@@ -57,7 +57,6 @@
     wget
     neovim
     ghostty
-    zoxide
     # Useful companions for niri
     waybar
     fuzzel
