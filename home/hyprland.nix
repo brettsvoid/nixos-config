@@ -12,7 +12,7 @@
       ];
 
       # ── Monitors ───────────────────────────────────────────────
-      monitor = [ ", preferred, auto, 1" ];
+      monitor = [ ", preferred, auto, 1, mirror, eDP-1" ];
 
       # ── Environment variables ──────────────────────────────────
       env = [
@@ -39,10 +39,9 @@
         };
       };
 
-      gestures = {
-        workspace_swipe = true;
-        workspace_swipe_fingers = 3;
-      };
+      gesture = [
+        "3, horizontal, workspace"
+      ];
 
       # ── Look & feel ────────────────────────────────────────────
       general = {
@@ -97,6 +96,7 @@
         "$mod, R, exec, fuzzel"
         "$mod, F, fullscreen"
         "$mod, V, togglefloating"
+        "$mod, M, exit"
 
         # Focus (vim-style)
         "$mod, H, movefocus, l"
