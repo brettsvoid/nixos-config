@@ -7,7 +7,7 @@
 
     settings = {
       # ── Autostart ──────────────────────────────────────────────
-      exec-once = [
+      exec = [
         "ambxst" # bar, wallpaper, launcher, notifications
       ];
 
@@ -31,6 +31,9 @@
         "SDL_VIDEODRIVER, wayland"
         "CLUTTER_BACKEND, wayland"
         "MOZ_ENABLE_WAYLAND, 1"
+        # Cursor
+        "XCURSOR_THEME, catppuccin-mocha-dark-cursors"
+        "XCURSOR_SIZE, 24"
       ];
 
       # ── Input ──────────────────────────────────────────────────
