@@ -3,6 +3,7 @@
 { 
   # ─── Modern CLI tools ───────────────────────────────────────────────
   home.packages = with pkgs; [
+    claude-code     # agentic coding CLI
     fd              # find replacement
     ripgrep         # grep replacement
     jq              # JSON processor
