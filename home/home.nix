@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 {
-  imports = [ ./shell.nix ./terminals.nix ./hyprland.nix ];
+  imports = [ ./shell.nix ./terminals.nix ./hyprland.nix ./tmux.nix ];
 
   home.username = "brett";
   home.homeDirectory = "/home/brett";
