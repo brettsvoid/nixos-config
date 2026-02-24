@@ -12,7 +12,10 @@
       ];
 
       # ── Monitors ───────────────────────────────────────────────
-      monitor = [ ", preferred, auto, 1, mirror, eDP-1" ];
+      monitor = [
+        "DP-1, 2560x1440@165, 0x0, 1"  # external monitor (main)
+        "eDP-1, preferred, auto-left, 1" # laptop to the left
+      ];
 
       # ── Environment variables ──────────────────────────────────
       env = [
@@ -32,6 +35,8 @@
 
       # ── Input ──────────────────────────────────────────────────
       input = {
+        repeat_rate = 35;
+        repeat_delay = 200;
         accel_profile = "flat";
         touchpad = {
           natural_scroll = true;
@@ -98,17 +103,17 @@
         "$mod, V, togglefloating"
         "$mod, M, exit"
 
-        # Focus (vim-style)
-        "$mod, H, movefocus, l"
-        "$mod, L, movefocus, r"
-        "$mod, K, movefocus, u"
-        "$mod, J, movefocus, d"
+        # Focus (ALT + arrow keys)
+        "ALT, Left, movefocus, l"
+        "ALT, Right, movefocus, r"
+        "ALT, Up, movefocus, u"
+        "ALT, Down, movefocus, d"
 
-        # Focus (arrow keys)
-        "$mod, Left, movefocus, l"
-        "$mod, Right, movefocus, r"
-        "$mod, Up, movefocus, u"
-        "$mod, Down, movefocus, d"
+        # Swap windows (ALT + SHIFT + arrow keys)
+        "ALT SHIFT, Left, swapwindow, l"
+        "ALT SHIFT, Right, swapwindow, r"
+        "ALT SHIFT, Up, swapwindow, u"
+        "ALT SHIFT, Down, swapwindow, d"
 
         # Workspaces
         "$mod, 1, workspace, 1"
