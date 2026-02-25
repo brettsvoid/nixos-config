@@ -9,6 +9,7 @@
       # ── Autostart ──────────────────────────────────────────────
       exec-once = [
         "ambxst" # bar, wallpaper, launcher, notifications
+        "media-player-widget"
       ];
 
       exec = [
