@@ -4,6 +4,7 @@
   # ─── Git ───────────────────────────────────────────────────────────
   programs.git = {
     enable = true;
+    lfs.enable = true;
     settings = {
       user.name = "Brett Henderson";
       user.email = "brettsvoid@gmail.com";
