@@ -24,6 +24,7 @@
       import Quickshell.Wayland
       import Quickshell.Services.Mpris
       import Quickshell.Io
+      import QtQuick.Effects
 
       PanelWindow {
           id: root
@@ -32,12 +33,12 @@
               top: true
               left: true
           }
-          margins.top: minimized ? 6 : 52
+          margins.top: minimized ? 8 : 52
           margins.left: minimized
-              ? screen.width / 2 + 160
+              ? screen.width / 2 + 146
               : (screen.width - 420) / 2
-          implicitWidth: minimized ? 32 : 420
-          implicitHeight: minimized ? 32 : 180
+          implicitWidth: minimized ? 36 : 420
+          implicitHeight: minimized ? 36 : 180
           exclusionMode: ExclusionMode.Ignore
           WlrLayershell.layer: minimized ? WlrLayer.Overlay : WlrLayer.Top
           color: "transparent"
@@ -142,9 +143,15 @@
                   height: parent.height
                   y: root.hasPlayer ? 0 : -height
                   radius: 16
-                  color: root.tc("surfaceContainer", "#1e1e2e")
-                  border.color: root.tc("outlineVariant", "#313244")
-                  border.width: 1
+                  color: root.tc("background", "#1e1e2e")
+                  layer.enabled: true
+                  layer.effect: MultiEffect {
+                      shadowEnabled: true
+                      shadowColor: root.tc("shadow", "#000000")
+                      shadowBlur: 0.3
+                      shadowVerticalOffset: 2
+                      shadowOpacity: 0.3
+                  }
 
                   Behavior on y {
                       NumberAnimation {
@@ -173,7 +180,7 @@
 
                       Text {
                           anchors.centerIn: parent
-                          text: "-"
+                          text: "\u2212"
                           font.pixelSize: 16
                           font.bold: true
                           color: root.tc("overBackground", "#cdd6f4")
@@ -208,7 +215,7 @@
                           Text {
                               Layout.fillWidth: true
                               text: root.hasPlayer ? root.activePlayer.trackArtist : ""
-                              color: root.tc("overSurface", "#bac2de")
+                              color: root.tc("outline", "#a6adc8")
                               font.pixelSize: 13
                               elide: Text.ElideRight
                               maximumLineCount: 1
@@ -240,7 +247,7 @@
                                   Layout.fillWidth: true
                                   height: 4
                                   radius: 2
-                                  color: root.tc("outlineVariant", "#313244")
+                                  color: root.tc("surfaceContainerHigh", "#313244")
 
                                   Rectangle {
                                       width: root.trackLength > 0
@@ -262,43 +269,76 @@
                           // ── Playback controls ──
                           RowLayout {
                               Layout.alignment: Qt.AlignHCenter
-                              spacing: 24
+                              spacing: 16
 
-                              Text {
-                                  text: "\u23EE"
-                                  font.pixelSize: 20
-                                  color: root.hasPlayer && root.activePlayer.canGoPrevious
-                                      ? root.tc("overBackground", "#cdd6f4")
-                                      : root.tc("surfaceDim", "#585b70")
-                                  MouseArea {
+                              Rectangle {
+                                  width: 36; height: 36; radius: 16
+                                  color: root.tc("background", "#1e1e2e")
+
+                                  Rectangle {
                                       anchors.fill: parent
-                                      cursorShape: Qt.PointingHandCursor
-                                      onClicked: { if (root.activePlayer) root.activePlayer.previous(); }
+                                      radius: parent.radius
+                                      color: root.tc("primary", "#cba6f7")
+                                      opacity: prevTap.pressed ? 0.5 : prevHover.hovered ? 0.25 : 0
                                   }
+
+                                  Text {
+                                      anchors.centerIn: parent
+                                      text: "\u23EE"
+                                      font.pixelSize: 20
+                                      color: root.hasPlayer && root.activePlayer.canGoPrevious
+                                          ? root.tc("overBackground", "#cdd6f4")
+                                          : root.tc("outline", "#a6adc8")
+                                  }
+
+                                  HoverHandler { id: prevHover }
+                                  TapHandler { id: prevTap; onTapped: { if (root.activePlayer) root.activePlayer.previous(); } }
                               }
 
-                              Text {
-                                  text: root.isPlaying ? "\u23F8" : "\u25B6"
-                                  font.pixelSize: 24
-                                  color: root.tc("primary", "#cba6f7")
-                                  MouseArea {
+                              Rectangle {
+                                  width: 36; height: 36; radius: 16
+                                  color: root.tc("background", "#1e1e2e")
+
+                                  Rectangle {
                                       anchors.fill: parent
-                                      cursorShape: Qt.PointingHandCursor
-                                      onClicked: { if (root.activePlayer) root.activePlayer.togglePlaying(); }
+                                      radius: parent.radius
+                                      color: root.tc("primary", "#cba6f7")
+                                      opacity: playTap.pressed ? 0.5 : playHover.hovered ? 0.25 : 0
                                   }
+
+                                  Text {
+                                      anchors.centerIn: parent
+                                      text: root.isPlaying ? "\u23F8" : "\u25B6"
+                                      font.pixelSize: 24
+                                      color: root.tc("primary", "#cba6f7")
+                                  }
+
+                                  HoverHandler { id: playHover }
+                                  TapHandler { id: playTap; onTapped: { if (root.activePlayer) root.activePlayer.togglePlaying(); } }
                               }
 
-                              Text {
-                                  text: "\u23ED"
-                                  font.pixelSize: 20
-                                  color: root.hasPlayer && root.activePlayer.canGoNext
-                                      ? root.tc("overBackground", "#cdd6f4")
-                                      : root.tc("surfaceDim", "#585b70")
-                                  MouseArea {
+                              Rectangle {
+                                  width: 36; height: 36; radius: 16
+                                  color: root.tc("background", "#1e1e2e")
+
+                                  Rectangle {
                                       anchors.fill: parent
-                                      cursorShape: Qt.PointingHandCursor
-                                      onClicked: { if (root.activePlayer) root.activePlayer.next(); }
+                                      radius: parent.radius
+                                      color: root.tc("primary", "#cba6f7")
+                                      opacity: nextTap.pressed ? 0.5 : nextHover.hovered ? 0.25 : 0
                                   }
+
+                                  Text {
+                                      anchors.centerIn: parent
+                                      text: "\u23ED"
+                                      font.pixelSize: 20
+                                      color: root.hasPlayer && root.activePlayer.canGoNext
+                                          ? root.tc("overBackground", "#cdd6f4")
+                                          : root.tc("outline", "#a6adc8")
+                                  }
+
+                                  HoverHandler { id: nextHover }
+                                  TapHandler { id: nextTap; onTapped: { if (root.activePlayer) root.activePlayer.next(); } }
                               }
                           }
                       }
@@ -322,23 +362,27 @@
               id: minimizedCircle
               anchors.fill: parent
               radius: 16
-              color: root.tc("surfaceContainer", "#1e1e2e")
-              border.color: root.tc("outlineVariant", "#313244")
-              border.width: 1
+              color: root.tc("background", "#1e1e2e")
               visible: root.minimized
 
-              Text {
-                  anchors.centerIn: parent
-                  text: "♫"
-                  font.pixelSize: 16
+              Rectangle {
+                  anchors.fill: parent
+                  radius: parent.radius
                   color: root.tc("primary", "#cba6f7")
+                  opacity: minimizedTap.pressed ? 0.5 : minimizedHover.hovered ? 0.25 : 0
               }
 
-              MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.minimized = false
+              AnimatedImage {
+                  anchors.centerIn: parent
+                  width: 32
+                  height: 32
+                  source: root.configDir + "/assets/music.gif"
+                  fillMode: Image.PreserveAspectFit
+                  playing: root.isPlaying
               }
+
+              HoverHandler { id: minimizedHover }
+              TapHandler { id: minimizedTap; onTapped: root.minimized = false }
           }
       }
     '';
