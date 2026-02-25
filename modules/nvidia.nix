@@ -19,11 +19,6 @@
     # Tracks the latest stable driver version from nixpkgs
     package = config.boot.kernelPackages.nvidiaPackages.stable;
     prime = {
-      # Reverse sync makes the NVIDIA GPU the primary renderer and copies frames
-      # back to the Intel iGPU only for displays wired to it (e.g. laptop screen).
-      # This is better suited to Wayland than regular sync mode, which has known
-      # issues where compositors still pick Intel as the primary GPU.
-      reverseSync.enable = true;
       # Bus IDs for each GPU - find these with: lspci | grep VGA
       intelBusId = "PCI:0:2:0";
       nvidiaBusId = "PCI:1:0:0";

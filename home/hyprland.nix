@@ -28,6 +28,7 @@
         "__GLX_VENDOR_LIBRARY_NAME, nvidia"
         "GBM_BACKEND, nvidia-drm"
         "NVD_BACKEND, direct"
+        "__GL_SYNC_TO_VBLANK, 0" # let Hyprland handle frame pacing
         # Wayland toolkit hints
         "XDG_SESSION_TYPE, wayland"
         "QT_QPA_PLATFORM, wayland"
