@@ -23,21 +23,56 @@
       import Quickshell
       import Quickshell.Wayland
       import Quickshell.Services.Mpris
+      import Quickshell.Io
 
       PanelWindow {
           id: root
 
           anchors {
               top: true
+              left: true
           }
-          margins.top: 52
-          implicitWidth: 420
-          implicitHeight: 180
+          margins.top: minimized ? 6 : 52
+          margins.left: minimized
+              ? screen.width / 2 + 160
+              : (screen.width - 420) / 2
+          implicitWidth: minimized ? 32 : 420
+          implicitHeight: minimized ? 32 : 180
           exclusionMode: ExclusionMode.Ignore
+          WlrLayershell.layer: minimized ? WlrLayer.Overlay : WlrLayer.Top
           color: "transparent"
+
+          Behavior on margins.top { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+          Behavior on margins.left { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+          Behavior on implicitWidth { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+          Behavior on implicitHeight { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+
+          // ── Minimize state ──
+          property bool minimized: false
 
           // ── Asset path (injected by Nix) ──
           property string configDir: "${config.xdg.configHome}/quickshell/media-player"
+
+          // ── Dynamic theme colors ──
+          property var themeColors: ({})
+
+          FileView {
+              id: colorsFile
+              path: "${config.home.homeDirectory}/.cache/ambxst/colors.json"
+              watchChanges: true
+              onLoaded: {
+                  try {
+                      root.themeColors = JSON.parse(colorsFile.text());
+                  } catch (e) {
+                      root.themeColors = {};
+                  }
+              }
+              onFileChanged: colorsFile.reload()
+          }
+
+          function tc(token, fallback) {
+              return themeColors[token] || fallback;
+          }
 
           // ── Player selection: prefer playing, fall back to first ──
           readonly property var activePlayer: {
@@ -99,6 +134,7 @@
           Item {
               anchors.fill: parent
               clip: true
+              visible: !root.minimized
 
               Rectangle {
                   id: card
@@ -106,8 +142,8 @@
                   height: parent.height
                   y: root.hasPlayer ? 0 : -height
                   radius: 16
-                  color: "#1e1e2e"
-                  border.color: "#313244"
+                  color: root.tc("surfaceContainer", "#1e1e2e")
+                  border.color: root.tc("outlineVariant", "#313244")
                   border.width: 1
 
                   Behavior on y {
@@ -119,6 +155,33 @@
                               if (!running && !root.hasPlayer) root.shouldShow = false;
                           }
                       }
+                  }
+
+                  // ── Minimize button ──
+                  Rectangle {
+                      anchors.top: parent.top
+                      anchors.right: parent.right
+                      anchors.topMargin: 8
+                      anchors.rightMargin: 8
+                      width: 24
+                      height: 24
+                      radius: 12
+                      color: minimizeHover.hovered
+                          ? root.tc("outline", "#a6adc8")
+                          : root.tc("surfaceDim", "#585b70")
+                      z: 10
+
+                      Text {
+                          anchors.centerIn: parent
+                          text: "-"
+                          font.pixelSize: 16
+                          font.bold: true
+                          color: root.tc("overBackground", "#cdd6f4")
+                      }
+
+                      HoverHandler { id: minimizeHover }
+
+                      TapHandler { onTapped: root.minimized = true }
                   }
 
                   RowLayout {
@@ -135,7 +198,7 @@
                           Text {
                               Layout.fillWidth: true
                               text: root.hasPlayer ? root.activePlayer.trackTitle : ""
-                              color: "#cdd6f4"
+                              color: root.tc("overBackground", "#cdd6f4")
                               font.pixelSize: 16
                               font.bold: true
                               elide: Text.ElideRight
@@ -145,7 +208,7 @@
                           Text {
                               Layout.fillWidth: true
                               text: root.hasPlayer ? root.activePlayer.trackArtist : ""
-                              color: "#bac2de"
+                              color: root.tc("overSurface", "#bac2de")
                               font.pixelSize: 13
                               elide: Text.ElideRight
                               maximumLineCount: 1
@@ -154,7 +217,7 @@
                           Text {
                               Layout.fillWidth: true
                               text: root.hasPlayer ? root.activePlayer.trackAlbum : ""
-                              color: "#a6adc8"
+                              color: root.tc("outline", "#a6adc8")
                               font.pixelSize: 12
                               elide: Text.ElideRight
                               maximumLineCount: 1
@@ -169,7 +232,7 @@
 
                               Text {
                                   text: root.formatTime(root.trackPosition)
-                                  color: "#a6adc8"
+                                  color: root.tc("outline", "#a6adc8")
                                   font.pixelSize: 11
                               }
 
@@ -177,7 +240,7 @@
                                   Layout.fillWidth: true
                                   height: 4
                                   radius: 2
-                                  color: "#313244"
+                                  color: root.tc("outlineVariant", "#313244")
 
                                   Rectangle {
                                       width: root.trackLength > 0
@@ -185,13 +248,13 @@
                                           : 0
                                       height: parent.height
                                       radius: 2
-                                      color: "#cba6f7"
+                                      color: root.tc("primary", "#cba6f7")
                                   }
                               }
 
                               Text {
                                   text: root.formatTime(root.trackLength)
-                                  color: "#a6adc8"
+                                  color: root.tc("outline", "#a6adc8")
                                   font.pixelSize: 11
                               }
                           }
@@ -204,7 +267,9 @@
                               Text {
                                   text: "\u23EE"
                                   font.pixelSize: 20
-                                  color: root.hasPlayer && root.activePlayer.canGoPrevious ? "#cdd6f4" : "#585b70"
+                                  color: root.hasPlayer && root.activePlayer.canGoPrevious
+                                      ? root.tc("overBackground", "#cdd6f4")
+                                      : root.tc("surfaceDim", "#585b70")
                                   MouseArea {
                                       anchors.fill: parent
                                       cursorShape: Qt.PointingHandCursor
@@ -215,7 +280,7 @@
                               Text {
                                   text: root.isPlaying ? "\u23F8" : "\u25B6"
                                   font.pixelSize: 24
-                                  color: "#cba6f7"
+                                  color: root.tc("primary", "#cba6f7")
                                   MouseArea {
                                       anchors.fill: parent
                                       cursorShape: Qt.PointingHandCursor
@@ -226,7 +291,9 @@
                               Text {
                                   text: "\u23ED"
                                   font.pixelSize: 20
-                                  color: root.hasPlayer && root.activePlayer.canGoNext ? "#cdd6f4" : "#585b70"
+                                  color: root.hasPlayer && root.activePlayer.canGoNext
+                                      ? root.tc("overBackground", "#cdd6f4")
+                                      : root.tc("surfaceDim", "#585b70")
                                   MouseArea {
                                       anchors.fill: parent
                                       cursorShape: Qt.PointingHandCursor
@@ -247,6 +314,30 @@
                           playing: root.isPlaying
                       }
                   }
+              }
+          }
+
+          // ── Minimized indicator (after card for z-order) ──
+          Rectangle {
+              id: minimizedCircle
+              anchors.fill: parent
+              radius: 16
+              color: root.tc("surfaceContainer", "#1e1e2e")
+              border.color: root.tc("outlineVariant", "#313244")
+              border.width: 1
+              visible: root.minimized
+
+              Text {
+                  anchors.centerIn: parent
+                  text: "♫"
+                  font.pixelSize: 16
+                  color: root.tc("primary", "#cba6f7")
+              }
+
+              MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.minimized = false
               }
           }
       }
