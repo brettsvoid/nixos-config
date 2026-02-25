@@ -19,5 +19,9 @@
     cursor-size = 24;
   };
 
+  home.packages = with pkgs; [
+    spotify
+  ];
+
   programs.home-manager.enable = true;
 }
