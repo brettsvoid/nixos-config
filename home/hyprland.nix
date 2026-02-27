@@ -19,11 +19,13 @@
       # ── Monitors ───────────────────────────────────────────────
       monitor = [
         "DP-1, 2560x1440@165, 0x0, 1"  # external monitor (main)
-        "eDP-1, preferred, auto-left, 1" # laptop to the left
+        "eDP-1, 1920x1080@144, auto-left, 1" # laptop to the left
       ];
 
       # ── Environment variables ──────────────────────────────────
       env = [
+        # Use NVIDIA as primary renderer (card1), Intel as secondary for eDP-1 output
+        "AQ_DRM_DEVICES, /dev/dri/card1:/dev/dri/card2"
         # NVIDIA
         "LIBVA_DRIVER_NAME, nvidia"
         "__GLX_VENDOR_LIBRARY_NAME, nvidia"
@@ -96,10 +98,12 @@
 
       render = {
         cm_enabled = false;
+        new_render_scheduling = true; # dynamic triple buffering for high refresh rates
       };
 
       misc = {
         vfr = true;
+        vrr = 2; # adaptive sync in fullscreen apps/games
         disable_hyprland_logo = true;
         disable_splash_rendering = true;
       };
