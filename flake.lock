@@ -2,44 +2,23 @@
   "nodes": {
     "ambxst": {
       "inputs": {
-        "axctl": "axctl",
         "nixpkgs": [
           "nixpkgs"
         ],
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1774820064,
-        "narHash": "sha256-niLp4ZCOSq5JO22eUoUTaHIEIq9CLVKo+PDHsAPI3LI=",
+        "lastModified": 1771072201,
+        "narHash": "sha256-SONu9NiNr0gaLC6rMt3x5x1L6DwSUuGJesizS7Ej2eo=",
         "owner": "Axenide",
         "repo": "Ambxst",
-        "rev": "8b01b7d0851d8e10bb19144bd983c5b2a9350f7b",
+        "rev": "59edec9a0430eb2f679697f4a817a1f44ffcfb8b",
         "type": "github"
       },
       "original": {
         "owner": "Axenide",
         "repo": "Ambxst",
-        "type": "github"
-      }
-    },
-    "axctl": {
-      "inputs": {
-        "nixpkgs": [
-          "ambxst",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1774572912,
-        "narHash": "sha256-1cK0jZAVZL5xhEc6soqdsdm1+uhP9/jmwdP/VsHZnUc=",
-        "owner": "Axenide",
-        "repo": "axctl",
-        "rev": "d8b2f0e8e52bfef49b95c561deaecfcbe6a74958",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Axenide",
-        "repo": "axctl",
+        "rev": "59edec9a0430eb2f679697f4a817a1f44ffcfb8b",
         "type": "github"
       }
     },
@@ -87,11 +66,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774422996,
-        "narHash": "sha256-mWjBJIbiMPCpljAQDk8RYf+92/lYZ5npHe2r2SJ+QWc=",
+        "lastModified": 1766725085,
+        "narHash": "sha256-O2aMFdDUYJazFrlwL7aSIHbUSEm3ADVZjmf41uBJfHs=",
         "ref": "refs/heads/master",
-        "rev": "08058326f04e9b5e55c903b3702405a8d3556ac6",
-        "revCount": 775,
+        "rev": "41828c4180fb921df7992a5405f5ff05d2ac2fff",
+        "revCount": 715,
         "type": "git",
         "url": "https://git.outfoxxed.me/outfoxxed/quickshell"
       },

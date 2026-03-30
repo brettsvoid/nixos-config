@@ -6,7 +6,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     ambxst = {
-      url = "github:Axenide/Ambxst";
+      # Pinned: newer versions cause stutter on NVIDIA external monitors
+      url = "github:Axenide/Ambxst/59edec9a0430eb2f679697f4a817a1f44ffcfb8b";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

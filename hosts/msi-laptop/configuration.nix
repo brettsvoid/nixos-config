@@ -89,6 +89,33 @@
   # Bluetooth
   hardware.bluetooth.enable = true;
 
+  # Dynamically resolve AQ_DRM_DEVICES by PCI bus ID at boot.
+  # Card numbers (/dev/dri/cardN) can change across kernel updates, but PCI addresses
+  # (0000:01:00.0 = NVIDIA, 0000:00:02.0 = Intel) are stable. This service generates
+  # a Hyprland config fragment that hyprland.nix sources via `source = ...`.
+  # Specific to this MSI GE75 Raider's hybrid GPU setup (NVIDIA RTX 2070 + Intel UHD 630).
+  systemd.services.hyprland-drm-config = {
+    description = "Generate Hyprland DRM device config from PCI bus IDs";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "display-manager.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "gen-hypr-drm" ''
+        for card in /dev/dri/card*; do
+          name=$(basename "$card")
+          bus=$(readlink -f "/sys/class/drm/$name/device" 2>/dev/null)
+          case "$bus" in
+            */0000:01:00.0) nvidia="$card" ;;  # NVIDIA RTX 2070 Mobile
+            */0000:00:02.0) intel="$card" ;;   # Intel UHD 630
+          esac
+        done
+        echo "env = AQ_DRM_DEVICES,''${nvidia:-/dev/dri/card0}:''${intel:-/dev/dri/card1}" > /tmp/hypr-drm-devices.conf
+        chmod 644 /tmp/hypr-drm-devices.conf
+      '';
+    };
+  };
+
   # Re-enable monitors after suspend/hibernate (DP link re-training)
   systemd.services.hyprland-resume-monitors = {
     description = "Re-enable Hyprland monitors after resume";

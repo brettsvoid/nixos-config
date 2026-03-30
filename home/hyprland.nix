@@ -5,6 +5,12 @@
     enable = true;
     package = null; # installed system-wide via programs.hyprland.enable
 
+    # Source the dynamically generated DRM device config (created by
+    # systemd service hyprland-drm-config in configuration.nix)
+    extraConfig = ''
+      source = /tmp/hypr-drm-devices.conf
+    '';
+
     settings = {
       # ── Autostart ──────────────────────────────────────────────
       exec-once = [
@@ -24,8 +30,6 @@
 
       # ── Environment variables ──────────────────────────────────
       env = [
-        # Use NVIDIA as primary renderer (card1), Intel as secondary for eDP-1 output
-        "AQ_DRM_DEVICES, /dev/dri/card1:/dev/dri/card2"
         # NVIDIA
         "LIBVA_DRIVER_NAME, nvidia"
         "__GLX_VENDOR_LIBRARY_NAME, nvidia"
