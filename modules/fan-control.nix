@@ -22,6 +22,15 @@ let
 
     postPatch = ''
       patchShebangs isw
+      # Adjust fan curve for 17E2EMS1 profile
+      sed -i '/^\[17E2EMS1\]/,/^\[/ {
+        s/^cpu_fan_speed_6 = 90/cpu_fan_speed_6 = 100/
+        s/^gpu_fan_speed_2 = 52/gpu_fan_speed_2 = 55/
+        s/^gpu_fan_speed_3 = 59/gpu_fan_speed_3 = 60/
+        s/^gpu_fan_speed_4 = 69/gpu_fan_speed_4 = 70/
+        s/^gpu_fan_speed_5 = 79/gpu_fan_speed_5 = 80/
+        s/^gpu_fan_speed_6 = 89/gpu_fan_speed_6 = 100/
+      }' etc/isw.conf
     '';
 
     installPhase = ''
