@@ -10,6 +10,7 @@
       ./hardware-configuration.nix
       ../../modules/audio.nix
       ../../modules/nvidia.nix
+      ../../modules/fan-control.nix
     ];
 
   # Use the systemd-boot EFI boot loader.
@@ -75,6 +76,7 @@
     catppuccin-cursors.mochaDark
     catppuccin-papirus-folders  # icon theme
     gnomeExtensions.user-themes
+    lm_sensors
   ];
   
   # Firmware (helps with hardware quirks)

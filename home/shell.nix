@@ -189,6 +189,11 @@
       gl  = "git log --oneline --graph --decorate -20";
       gp  = "git push";
 
+      # Fan control (isw)
+      fans      = "sudo isw -r";
+      fan-boost = "sudo isw -b on";
+      fan-quiet = "sudo isw -b off";
+
       # Quick navigation
       ".."   = "cd ..";
       "..."  = "cd ../..";
