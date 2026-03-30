@@ -89,6 +89,28 @@
   # Bluetooth
   hardware.bluetooth.enable = true;
 
+  # Re-enable monitors after suspend/hibernate (DP link re-training)
+  systemd.services.hyprland-resume-monitors = {
+    description = "Re-enable Hyprland monitors after resume";
+    after = [ "nvidia-resume.service" "systemd-suspend.service" "systemd-hibernate.service" ];
+    wantedBy = [ "post-resume.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "brett";
+      ExecStart = pkgs.writeShellScript "hyprland-resume-monitors" ''
+        INSTANCE_DIR="/run/user/1000/hypr"
+        [ ! -d "$INSTANCE_DIR" ] && exit 0
+        INSTANCE=$(ls "$INSTANCE_DIR" | head -1)
+        [ -z "$INSTANCE" ] && exit 0
+        export HYPRLAND_INSTANCE_SIGNATURE="$INSTANCE"
+        sleep 3
+        /run/current-system/sw/bin/hyprctl dispatch dpms off
+        sleep 1
+        /run/current-system/sw/bin/hyprctl dispatch dpms on
+      '';
+    };
+  };
+
   # This value does NOT affect the Nixpkgs version your packages and OS are pulled from,
   # so changing it will NOT upgrade your system - see https://nixos.org/manual/nixos/stable/#sec-upgrading for how
   # to actually do that.
