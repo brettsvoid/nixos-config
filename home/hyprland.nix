@@ -88,7 +88,7 @@ in
       ];
 
       exec = [
-        "sh -c 'echo \"--- reload $(date) ---\" >> /tmp/hypr-debug.log && echo \"ambxst pid: $(cat /tmp/ambxst.pid 2>/dev/null)\" >> /tmp/hypr-debug.log && kill -0 $(cat /tmp/ambxst.pid 2>/dev/null) 2>> /tmp/hypr-debug.log && echo \"ambxst: alive\" >> /tmp/hypr-debug.log || echo \"ambxst: dead\" >> /tmp/hypr-debug.log && hyprctl clients >> /tmp/hypr-debug.log 2>&1 && hyprctl layers >> /tmp/hypr-debug.log 2>&1'"
+        "sh -c 'echo \"--- reload $(date) ---\" >> /tmp/hypr-debug.log && AMBXST_PID=$(pgrep -f ambxst-shell) && echo \"ambxst pid: $AMBXST_PID\" >> /tmp/hypr-debug.log && echo \"ambxst: alive\" >> /tmp/hypr-debug.log || echo \"ambxst: dead\" >> /tmp/hypr-debug.log && hyprctl clients >> /tmp/hypr-debug.log 2>&1 && hyprctl layers >> /tmp/hypr-debug.log 2>&1'"
       ];
 
       # ── Monitors ───────────────────────────────────────────────

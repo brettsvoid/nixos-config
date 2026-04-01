@@ -4,11 +4,12 @@ let
   qsPkg = quickshell.packages.x86_64-linux.default;
 
   toggle-shell = pkgs.writeShellScriptBin "toggle-shell" ''
-    AMBXST_PID_FILE="/tmp/ambxst.pid"
     CUSTOM_PID_FILE="/tmp/custom-shell.pid"
 
+    AMBXST_PATTERN="quickshell.*ambxst-shell"
+
     ambxst_running() {
-      [ -f "$AMBXST_PID_FILE" ] && kill -0 "$(cat "$AMBXST_PID_FILE")" 2>/dev/null
+      pgrep -f "$AMBXST_PATTERN" >/dev/null 2>&1
     }
 
     custom_running() {
@@ -17,7 +18,7 @@ let
 
     case "''${1:-}" in
       status)
-        echo "ambxst:       $(ambxst_running && echo "running (pid $(cat "$AMBXST_PID_FILE"))" || echo "stopped")"
+        echo "ambxst:       $(ambxst_running && echo "running (pid $(pgrep -f "$AMBXST_PATTERN" | head -1))" || echo "stopped")"
         echo "custom-shell: $(custom_running && echo "running (pid $(cat "$CUSTOM_PID_FILE"))" || echo "stopped")"
         ;;
       custom)
@@ -27,12 +28,12 @@ let
         fi
         echo "Stopping ambxst..."
         if ambxst_running; then
-          kill "$(cat "$AMBXST_PID_FILE")" 2>/dev/null
+          pkill -f "$AMBXST_PATTERN" 2>/dev/null
           sleep 0.5
         fi
         echo "Starting custom shell..."
         export QSG_RHI_BACKEND=vulkan
-        ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" &
+        ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" >/dev/null 2>&1 &
         echo $! > "$CUSTOM_PID_FILE"
         echo "Custom shell started (pid $!)"
         ;;
@@ -48,7 +49,7 @@ let
           sleep 0.5
         fi
         echo "Starting ambxst..."
-        ambxst &
+        ambxst >/dev/null 2>&1 &
         echo "ambxst restarted"
         ;;
       *)
