@@ -17,6 +17,13 @@
       git
       curl
       unzip
+      luarocks
+      lua5_1
+
+      # Language toolchains
+      go
+      rustc
+      cargo
 
       # LSP servers (replaces Mason on NixOS)
       lua-language-server
