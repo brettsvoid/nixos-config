@@ -1,8 +1,6 @@
 { config, pkgs, ... }:
 
 {
-  home.sessionVariables.EDITOR = "nvim";
-
   # ─── Modern CLI tools ───────────────────────────────────────────────
   home.packages = with pkgs; [
     claude-code     # agentic coding CLI

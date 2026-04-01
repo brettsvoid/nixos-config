@@ -74,7 +74,6 @@
     vim 
     git
     wget
-    neovim
     ghostty
     # Useful companions for niri
     waybar
