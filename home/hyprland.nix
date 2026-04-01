@@ -120,7 +120,7 @@ in
       # ── Input ──────────────────────────────────────────────────
       input = {
         repeat_rate = 35;
-        repeat_delay = 200;
+        repeat_delay = 300;
         accel_profile = "flat";
         touchpad = {
           natural_scroll = true;
