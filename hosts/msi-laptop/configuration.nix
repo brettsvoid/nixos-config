@@ -64,6 +64,7 @@
   programs.firefox.enable = true;
   programs.niri.enable = true;
   programs.hyprland.enable = true;
+  programs.hyprlock.enable = true;
   programs.ambxst.enable = true;
 
   xdg.portal.config.common.default = "*";
@@ -80,7 +81,6 @@
     fuzzel
     mako
     kitty
-    swaylock
     # Theme
     (catppuccin-gtk.override {
       variant = "mocha";
