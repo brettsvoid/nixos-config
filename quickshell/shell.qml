@@ -1,6 +1,16 @@
 import QtQuick
 import Quickshell
+import "bar"
 
 ShellRoot {
-    // Custom shell - edit and test with: qs-dev
+    Component.onCompleted: Quickshell.watchFiles = true
+
+    Variants {
+        model: Quickshell.screens
+
+        Bar {
+            required property var modelData
+            screen: modelData
+        }
+    }
 }
