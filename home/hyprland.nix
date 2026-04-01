@@ -93,8 +93,9 @@ in
 
       # ── Monitors ───────────────────────────────────────────────
       monitor = [
-        "DP-1, 2560x1440@165, 0x0, 1"  # external monitor (main)
-        "eDP-1, 1920x1080@144, auto-left, 1" # laptop to the left
+        "DP-1, 2560x1440@165, 1920x0, 1"  # external monitor (right)
+        "eDP-1, 1920x1080@144, 0x0, 1"     # laptop (left, always at origin)
+        ", preferred, auto, 1"              # fallback for hotplug
       ];
 
       # ── Environment variables ──────────────────────────────────
@@ -102,8 +103,8 @@ in
         # NVIDIA
         "LIBVA_DRIVER_NAME, nvidia"
         "__GLX_VENDOR_LIBRARY_NAME, nvidia"
-        "GBM_BACKEND, nvidia-drm"
         "NVD_BACKEND, direct"
+        "AQ_FORCE_LINEAR_BLIT, 1" # force linear blitting for cross-GPU buffer copy (NVIDIA → Intel eDP)
         # Wayland toolkit hints
         "XDG_SESSION_TYPE, wayland"
         "QT_QPA_PLATFORM, wayland"

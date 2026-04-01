@@ -14,11 +14,6 @@
     gtk.enable = true;
   };
 
-  dconf.settings."org/gnome/desktop/interface" = {
-    cursor-theme = "catppuccin-mocha-dark-cursors";
-    cursor-size = 24;
-  };
-
   home.packages = with pkgs; [
     spotify
   ];

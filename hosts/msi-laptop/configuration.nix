@@ -18,6 +18,10 @@
   boot.loader.efi.canTouchEfiVariables = true;
   # Hibernation
   boot.resumeDevice = "/dev/sda2";
+  # Early KMS: load NVIDIA modules in initrd for proper DRM handoff to compositor
+  boot.initrd.kernelModules = [ "nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" ];
+  # Move fbcon to NVIDIA framebuffer (fb1) so Intel eDP-1 isn't stuck showing console text
+  boot.kernelParams = [ "fbcon=map:1" ];
 
   networking.hostName = "brett-msi-laptop"; 
 
@@ -30,16 +34,26 @@
   # Select internationalisation properties.
   i18n.defaultLocale = "en_GB.UTF-8";
 
-  # Enable the X11 windowing system.
+  # Needed for services.xserver.videoDrivers (NVIDIA module)
   services.xserver.enable = true;
 
-  services.displayManager.gdm.enable = true;
-  services.desktopManager.gnome.enable = true;
+  services.greetd = let
+    sessions = pkgs.linkFarm "greeter-sessions" [
+      { name = "hyprland.desktop"; path = "${pkgs.hyprland}/share/wayland-sessions/hyprland.desktop"; }
+      { name = "niri.desktop"; path = "${pkgs.niri}/share/wayland-sessions/niri.desktop"; }
+    ];
+  in {
+    enable = true;
+    settings.default_session = {
+      command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --asterisks --remember --sessions ${sessions}";
+      user = "greeter";
+    };
+  };
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.brett = {
     isNormalUser = true;
-    extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
+    extraGroups = [ "wheel" "video" "render" ];
     shell = pkgs.zsh;
   };
 
@@ -75,7 +89,6 @@
     })
     catppuccin-cursors.mochaDark
     catppuccin-papirus-folders  # icon theme
-    gnomeExtensions.user-themes
     lm_sensors
   ];
   
@@ -116,7 +129,7 @@
     };
   };
 
-  # Re-enable monitors after suspend/hibernate (DP link re-training)
+  # Re-enable monitors after suspend/hibernate (force modeset via disable + reload)
   systemd.services.hyprland-resume-monitors = {
     description = "Re-enable Hyprland monitors after resume";
     after = [ "nvidia-resume.service" "systemd-suspend.service" "systemd-hibernate.service" ];
@@ -130,10 +143,12 @@
         INSTANCE=$(ls "$INSTANCE_DIR" | head -1)
         [ -z "$INSTANCE" ] && exit 0
         export HYPRLAND_INSTANCE_SIGNATURE="$INSTANCE"
-        sleep 3
-        /run/current-system/sw/bin/hyprctl dispatch dpms off
-        sleep 1
-        /run/current-system/sw/bin/hyprctl dispatch dpms on
+
+        # Disable laptop monitor to tear down stale framebuffer from Intel iGPU
+        /run/current-system/sw/bin/hyprctl keyword monitor "eDP-1,disable"
+
+        # Reload config — re-applies all monitor rules, forcing fresh modesets
+        /run/current-system/sw/bin/hyprctl reload
       '';
     };
   };
