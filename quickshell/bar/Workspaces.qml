@@ -39,12 +39,12 @@ Item {
                     return false
                 }
 
-                width: isActive ? 24 : 8
-                height: 8
+                Layout.preferredWidth: isActive ? 24 : 8
+                implicitHeight: 8
                 radius: 4
                 color: isActive ? Theme.wsActive : (hasWindows ? Theme.wsOccupied : Theme.wsEmpty)
 
-                Behavior on width {
+                Behavior on Layout.preferredWidth {
                     NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
                 }
                 Behavior on color {
@@ -52,9 +52,11 @@ Item {
                 }
 
                 MouseArea {
-                    anchors.fill: parent
+                    anchors.centerIn: parent
+                    width: parent.width + 8
+                    height: Theme.barHeight
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Hyprland.dispatch("dispatch workspace " + wsId)
+                    onClicked: Hyprland.dispatch("workspace " + wsId)
                 }
             }
         }

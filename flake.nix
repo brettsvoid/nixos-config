@@ -29,7 +29,7 @@
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "backup";
             home-manager.extraSpecialArgs = { inherit quickshell; };
-            home-manager.users.brett = import ./home/home.nix;
+            home-manager.users.brett = { imports = [ ./home/home.nix ./hosts/msi-laptop/home.nix ]; };
           }
         ];
       };

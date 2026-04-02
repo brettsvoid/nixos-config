@@ -99,6 +99,7 @@ in
         ", preferred, auto, 1"              # fallback for hotplug
       ];
 
+
       # ── Environment variables ──────────────────────────────────
       env = [
         # NVIDIA
