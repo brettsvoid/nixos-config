@@ -1,41 +1,44 @@
 {
+  description = "brett's nix config";
+
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+    flake-parts.url = "github:hercules-ci/flake-parts";
+
+    import-tree.url = "github:vic/import-tree";
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
     ambxst = {
       # Pinned: newer versions cause stutter on NVIDIA external monitors
       url = "github:Axenide/Ambxst/59edec9a0430eb2f679697f4a817a1f44ffcfb8b";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
     quickshell = {
       url = "git+https://git.outfoxxed.me/outfoxxed/quickshell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-  };
 
-  outputs = { nixpkgs, home-manager, ambxst, quickshell, ... }: {
-    nixosConfigurations = {
-      brett-msi-laptop = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/msi-laptop/configuration.nix
-          home-manager.nixosModules.home-manager
-          ambxst.nixosModules.default
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.backupFileExtension = "backup";
-            home-manager.extraSpecialArgs = { inherit quickshell; };
-            home-manager.users.brett = { imports = [ ./home/home.nix ./hosts/msi-laptop/home.nix ]; };
-          }
-        ];
-      };
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
-      # Future machines go here:
-      # brett-desktop = nixpkgs.lib.nixosSystem { ... };
+    agenix = {
+      url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    secrets = {
+      url = "git+ssh://git@github.com/brettsvoid/nix-secrets.git";
+      flake = false;
     };
   };
+
+  outputs = inputs: inputs.flake-parts.lib.mkFlake { inherit inputs; } (inputs.import-tree ./modules);
 }

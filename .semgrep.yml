@@ -1,0 +1,62 @@
+# Semgrep custom rules for this repo. Runs in CI and on demand via
+# `semgrep --config .semgrep.yml --error .` from the devShell.
+#
+# Most secret-shaped strings are caught by gitleaks. Use semgrep for
+# patterns gitleaks misses: configuration anti-patterns, unsafe nix idioms,
+# leak-via-shape rather than leak-via-content.
+
+rules:
+  - id: nix-builtins-getEnv-secret-name
+    message: |
+      `builtins.getEnv` reads from the build environment and bakes the
+      result into the nix store, where it is world-readable. Never use
+      it for secrets — use agenix or a runtime-decrypted file instead.
+    pattern-either:
+      - pattern: builtins.getEnv "$SECRET"
+      - pattern: builtins.getEnv "$TOKEN"
+      - pattern: builtins.getEnv "$KEY"
+      - pattern: builtins.getEnv "$PASSWORD"
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include:
+        - "**/*.nix"
+
+  - id: nix-readFile-tilde
+    message: |
+      `builtins.readFile "~/..."` will not expand `~`. Use
+      `${config.home.homeDirectory}/...` or `/home/<user>/...` instead.
+    pattern-regex: 'builtins\.readFile\s+"~/'
+    languages: [generic]
+    severity: WARNING
+    paths:
+      include:
+        - "**/*.nix"
+
+  - id: hardcoded-password-likely
+    message: |
+      A line containing `password`, `passwd`, or `secret` followed by
+      what looks like an actual literal value. Audit this.
+    pattern-regex: '(?i)(password|passwd|secret|token|api[_-]?key)\s*[=:]\s*["''][A-Za-z0-9_\-]{12,}["'']'
+    languages: [generic]
+    severity: ERROR
+    paths:
+      exclude:
+        - "flake.lock"
+        - "**/secrets.nix"
+        - ".gitleaks.toml"
+        - ".semgrep.yml"
+
+  - id: env-var-with-secret-substring
+    message: |
+      Environment variables named *_TOKEN, *_KEY, *_SECRET, *_PASSWORD
+      should be set by an out-of-tree secrets mechanism (agenix, bws),
+      not via a literal in the nix expression.
+    pattern-regex: '(?i)(SESSION_TOKEN|API_KEY|SECRET_KEY|AUTH_TOKEN|ACCESS_TOKEN)\s*=\s*"(?!\$)[^"\$][^"]{8,}"'
+    languages: [generic]
+    severity: ERROR
+    paths:
+      include:
+        - "**/*.nix"
+        - "**/*.sh"
+        - "**/*.zsh"

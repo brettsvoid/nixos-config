@@ -1,0 +1,86 @@
+# gitleaks configuration tuned for nix flakes.
+#
+# Strategy:
+#   - Inherit the upstream default ruleset (covers AWS, GitHub, OpenAI,
+#     Anthropic, GCP, Stripe, generic high-entropy, etc.)
+#   - Add nix-specific allowlists so flake.lock narHashes, nix store paths,
+#     and SSH public keys don't trip false positives
+#   - Add custom rules for the things the default set misses
+
+title = "brettsvoid/nixos-config"
+
+[extend]
+useDefault = true
+
+# ─── Allowlist: legitimate nix-shaped strings ─────────────────────────────
+# These look high-entropy but are public-by-design.
+[[allowlists]]
+description = "nix store hashes / narHashes / public keys"
+regexes = [
+  # nix store paths (32-char base32 hash + name)
+  '''/nix/store/[0-9a-z]{32}-[A-Za-z0-9._+\-]+''',
+  # narHash format: sha256-<base64>= or sha256:<hex>
+  '''sha256[-:][A-Za-z0-9+/=]{43,}=?''',
+  '''sha512[-:][A-Za-z0-9+/=]{86,}=?''',
+  # ssh-ed25519 / ssh-rsa public keys (signature-shaped but public)
+  '''ssh-(rsa|ed25519|ecdsa-sha2-nistp[0-9]+) +AAAA[A-Za-z0-9+/=]+''',
+  # PGP fingerprints (16 or 40 hex chars in PGP context)
+  '''[0-9A-F]{40}''',
+  # Git commit SHAs in flake.lock / commit messages
+  '''[0-9a-f]{40}''',
+  # Generic 32-char base32 (very common in nix)
+  '''(?i)\b[a-z0-9]{32}\b''',
+]
+paths = [
+  '''flake\.lock''',
+  '''.*\.lock$''',
+]
+
+# ─── Allowlist: paths that are inherently public ──────────────────────────
+[[allowlists]]
+description = "files that contain public-key material by design"
+paths = [
+  # Phase A.5b: secrets registry holds public keys (decryption recipients)
+  '''.*/secrets\.nix$''',
+  # nvim plugin lockfiles
+  '''lazy-lock\.json$''',
+  # GitHub workflows reference run-tokens but those are ephemeral
+  '''\.github/workflows/.*\.yml$''',
+]
+
+# ─── Custom rules: catch things the default misses ────────────────────────
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key (sk-ant-*)"
+regex = '''sk-ant-[A-Za-z0-9_\-]{20,}'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API key (sk-*)"
+regex = '''sk-[A-Za-z0-9]{32,}'''
+keywords = ["sk-"]
+
+[[rules]]
+id = "bws-access-token"
+description = "Bitwarden Secrets Manager access token (0_*)"
+regex = '''0\.[0-9a-f\-]{36}\.[A-Za-z0-9_\-]{40,}:[A-Za-z0-9_\-]{40,}'''
+keywords = ["BWS_ACCESS_TOKEN", "bws"]
+
+[[rules]]
+id = "private-ssh-key-block"
+description = "PEM-encoded private key block"
+regex = '''-----BEGIN (OPENSSH|RSA|EC|DSA|PGP|ENCRYPTED) PRIVATE KEY-----'''
+
+[[rules]]
+id = "age-private-key"
+description = "Age private key (AGE-SECRET-KEY-*)"
+regex = '''AGE-SECRET-KEY-1[0-9A-Z]{50,}'''
+keywords = ["AGE-SECRET-KEY-"]
+
+[[rules]]
+id = "aws-secret-access-key-blob"
+description = "Inline AWS secret access key"
+regex = '''(?i)aws_secret_access_key[\s=:]+["']?[A-Za-z0-9/+=]{40}["']?'''
+keywords = ["aws_secret_access_key"]
