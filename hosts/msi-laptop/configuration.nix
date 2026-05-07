@@ -58,7 +58,6 @@
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nixpkgs.config.allowUnfree = true;
 
-  programs.ssh.startAgent = true;
   programs.zsh.enable = true;
   programs.firefox.enable = true;
   programs.niri.enable = true;
