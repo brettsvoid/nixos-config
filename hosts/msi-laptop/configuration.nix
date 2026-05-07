@@ -38,7 +38,6 @@
   services.greetd = let
     sessions = pkgs.linkFarm "greeter-sessions" [
       { name = "hyprland.desktop"; path = "${pkgs.hyprland}/share/wayland-sessions/hyprland.desktop"; }
-      { name = "niri.desktop"; path = "${pkgs.niri}/share/wayland-sessions/niri.desktop"; }
     ];
   in {
     enable = true;
@@ -60,16 +59,13 @@
 
   programs.zsh.enable = true;
   programs.firefox.enable = true;
-  programs.niri.enable = true;
   programs.hyprland.enable = true;
   programs.hyprlock.enable = true;
   programs.ambxst.enable = true;
 
-  # Point SSH_AUTH_SOCK at gcr-ssh-agent (gnome keyring's SSH agent, pulled
-  # in transitively, socket-activated, already loads ~/.ssh/id_ed25519).
-  # Greetd → Hyprland doesn't propagate the systemd user env, so terminal
-  # shells launched in the session never see SSH_AUTH_SOCK without this.
-  environment.sessionVariables.SSH_AUTH_SOCK = "$XDG_RUNTIME_DIR/gcr/ssh";
+  # Standard ssh-agent — terminal passphrase prompts, key cached for the
+  # session via systemd user service.
+  programs.ssh.startAgent = true;
 
   xdg.portal.config.common.default = "*";
 
@@ -80,7 +76,6 @@
     git
     wget
     ghostty
-    # Useful companions for niri
     waybar
     fuzzel
     mako
