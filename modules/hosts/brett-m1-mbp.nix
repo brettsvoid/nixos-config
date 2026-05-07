@@ -12,7 +12,6 @@
     };
     modules = [
       inputs.home-manager.darwinModules.home-manager
-      inputs.nix-homebrew.darwinModules.nix-homebrew
       (_: {
         imports = with config.flake.modules.darwin; [
           agenix
