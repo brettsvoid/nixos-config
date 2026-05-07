@@ -28,11 +28,11 @@
       # LSP servers (replaces Mason on NixOS)
       lua-language-server
       nil # Nix
-      nodePackages.typescript-language-server
+      typescript-language-server
       pyright
       gopls
       rust-analyzer
-      nodePackages.bash-language-server
+      bash-language-server
       terraform-ls
       dockerfile-language-server
       vscode-langservers-extracted # HTML/CSS/JSON/ESLint
