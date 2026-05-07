@@ -65,6 +65,12 @@
   programs.hyprlock.enable = true;
   programs.ambxst.enable = true;
 
+  # Point SSH_AUTH_SOCK at gcr-ssh-agent (gnome keyring's SSH agent, pulled
+  # in transitively, socket-activated, already loads ~/.ssh/id_ed25519).
+  # Greetd → Hyprland doesn't propagate the systemd user env, so terminal
+  # shells launched in the session never see SSH_AUTH_SOCK without this.
+  environment.sessionVariables.SSH_AUTH_SOCK = "$XDG_RUNTIME_DIR/gcr/ssh";
+
   xdg.portal.config.common.default = "*";
 
   # List packages installed in system profile.
