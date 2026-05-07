@@ -97,6 +97,15 @@
   hardware.sensor.iio.enable = true;
   services.thermald.enable = true;
 
+  # SSH
+  services.openssh = {
+    enable = true;
+    settings = {
+      PasswordAuthentication = false;
+      PermitRootLogin = "no";
+    };
+  };
+
   # Bluetooth
   hardware.bluetooth.enable = true;
 
