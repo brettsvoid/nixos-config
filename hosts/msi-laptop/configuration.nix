@@ -67,6 +67,16 @@
   # session via systemd user service.
   programs.ssh.startAgent = true;
 
+  # /etc/zshenv only sets SSH_AUTH_SOCK once per session and skips the
+  # assignment if the variable is already set (even to a stale path left
+  # behind by gcr-ssh-agent in the systemd user manager env). Re-point
+  # at the real agent on every interactive zsh.
+  programs.zsh.interactiveShellInit = ''
+    if [ -S "$XDG_RUNTIME_DIR/ssh-agent" ]; then
+      export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent"
+    fi
+  '';
+
   xdg.portal.config.common.default = "*";
 
   # List packages installed in system profile.
