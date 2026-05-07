@@ -11,7 +11,7 @@ _: {
         vault
         kubectl
         k9s
-        helm
+        kubernetes-helm
       ];
 
       home.sessionVariables = {

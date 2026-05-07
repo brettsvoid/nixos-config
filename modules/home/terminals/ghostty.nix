@@ -1,8 +1,17 @@
 # Ghostty doesn't yet have a first-class home-manager module on every channel,
 # so we manage it via xdg.configFile + the package directly.
+#
+# On Darwin the package install is skipped — nixpkgs.ghostty currently
+# blocks aarch64-darwin, so we let the homebrew cask own the binary and
+# nix only manages the config file.
 _: {
   flake.modules.homeManager.terminals-ghostty =
-    { config, pkgs, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     let
       terminal = {
         font = {
@@ -15,7 +24,7 @@ _: {
       };
     in
     {
-      home.packages = [ pkgs.ghostty ];
+      home.packages = lib.optionals pkgs.stdenv.isLinux [ pkgs.ghostty ];
 
       xdg.configFile."ghostty/config".text = ''
         # ─── Theme ─────────────────────────────────────────────────────────
