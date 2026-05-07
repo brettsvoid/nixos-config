@@ -20,8 +20,6 @@
   boot.resumeDevice = "/dev/sda2";
   # Early KMS: load NVIDIA modules in initrd for proper DRM handoff to compositor
   boot.initrd.kernelModules = [ "nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" ];
-  # Move fbcon to NVIDIA framebuffer (fb1) so Intel eDP-1 isn't stuck showing console text
-  boot.kernelParams = [ "fbcon=map:1" ];
 
   networking.hostName = "brett-msi-laptop"; 
 
