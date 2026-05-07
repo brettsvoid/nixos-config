@@ -35,9 +35,9 @@
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
           users.brett = {
-            # Phase B home modules: shell + tools + tmux + ghostty + git
-            # only. NO nvim, kitty, or WM modules — chezmoi still owns
-            # those until Phase C.
+            # Phase C migrating in pieces. Currently nix-managed: shell,
+            # tools, tmux, ghostty, git, ssh, fonts, nvim. Still chezmoi:
+            # kitty config, p10k (stale), yabai/skhd/sketchybar, tmuxinator.
             imports = with config.flake.modules.homeManager; [
               base
               shell-zsh
@@ -46,6 +46,7 @@
               shell-tools
               terminals-tmux
               terminals-ghostty
+              nvim
               apps-git
               apps-ssh
               apps-fonts

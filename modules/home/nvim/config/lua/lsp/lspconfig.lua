@@ -87,20 +87,15 @@ return { -- lspconfig
 								callSnippet = "Replace",
 							},
 							diagnostics = {
-								globals = vim.fn.has("mac") == 1 and { "vim", "hs" } or { "vim" },
+								globals = { "vim", "hs" },
 							},
 							workspace = {
-								library = (function()
-									local lib = {
-										vim.fn.expand("$VIMRUNTIME/lua"),
-										vim.fn.expand("$VIMRUNTIME/lua/vim/lsp"),
-									}
-									if vim.fn.has("mac") == 1 then
-										table.insert(lib, "/Applications/Hammerspoon.app/Contents/Resources/extensions/hs/")
-										table.insert(lib, vim.fn.expand("~") .. "/.hammerspoon/Spoons/EmmyLua.spoon/annotations")
-									end
-									return lib
-								end)(),
+								library = {
+									vim.fn.expand("$VIMRUNTIME/lua"),
+									vim.fn.expand("$VIMRUNTIME/lua/vim/lsp"),
+									"/Applications/Hammerspoon.app/Contents/Resources/extensions/hs/",
+									"/Users/brett/.hammerspoon/Spoons/EmmyLua.spoon/annotations",
+								},
 							},
 						},
 					},

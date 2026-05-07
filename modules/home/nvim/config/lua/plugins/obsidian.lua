@@ -5,7 +5,6 @@ local work_vault = vim.fn.expand("~") .. "/Documents/Work Vault"
 -- https://github.com/epwalsh/obsidian.nvim
 return {
 	"epwalsh/obsidian.nvim",
-	enabled = false,
 	version = "*", -- recommended, use latest release instead of latest commit
 	lazy = true,
 	cmd = {

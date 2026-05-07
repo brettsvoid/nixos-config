@@ -29,7 +29,7 @@ return {
 		window_overlap_clear_enabled = false,
 		window_overlap_clear_ft_ignore = { "cmp_menu", "cmp_docs", "" },
 		editor_only_render_when_focused = false,
-		tmux_show_only_in_active_window = true,
+		tmux_show_only_in_active_window = true, -- Only show images in active tmux pane
 		hijack_file_patterns = { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.avif" },
 	},
 }

@@ -70,14 +70,10 @@ return {
 		vim.keymap.set("n", "<leader>dC", dap.run_to_cursor, { desc = "Debug: Run to cursor" })
 		vim.keymap.set("n", "<leader>dg", dap.goto_, { desc = "Debug: Go to line (No execute)" })
 		vim.keymap.set("n", "<leader>di", dap.step_into, { desc = "Debug: Step into" })
-		vim.keymap.set("n", "<S-l>", dap.step_into, { desc = "Debug: Step into" })
 		vim.keymap.set("n", "<leader>dj", dap.down, { desc = "Debug: Down" })
-		vim.keymap.set("n", "<S-j>", dap.down, { desc = "Debug: Down" })
 		vim.keymap.set("n", "<leader>dk", dap.up, { desc = "Debug: Up" })
-		vim.keymap.set("n", "<S-k>", dap.up, { desc = "Debug: Up" })
 		vim.keymap.set("n", "<leader>dl", dap.run_last, { desc = "Debug: Run last" })
 		vim.keymap.set("n", "<leader>do", dap.step_out, { desc = "Debug: Step out" })
-		vim.keymap.set("n", "<S-h>", dap.step_out, { desc = "Debug: Step out" })
 		vim.keymap.set("n", "<leader>dO", dap.step_over, { desc = "Debug: Step over" })
 		vim.keymap.set("n", "<leader>dP", dap.pause, { desc = "Debug: Pause" })
 		vim.keymap.set("n", "<leader>dr", dap.repl.toggle, { desc = "Debug: Toggle repl" })
@@ -119,10 +115,7 @@ return {
 		require("dap-go").setup({})
 
 		-- Install python specific config
-		local python_path = vim.fn.has("mac") == 1
-				and "/opt/homebrew/anaconda3/bin/python"
-			or (vim.fn.exepath("python3") ~= "" and vim.fn.exepath("python3") or "python3")
-		require("dap-python").setup(python_path)
+		require("dap-python").setup("/opt/homebrew/anaconda3/bin/python")
 
 		dap.configurations.python = {
 			{

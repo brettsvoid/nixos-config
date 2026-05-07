@@ -42,7 +42,13 @@ return {
       end
     end)
 
-    vim.g.rainbow_delimiters = { highlight = highlight }
+    vim.g.rainbow_delimiters = {
+      highlight = highlight,
+      condition = function(bufnr)
+        local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+        return ok and parser ~= nil
+      end,
+    }
     ibl.setup { indent = { highlight = highlight } }
 
     hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)

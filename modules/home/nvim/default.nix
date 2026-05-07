@@ -1,8 +1,21 @@
 # Neovim with full LSP/formatter/linter toolchain. Lazy.nvim manages plugins
 # at runtime; the lua tree under ./config is the static source of truth.
+#
+# IMPORTANT: ~/.config/nvim itself stays a real directory so lazy.nvim can
+# write its lazy-lock.json there. Only the *children* are managed (each as
+# an mkOutOfStoreSymlink → live repo path). Editing a .lua file in the
+# repo updates nvim immediately; no rebuild needed.
 _: {
   flake.modules.homeManager.nvim =
-    { pkgs, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
+    let
+      configRoot = "${config.home.homeDirectory}/nixos-config/modules/home/nvim/config";
+    in
     {
       programs.neovim = {
         enable = true;
@@ -10,71 +23,78 @@ _: {
         viAlias = true;
         vimAlias = true;
 
-        extraPackages = with pkgs; [
-          # Build deps (treesitter parser compilation, plugin builds)
-          gcc
-          gnumake
-          cmake
-          nodejs
-          python3
-          git
-          curl
-          unzip
-          luarocks
-          lua5_1
+        extraPackages =
+          with pkgs;
+          [
+            # Build deps (treesitter parser compilation, plugin builds)
+            gcc
+            gnumake
+            cmake
+            nodejs
+            python3
+            git
+            curl
+            unzip
+            luarocks
+            lua5_1
 
-          # Language toolchains
-          go
-          rustc
-          cargo
+            # Language toolchains
+            go
+            rustc
+            cargo
 
-          # LSP servers (replaces Mason on NixOS)
-          lua-language-server
-          nil # Nix
-          typescript-language-server
-          pyright
-          gopls
-          rust-analyzer
-          bash-language-server
-          terraform-ls
-          dockerfile-language-server
-          vscode-langservers-extracted # HTML/CSS/JSON/ESLint
-          emmet-ls
-          tailwindcss-language-server
-          biome
-          glsl_analyzer
-          yaml-language-server
+            # LSP servers (replaces Mason on NixOS)
+            lua-language-server
+            nil # Nix
+            typescript-language-server
+            pyright
+            gopls
+            rust-analyzer
+            bash-language-server
+            terraform-ls
+            dockerfile-language-server
+            vscode-langservers-extracted # HTML/CSS/JSON/ESLint
+            emmet-ls
+            tailwindcss-language-server
+            biome
+            glsl_analyzer
+            yaml-language-server
 
-          # Formatters
-          stylua
-          prettierd
-          prettier
-          black
-          isort
-          gofumpt
-          goimports-reviser
-          golines
-          shfmt
-          taplo
-          rustfmt
+            # Formatters
+            stylua
+            prettierd
+            prettier
+            black
+            isort
+            gofumpt
+            goimports-reviser
+            golines
+            shfmt
+            taplo
+            rustfmt
 
-          # Linters
-          eslint_d
-          selene
-          shellcheck
-          tflint
+            # Linters
+            eslint_d
+            selene
+            shellcheck
+            tflint
 
-          # Clipboard (Wayland)
-          wl-clipboard
-
-          # Tools used by plugins
-          ripgrep
-          fd
-          lazygit
-          tree-sitter
-        ];
+            # Tools used by plugins
+            ripgrep
+            fd
+            lazygit
+            tree-sitter
+          ]
+          # Wayland clipboard helper — Linux-only (Darwin uses pbcopy/pbpaste)
+          ++ lib.optionals pkgs.stdenv.isLinux [ wl-clipboard ];
       };
 
-      xdg.configFile."nvim".source = ./config;
+      xdg.configFile = {
+        "nvim/init.lua".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/init.lua";
+        "nvim/lua".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/lua";
+        "nvim/lsp".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/lsp";
+        "nvim/queries".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/queries";
+        "nvim/README.md".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/README.md";
+      };
     };
 }

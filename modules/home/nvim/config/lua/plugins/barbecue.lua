@@ -1,3 +1,4 @@
+-- https://github.com/utilyre/barbecue.nvim
 return {
 	"utilyre/barbecue.nvim",
 	name = "barbecue",

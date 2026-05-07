@@ -1,3 +1,4 @@
+-- https://github.com/rmagatti/auto-session
 return {
 	"rmagatti/auto-session",
 	enabled = false,
