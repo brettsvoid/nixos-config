@@ -3,12 +3,13 @@ _: {
     { lib, pkgs, ... }:
     {
       programs.zsh.shellAliases = {
-        # Flake management
+        # Flake management. `nix-rebuild` builds + activates the host
+        # config matching `hostname` (no `#name` needed since each host
+        # file uses the machine hostname as its config name).
         edit = "cd ~/nixos-config && $EDITOR .";
-        update = "nix flake update --flake ~/nixos-config";
-        rebuild =
+        nix-rebuild =
           if pkgs.stdenv.isDarwin then
-            "darwin-rebuild switch --flake ~/nixos-config"
+            "sudo darwin-rebuild switch --flake ~/nixos-config"
           else
             "sudo nixos-rebuild switch --flake ~/nixos-config";
 

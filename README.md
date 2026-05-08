@@ -37,8 +37,7 @@ docs/SECRETS.md            # secrets architecture & operational guide
 ## Daily use
 
 ```sh
-rebuild           # alias: nixos-rebuild / darwin-rebuild for the current host
-update            # nix flake update
+nix-rebuild       # alias: nixos-rebuild / darwin-rebuild for the current host
 edit              # cd ~/nixos-config && $EDITOR .
 ```
 

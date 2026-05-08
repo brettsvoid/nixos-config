@@ -61,4 +61,4 @@ esac
 
 echo ""
 echo "==> Bootstrap complete for $HOST."
-echo "==> Future updates: \`rebuild\` (alias)."
+echo "==> Future updates: \`nix-rebuild\` (alias)."
