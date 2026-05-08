@@ -49,6 +49,9 @@
               terminals-tmux
               terminals-ghostty
               terminals-kitty
+              darwin-yabai
+              darwin-skhd
+              darwin-sketchybar
               nvim
               apps-git
               apps-ssh

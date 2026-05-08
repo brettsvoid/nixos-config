@@ -4,3 +4,4 @@
 
 # direnv local state
 .direnv/
+.DS_Store
