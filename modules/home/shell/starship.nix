@@ -6,28 +6,54 @@ _: {
       settings = {
         palette = "catppuccin_mocha";
 
-        format = builtins.concatStringsSep "" [
-          "$directory"
-          "$git_branch"
-          "$git_status"
-          "$nix_shell"
-          "$rust"
-          "$python"
-          "$nodejs"
-          "$cmd_duration"
-          "$line_break"
-          "$character"
-        ];
+        # format = builtins.concatStringsSep "" [
+        #   "$directory"
+        #   "$git_branch"
+        #   "$git_status"
+        #   "$nix_shell"
+        #   "$rust"
+        #   "$python"
+        #   "$nodejs"
+        #   "$cmd_duration"
+        #   "$line_break"
+        #   "$character"
+        # ];
+
+        aws = {
+          format = "aws [$symbol($profile )(\($region\) )(\[$duration\] )]($style)";
+          symbol = "☁️ ";
+        };
+
+        character = {
+          error_symbol = "[✖](bold red)";
+          success_symbol = "[❯](bold green)";
+        };
+
+        cmd_duration = {
+          style = "bold yellow";
+          min_time = 2000;
+          format = "took [$duration]($style) ";
+        };
 
         directory = {
           style = "bold lavender";
+          truncate_to_repo = false;
           truncation_length = 4;
           truncation_symbol = "…/";
         };
 
+        direnv = {
+          disabled = false;
+        };
+
+        gcloud = {
+          format = "gcloud [$symbol$account(@$domain)(\($region\))]($style) ";
+          symbol = "☁️ ";
+        };
+
         git_branch = {
+          format = "[$symbol$branch(:$remote_branch)]($style) ";
           style = "bold mauve";
-          symbol = " ";
         };
 
         git_status = {
@@ -37,35 +63,8 @@ _: {
         };
 
         nix_shell = {
-          style = "bold blue";
-          symbol = " ";
-          format = "via [$symbol$state]($style) ";
-        };
-
-        rust = {
-          style = "bold peach";
-          symbol = " ";
-        };
-
-        python = {
-          style = "bold yellow";
-          symbol = " ";
-        };
-
-        nodejs = {
-          style = "bold green";
-          symbol = " ";
-        };
-
-        cmd_duration = {
-          style = "bold yellow";
-          min_time = 2000;
-          format = "took [$duration]($style) ";
-        };
-
-        character = {
-          success_symbol = "[❯](bold green)";
-          error_symbol = "[❯](bold red)";
+          format = "[$symbol$state( \($name\))]($style) ";
+          symbol = "❄️ ";
         };
 
         palettes.catppuccin_mocha = {
