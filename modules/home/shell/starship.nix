@@ -31,7 +31,9 @@ _: {
         };
 
         git_status = {
-          style = "bold red";
+          ahead = "⇡$count";
+          behind = "⇣$count";
+          diverged = "⇕⇡$ahead_count⇣$behind_count";
         };
 
         nix_shell = {
