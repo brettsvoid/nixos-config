@@ -2,7 +2,7 @@
 # tooling (gh, lazygit, claude-code, language toolchains) lives in profiles/code.
 _: {
   flake.modules.homeManager.shell-tools =
-    { pkgs, ... }:
+    { lib, pkgs, ... }:
     {
       home.packages = with pkgs; [
         fd
@@ -43,6 +43,28 @@ _: {
             "--border"
           ];
         };
+
+        # direnv is enabled in profile-code for the binary + nix-direnv.
+        # The zsh hook is added there too — no manual `eval $(direnv hook
+        # zsh)` needed here.
       };
+
+      # Tool hooks that don't have a home-manager `programs.*` module.
+      programs.zsh.initContent = lib.mkOrder 800 ''
+        # fnm (Fast Node Manager). Currently provided by homebrew; the
+        # `--use-on-cd` switch picks up .nvmrc when entering a project.
+        if command -v fnm &>/dev/null; then
+          eval "$(fnm env --use-on-cd)"
+        fi
+
+        # envman (per-project env-var manager)
+        [ -s "$HOME/.config/envman/load.sh" ] && \
+          source "$HOME/.config/envman/load.sh"
+
+        # Docker CLI completions installed by Docker Desktop
+        if [[ -d "$HOME/.docker/completions" ]]; then
+          fpath=("$HOME/.docker/completions" $fpath)
+        fi
+      '';
     };
 }

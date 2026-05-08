@@ -42,6 +42,8 @@
               base
               shell-zsh
               shell-aliases
+              shell-env
+              shell-functions
               shell-starship
               shell-tools
               terminals-tmux
