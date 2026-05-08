@@ -87,7 +87,7 @@ _: {
           "fastlane"
           "fd"
           "felixkratz/formulae/borders"
-          "felixkratz/formulae/sketchybar"
+          # sketchybar moved to nix-darwin services (see window-manager.nix)
           "ffmpegthumbnailer"
           "fnm"
           "gabotechs/taps/dep-tree"
@@ -110,8 +110,7 @@ _: {
           "inframap"
           "ios-deploy"
           "julien-cpsn/atac/atac"
-          "koekeishiya/formulae/skhd"
-          "koekeishiya/formulae/yabai"
+          # skhd + yabai moved to nix-darwin services (see window-manager.nix)
           "lazydocker"
           "lazygit"
           "lazyjournal"

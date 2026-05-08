@@ -19,6 +19,7 @@
           defaults
           users
           homebrew
+          window-manager
         ];
 
         # ─── Identity ──────────────────────────────────────────────────
