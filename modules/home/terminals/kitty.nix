@@ -14,7 +14,8 @@ _: {
         };
         opacity = 0.95;
         padding = 8;
-        scrollback = 10000;
+        margin = 8;
+        scrollback = 4000;
       };
     in
     {
@@ -36,19 +37,21 @@ _: {
           scrollback_lines = terminal.scrollback;
 
           # Window
-          enabled_layouts = "Tall,Fat,Grid,Stack";
+          enabled_layouts = "Tall,*";
           window_border_width = 0;
-          window_margin_width = 0;
+          window_margin_width = terminal.margin;
           window_padding_width = terminal.padding;
           single_window_margin_width = 0;
-          single_window_padding_width = terminal.padding;
+          single_window_padding_width = "${toString terminal.padding} ${toString terminal.padding}";
           active_border_color = "none";
           inactive_text_alpha = "0.4";
           dim_opacity = "0.4";
           background_opacity = builtins.toString terminal.opacity;
 
-          # Background
-          background_image = "${config.home.homeDirectory}/.config/kitty/anime-neko-ninja-wallpaper-rework.png";
+          # Background. Image is shipped from the repo; nix-store path is
+          # stable across rebuilds so kitty doesn't lose its wallpaper if
+          # ~/.config gets cleaned.
+          background_image = "${./kitty/anime-neko-ninja-wallpaper-rework.png}";
           background_image_layout = "cscaled";
           background_image_linear = "yes";
           background_tint = "0.95";
@@ -65,10 +68,18 @@ _: {
           tab_bar_min_tabs = 2;
         }
         // lib.optionalAttrs pkgs.stdenv.isLinux {
-          # Wayland / Linux-only options
+          # Wayland / Linux-only
           linux_display_server = "wayland";
           wayland_titlebar_color = "background";
           hide_window_decorations = "yes";
+        }
+        // lib.optionalAttrs pkgs.stdenv.isDarwin {
+          # macOS-only
+          background_blur = 20;
+          hide_window_decorations = "titlebar-only";
+          macos_titlebar_color = "background";
+          macos_option_as_alt = "yes";
+          macos_thicken_font = "0.2";
         };
         keybindings = {
           # Splits
@@ -96,6 +107,10 @@ _: {
           # Word jump
           "alt+left" = "send_text all \\x1b[1;3D";
           "alt+right" = "send_text all \\x1b[1;3C";
+
+          # Vim-style cursor motion in shells
+          "alt+h" = "send_text all \\x1b[D";
+          "alt+l" = "send_text all \\x1b[C";
         };
       };
     };

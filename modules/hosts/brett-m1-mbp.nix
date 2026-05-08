@@ -48,6 +48,7 @@
               shell-tools
               terminals-tmux
               terminals-ghostty
+              terminals-kitty
               nvim
               apps-git
               apps-ssh
