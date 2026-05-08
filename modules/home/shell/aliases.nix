@@ -14,17 +14,19 @@ _: {
 
         # Editor shortcut (vim/vi handled by programs.neovim's
         # viAlias/vimAlias options)
+        vim = "nvim";
         v = "nvim";
+        vimdiff = "nvim -d";
 
         # Modern replacements
-        cat = "bat";
+        # cat = "bat";
         ls = "eza";
         ll = "eza -la";
         la = "eza -a";
-        lt = "eza --tree --level=2";
-        grep = "rg";
-        find = "fd";
-        ps = "procs";
+        tree = "eza --tree --level=2";
+        # grep = "rg";
+        # find = "fd";
+        # ps = "procs";
         df = "duf";
         du = "dust";
 

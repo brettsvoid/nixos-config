@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-source "$HOME/.config/config.sh"
+# Sketchybar height (was sourced from ~/.config/config.sh; inlined when
+# config.sh was retired in Phase C.5).
+EXTERNAL_BAR_HEIGHT=52
 
 # To get the names of all the running applications
 # yabai -m query --windows | jq -r '.[].app'
@@ -9,16 +11,14 @@ source "$HOME/.config/config.sh"
 current_dir="$(dirname "$0")"
 source "$current_dir/yabai_env.sh"
 
-# Clean up signals and rules to prevent duplicates on restart
-yabai -m signal --remove-all
-yabai -m rule --remove-all
-
-# This command is the one that loads the scripting addition
-# Configure your user to execute `yabai --load-sa` as the root user without having to enter a password.
-#  https://github.com/koekeishiya/yabai/wiki/Installing-yabai-(latest-release)#configure-scripting-addition
-yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
-sudo yabai --load-sa
-yabai -m signal --add event=system_woke action="sudo yabai --load-sa"
+# Scripting addition: disabled. Re-enable later with
+# `services.yabai.enableScriptingAddition = true` in nix-darwin
+# (requires SIP partial-disable + sudoers entry for the new yabai
+# /nix/store path). Tiling works without SA — only loses window
+# shadow / opacity / padding effects.
+# yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
+# sudo yabai --load-sa
+# yabai -m signal --add event=system_woke action="sudo yabai --load-sa"
 
 # This is the recommended setup for using the Raycast yabai extension
 # Commented out - not needed
