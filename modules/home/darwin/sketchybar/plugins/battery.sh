@@ -1,7 +1,7 @@
 #!/bin/sh
 
-source "$HOME/.config/colors.sh"
-source "$HOME/.config/icons.sh"
+source "$CONFIG_DIR/colors.sh"
+source "$CONFIG_DIR/icons.sh"
 
 BATT_PERCENT="$(pmset -g batt | grep -Eo "\d+%" | cut -d% -f1)"
 IS_CHARGING="$(pmset -g batt | grep 'AC Power')"

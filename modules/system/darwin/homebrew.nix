@@ -5,9 +5,11 @@
 # The lists below run `brew bundle` at activation against an existing
 # brew installation that nix doesn't manage.
 #
-# CRITICAL: onActivation.cleanup = "none" — do NOT zap brews/casks not
-# declared here. Phase B is "track current state". Phase C audits and
-# flips this to "zap".
+# `onActivation.cleanup = "none"` — undeclared brews/casks are left alone.
+# Flipping to "uninstall"/"zap" is blocked on resolving the vivaldi cask
+# (currently undeclared because its upstream cask URL 404s; the locally
+# installed app keeps working). Once the cask is republishable, declare
+# it and flip cleanup. Manual `brew uninstall` is the workflow until then.
 _: {
   flake.modules.darwin.homebrew =
     { config, lib, ... }:
@@ -19,7 +21,18 @@ _: {
       # ever tapping. Pre-tap each declared tap as user brett before the
       # homebrew module's bundle phase runs.
       # Drop this when upstream brew bundle resolves taps before brews.
+      #
+      # Also: a symlink from 2021 brew installs at
+      # /opt/homebrew/share/zsh/site-functions/_brew points to a path
+      # that no longer exists; modern brew reports "Completions are not
+      # linked" and won't recreate it. The dangling link triggers a
+      # compinit error in every new zsh session.
       system.activationScripts.preActivation.text = lib.mkAfter ''
+        if [ -L /opt/homebrew/share/zsh/site-functions/_brew ] \
+           && [ ! -e /opt/homebrew/share/zsh/site-functions/_brew ]; then
+          rm -f /opt/homebrew/share/zsh/site-functions/_brew
+        fi
+
         if [ -x /opt/homebrew/bin/brew ]; then
           existing_taps="$(sudo --user=brett /opt/homebrew/bin/brew tap 2>/dev/null || true)"
           for tap in ${
@@ -38,8 +51,8 @@ _: {
         onActivation = {
           autoUpdate = false;
           upgrade = false;
-          # PHASE B: do not delete anything not in this list. Phase C flips
-          # this to "zap" once the migration audit is complete.
+          # See top-of-file note. Holding at "none" until vivaldi can
+          # rejoin the declared casks list.
           cleanup = "none";
         };
 
@@ -61,8 +74,12 @@ _: {
           "wix/brew"
         ];
 
-        # Snapshot from `brew leaves --installed-on-request`. Many of these
-        # have nixpkgs equivalents; Phase C audits which to migrate.
+        # `brew leaves --installed-on-request`. Anything migratable to
+        # nixpkgs without losing platform-specific behaviour should move
+        # over time; the remainder lives here. Items intentionally absent
+        # because nix manages them (and the brew copy is redundant):
+        # `direnv` (programs.direnv in profile-code), `yabai`/`skhd`/
+        # `sketchybar` (services in system/darwin/window-manager.nix).
         brews = [
           "age"
           "angband"
@@ -144,6 +161,7 @@ _: {
           "procs"
           "python@3.10"
           "python@3.11"
+          "python@3.12"
           "qemu"
           "qrencode"
           "qt@5"

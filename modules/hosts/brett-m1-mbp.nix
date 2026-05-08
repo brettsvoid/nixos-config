@@ -1,8 +1,4 @@
 # Brett's M1 MacBook Pro (16 GB, aarch64-darwin).
-#
-# Phase B: nix-darwin runs alongside chezmoi. nix manages shell + tools +
-# tmux + ghostty + git config. chezmoi still owns nvim, kitty, p10k (now
-# stale), yabai, skhd, sketchybar. Phase C migrates each piece in turn.
 { config, inputs, ... }:
 {
   flake.darwinConfigurations.brett-m1-mbp = inputs.nix-darwin.lib.darwinSystem {
@@ -36,9 +32,6 @@
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
           users.brett = {
-            # Phase C migrating in pieces. Currently nix-managed: shell,
-            # tools, tmux, ghostty, git, ssh, fonts, nvim. Still chezmoi:
-            # kitty config, p10k (stale), yabai/skhd/sketchybar, tmuxinator.
             imports = with config.flake.modules.homeManager; [
               base
               shell-zsh

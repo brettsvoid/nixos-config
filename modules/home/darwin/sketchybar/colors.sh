@@ -1,24 +1,46 @@
-#!/usr/bin/env sh
+#!/bin/sh
 
-# Source the colorscheme file
-#source "$HOME/github/dotfiles-latest/colorscheme/active/active-colorscheme.sh"
+# Catpuccin Color Palette
 
-### Sonokai
-# export BLACK=0xff181819
-# export WHITE=0xffe2e2e3
-# export RED=0xfffc5d7c
-# export GREEN=0xff9ed072
-# export BLUE=0xff76cce0
-# export YELLOW=0xffe7c664
-# export ORANGE=0xfff39660
-# export MAGENTA=0xffb39df3
-# export GREY=0xff7f8490
-# export TRANSPARENT=0x00000000
-# export BG0=0xff2c2e34
-# export BG1=0xff363944
-# export BG2=0xff414550
+export COLOR_BACKGROUND=0xe01d2021
+export COLOR_FOREGROUND=0xe0fbf1c7
 
-#### Catppuccin
+export COLOR_ACCENT=0xe0d65d0e
+export COLOR_ACCENT_BRIGHT=0xe0fe8019
+
+export COLOR_BLACK=0xe0282828
+export COLOR_RED=0xe0cc241d
+export COLOR_GREEN=0xe098971a
+export COLOR_YELLOW=0xe0d79921
+export COLOR_BLUE=0xe0458588
+export COLOR_MAGENTA=0xe0b16286
+export COLOR_CYAN=0xe0689d6a
+export COLOR_WHITE=0xe0a89984
+
+export COLOR_BLACK_BRIGHT=0xe0928374
+export COLOR_RED_BRIGHT=0xe0fb4934
+export COLOR_GREEN_BRIGHT=0xe0b8bb26
+export COLOR_YELLOW_BRIGHT=0xe0fabd2f
+export COLOR_BLUE_BRIGHT=0xe083a598
+export COLOR_MAGENTA_BRIGHT=0xe0d3869b
+export COLOR_CYAN_BRIGHT=0xe08ec07c
+export COLOR_WHITE_BRIGHT=0xe0ebdbb2
+
+# Revised TODO: apply Catpuccin colors
+export COLOR_BACKGROUND=0xe01d2021
+export COLOR_ON_BACKGROUND=0xe0fbf1c7
+
+export COLOR_BORDER=$COLOR_YELLOW
+export COLOR_ICON=$COLOR_YELLOW
+export COLOR_LABEL=$COLOR_YELLOW
+export COLOR_TRANSPARENT=0x00000000
+
+export COLOR_DATE_TIME=$COLOR_RED
+
+
+export COLOR_ORANGE=0xfff5a97f
+
+# Catpuccin
 export BLACK=0xff181926
 export WHITE=0xffcad3f5
 export RED=0xffed8796
@@ -37,59 +59,6 @@ export BG0O80=0xCC1e1e2e
 export BG0O85=0xD91e1e2e
 export BG1=0x603c3e4f
 export BG2=0x60494d64
-
-# # Eldritch Theme
-# # https://github.com/eldritch-theme
-# export BLACK=0xff181926
-# export WHITE=0xffebfafa
-# export RED=0xfff16c75
-# export GREEN=0xff37f499
-# export BLUE=0xff04d1f9
-# export YELLOW=0xfff1fc79
-# export ORANGE=0xfff7c67f
-# export MAGENTA=0xffa48cf2
-# export GREY=0xff323449
-# export TRANSPARENT=0x00000000
-# export BG0=0xff1e1e2e
-# export BG0O50=0x801e1e2e
-# export BG0O60=0x991e1e2e
-# export BG0O70=0xB21e1e2e
-# export BG0O80=0xCC1e1e2e
-# # export BG0O85=0xD91e1e2e
-# # export BG0O85=0xD9212337
-# # This sets the color of the bar
-# # Eldritch dark
-# export BG0O85=0xCF0D1116
-# # Eldritch light
-# # export BG0O85=0xCF212337
-# export BG1=0x603c3e4f
-# export BG2=0x60494d64
-
-# Linkarzu Theme
-# export BLACK=0xff${linkarzu_color10#\#}
-# export WHITE=0xff${linkarzu_color14#\#}
-# export RED=0xff${linkarzu_color11#\#}
-# export GREEN=0xff${linkarzu_color02#\#}
-# export BLUE=0xff${linkarzu_color03#\#}
-# export YELLOW=0xff${linkarzu_color12#\#}
-# export ORANGE=0xff${linkarzu_color04#\#}
-# export MAGENTA=0xff${linkarzu_color01#\#}
-# export GREY=0xff${linkarzu_color09#\#}
-# export TRANSPARENT=0x00000000
-# export BG0=0xff${linkarzu_color10#\#}
-# export BG0O50=0x80${linkarzu_color10#\#}
-# export BG0O60=0x99${linkarzu_color10#\#}
-# export BG0O70=0xb2${linkarzu_color10#\#}
-# export BG0O80=0xcc${linkarzu_color10#\#}
-# export BG0O85=0xD91e1e2e
-# export BG0O85=0xD9212337
-# This sets the color of the bar
-# Eldritch dark
-# export BG0O85=0x55${linkarzu_color10#\#}
-# Eldritch light
-# export BG0O85=0xCF212337
-# export BG1=0x60${linkarzu_color13#\#}
-# export BG2=0x60${linkarzu_color07#\#}
 
 # General bar colors
 export BAR_COLOR=$BG0O85

@@ -1,6 +1,6 @@
-source "$HOME/.config/config.sh"
-source "$HOME/.config/colors.sh"
-source "$HOME/.config/icons.sh"
+source "$CONFIG_DIR/config.sh"
+source "$CONFIG_DIR/colors.sh"
+source "$CONFIG_DIR/icons.sh"
 
 [ -f "$CONFIG_DIR/env.sh" ] && source "$CONFIG_DIR/env.sh"
 

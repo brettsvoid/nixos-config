@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
-source "$HOME/.config/colors.sh"
-source "$HOME/.config/icons.sh"
+source "$CONFIG_DIR/colors.sh"
+source "$CONFIG_DIR/icons.sh"
 
 IP_ADDRESS=$(scutil --nwi | grep address | sed 's/.*://' | tr -d ' ' | head -1)
 IS_VPN=$(scutil --nwi | grep -m1 'utun' | awk '{ print $1 }')

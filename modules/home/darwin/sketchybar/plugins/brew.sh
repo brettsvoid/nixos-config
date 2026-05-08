@@ -8,7 +8,7 @@ export HOMEBREW_MAKE_JOBS=4
 export HOMEBREW_CURL_RETRIES=0
 export HOMEBREW_DOWNLOAD_CONCURRENCY=1
 
-source "$HOME/.config/colors.sh"
+source "$CONFIG_DIR/colors.sh"
 
 COUNT="$(brew outdated | wc -l | tr -d ' ')"
 

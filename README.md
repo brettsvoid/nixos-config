@@ -13,7 +13,7 @@ pattern](https://github.com/mightyiam/dendritic) (flake-parts + import-tree).
 | Host | Platform | Profiles | Status |
 |---|---|---|---|
 | `brett-msi-laptop` | NixOS (x86_64-linux, Hyprland, NVIDIA, greetd) | base, code, gaming | active |
-| `brett-m1-mbp` | nix-darwin (aarch64-darwin) | base, code, work | planned (Phase B) |
+| `brett-m1-mbp` | nix-darwin (aarch64-darwin) | base, code, work | active |
 | `brett-mac-mini` | nix-darwin (aarch64-darwin) | base, code, work | planned (Phase D) |
 | `brett-main-desktop` | NixOS (x86_64-linux) | base, code, gaming, art | planned (Phase E) |
 | `server-pi` | NixOS (aarch64-linux, headless, colmena-deployed) | base, server | planned (Phase F) |
@@ -47,8 +47,6 @@ edit              # cd ~/nixos-config && $EDITOR .
 ```sh
 sh <(curl -fsSL https://raw.githubusercontent.com/brettsvoid/nixos-config/main/bootstrap.sh) <hostname>
 ```
-
-(Bootstrap script lands with Phase B.)
 
 ## Development
 

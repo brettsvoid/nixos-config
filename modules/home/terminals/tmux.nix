@@ -82,6 +82,13 @@ _: {
           bind -n M-H previous-window
           bind -n M-L next-window
 
+          # Sesh: curated project session picker.
+          # Sources: running tmux sessions + ~/.config/sesh/sesh.toml entries
+          # (`-tcd` excludes zoxide directories; -d hides duplicates so a
+          # grouped session shows once).
+          bind T display-popup -E -w 60% -h 60% \
+            "sesh connect \"\$(sesh list -tcd | fzf --prompt='sessions  ' --header='enter: attach or create')\""
+
           # Status bar position
           set -g status-position bottom
         '';
