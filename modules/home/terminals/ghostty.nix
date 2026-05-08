@@ -49,7 +49,7 @@ _: {
 
         # ─── Background ────────────────────────────────────────────────────
         background-opacity = ${builtins.toString terminal.opacity}
-        background-image = ${config.home.homeDirectory}/.config/ghostty/anime_style_sheet_ghost_outside_town.jpg
+        background-image = ${./ghostty/anime_style_sheet_ghost_outside_town.jpg}
         background-image-fit = cover
         background-image-opacity = 0.05
 

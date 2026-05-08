@@ -21,6 +21,29 @@ _: {
             rm -f -- "$tmp"
           }
 
+          # mkdir + cd in one command
+          md() { mkdir -p "$@" && cd -- "$@"; }
+
+          # Quick "what's this" — opens a Google search in the default browser
+          wtf() { /usr/bin/open "http://www.google.com/search?q=$1"; }
+
+          # cht.sh launcher: pick a language/util via fzf, prompt for a query,
+          # fetch the cheatsheet from cht.sh.
+          cht() {
+            local languages="rust lua python typescript nodejs"
+            local utils="xargs find mv sed awk"
+            local selected
+            selected="$(printf '%s\n%s' "$languages" "$utils" | tr ' ' '\n' | fzf)"
+            [ -z "$selected" ] && return 1
+            local query
+            read "query?query: "
+            if echo "$languages" | grep -qs "$selected"; then
+              curl "cht.sh/$selected/''${query// /+}"
+            else
+              curl "cht.sh/$selected~$query"
+            fi
+          }
+
           # Conda lazy-loader: only invoke conda's slow init when first used.
           conda() {
             unset -f conda

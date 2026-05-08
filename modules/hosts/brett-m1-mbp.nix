@@ -56,6 +56,7 @@
               apps-git
               apps-ssh
               apps-fonts
+              apps-sql-formatter
               profile-base
               profile-code
               profile-work

@@ -74,7 +74,6 @@ _: {
           "bore-cli"
           "bundletool"
           "caddy"
-          "chezmoi"
           "cmake"
           "cocoapods"
           "dive"
