@@ -24,6 +24,14 @@ _: {
         vimAlias = true;
         vimdiffAlias = true;
 
+        # Drop the Ruby and Python providers — config is Lua-only and the
+        # only Python touchpoint (nvim-dap-python) shells out to an
+        # external interpreter rather than using the in-process provider.
+        # Adopts the home-manager 26.05 default early; without these our
+        # `home.stateVersion = "24.11"` triggers a deprecation warning.
+        withRuby = false;
+        withPython3 = false;
+
         extraPackages =
           with pkgs;
           [
