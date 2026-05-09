@@ -1,6 +1,14 @@
-# NVIDIA + Intel hybrid GPU configuration
-# NOTE: prime.intelBusId and prime.nvidiaBusId are machine-specific.
-#       Find yours with: lspci | grep VGA
+# NVIDIA Optimus configuration: Intel iGPU + discrete NVIDIA GPU on the same
+# laptop, with Intel driving at least one display (typically the internal
+# panel) and NVIDIA driving external monitors.
+#
+# Do NOT import this on:
+#   - pure-NVIDIA desktops or single-GPU NVIDIA laptops — prime.* is wrong and
+#     the Mesa EGL entry below is unnecessary
+#   - hosts without an NVIDIA GPU
+#
+# Per-host overrides: prime.intelBusId / prime.nvidiaBusId
+# (find yours with `lspci | grep VGA`).
 _: {
   flake.modules.nixos.nvidia =
     { config, ... }:
