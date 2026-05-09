@@ -153,17 +153,20 @@
 
               # Host-specific Hyprland workspace bindings.
               # DP-1 = external monitor (right), eDP-1 = laptop screen (left).
+              # persistent:true keeps each workspace alive even when its monitor
+              # is absent — apps land on the available monitor instead of into
+              # an invisible orphan, and snap back when DP-1 reconnects.
               wayland.windowManager.hyprland.settings.workspace = [
-                "1, monitor:DP-1, default:true"
-                "2, monitor:DP-1"
-                "3, monitor:DP-1"
-                "4, monitor:DP-1"
-                "5, monitor:DP-1"
-                "6, monitor:eDP-1, default:true"
-                "7, monitor:eDP-1"
-                "8, monitor:eDP-1"
-                "9, monitor:eDP-1"
-                "10, monitor:eDP-1"
+                "1, monitor:DP-1, default:true, persistent:true"
+                "2, monitor:DP-1, persistent:true"
+                "3, monitor:DP-1, persistent:true"
+                "4, monitor:DP-1, persistent:true"
+                "5, monitor:DP-1, persistent:true"
+                "6, monitor:eDP-1, default:true, persistent:true"
+                "7, monitor:eDP-1, persistent:true"
+                "8, monitor:eDP-1, persistent:true"
+                "9, monitor:eDP-1, persistent:true"
+                "10, monitor:eDP-1, persistent:true"
               ];
             };
           };
