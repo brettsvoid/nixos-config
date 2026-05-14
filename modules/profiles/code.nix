@@ -18,6 +18,7 @@ _: {
         delta
         direnv
         nix-direnv
+        just
       ];
 
       programs.direnv = {
