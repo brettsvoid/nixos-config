@@ -58,6 +58,16 @@ return {
 		},
 	},
 	init = function()
+		vim.g.rustaceanvim = {
+			server = {
+				default_settings = {
+					["rust-analyzer"] = {
+						cargo = { targetDir = true },
+					},
+				},
+			},
+		}
+
 		-- Temporary workaround until the next update in Feb 2025
 		-- https://github.com/neovim/neovim/issues/30985
 		for _, method in ipairs({ "textDocument/diagnostic", "workspace/diagnostic" }) do
