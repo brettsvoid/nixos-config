@@ -99,6 +99,8 @@ return {
 
 			go = { "gofumpt", "goimports_reviser", "golines" },
 
+			nix = { "nixpkgs_fmt" },
+
 			["*"] = { "injected" },
 		},
 		-- Set up format-on-save
