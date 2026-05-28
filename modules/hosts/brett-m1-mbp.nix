@@ -9,13 +9,20 @@
     modules = [
       inputs.home-manager.darwinModules.home-manager
       (_: {
+        # ─── Window-manager stack swap ────────────────────────────────
+        # Active: yabai + skhd (via `window-manager`). To trial AeroSpace
+        # instead, comment `window-manager` and uncomment
+        # `window-manager-aerospace`, then swap the home-manager block
+        # below the same way. Files for both stacks live side-by-side so
+        # reverting is a comment flip — no deletes.
         imports = with config.flake.modules.darwin; [
           agenix
           common
           defaults
           users
           homebrew
-          window-manager
+          #window-manager
+          window-manager-aerospace
         ];
 
         # ─── Identity ──────────────────────────────────────────────────
@@ -43,8 +50,12 @@
               terminals-tmux
               terminals-ghostty
               terminals-kitty
-              darwin-yabai
-              darwin-skhd
+              # Paired with `window-manager` above — comment these out and
+              # uncomment `darwin-aerospace` to trial AeroSpace. Keep
+              # `darwin-sketchybar` enabled either way.
+              #darwin-yabai
+              #darwin-skhd
+              darwin-aerospace
               darwin-sketchybar
               nvim
               apps-git

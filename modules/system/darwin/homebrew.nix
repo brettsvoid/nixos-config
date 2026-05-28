@@ -212,7 +212,11 @@ _: {
           "godot"
           "hammerspoon"
           "karabiner-elements"
-          "kitty"
+          # kitty managed via home-manager (programs.kitty in
+          # modules/home/terminals/kitty.nix). Removed from brew so the
+          # two installs stop competing — the brew bundle would only
+          # be picked up by LaunchServices, which is what made `open -a
+          # Kitty` open the wrong copy.
           "loopback"
           "macdown"
           "mos"
