@@ -78,7 +78,13 @@ _: {
           background_blur = 20;
           hide_window_decorations = "titlebar-only";
           macos_titlebar_color = "background";
-          macos_option_as_alt = "yes";
+          # Was "yes" — let kitty consume opt+key combos for Emacs-style
+          # word jumps in the shell. Conflicted with aerospace's alt+N
+          # workspace bindings, which never reached aerospace when kitty
+          # had focus. Trade-off: alt+h / alt+l / alt+left / alt+right
+          # word-motion bindings below now produce a terminal-bell or
+          # noop unless the shell binds Option directly.
+          macos_option_as_alt = "no";
           macos_thicken_font = "0.2";
         };
         keybindings = {
