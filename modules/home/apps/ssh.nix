@@ -10,7 +10,14 @@ _: {
       # the auto-generated default block silences the deprecation warning
       # and keeps everything explicit here.
       enableDefaultConfig = false;
+      # Per-host blocks (internal IPs, work hostnames, which key unlocks which
+      # box) are infrastructure recon and this repo is public, so they live in
+      # ~/.ssh/config.local — outside git, next to the .pem keys they reference.
+      # nix only emits the `Include` line; the global defaults below are generic
+      # and safe to publish.
+      includes = [ "config.local" ];
       matchBlocks."*" = {
+        identityFile = "~/.ssh/id_ed25519";
         addKeysToAgent = "yes";
         forwardAgent = false;
         compression = false;

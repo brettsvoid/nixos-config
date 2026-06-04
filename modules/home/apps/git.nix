@@ -9,6 +9,7 @@ _: {
         "*.swp"
         "*.tmp"
         ".DS_Store"
+        ".claude/settings.local.json"
       ];
       settings = {
         user.name = "Brett Henderson";
