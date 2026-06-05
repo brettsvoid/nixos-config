@@ -9,6 +9,21 @@ _: {
       ];
       nixpkgs.config.allowUnfree = true;
 
+      # Weekly garbage collection: delete store paths older than 30 days.
+      # `dates` is a systemd OnCalendar string here (the NixOS form),
+      # unlike the launchd StartCalendarInterval used on Darwin.
+      nix.gc = {
+        automatic = true;
+        dates = "weekly";
+        options = "--delete-older-than 30d";
+      };
+
+      # Hard-link identical store files to reclaim disk.
+      nix.optimise = {
+        automatic = true;
+        dates = [ "weekly" ];
+      };
+
       # Workaround: openldap's test017-syncreplication-refresh is flaky
       # and intermittently fails on x86_64-linux. openldap arrives as a
       # transitive build dep of GTK theme stack (gnome-themes-extra ⇒
