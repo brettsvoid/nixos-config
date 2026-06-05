@@ -20,6 +20,28 @@ _: {
       ];
     };
 
+    # Weekly garbage collection: delete store paths older than 30 days.
+    # `interval` is a launchd StartCalendarInterval, not a systemd string.
+    nix.gc = {
+      automatic = true;
+      interval = {
+        Weekday = 7;
+        Hour = 3;
+        Minute = 15;
+      };
+      options = "--delete-older-than 30d";
+    };
+
+    # Hard-link identical store files to reclaim disk. Same weekly schedule.
+    nix.optimise = {
+      automatic = true;
+      interval = {
+        Weekday = 7;
+        Hour = 3;
+        Minute = 45;
+      };
+    };
+
     programs.zsh.enable = true;
 
     # nix-darwin requires this. Pinned at first switch; do NOT change.
