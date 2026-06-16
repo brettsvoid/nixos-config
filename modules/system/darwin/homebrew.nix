@@ -79,15 +79,17 @@ _: {
         # over time; the remainder lives here. Items intentionally absent
         # because nix manages them (and the brew copy is redundant):
         # `direnv` (programs.direnv in profile-code), `yabai`/`skhd`/
-        # `sketchybar` (services in system/darwin/window-manager.nix).
+        # `sketchybar` (services in system/darwin/window-manager.nix);
+        # `gh`/`lazygit`/`git-delta`(→delta)/`git-lfs` (profile-code),
+        # `bat`/`fd`/`dust`/`duf`/`procs`/`zoxide` (shell-tools),
+        # `awscli`(→awscli2) (profile-work). The brew copies shadowed the
+        # nix ones on PATH; removed here + `brew uninstall`d (cleanup=none).
         brews = [
           "age"
           "angband"
           "anirudhg07/anirudhg07/cheatshh"
           "ansible"
           "auth0/auth0-cli/auth0"
-          "awscli"
-          "bat"
           "bore-cli"
           "bundletool"
           "caddy"
@@ -97,12 +99,9 @@ _: {
           "docker"
           "dua-cli"
           "duckdb"
-          "duf"
-          "dust"
           "entr"
           "facebook/fb/idb-companion"
           "fastlane"
-          "fd"
           "felixkratz/formulae/borders"
           # sketchybar moved to nix-darwin services (see window-manager.nix)
           "ffmpegthumbnailer"
@@ -110,10 +109,8 @@ _: {
           "gabotechs/taps/dep-tree"
           "gcc"
           "gdu"
-          "gh"
           "git"
           "git-cliff"
-          "git-delta"
           "git-gui"
           "gitleaks"
           "glow"
@@ -128,7 +125,6 @@ _: {
           "julien-cpsn/atac/atac"
           # skhd + yabai moved to nix-darwin services (see window-manager.nix)
           "lazydocker"
-          "lazygit"
           "lazyjournal"
           "libsixel"
           "lima"
@@ -160,7 +156,6 @@ _: {
           "postgresql@15"
           "posting"
           "pre-commit"
-          "procs"
           "python@3.10"
           "python@3.11"
           "python@3.12"
@@ -191,7 +186,6 @@ _: {
           "wix/brew/applesimutils"
           "yazi"
           "yt-dlp"
-          "zoxide"
           "zsh-autosuggestions"
           "zsh-syntax-highlighting"
         ];
