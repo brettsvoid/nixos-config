@@ -21,6 +21,7 @@
           defaults
           users
           homebrew
+          tailscale
           #window-manager
           window-manager-aerospace
         ];
