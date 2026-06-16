@@ -3,8 +3,10 @@
 # initExtra block.
 #
 # Secrets and machine-specific config are NOT kept here (this repo is
-# public). They're sourced at shell init from an untracked
-# ~/.config/zsh/local.zsh — see local.zsh.example for the template.
+# public). Machine-local config is sourced at shell init from an
+# untracked ~/.config/zsh/local.zsh (see local.zsh.example). Plaintext
+# env-var secrets (BWS_ACCESS_TOKEN + a few API keys) live in an
+# untracked ~/.env_vars, sourced via .zshenv below.
 _: {
   flake.modules.homeManager.shell-env =
     {
@@ -21,6 +23,18 @@ _: {
         PNPM_HOME = "$HOME/Library/pnpm";
         CONDA_BASE = "/opt/homebrew/anaconda3";
       };
+
+      # Interim secrets bootstrap (until the agenix "Phase G" migration).
+      # ~/.env_vars is an untracked, plaintext file exporting
+      # BWS_ACCESS_TOKEN + a few API keys. It MUST be sourced from .zshenv
+      # (this option), not .zshrc: .zshenv runs before .zshrc, so the bws
+      # fetch block in local.zsh sees BWS_ACCESS_TOKEN when it runs.
+      # Sourcing it later (or not at all, as the nix migration accidentally
+      # did) makes that block silently no-op. The [ -f ] guard keeps this
+      # harmless on hosts without the file. Keep the file mode 600.
+      programs.zsh.envExtra = ''
+        [ -f "$HOME/.env_vars" ] && source "$HOME/.env_vars"
+      '';
 
       programs.zsh.initContent = lib.mkIf pkgs.stdenv.isDarwin (
         lib.mkOrder 600 ''
