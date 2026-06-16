@@ -3,11 +3,6 @@
 Brett's cross-platform Nix flake (NixOS + nix-darwin), built on the [dendritic
 pattern](https://github.com/mightyiam/dendritic) (flake-parts + import-tree).
 
-> ⚠️ **This repository is public.** It contains no secrets. Encrypted secrets
-> live in a separate private repo (`brettsvoid/nix-secrets`). See
-> [`docs/SECRETS.md`](docs/SECRETS.md) before committing anything that looks
-> credential-shaped.
-
 ## Hosts
 
 | Host | Platform | Profiles | Status |
