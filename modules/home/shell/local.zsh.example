@@ -1,0 +1,38 @@
+# Template for ~/.config/zsh/local.zsh — copy it there and fill in real
+# values. That path is OUTSIDE this (public) repo and is sourced from
+# modules/home/shell/env.nix at shell init.
+#
+#   cp modules/home/shell/local.zsh.example ~/.config/zsh/local.zsh
+#
+# Keep sensitive/machine-specific values (internal hostnames, secret
+# lookup IDs, work tokens, account-specific resource IDs) here, never in
+# the tracked Nix files.
+
+# ─── Work secrets (Bitwarden Secrets Manager, runtime-fetched) ──────────
+# Each fetch falls back to empty on failure so a missing BWS_ACCESS_TOKEN
+# doesn't break the shell.
+if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
+  _bws() {
+    bws secret get "$1" --access-token "$BWS_ACCESS_TOKEN" 2>/dev/null \
+      | jq -r '.value' 2>/dev/null
+  }
+
+  # Nomad
+  export NOMAD_ADDR="http://<nomad-host>:4646"
+  export NOMAD_OPERATOR_TOKEN="$(_bws <nomad-token-secret-id>)"
+  export NOMAD_TOKEN="$NOMAD_OPERATOR_TOKEN"
+
+  # Sentry MCP / release auth
+  export SENTRY_ACCESS_TOKEN_CLAUDE="$(_bws <sentry-access-token-secret-id>)"
+  export SENTRY_ACCESS_TOKEN_MCP="$SENTRY_ACCESS_TOKEN_CLAUDE"
+  export SENTRY_AUTH_TOKEN="$(_bws <sentry-auth-token-secret-id>)"
+
+  # Grafana
+  export GRAFANA_TOKEN_TYTO_CLAUDE_MCP="$(_bws <grafana-token-secret-id>)"
+  export GRAFANA_SERVICE_ACCOUNT_TOKEN_MCP="$GRAFANA_TOKEN_TYTO_CLAUDE_MCP"
+fi
+
+# ─── AWS-managed EC2 instance shortcuts (account-specific resource IDs) ──
+alias vpn-start='aws ec2 start-instances --profile <profile> --region <region> --instance-ids <instance-id>'
+alias vpn-stop='aws ec2 stop-instances --profile <profile> --region <region> --instance-ids <instance-id>'
+alias vpn-status="aws ec2 describe-instances --profile <profile> --region <region> | jq '.Reservations[0].Instances[0].State'"

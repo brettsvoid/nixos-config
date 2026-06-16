@@ -1,0 +1,157 @@
+# AeroSpace config — mirrors the yabai+skhd setup in modules/home/darwin/yabai/
+# and modules/home/darwin/skhd/ closely enough to A/B test the two stacks.
+#
+# AeroSpace uses *virtual* workspaces (no native macOS Spaces), so:
+#   - There is one native macOS Space; AeroSpace cycles workspaces inside it.
+#   - Mission Control swipes don't show AeroSpace workspaces.
+#   - No SIP relaxation / scripting addition / sudoers entry required.
+#
+# Reload after edits: `aerospace reload-config` (no rebuild needed; the file
+# is symlinked from ~/.config/aerospace/ via mkOutOfStoreSymlink).
+
+start-at-login = false # nix-darwin launchd agent handles startup instead.
+
+# After AeroSpace starts, settle into tiles as the default layout. The yabai
+# config defaulted to `stack` but the user normally flips to bsp immediately;
+# starting in tiles skips that step.
+after-startup-command = ["layout tiles horizontal vertical"]
+
+# Containers with one child get flattened. Matches yabai's bsp behaviour.
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# Accordion (AeroSpace's closest analogue to yabai's `stack` layout).
+# No peek padding — stacked windows fully overlap.
+accordion-padding = 0
+
+default-root-container-layout = "tiles"
+default-root-container-orientation = "auto"
+
+# Don't auto-move mouse when focus changes — yabai had this off too
+# (mouse_follows_focus off, focus_follows_mouse off).
+on-focus-changed = []
+on-focused-monitor-changed = []
+
+# ─── Gaps ──────────────────────────────────────────────────────────────────
+# Top = 52 (sketchybar EXTERNAL_BAR_HEIGHT) + 8 (yabai's top_padding) = 60.
+# Other sides + inner gaps = 8, matching yabai's window_gap/*_padding.
+[gaps]
+inner.horizontal = 8
+inner.vertical = 8
+outer.left = 8
+outer.right = 8
+outer.top = 60
+outer.bottom = 8
+
+# ─── Float rules (mirror yabai's apps_mgoff_* lists) ───────────────────────
+# yabai used `app=^(...)$` regex on app name; AeroSpace matches by either
+# app-id (CFBundleIdentifier) or app-name-regex-substring. We use the regex
+# form to stay close to the yabai rules without needing bundle IDs.
+#
+# Hybrid apps (DBeaver) — yabai floats the first window per pid and tiles
+# the rest via a custom signal script. AeroSpace has no per-pid window-count
+# primitive, so we float DBeaver entirely. Revisit if that hurts.
+
+[[on-window-detected]]
+if.app-name-regex-substring = '^(System Settings|Calculator|Hammerspoon|Notes|Activity Monitor|App Store|Software Update|Raycast|Photo Booth|Jitsi Meet|Shortcat|Screen Sharing|Godot|Finder)$'
+run = "layout floating"
+
+[[on-window-detected]]
+if.app-name-regex-substring = '^(DBeaver|DBeaver Community)$'
+run = "layout floating"
+
+# ─── Keybindings ───────────────────────────────────────────────────────────
+# Two paths into commands:
+#   1. Hyper-mode: press F18 (Karabiner remaps capslock → F18) to enter
+#      `hyper` mode, then a single letter; esc returns to main.
+#   2. Direct hyper combo: cmd+alt+ctrl+shift+<letter> from anywhere.
+#
+# `hyper` is shorthand in skhd for cmd+alt+ctrl+shift; AeroSpace doesn't
+# expand "hyper" so we spell it out as `cmd-alt-ctrl-shift-`.
+
+[mode.main.binding]
+# Enter hyper mode
+f18 = "mode hyper"
+
+# Workspace focus / move-window-to-workspace. Mirror AeroSpace's own
+# defaults (default-config.toml in the .app bundle). Required because
+# providing [mode.main.binding] replaces the whole default binding set
+# rather than merging — without these, alt-1..9 do nothing.
+alt-1 = "workspace 1"
+alt-2 = "workspace 2"
+alt-3 = "workspace 3"
+alt-4 = "workspace 4"
+alt-5 = "workspace 5"
+alt-6 = "workspace 6"
+alt-7 = "workspace 7"
+alt-8 = "workspace 8"
+alt-9 = "workspace 9"
+alt-0 = "workspace 0"
+
+alt-shift-1 = "move-node-to-workspace 1"
+alt-shift-2 = "move-node-to-workspace 2"
+alt-shift-3 = "move-node-to-workspace 3"
+alt-shift-4 = "move-node-to-workspace 4"
+alt-shift-5 = "move-node-to-workspace 5"
+alt-shift-6 = "move-node-to-workspace 6"
+alt-shift-7 = "move-node-to-workspace 7"
+alt-shift-8 = "move-node-to-workspace 8"
+alt-shift-9 = "move-node-to-workspace 9"
+alt-shift-0 = "move-node-to-workspace 0"
+
+# Layout switches (direct combo)
+# `n` → accordion (closest to yabai's "stack")
+# `m` → tiles (closest to yabai's "bsp")
+cmd-alt-ctrl-shift-n = "layout accordion horizontal vertical"
+cmd-alt-ctrl-shift-m = "layout tiles horizontal vertical"
+
+# Toggle float (yabai: `--toggle float --grid 4:4:1:1:2:2`)
+# AeroSpace doesn't have a centered-grid sizing primitive — `layout floating
+# tiling` toggles between modes; the floating window keeps its prior size.
+cmd-alt-ctrl-shift-t = "layout floating tiling"
+
+# Yabai's `--grid 1:1:0:0:1:1` is effectively "fill the container"; closest
+# AeroSpace command is fullscreen (covers monitor without entering native
+# macOS fullscreen).
+cmd-alt-ctrl-shift-f = "fullscreen"
+
+# Balance sizes in current container (yabai: `space --balance`)
+cmd-alt-ctrl-shift-e = "balance-sizes"
+
+# Service control. AeroSpace can't stop itself the way `yabai --stop-service`
+# does; closest is `reload-config`. Bind r to that; leave q/s unbound.
+cmd-alt-ctrl-shift-r = "reload-config"
+
+# App launchers (mirror skhdrc:98–106).
+# `open -a <name>` uses LaunchServices, which indexes the home-manager
+# .app at ~/Applications/Home Manager Apps/kitty.app. Gives focus-or-
+# launch behaviour: if kitty is running, bring it forward; else spawn.
+ctrl-1 = "exec-and-forget open -a kitty"
+ctrl-2 = "exec-and-forget open -a 'Google Chrome'"
+ctrl-9 = "exec-and-forget open -a Finder"
+ctrl-0 = "exec-and-forget open -a Spotify"
+
+# Quit those apps
+ctrl-shift-1 = "exec-and-forget osascript -e 'tell application \"kitty\" to quit'"
+ctrl-shift-2 = "exec-and-forget osascript -e 'tell application \"Google Chrome\" to quit'"
+ctrl-shift-9 = "exec-and-forget osascript -e 'tell application \"Finder\" to close every window'"
+ctrl-shift-0 = "exec-and-forget osascript -e 'tell application \"Spotify\" to quit'"
+
+[mode.hyper.binding]
+# Exit hyper mode
+esc = "mode main"
+
+# Same actions as direct combos above, but as single keys inside hyper mode.
+# Each ends with `mode main` so hyper exits after one action (mirroring
+# skhd's `; skhd -k "escape"` pattern on most hyper_mode bindings).
+n = ["layout accordion horizontal vertical", "mode main"]
+m = ["layout tiles horizontal vertical", "mode main"]
+t = ["layout floating tiling", "mode main"]
+f = ["fullscreen", "mode main"]
+e = ["balance-sizes", "mode main"]
+r = ["reload-config", "mode main"]
+
+# cmd+alt aliases inside hyper, mirroring the `hyper_mode < cmd + alt - X`
+# bindings in skhdrc that survived (others were commented out).
+cmd-alt-b = ["layout tiles horizontal vertical", "mode main"]
+cmd-alt-t = ["layout floating tiling", "mode main"]

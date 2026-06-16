@@ -1,0 +1,6 @@
+# Auto-generated nix store paths
+.pre-commit-config.yaml
+
+# Lock files (handled by gitleaks allowlist; semgrep shouldn't lint them)
+flake.lock
+*.lock
