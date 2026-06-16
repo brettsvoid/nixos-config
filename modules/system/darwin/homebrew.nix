@@ -115,7 +115,6 @@ _: {
           "git-cliff"
           "git-delta"
           "git-gui"
-          "git-lfs"
           "gitleaks"
           "glow"
           "go"
