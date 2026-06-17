@@ -1,6 +1,6 @@
 # nixos-config
 
-Brett's cross-platform Nix flake (NixOS + nix-darwin), built on the [dendritic
+Cross-platform Nix flake (NixOS + nix-darwin), built on the [dendritic
 pattern](https://github.com/mightyiam/dendritic) (flake-parts + import-tree).
 
 ## Hosts
@@ -16,7 +16,7 @@ pattern](https://github.com/mightyiam/dendritic) (flake-parts + import-tree).
 ## Layout
 
 ```
-flake.nix                  # ~50 lines: inputs + flake-parts + import-tree
+flake.nix                  # inputs + flake-parts + import-tree
 modules/
   flake/                   # flake-parts wiring (parts, systems, formatter, hooks, agenix)
   system/{nixos,darwin}/   # platform-specific composables
@@ -49,15 +49,15 @@ nix develop            # enter the devShell with linters + scanners + formatter
 pre-commit run --all-files
 ```
 
-The devShell auto-installs pre-commit hooks on first entry. Hooks:
+The devShell installs the pre-commit hooks on first entry. Hooks:
 - `gitleaks` — secret scanner
-- `detect-private-keys` — refuses SSH/PGP private key blobs
-- `nixfmt-rfc-style` — auto-formatter
+- `detect-private-keys` — blocks SSH/PGP private keys
+- `nixfmt-rfc-style` — formatter
 - `check-added-large-files`, `end-of-file-fixer`, `trim-trailing-whitespace`
 
 `nix flake check` runs the full hook set. GitHub Actions runs it again on every
-push as a backstop, plus a full-history `gitleaks detect` and a `semgrep`
-scan with custom rules + community auto-rulesets.
+push, plus a full-history `gitleaks detect` and a `semgrep` scan with custom
+rules, community auto-rulesets, and the OWASP Top Ten preset.
 
 ## See also
 
