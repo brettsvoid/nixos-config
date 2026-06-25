@@ -5,3 +5,8 @@
 # direnv local state
 .direnv/
 .DS_Store
+
+# nix build outputs (`darwin-rebuild build`, `nix build`); symlinks into
+# /nix/store, per-machine, never source
+result
+result-*

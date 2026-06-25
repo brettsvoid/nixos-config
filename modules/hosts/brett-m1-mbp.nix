@@ -58,6 +58,7 @@
               #darwin-skhd
               darwin-aerospace
               darwin-sketchybar
+              darwin-karabiner
               nvim
               apps-git
               apps-ssh

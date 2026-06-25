@@ -34,19 +34,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Installs/owns /opt/homebrew so `darwin-rebuild switch` bootstraps
+    # Homebrew on a fresh Mac with no separate install step. We keep
+    # mutableTaps (the default) and manage taps imperatively, so the
+    # homebrew/{core,cask,bundle} tap inputs aren't needed.
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-    homebrew-core = {
-      url = "github:homebrew/homebrew-core";
-      flake = false;
-    };
-    homebrew-cask = {
-      url = "github:homebrew/homebrew-cask";
-      flake = false;
-    };
-    homebrew-bundle = {
-      url = "github:homebrew/homebrew-bundle";
-      flake = false;
-    };
 
     agenix = {
       url = "github:ryantm/agenix";

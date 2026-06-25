@@ -1,9 +1,14 @@
-# Declarative bridge over /opt/homebrew using nix-darwin's built-in
-# `homebrew = { ... }` module. We don't use the separate `nix-homebrew`
-# input — that adds flake-pinning of homebrew/{core,cask,bundle} taps
-# but is fragile to layer on top of an existing /opt/homebrew install.
-# The lists below run `brew bundle` at activation against an existing
-# brew installation that nix doesn't manage.
+# Homebrew, fully managed by nix via two cooperating layers:
+#   * nix-homebrew installs and owns /opt/homebrew itself, so a fresh Mac
+#     bootstraps Homebrew from `darwin-rebuild switch` alone — no separate
+#     install step. brew lives in the nix store, but while nix-homebrew is
+#     active that path is part of the system closure (a GC root), so it
+#     can't be garbage-collected out from under us. (Abandoning it is what
+#     orphaned the old store path and broke brew — hence the re-adoption.)
+#   * nix-darwin's built-in `homebrew = { ... }` module runs `brew bundle`
+#     at activation to install the taps/brews/casks declared below.
+# mutableTaps stays at its default (true), so the third-party taps below
+# are added imperatively by brew and don't each need to be a flake input.
 #
 # `onActivation.cleanup = "none"` — undeclared brews/casks are left alone.
 # Flipping to "uninstall"/"zap" is blocked on resolving the vivaldi cask
@@ -12,36 +17,38 @@
 # it and flip cleanup. Manual `brew uninstall` is the workflow until then.
 _: {
   flake.modules.darwin.homebrew =
-    { config, lib, ... }:
+    { config, lib, inputs, ... }:
     {
-      # ─── Workaround: brew bundle 5.1.x tap regression ─────────────
-      # `brew bundle` 5.1.x pre-validates all formula names BEFORE
-      # processing tap entries — meaning a Brewfile with `tap "foo/bar"`
-      # followed by `brew "foo/bar/x"` errors on the brew lookup before
-      # ever tapping. Pre-tap each declared tap as user brett before the
-      # homebrew module's bundle phase runs.
-      # Drop this when upstream brew bundle resolves taps before brews.
-      #
-      # Also: a symlink from 2021 brew installs at
-      # /opt/homebrew/share/zsh/site-functions/_brew points to a path
-      # that no longer exists; modern brew reports "Completions are not
-      # linked" and won't recreate it. The dangling link triggers a
-      # compinit error in every new zsh session.
-      system.activationScripts.preActivation.text = lib.mkAfter ''
-        if [ -L /opt/homebrew/share/zsh/site-functions/_brew ] \
-           && [ ! -e /opt/homebrew/share/zsh/site-functions/_brew ]; then
-          rm -f /opt/homebrew/share/zsh/site-functions/_brew
-        fi
+      imports = [ inputs.nix-homebrew.darwinModules.nix-homebrew ];
 
+      # nix-homebrew installs and owns Homebrew, so `switch` bootstraps it
+      # on a fresh machine. autoMigrate lets it adopt a pre-existing
+      # /opt/homebrew (keeping installed packages) rather than erroring.
+      nix-homebrew = {
+        enable = true;
+        user = "brett";
+        autoMigrate = true;
+      };
+
+      # ─── Trust non-official taps before `brew bundle` ─────────────
+      # brew 6.x refuses to load formulae/casks from non-official taps
+      # unless they're trusted (HOMEBREW_REQUIRE_TAP_TRUST defaults to
+      # true; the opt-out is deprecated). Trust exactly the taps declared
+      # below — `brew trust` persists to trust.json, is idempotent, and
+      # doesn't need the tap tapped first (bundle taps them itself). Run as
+      # user brett so trust.json lands in brett's config, not root's.
+      #
+      # mkOrder 600 places this in the `homebrew` activation script after
+      # nix-homebrew's prefix setup (mkBefore, 500) installs brew, but
+      # before nix-darwin's bundle (default, 1000). On a fresh Mac brew
+      # doesn't exist until this same activation, so no earlier phase could
+      # do it.
+      system.activationScripts.homebrew.text = lib.mkOrder 600 ''
         if [ -x /opt/homebrew/bin/brew ]; then
-          existing_taps="$(sudo --user=brett /opt/homebrew/bin/brew tap 2>/dev/null || true)"
           for tap in ${
             lib.concatStringsSep " " (map (t: lib.escapeShellArg t.name) config.homebrew.taps)
           }; do
-            if ! echo "$existing_taps" | grep -qx "$tap"; then
-              echo >&2 "Pre-tapping $tap (brew bundle 5.1.x workaround)..."
-              sudo --user=brett --set-home /opt/homebrew/bin/brew tap "$tap" || true
-            fi
+            sudo --user=brett --set-home /opt/homebrew/bin/brew trust --tap "$tap" || true
           done
         fi
       '';
