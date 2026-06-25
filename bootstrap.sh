@@ -19,9 +19,13 @@ if ! command -v nix >/dev/null 2>&1; then
       # shellcheck disable=SC1091
       . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     else
-      echo "==> Installing Determinate Nix"
+      # Upstream Nix, NOT Determinate (no `--determinate`): nix-darwin manages
+      # Nix here (nix.enable defaults true) and its activation check aborts with
+      # "Determinate detected" if /usr/local/bin/determinate-nixd exists. See
+      # modules/system/checks.nix. To adopt Determinate, set nix.enable = false.
+      echo "==> Installing Nix (upstream)"
       curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
-        | sh -s -- install --determinate
+        | sh -s -- install
       # shellcheck disable=SC1091
       . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     fi
