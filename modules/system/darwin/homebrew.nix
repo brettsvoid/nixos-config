@@ -103,7 +103,6 @@ _: {
           "facebook/fb/idb-companion"
           "fastlane"
           "felixkratz/formulae/borders"
-          # sketchybar moved to nix-darwin services (see window-manager.nix)
           "ffmpegthumbnailer"
           "fnm"
           "gabotechs/taps/dep-tree"
@@ -123,7 +122,6 @@ _: {
           "inframap"
           "ios-deploy"
           "julien-cpsn/atac/atac"
-          # skhd + yabai moved to nix-darwin services (see window-manager.nix)
           "lazydocker"
           "lazyjournal"
           "libsixel"
@@ -134,10 +132,6 @@ _: {
           "mkcert"
           "ncdu"
           "neomutt"
-          # neovim removed: the Nix-built `programs.neovim` (with its full
-          # extraPackages LSP/formatter toolchain incl. nil) is the canonical
-          # nvim now. The Homebrew build shadowed it on PATH and forced a
-          # reliance on Mason for tooling.
           "nethack"
           "nmap"
           "node"
@@ -208,11 +202,6 @@ _: {
           "godot"
           "hammerspoon"
           "karabiner-elements"
-          # kitty managed via home-manager (programs.kitty in
-          # modules/home/terminals/kitty.nix). Removed from brew so the
-          # two installs stop competing — the brew bundle would only
-          # be picked up by LaunchServices, which is what made `open -a
-          # Kitty` open the wrong copy.
           "loopback"
           "macdown"
           "mos"
@@ -223,9 +212,6 @@ _: {
           "raycast"
           "shortcat"
           "syncthing-app"
-          # vivaldi temporarily excluded: cask metadata's download URL 404s
-          # (upstream issue; the locally installed app keeps working). Add
-          # back when homebrew-cask publishes a new version.
           "vlc"
           "vnc-viewer"
           "wezterm"
