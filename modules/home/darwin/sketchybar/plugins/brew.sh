@@ -30,5 +30,4 @@ case "$COUNT" in
   ;;
 esac
 
-
 sketchybar -m --set $NAME label=$COUNT icon.color=$COLOR

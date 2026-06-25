@@ -10,11 +10,9 @@
 # mutableTaps stays at its default (true), so the third-party taps below
 # are added imperatively by brew and don't each need to be a flake input.
 #
-# `onActivation.cleanup = "none"` — undeclared brews/casks are left alone.
-# Flipping to "uninstall"/"zap" is blocked on resolving the vivaldi cask
-# (currently undeclared because its upstream cask URL 404s; the locally
-# installed app keeps working). Once the cask is republishable, declare
-# it and flip cleanup. Manual `brew uninstall` is the workflow until then.
+# `onActivation.cleanup = "uninstall"` — the brews/casks lists are
+# authoritative: anything installed but not declared here is uninstalled on
+# activation (cask user-data is preserved; "zap" would also wipe that).
 _: {
   flake.modules.darwin.homebrew =
     { config, lib, inputs, ... }:
@@ -28,39 +26,56 @@ _: {
         enable = true;
         user = "brett";
         autoMigrate = true;
+        # Baked into the `brew` launcher, so it applies to every brew call
+        # including the activation bundle — not just interactive shells.
+        extraEnv.HOMEBREW_NO_ANALYTICS = "1";
       };
 
-      # ─── Trust non-official taps before `brew bundle` ─────────────
-      # brew 6.x refuses to load formulae/casks from non-official taps
-      # unless they're trusted (HOMEBREW_REQUIRE_TAP_TRUST defaults to
-      # true; the opt-out is deprecated). Trust exactly the taps declared
-      # below — `brew trust` persists to trust.json, is idempotent, and
-      # doesn't need the tap tapped first (bundle taps them itself). Run as
-      # user brett so trust.json lands in brett's config, not root's.
-      #
-      # mkOrder 600 places this in the `homebrew` activation script after
-      # nix-homebrew's prefix setup (mkBefore, 500) installs brew, but
-      # before nix-darwin's bundle (default, 1000). On a fresh Mac brew
-      # doesn't exist until this same activation, so no earlier phase could
-      # do it.
-      system.activationScripts.homebrew.text = lib.mkOrder 600 ''
-        if [ -x /opt/homebrew/bin/brew ]; then
-          for tap in ${
-            lib.concatStringsSep " " (map (t: lib.escapeShellArg t.name) config.homebrew.taps)
-          }; do
-            sudo --user=brett --set-home /opt/homebrew/bin/brew trust --tap "$tap" || true
-          done
-        fi
-      '';
+      # Two ordered steps wrapped around nix-darwin's bundle (default,
+      # 1000), so this single attribute needs mkMerge. Both run as user
+      # brett so trust.json / the cache dir are brett's, not root's.
+      system.activationScripts.homebrew.text = lib.mkMerge [
+        # ─── Trust non-official taps before `brew bundle` ───────────
+        # brew 6.x refuses to load formulae/casks from non-official taps
+        # unless trusted (HOMEBREW_REQUIRE_TAP_TRUST defaults to true; the
+        # opt-out is deprecated). Trust exactly the declared taps — `brew
+        # trust` persists to trust.json, is idempotent, accepts many taps
+        # at once, and doesn't need them tapped first (bundle taps them).
+        # mkOrder 600: after nix-homebrew's prefix setup (mkBefore, 500)
+        # installs brew, before the bundle. On a fresh Mac brew doesn't
+        # exist until this activation, so no earlier phase could do it.
+        (lib.mkOrder 600 ''
+          if [ -x /opt/homebrew/bin/brew ]; then
+            sudo --user=brett --set-home /opt/homebrew/bin/brew trust --tap ${
+              lib.concatStringsSep " " (map (t: lib.escapeShellArg t.name) config.homebrew.taps)
+            } || true
+          fi
+        '')
+        # ─── Prune caches/logs after `brew bundle` ──────────────────
+        # --force-cleanup uninstalls undeclared *packages* but doesn't
+        # reclaim cache disk space, and the bundle never runs a full
+        # `brew cleanup`. mkAfter (1500) runs this after the bundle.
+        (lib.mkAfter ''
+          if [ -x /opt/homebrew/bin/brew ]; then
+            sudo --user=brett --set-home /opt/homebrew/bin/brew cleanup || true
+          fi
+        '')
+      ];
 
       homebrew = {
         enable = true;
         onActivation = {
           autoUpdate = false;
           upgrade = false;
-          # See top-of-file note. Holding at "none" until vivaldi can
-          # rejoin the declared casks list.
-          cleanup = "none";
+          # Authoritative: any formula/cask installed but not declared here
+          # is uninstalled on activation. "uninstall" (not "zap") so cask
+          # user-data/preferences are preserved.
+          cleanup = "uninstall";
+          # nix-darwin emits `brew bundle ... --cleanup`, which in brew 6.x
+          # only *asks* to clean up (it requires --force/--force-cleanup/
+          # $HOMEBREW_ASK). --force-cleanup makes activation unattended; it's
+          # narrower than --force, which would also overwrite installs.
+          extraFlags = [ "--force-cleanup" ];
         };
 
         # Third-party taps. homebrew/{core,cask,bundle} are auto-tapped by
@@ -219,6 +234,7 @@ _: {
           "raycast"
           "shortcat"
           "syncthing-app"
+          "vivaldi"
           "vlc"
           "vnc-viewer"
           "wezterm"
