@@ -26,6 +26,6 @@ _: {
     #   outerTop = (height - padding) + padding = height.
     # Using `height` (not the old height + padding = 60) is the fix for the
     # double gap between the bar and the windows.
-    outerTop = height;
+    outerTop = height + 2;
   };
 }

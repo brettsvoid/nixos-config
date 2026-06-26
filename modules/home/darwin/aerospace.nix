@@ -27,7 +27,7 @@ let
 in
 {
   flake.modules.homeManager.darwin-aerospace =
-    { pkgs, ... }:
+    { pkgs, lib, ... }:
     let
       aerospaceToml = pkgs.replaceVars ./aerospace/aerospace.toml.in {
         outerTop = toString geom.outerTop;
@@ -40,5 +40,13 @@ in
           path = aerospaceToml;
         }
       ];
+
+      # Apply config changes (e.g. the bar gap) on every `darwin-rebuild
+      # switch`. Runs after writeBoundary so the rendered toml is already
+      # linked. `|| true` keeps the switch from failing when the daemon isn't
+      # running yet (first install).
+      home.activation.reloadAerospace = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        run ${pkgs.aerospace}/bin/aerospace reload-config || true
+      '';
     };
 }

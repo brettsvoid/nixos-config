@@ -22,7 +22,12 @@ let
 in
 {
   flake.modules.homeManager.darwin-sketchybar =
-    { config, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     {
       xdg.configFile."sketchybar".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nixos-config/modules/home/darwin/sketchybar";
@@ -32,6 +37,16 @@ in
       home.file.".config/sketchybar-vars.sh".text = ''
         # Generated from flake.lib.barGeometry — edit modules/home/darwin/bar-geometry.nix
         EXTERNAL_BAR_HEIGHT=${toString geom.height}
+      '';
+
+      # Re-run sketchybarrc on every `darwin-rebuild switch` so a changed
+      # EXTERNAL_BAR_HEIGHT (in sketchybar-vars.sh) takes effect — the launchd
+      # plist references only the binary, so nix-darwin won't restart the
+      # daemon on config changes, and hotload doesn't watch the vars file
+      # (it lives outside ~/.config/sketchybar). Runs after writeBoundary so
+      # the vars file exists; `|| true` tolerates the daemon not running yet.
+      home.activation.reloadSketchybar = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        run ${pkgs.sketchybar}/bin/sketchybar --reload || true
       '';
     };
 }
