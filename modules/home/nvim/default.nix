@@ -139,7 +139,7 @@ _: {
             shfmt
             taplo
             rustfmt
-            nixfmt-rfc-style # provides the `nixfmt` binary conform calls
+            nixfmt # nix formatter (RFC style); binary is `nixfmt`
 
             # Linters
             eslint_d

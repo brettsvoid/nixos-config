@@ -41,7 +41,7 @@
         packages = with pkgs; [
           gitleaks
           semgrep
-          nixfmt-rfc-style
+          nixfmt
           deadnix
           statix
           nix-output-monitor
