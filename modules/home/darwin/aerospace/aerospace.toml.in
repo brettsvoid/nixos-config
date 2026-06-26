@@ -6,8 +6,10 @@
 #   - Mission Control swipes don't show AeroSpace workspaces.
 #   - No SIP relaxation / scripting addition / sudoers entry required.
 #
-# Reload after edits: `aerospace reload-config` (no rebuild needed; the file
-# is symlinked from ~/.config/aerospace/ via mkOutOfStoreSymlink).
+# This file is a TEMPLATE. aerospace.nix renders it (substituting @outerTop@
+# from flake.lib.barGeometry) into ~/.config/aerospace/aerospace.toml, so the
+# bar height lives in one place (modules/home/darwin/bar-geometry.nix). Edits
+# here need a rebuild (`darwin-rebuild switch`) then `aerospace reload-config`.
 
 start-at-login = false # nix-darwin launchd agent handles startup instead.
 
@@ -33,14 +35,17 @@ on-focus-changed = []
 on-focused-monitor-changed = []
 
 # ─── Gaps ──────────────────────────────────────────────────────────────────
-# Top = 52 (sketchybar EXTERNAL_BAR_HEIGHT) + 8 (yabai's top_padding) = 60.
-# Other sides + inner gaps = 8, matching yabai's window_gap/*_padding.
+# outer.top is substituted from flake.lib.barGeometry: it equals the sketchybar
+# bar height (EXTERNAL_BAR_HEIGHT), whose built-in bottom padding already
+# supplies the gap below the bar. The old value (60 = height + 8) double-counted
+# that padding, producing a doubled gap. Other sides + inner gaps = 8, matching
+# the bar padding / yabai window_gap. Don't hardcode outer.top here.
 [gaps]
 inner.horizontal = 8
 inner.vertical = 8
 outer.left = 8
 outer.right = 8
-outer.top = 60
+outer.top = @outerTop@
 outer.bottom = 8
 
 # ─── Float rules (mirror yabai's apps_mgoff_* lists) ───────────────────────
