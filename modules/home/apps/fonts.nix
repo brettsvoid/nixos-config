@@ -6,6 +6,7 @@ _: {
     {
       home.packages = with pkgs; [
         nerd-fonts.fira-code
+        sketchybar-app-font # app glyphs for sketchybar's front_app item
       ];
     };
 }

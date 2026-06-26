@@ -178,7 +178,12 @@ sketchybar --add bracket cmd command.logo                         \
 front_app=(
   display=active
 
-  icon.background.drawing=on
+  # Font glyph (when icon_map.sh has a mapping) ...
+  icon.font="sketchybar-app-font:Regular:16.0"
+  icon.padding_left=$((PADDING * 75 / 100))
+  icon.padding_right=$((PADDING * 25 / 100))
+
+  # ... or the real macOS app icon image (fallback for unmapped apps).
   icon.background.image.padding_left=$((PADDING * 50 / 100))
   icon.background.image.padding_right=$((PADDING * 25 / 100))
 
