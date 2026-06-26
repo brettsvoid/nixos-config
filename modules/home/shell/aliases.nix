@@ -3,15 +3,16 @@ _: {
     { lib, pkgs, ... }:
     {
       programs.zsh.shellAliases = {
-        # Flake management. `nix-rebuild` builds + activates the host
-        # config matching `hostname` (no `#name` needed since each host
-        # file uses the machine hostname as its config name).
+        # Flake management. `nix-rebuild` runs nh, which builds + activates
+        # the host config matching `hostname` (autodiscovered, so no `#name`)
+        # and shows a dix diff first. Flake path comes from NH_FLAKE
+        # (programs.nh.flake) and nh self-elevates — hence no `--flake`/`sudo`.
         edit = "cd ~/nixos-config && $EDITOR .";
         nix-rebuild =
           if pkgs.stdenv.isDarwin then
-            "sudo darwin-rebuild switch --flake ~/nixos-config"
+            "nh darwin switch"
           else
-            "sudo nixos-rebuild switch --flake ~/nixos-config";
+            "nh os switch";
 
         # Editor shortcut (vim/vi handled by programs.neovim's
         # viAlias/vimAlias options)
