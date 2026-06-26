@@ -42,6 +42,7 @@ in
             users
             homebrew
             tailscale
+            nh-gc
           ])
           ++ wm.system;
 
@@ -81,6 +82,8 @@ in
                 apps-ssh
                 apps-fonts
                 apps-sql-formatter
+                apps-nh
+                apps-comma
                 profile-base
                 profile-code
                 profile-work

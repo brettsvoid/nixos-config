@@ -20,19 +20,12 @@ _: {
       ];
     };
 
-    # Weekly garbage collection: delete store paths older than 30 days.
-    # `interval` is a launchd StartCalendarInterval, not a systemd string.
-    nix.gc = {
-      automatic = true;
-      interval = {
-        Weekday = 7;
-        Hour = 3;
-        Minute = 15;
-      };
-      options = "--delete-older-than 30d";
-    };
+    # Garbage collection is handled by `nh clean all` (a strict superset of
+    # nix-collect-garbage — it also prunes stale gcroots / nix-direnv roots)
+    # in modules/system/darwin/nh-gc.nix. Kept out of here so there is a
+    # single GC retention policy on the system profile.
 
-    # Hard-link identical store files to reclaim disk. Same weekly schedule.
+    # Hard-link identical store files to reclaim disk. Weekly, alongside GC.
     nix.optimise = {
       automatic = true;
       interval = {

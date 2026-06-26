@@ -29,6 +29,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Prebuilt nix-index database → `comma` (run any nixpkgs binary ad-hoc,
+    # no install) and a working command-not-found on a flakes system. The DB
+    # is CI-built and refreshed on `nix flake update`; only input is nixpkgs,
+    # which we follow to keep flake.lock lean.
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nix-darwin = {
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
