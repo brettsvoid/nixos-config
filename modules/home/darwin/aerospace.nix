@@ -7,6 +7,14 @@
 # mkOutOfStoreSymlink: edits now need `darwin-rebuild switch` before
 # `aerospace reload-config` (the file is no longer live-edited in place).
 #
+# We manage ~/.config/aerospace as a whole directory (one symlink to a store
+# dir built by linkFarm), NOT a file nested under it. Managing a file *under* a
+# path that home-manager previously symlinked as a directory makes activation
+# write *through* the stale directory symlink instead of replacing it — which
+# leaked the rendered aerospace.toml back into this repo on every rebuild.
+# A directory-level link reuses the original `aerospace` key, so home-manager
+# cleanly swaps the symlink.
+#
 # Pair this module with `flake.modules.darwin.window-manager-aerospace`,
 # which installs the package + launchd agent.
 #
@@ -20,9 +28,17 @@ in
 {
   flake.modules.homeManager.darwin-aerospace =
     { pkgs, ... }:
-    {
-      xdg.configFile."aerospace/aerospace.toml".source = pkgs.replaceVars ./aerospace/aerospace.toml.in {
+    let
+      aerospaceToml = pkgs.replaceVars ./aerospace/aerospace.toml.in {
         outerTop = toString geom.outerTop;
       };
+    in
+    {
+      xdg.configFile."aerospace".source = pkgs.linkFarm "aerospace-config" [
+        {
+          name = "aerospace.toml";
+          path = aerospaceToml;
+        }
+      ];
     };
 }
