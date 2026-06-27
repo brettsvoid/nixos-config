@@ -1,5 +1,6 @@
 :root {
-  /* Catppuccin Mocha-ish, matching the rest of brett's setup */
+  /* Defaults / fallbacks only — the live values come from config.json
+     (src-tauri/config.default.json), applied as CSS vars at runtime. */
   --base: #1e1e2e;
   --pill-bg: #a6e3a1; /* catppuccin green */
   --text: #cdd6f4;
@@ -8,11 +9,9 @@
   --occupied: #a6adc8;
   --empty: #45475a;
 
-  /* geometry — mirror the native frame constants (RADIUS, LINE) in
-     src-tauri/src/lib.rs so the corner pills nest into the frame's corners */
+  /* geometry (defaults; overridden from config.json at runtime) */
   --bezel-thickness: 0px;
   --bezel-line-thickness: 4px; /* matches native frame LINE */
-  --inner-radius: 20px; /* matches native frame RADIUS */
   --pill-h: 30px;
   --pill-radius: 16px; /* rounded bottom of each pill */
   --concave: 16px; /* radius of the concave fillets flanking each pill */
@@ -135,8 +134,9 @@ body {
    The outer (top) corner merges flush into the frame corner; the outer top
    fillet is replaced by a fillet on the bottom that flares into the side edge. */
 #workspaces {
-  border-radius: calc(var(--inner-radius) - var(--bezel-line-thickness)) 0
-    var(--pill-radius) 0;
+  /* sharp top-left: it tucks under the frame corner, so no rounding (avoids the
+     1px anti-aliased seam against the frame's curve) */
+  border-radius: 0 0 var(--pill-radius) 0;
 }
 /* left pill: bottom-left fillet (replaces the default top-left ::before) */
 #workspaces::before {
@@ -157,8 +157,8 @@ body {
 
 /* ---- right clock: corner pill (merges into the top-right frame corner) ---- */
 #clock {
-  border-radius: 0 calc(var(--inner-radius) - var(--bezel-line-thickness)) 0
-    var(--pill-radius);
+  /* sharp top-right: tucks under the frame corner (no AA seam) */
+  border-radius: 0 0 0 var(--pill-radius);
   color: var(--base); /* dark text reads on the green pill */
 }
 /* bottom-right fillet (replaces the default top-right ::after) */

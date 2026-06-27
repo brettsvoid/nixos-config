@@ -9,11 +9,46 @@ interface Workspace {
   has_windows: boolean;
 }
 
+interface Config {
+  colors: Record<string, string>;
+  geometry: {
+    innerRadius: number;
+    lineThickness: number;
+    pillHeight: number;
+    pillRadius: number;
+    concave: number;
+  };
+}
+
 const HIDDEN_Y = -48; // px above the top edge (clipped by the window)
 
-initBar();
+// Pull the shared config (same one the native frame uses) and apply it as CSS
+// variables, then start the bar. styles.css keeps matching defaults as fallback.
+invoke<Config>("get_config")
+  .then((cfg) => {
+    applyConfig(cfg);
+    initBar(cfg.geometry.pillHeight);
+  })
+  .catch(() => initBar(30));
 
-function initBar() {
+function applyConfig(cfg: Config) {
+  const s = document.documentElement.style;
+  const c = cfg.colors;
+  const g = cfg.geometry;
+  s.setProperty("--base", c.base);
+  s.setProperty("--pill-bg", c.pillBg);
+  s.setProperty("--text", c.text);
+  s.setProperty("--subtext", c.subtext);
+  s.setProperty("--accent", c.accent);
+  s.setProperty("--occupied", c.occupied);
+  s.setProperty("--empty", c.empty);
+  s.setProperty("--bezel-line-thickness", `${g.lineThickness}px`);
+  s.setProperty("--pill-h", `${g.pillHeight}px`);
+  s.setProperty("--pill-radius", `${g.pillRadius}px`);
+  s.setProperty("--concave", `${g.concave}px`);
+}
+
+function initBar(pillHeight: number) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
   let shown = false;
@@ -103,7 +138,7 @@ function initBar() {
   // pill open. The resize is invisible since the window is transparent.
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
   const notchPanel = document.querySelector<HTMLElement>("#notch .notch-panel")!;
-  const COLLAPSED_H = 30; // matches --pill-h
+  const COLLAPSED_H = pillHeight; // matches --pill-h (from config)
   const EXPANDED_H = 104;
   const EXPANDED_W = 240;
   const WINDOW_BASE_H = 64;

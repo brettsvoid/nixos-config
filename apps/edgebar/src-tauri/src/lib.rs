@@ -12,8 +12,104 @@
 // the app underneath. The bar webview gets native mouse events, so hover/click
 // and reveal/hide need no polling.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize};
+
+/// Single source of truth for colors + geometry, read by both the native frame
+/// (Rust) and the bar WebView (applied as CSS custom properties). Loaded from
+/// `~/.config/edgebar/config.json` if present, else the bundled default.
+#[derive(Clone, Deserialize, Serialize)]
+struct Config {
+    /// Named colors (e.g. Catppuccin Mocha). Color fields below may reference
+    /// these by name; anything starting with '#' is treated as a literal hex.
+    #[serde(default)]
+    palette: std::collections::HashMap<String, String>,
+    colors: Colors,
+    geometry: Geometry,
+}
+
+impl Config {
+    /// Resolve every color field: palette name -> hex (literal hex passes through).
+    fn resolved(mut self) -> Self {
+        let palette = self.palette.clone();
+        let resolve = |v: &str| -> String {
+            if v.starts_with('#') {
+                v.to_string()
+            } else {
+                palette.get(v).cloned().unwrap_or_else(|| v.to_string())
+            }
+        };
+        let c = &mut self.colors;
+        c.base = resolve(&c.base);
+        c.pill_bg = resolve(&c.pill_bg);
+        c.text = resolve(&c.text);
+        c.subtext = resolve(&c.subtext);
+        c.accent = resolve(&c.accent);
+        c.occupied = resolve(&c.occupied);
+        c.empty = resolve(&c.empty);
+        c.frame_line = resolve(&c.frame_line);
+        c.frame_corner = resolve(&c.frame_corner);
+        self
+    }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Colors {
+    base: String,
+    pill_bg: String,
+    text: String,
+    subtext: String,
+    accent: String,
+    occupied: String,
+    empty: String,
+    frame_line: String,
+    frame_corner: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Geometry {
+    inner_radius: f64,
+    line_thickness: f64,
+    pill_height: f64,
+    pill_radius: f64,
+    concave: f64,
+}
+
+fn load_config() -> Config {
+    const DEFAULT: &str = include_str!("../config.default.json");
+    let raw: Config = std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".config/edgebar/config.json"))
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| {
+            serde_json::from_str(DEFAULT).expect("bundled config.default.json is valid")
+        });
+    raw.resolved()
+}
+
+/// "#rrggbb" or "#rrggbbaa" -> [r, g, b, a] in 0..1 (defaults to opaque black).
+fn hex_to_rgba(hex: &str) -> [f64; 4] {
+    let h = hex.trim().trim_start_matches('#');
+    let byte = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).map(|v| v as f64 / 255.0);
+    if h.len() >= 6 {
+        let a = if h.len() >= 8 { byte(6).unwrap_or(1.0) } else { 1.0 };
+        [
+            byte(0).unwrap_or(0.0),
+            byte(2).unwrap_or(0.0),
+            byte(4).unwrap_or(0.0),
+            a,
+        ]
+    } else {
+        [0.0, 0.0, 0.0, 1.0]
+    }
+}
+
+#[tauri::command]
+fn get_config(config: tauri::State<Config>) -> Config {
+    config.inner().clone()
+}
 
 /// Height (logical px) of the interactive top strip. Kept small so it only
 /// covers the area AeroSpace already reserves for the bar.
@@ -102,20 +198,20 @@ fn make_overlay(window: &tauri::WebviewWindow) {
 /// border) plus black fills in the four corner notches outside that rounded rect
 /// (an even-odd CAShapeLayer). Click-through, all-spaces, stationary.
 #[cfg(target_os = "macos")]
-fn create_native_frame() {
+fn create_native_frame(cfg: &Config) {
     use objc2::{MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
-        NSBackingStoreType, NSBezierPath, NSColor, NSFloatingWindowLevel, NSScreen, NSWindow,
+        NSBackingStoreType, NSBezierPath, NSColor, NSScreen, NSWindow,
         NSWindowCollectionBehavior, NSWindowStyleMask, NSWindingRule,
     };
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
     use objc2_quartz_core::{kCAFillRuleEvenOdd, CAShapeLayer};
 
-    // Frame look — edit here (until the shared config lands). RGBA in 0..1.
-    const RADIUS: f64 = 20.0; // interior corner radius
-    const LINE: f64 = 4.0; // edge line thickness
-    const LINE_RGBA: [f64; 4] = [0.651, 0.890, 0.631, 1.0]; // #a6e3a1 edge line
-    const CORNER_RGBA: [f64; 4] = [0.0, 0.0, 0.0, 1.0]; // filled screen corners
+    // Look comes from the shared config (config.json).
+    let radius = cfg.geometry.inner_radius;
+    let line = cfg.geometry.line_thickness;
+    let line_rgba = hex_to_rgba(&cfg.colors.frame_line);
+    let corner_rgba = hex_to_rgba(&cfg.colors.frame_corner);
 
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -137,7 +233,10 @@ fn create_native_frame() {
     window.setOpaque(false);
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
-    window.setLevel(NSFloatingWindowLevel);
+    // tao sets always-on-top windows (the bar) to kCGFloatingWindowLevelKey (the
+    // key value 5), not the real NSFloatingWindowLevel (3) — so the bar sits at
+    // level 5. Put the frame just above it so the edge line renders over the pills.
+    window.setLevel(6);
     window.setIgnoresMouseEvents(true);
     // CanJoinAllSpaces | Stationary | IgnoresCycle | FullScreenAuxiliary
     window.setCollectionBehavior(NSWindowCollectionBehavior(1 | (1 << 4) | (1 << 6) | (1 << 8)));
@@ -156,24 +255,24 @@ fn create_native_frame() {
         CGSize::new(frame.size.width, frame.size.height),
     );
     let line_color = NSColor::colorWithSRGBRed_green_blue_alpha(
-        LINE_RGBA[0], LINE_RGBA[1], LINE_RGBA[2], LINE_RGBA[3],
+        line_rgba[0], line_rgba[1], line_rgba[2], line_rgba[3],
     );
     let corner_color = NSColor::colorWithSRGBRed_green_blue_alpha(
-        CORNER_RGBA[0], CORNER_RGBA[1], CORNER_RGBA[2], CORNER_RGBA[3],
+        corner_rgba[0], corner_rgba[1], corner_rgba[2], corner_rgba[3],
     );
 
     // root layer = the rounded-rect edge line
     layer.setFrame(bounds);
     layer.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
-    layer.setCornerRadius(RADIUS);
-    layer.setBorderWidth(LINE);
+    layer.setCornerRadius(radius);
+    layer.setBorderWidth(line);
     layer.setBorderColor(Some(&line_color.CGColor()));
     layer.setMasksToBounds(false);
 
     // black corner fills = full rect minus the rounded interior (even-odd)
     let path = NSBezierPath::bezierPath();
     path.appendBezierPathWithRect(bounds);
-    path.appendBezierPathWithRoundedRect_xRadius_yRadius(bounds, RADIUS, RADIUS);
+    path.appendBezierPathWithRoundedRect_xRadius_yRadius(bounds, radius, radius);
     path.setWindingRule(NSWindingRule::EvenOdd);
 
     let corners = CAShapeLayer::new();
@@ -220,9 +319,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             aerospace_workspaces,
             aerospace_focus,
-            set_bar_size
+            set_bar_size,
+            get_config
         ])
         .setup(|app| {
+            // Shared config (colors + geometry) — drives both the native frame
+            // and the WebView (which fetches it via get_config and applies CSS vars).
+            let config = load_config();
+
             // Accessory app: no Dock icon, never becomes the active app, so it
             // never steals focus or bounces you back to the previously-active
             // app (e.g. Arc) when its windows are shown or touched.
@@ -232,7 +336,7 @@ pub fn run() {
             // Frame: a native borderless NSWindow drawn with CALayer — no
             // WebView, so it costs no extra web-content process.
             #[cfg(target_os = "macos")]
-            create_native_frame();
+            create_native_frame(&config);
 
             // Bar: full-width strip pinned to the top, normally interactive.
             if let Some(bar) = app.get_webview_window("bar") {
@@ -275,6 +379,9 @@ pub fn run() {
                     let _ = ws_handle.emit("workspaces", query_workspaces());
                 }
             });
+
+            // Expose the config to the WebView (get_config).
+            app.manage(config);
 
             Ok(())
         })
