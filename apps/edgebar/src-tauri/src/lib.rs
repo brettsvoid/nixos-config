@@ -139,6 +139,11 @@ fn aerospace(args: &[&str]) -> Vec<String> {
 
 /// Query AeroSpace for all workspaces with focused + occupied state.
 /// Two CLI calls: focused flag via --format, occupied set via --empty no.
+/// Canonical dot order: 1-9 then 0. AeroSpace lists `0` first and may surface
+/// stray on-demand workspaces (e.g. `11`, where Spotify lives); we render only
+/// these ten, with `alt-0` shown last to match the keyboard row.
+const WS_ORDER: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+
 fn query_workspaces() -> Vec<Workspace> {
     let rows = aerospace(&[
         "list-workspaces",
@@ -148,18 +153,27 @@ fn query_workspaces() -> Vec<Workspace> {
     ]);
     let non_empty = aerospace(&["list-workspaces", "--monitor", "all", "--empty", "no"]);
 
-    rows.into_iter()
+    let mut workspaces: Vec<Workspace> = rows
+        .into_iter()
         .filter_map(|row| {
             let mut parts = row.splitn(2, '|');
             let name = parts.next()?.to_string();
             let focused = parts.next() == Some("true");
-            Some(Workspace {
+            WS_ORDER.contains(&name.as_str()).then(|| Workspace {
                 has_windows: non_empty.contains(&name),
                 focused,
                 name,
             })
         })
-        .collect()
+        .collect();
+
+    workspaces.sort_by_key(|w| {
+        WS_ORDER
+            .iter()
+            .position(|n| *n == w.name)
+            .unwrap_or(usize::MAX)
+    });
+    workspaces
 }
 
 /// Mark a window as a stationary, all-spaces overlay so Mission Control /
