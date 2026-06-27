@@ -1,0 +1,265 @@
+:root {
+  /* Catppuccin Mocha-ish, matching the rest of brett's setup */
+  --base: #1e1e2e;
+  --pill-bg: #a6e3a1; /* catppuccin green */
+  --text: #cdd6f4;
+  --subtext: #a6adc8;
+  --accent: #89b4fa;
+  --occupied: #a6adc8;
+  --empty: #45475a;
+
+  /* geometry — mirror the native frame constants (RADIUS, LINE) in
+     src-tauri/src/lib.rs so the corner pills nest into the frame's corners */
+  --bezel-thickness: 0px;
+  --bezel-line-thickness: 4px; /* matches native frame LINE */
+  --inner-radius: 20px; /* matches native frame RADIUS */
+  --pill-h: 30px;
+  --pill-radius: 16px; /* rounded bottom of each pill */
+  --concave: 16px; /* radius of the concave fillets flanking each pill */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font-family: "FiraCode Nerd Font", ui-monospace, "SF Mono", monospace;
+  font-size: 13px;
+  color: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* The screen frame is drawn natively (src-tauri/src/lib.rs) — no DOM here. */
+
+/* ---- top bar ---- */
+.bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 90px; /* transparent; gives the spring room to overshoot */
+  display: flex;
+  align-items: flex-start;
+  /* top inset handled via .pill `top`; sides flush to the frame line so the
+     corner pills merge into the frame corners */
+  padding: 0 var(--bezel-line-thickness) 0;
+  pointer-events: none; /* pills opt back in */
+}
+
+.cluster {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.cluster.left {
+  flex: 1;
+  justify-content: flex-start;
+}
+.cluster.center {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+.cluster.right {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* ---- pill: hangs from the top edge, rounded bottom ---- */
+.pill {
+  position: relative;
+  height: var(--pill-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--pill-bg);
+  border-radius: 0 0 var(--pill-radius) var(--pill-radius);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: auto; /* interactive (native click-through toggles to match) */
+  top: calc(var(--bezel-thickness) + var(--bezel-line-thickness));
+  /* start hidden above the edge; main.ts springs them down */
+  transform: translateY(-110%);
+  will-change: transform, opacity;
+}
+
+/* concave fillets that flare each pill's top into the screen edge */
+.pill::before,
+.pill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: var(--concave);
+  height: var(--concave);
+  background: var(--pill-bg);
+}
+.pill::before {
+  left: calc(-1 * var(--concave));
+  -webkit-mask-image: radial-gradient(
+    circle at 0 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+  mask-image: radial-gradient(
+    circle at 0 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+}
+.pill::after {
+  right: calc(-1 * var(--concave));
+  -webkit-mask-image: radial-gradient(
+    circle at 100% 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+  mask-image: radial-gradient(
+    circle at 100% 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+}
+
+/* ---- corner-anchored pills: merge into the top frame corners ----
+   The outer (top) corner merges flush into the frame corner; the outer top
+   fillet is replaced by a fillet on the bottom that flares into the side edge. */
+#workspaces {
+  border-radius: calc(var(--inner-radius) - var(--bezel-line-thickness)) 0
+    var(--pill-radius) 0;
+}
+/* left pill: bottom-left fillet (replaces the default top-left ::before) */
+#workspaces::before {
+  top: auto;
+  left: 0;
+  bottom: calc(-1 * var(--concave));
+  -webkit-mask-image: radial-gradient(
+    circle at 100% 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+  mask-image: radial-gradient(
+    circle at 100% 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+}
+
+/* ---- right clock: corner pill (merges into the top-right frame corner) ---- */
+#clock {
+  border-radius: 0 calc(var(--inner-radius) - var(--bezel-line-thickness)) 0
+    var(--pill-radius);
+  color: var(--base); /* dark text reads on the green pill */
+}
+/* bottom-right fillet (replaces the default top-right ::after) */
+#clock::after {
+  top: auto;
+  right: 0;
+  bottom: calc(-1 * var(--concave));
+  -webkit-mask-image: radial-gradient(
+    circle at 0 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+  mask-image: radial-gradient(
+    circle at 0 100%,
+    transparent var(--concave),
+    #000 calc(var(--concave) + 0.5px)
+  );
+}
+#clock .time {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+#clock .date {
+  font-size: 12px;
+  opacity: 0.75;
+}
+#clock .sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(30, 30, 46, 0.3);
+}
+
+/* ---- center notch: click to expand into a hub ---- */
+#notch {
+  flex-direction: column;
+  align-items: stretch;
+  /* no overflow:hidden — it would clip the concave fillets. The panel is
+     clipped by .notch-panel-clip instead. */
+  padding: 0;
+  height: var(--pill-h);
+  cursor: pointer;
+  color: var(--base);
+}
+.notch-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--pill-h);
+  padding: 0 18px;
+  flex: 0 0 auto;
+}
+.notch-handle {
+  width: 26px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(30, 30, 46, 0.45);
+}
+.notch-panel-clip {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden; /* clips the panel when collapsed; #notch stays visible */
+}
+.notch-panel {
+  opacity: 0;
+  padding: 4px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.notch-panel .big-time {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.notch-panel .full-date {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* ---- workspaces ---- */
+#workspaces {
+  gap: 6px;
+}
+.ws {
+  height: 8px;
+  width: 8px;
+  border-radius: 4px;
+  background: var(--empty);
+  cursor: pointer;
+  transition:
+    width 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 150ms ease;
+}
+.ws.occupied {
+  background: var(--occupied);
+}
+.ws.active {
+  width: 22px;
+  background: var(--accent);
+}

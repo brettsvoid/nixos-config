@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>edgebar</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <!-- screen frame is drawn natively (src-tauri); this window is just the bar -->
+    <!-- top bar: workspaces left, notch center, clock right -->
+    <div class="bar">
+      <div class="cluster left">
+        <div class="pill" id="workspaces"></div>
+      </div>
+      <div class="cluster center">
+        <div class="pill" id="notch">
+          <div class="notch-row">
+            <span class="notch-handle"></span>
+          </div>
+          <div class="notch-panel-clip">
+            <div class="notch-panel">
+              <div class="big-time">--:--:--</div>
+              <div class="full-date">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cluster right">
+        <div class="pill" id="clock">
+          <span class="time">--:--</span>
+          <span class="sep"></span>
+          <span class="date">---</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -34,6 +34,11 @@ default-root-container-orientation = "auto"
 on-focus-changed = []
 on-focused-monitor-changed = []
 
+# Notify edgebar of workspace changes (event-driven; replaces polling). Pings
+# edgebar's unix socket so the bar re-queries only on an actual change. No-op if
+# edgebar isn't running (nc fails fast). Backgrounded so AeroSpace never waits.
+exec-on-workspace-change = ['/bin/bash', '-c', 'nc -U "$HOME/.cache/edgebar/ws.sock" </dev/null >/dev/null 2>&1 &']
+
 # ─── Gaps ──────────────────────────────────────────────────────────────────
 # outer.top is substituted from flake.lib.barGeometry: it equals the sketchybar
 # bar height (EXTERNAL_BAR_HEIGHT), whose built-in bottom padding already
@@ -43,10 +48,10 @@ on-focused-monitor-changed = []
 [gaps]
 inner.horizontal = 8
 inner.vertical = 8
-outer.left = 8
-outer.right = 8
+outer.left = 12
+outer.right = 12
 outer.top = @outerTop@
-outer.bottom = 8
+outer.bottom = 12
 
 # ─── Float rules (mirror yabai's apps_mgoff_* lists) ───────────────────────
 # yabai used `app=^(...)$` regex on app name; AeroSpace matches by either

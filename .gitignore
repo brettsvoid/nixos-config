@@ -10,3 +10,6 @@
 # /nix/store, per-machine, never source
 result
 result-*
+
+# Rust build artifacts (stray cargo / rust-analyzer targets)
+target/
