@@ -9,10 +9,14 @@
 
   <body>
     <!-- screen frame is drawn natively (src-tauri); this window is just the bar -->
-    <!-- top bar: workspaces left, notch center, clock right -->
+    <!-- top bar: workspaces + front app left, notch center, status + clock right -->
     <div class="bar">
       <div class="cluster left">
         <div class="pill" id="workspaces"></div>
+        <div class="pill" id="frontapp">
+          <img class="fa-icon" alt="" />
+          <span class="fa-name">—</span>
+        </div>
       </div>
       <div class="cluster center">
         <div class="pill" id="notch">
@@ -23,11 +27,60 @@
             <div class="notch-panel">
               <div class="big-time">--:--:--</div>
               <div class="full-date">—</div>
+              <!-- Metrics: lazy-polled only while the notch is open (ambxst style) -->
+              <div class="metrics">
+                <div class="metric" data-k="cpu">
+                  <span class="m-icon">󰘚</span>
+                  <span class="m-bar"><i></i></span>
+                  <span class="m-val">—</span>
+                </div>
+                <div class="metric" data-k="mem">
+                  <span class="m-icon">󰓅</span>
+                  <span class="m-bar"><i></i></span>
+                  <span class="m-val">—</span>
+                </div>
+                <div class="metric" data-k="disk">
+                  <span class="m-icon">󰋊</span>
+                  <span class="m-bar"><i></i></span>
+                  <span class="m-val">—</span>
+                </div>
+                <div class="metric" data-k="swap">
+                  <span class="m-icon">󰁯</span>
+                  <span class="m-bar"><i></i></span>
+                  <span class="m-val">—</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
       <div class="cluster right">
+        <!-- Controls: volume / mic / brightness behind a button (ambxst style) -->
+        <div class="pill" id="controls">
+          <div class="notch-row">
+            <span class="ctl-icon">󰒓</span>
+          </div>
+          <div class="notch-panel-clip">
+            <div class="ctl-panel">
+              <div class="slider-row" data-k="volume">
+                <span class="s-icon">󰕾</span>
+                <input class="s-range" type="range" min="0" max="100" value="0" />
+              </div>
+              <div class="slider-row" data-k="mic">
+                <span class="s-icon">󰍬</span>
+                <input class="s-range" type="range" min="0" max="100" value="0" />
+              </div>
+              <div class="slider-row" data-k="brightness">
+                <span class="s-icon">☀</span>
+                <input class="s-range" type="range" min="0" max="100" value="0" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pill" id="battery">
+          <span class="bat-icon">󰂎</span>
+          <span class="bat-pct">—</span>
+        </div>
         <div class="pill" id="clock">
           <span class="time">--:--</span>
           <span class="sep"></span>

@@ -22,13 +22,20 @@ tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# System metrics for the notch's Metrics view (CPU/RAM/disk/swap). Pure Rust,
+# cross-platform; sampled on demand only while the notch is open (lazy poll).
+sysinfo = "0.33"
 
 # Native macOS: NSWindow collection behavior (Stationary, via raw msg_send) and
 # the native frame window drawn with CALayer/CAShapeLayer (no webview). All
 # pinned to the 0.3 objc2 ecosystem already in the tree via tao/wry.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+objc2-foundation = { version = "0.3", features = [
+  "NSGeometry",
+  "NSString",
+  "NSNotification",
+] }
 objc2-app-kit = { version = "0.3", features = [
   "NSWindow",
   "NSResponder",
@@ -37,6 +44,11 @@ objc2-app-kit = { version = "0.3", features = [
   "NSScreen",
   "NSBezierPath",
   "NSGraphics",
+  "NSWorkspace",
+  "NSRunningApplication",
+  "NSImage",
+  "NSImageRep",
+  "NSBitmapImageRep",
 ] }
 objc2-quartz-core = { version = "0.3", features = [
   "CALayer",

@@ -191,8 +191,9 @@ body {
   background: rgba(30, 30, 46, 0.3);
 }
 
-/* ---- center notch: click to expand into a hub ---- */
-#notch {
+/* ---- expandable pills (notch + controls): click to expand into a panel ---- */
+#notch,
+#controls {
   flex-direction: column;
   align-items: stretch;
   /* no overflow:hidden — it would clip the concave fillets. The panel is
@@ -240,6 +241,134 @@ body {
 .notch-panel .full-date {
   font-size: 12px;
   opacity: 0.75;
+}
+
+/* ---- front app (left, next to workspaces) ---- */
+#frontapp {
+  color: var(--base);
+  max-width: 220px;
+  gap: 6px;
+}
+#frontapp .fa-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+#frontapp .fa-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* hidden when there's no frontmost app name yet */
+#frontapp.empty {
+  display: none;
+}
+
+/* ---- battery (right, left of the clock) ---- */
+#battery {
+  color: var(--base);
+  gap: 6px;
+}
+#battery .bat-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+#battery.charging .bat-icon {
+  color: #40a02b; /* catppuccin latte green — reads on the light pill */
+}
+#battery.low .bat-icon,
+#battery.low .bat-pct {
+  color: #d20f39; /* catppuccin latte red */
+}
+#battery .bat-pct {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- controls icon (collapsed state) ---- */
+#controls .ctl-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ---- metrics rows inside the notch panel ---- */
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+}
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.metric .m-icon {
+  width: 16px;
+  text-align: center;
+  opacity: 0.8;
+}
+.metric .m-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(30, 30, 46, 0.18);
+  overflow: hidden;
+}
+.metric .m-bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--base);
+  border-radius: 3px;
+  transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.metric .m-val {
+  width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ---- controls panel (volume / mic / brightness sliders) ---- */
+.ctl-panel {
+  opacity: 0;
+  padding: 10px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 190px;
+}
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.slider-row .s-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+}
+.s-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(30, 30, 46, 0.2);
+  cursor: pointer;
+}
+.s-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--base);
 }
 
 /* ---- workspaces ---- */

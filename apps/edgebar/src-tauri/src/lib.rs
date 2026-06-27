@@ -13,6 +13,7 @@
 // and reveal/hide need no polling.
 
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize};
 
 /// Single source of truth for colors + geometry, read by both the native frame
@@ -326,6 +327,322 @@ fn set_bar_size(app: tauri::AppHandle, width: f64, height: f64) {
     }
 }
 
+// ───────────────────────── shared app state ─────────────────────────
+// Holds the cached front-app name (pushed by the NSWorkspace observer, read
+// back by the `front_app` command for the bar's initial paint) and a persistent
+// `sysinfo::System` (kept alive so CPU usage can be computed from the delta
+// between samples — a fresh System always reports 0%).
+struct AppState {
+    front_app: Mutex<FrontApp>,
+    sys: Mutex<sysinfo::System>,
+}
+
+/// The frontmost app's name plus its real macOS icon as a PNG data URL (so the
+/// WebView can render the actual app icon — sketchybar used an app-font glyph
+/// with the macOS icon as fallback; here the icon is the primary source).
+#[derive(Clone, Default, Serialize)]
+struct FrontApp {
+    name: String,
+    /// "data:image/png;base64,…" or "" when no icon is available.
+    icon: String,
+}
+
+// ───────────────────────── battery (pmset) ─────────────────────────
+#[derive(Clone, Default, Serialize)]
+struct Battery {
+    percent: u8,
+    /// "charging" | "discharging" | "charged" | "AC attached" | …
+    state: String,
+    /// "2:38" when an estimate exists, else None.
+    time: Option<String>,
+}
+
+/// Parse `pmset -g batt`, whose battery line looks like:
+///   ` -InternalBattery-0 (id=…)\t29%; charging; 2:38 remaining present: true`
+fn read_battery() -> Battery {
+    let text = std::process::Command::new("pmset")
+        .args(["-g", "batt"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let Some(line) = text.lines().find(|l| l.contains('%')) else {
+        return Battery::default();
+    };
+
+    let percent = line.find('%').map_or(0, |i| {
+        let rev: String = line[..i]
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
+        rev.chars().rev().collect::<String>().parse().unwrap_or(0)
+    });
+    let state = line
+        .splitn(3, ';')
+        .nth(1)
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    let time = line.splitn(3, ';').nth(2).and_then(|s| {
+        s.trim()
+            .split_whitespace()
+            .next()
+            .filter(|t| t.contains(':'))
+            .map(str::to_string)
+    });
+
+    Battery {
+        percent,
+        state,
+        time,
+    }
+}
+
+#[tauri::command]
+async fn battery() -> Battery {
+    tauri::async_runtime::spawn_blocking(read_battery)
+        .await
+        .unwrap_or_default()
+}
+
+// ───────────────────────── system metrics (sysinfo) ─────────────────
+// Sampled on demand (lazy poll) only while the notch's Metrics view is open —
+// mirrors ambxst, which polls SystemResources only when the dashboard is open.
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Metrics {
+    cpu: f32, // percent 0..100
+    mem_used: u64,
+    mem_total: u64,
+    swap_used: u64,
+    swap_total: u64,
+    disk_used: u64,
+    disk_total: u64,
+}
+
+fn sample_metrics(sys: &mut sysinfo::System) -> Metrics {
+    sys.refresh_cpu_usage();
+    sys.refresh_memory();
+
+    // Root volume (the boot disk). Fall back to the largest disk if "/" isn't
+    // listed (on macOS the data volume is mounted under /System/Volumes/Data).
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let root = disks
+        .list()
+        .iter()
+        .find(|d| d.mount_point() == std::path::Path::new("/"))
+        .or_else(|| disks.list().iter().max_by_key(|d| d.total_space()));
+    let (disk_total, disk_avail) = root.map_or((0, 0), |d| (d.total_space(), d.available_space()));
+
+    Metrics {
+        cpu: sys.global_cpu_usage(),
+        mem_used: sys.used_memory(),
+        mem_total: sys.total_memory(),
+        swap_used: sys.used_swap(),
+        swap_total: sys.total_swap(),
+        disk_used: disk_total.saturating_sub(disk_avail),
+        disk_total,
+    }
+}
+
+#[tauri::command]
+fn metrics_sample(state: tauri::State<AppState>) -> Metrics {
+    let mut sys = state.sys.lock().unwrap();
+    sample_metrics(&mut sys)
+}
+
+// ───────────────────────── volume / mic (osascript) ─────────────────
+#[derive(Clone, Default, Serialize)]
+struct Volume {
+    output: u8,
+    input: u8,
+}
+
+fn run_osa(script: &str) -> Option<String> {
+    let out = std::process::Command::new("osascript")
+        .args(["-e", script])
+        .output()
+        .ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn osa_num(script: &str) -> u8 {
+    run_osa(script)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
+#[tauri::command]
+async fn get_volume() -> Volume {
+    tauri::async_runtime::spawn_blocking(|| Volume {
+        output: osa_num("output volume of (get volume settings)"),
+        input: osa_num("input volume of (get volume settings)"),
+    })
+    .await
+    .unwrap_or_default()
+}
+
+#[tauri::command]
+async fn set_volume(output: u8) {
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        run_osa(&format!("set volume output volume {}", output.min(100)))
+    })
+    .await;
+}
+
+#[tauri::command]
+async fn set_input_volume(input: u8) {
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        run_osa(&format!("set volume input volume {}", input.min(100)))
+    })
+    .await;
+}
+
+// ───────────────────────── brightness (DisplayServices) ─────────────
+// Private framework; linked in build.rs. Works for the internal display.
+#[cfg(target_os = "macos")]
+mod brightness {
+    type CGDirectDisplayID = u32;
+    extern "C" {
+        fn CGMainDisplayID() -> CGDirectDisplayID;
+        fn DisplayServicesGetBrightness(id: CGDirectDisplayID, brightness: *mut f32) -> i32;
+        fn DisplayServicesSetBrightness(id: CGDirectDisplayID, brightness: f32) -> i32;
+    }
+    pub fn get() -> f32 {
+        let mut b: f32 = 0.0;
+        unsafe {
+            DisplayServicesGetBrightness(CGMainDisplayID(), &mut b);
+        }
+        b
+    }
+    pub fn set(value: f32) {
+        unsafe {
+            DisplayServicesSetBrightness(CGMainDisplayID(), value.clamp(0.0, 1.0));
+        }
+    }
+}
+
+#[tauri::command]
+fn get_brightness() -> f32 {
+    #[cfg(target_os = "macos")]
+    {
+        brightness::get()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        0.0
+    }
+}
+
+#[tauri::command]
+fn set_brightness(value: f32) {
+    #[cfg(target_os = "macos")]
+    {
+        brightness::set(value);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = value;
+    }
+}
+
+// ───────────────────────── front app (NSWorkspace) ──────────────────
+// Event-driven, no polling: an NSWorkspace observer fires on every app
+// activation, re-reads the frontmost app, caches it, and emits "front_app".
+#[tauri::command]
+fn front_app(state: tauri::State<AppState>) -> FrontApp {
+    state.front_app.lock().unwrap().clone()
+}
+
+/// Encode an NSImage as a PNG data URL (TIFF rep → bitmap rep → PNG → base64).
+#[cfg(target_os = "macos")]
+fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep};
+    use objc2_foundation::{NSDataBase64EncodingOptions, NSDictionary};
+
+    let tiff = img.TIFFRepresentation()?;
+    let rep = NSBitmapImageRep::imageRepWithData(&tiff)?;
+    let png = unsafe {
+        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
+    }?;
+    let b64 = png.base64EncodedStringWithOptions(NSDataBase64EncodingOptions::empty());
+    Some(format!("data:image/png;base64,{}", &*b64))
+}
+
+/// Read the current frontmost app's name + icon. Touches AppKit, so it must run
+/// on the main thread (setup + the observer callback both do).
+#[cfg(target_os = "macos")]
+fn current_front_app() -> FrontApp {
+    use objc2_app_kit::NSWorkspace;
+    let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() else {
+        return FrontApp::default();
+    };
+    FrontApp {
+        name: app
+            .localizedName()
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
+        icon: app
+            .icon()
+            .and_then(|img| icon_png_data_url(&img))
+            .unwrap_or_default(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct FrontIvars {
+    app: tauri::AppHandle,
+}
+
+#[cfg(target_os = "macos")]
+use objc2::runtime::NSObjectProtocol;
+#[cfg(target_os = "macos")]
+use objc2::DefinedClass;
+
+#[cfg(target_os = "macos")]
+objc2::define_class!(
+    #[unsafe(super(objc2::runtime::NSObject))]
+    #[name = "EdgebarFrontAppObserver"]
+    #[ivars = FrontIvars]
+    struct FrontAppObserver;
+
+    impl FrontAppObserver {
+        #[unsafe(method(appActivated:))]
+        fn app_activated(&self, _notification: *mut objc2::runtime::AnyObject) {
+            let fa = current_front_app();
+            let app = &self.ivars().app;
+            if let Some(state) = app.try_state::<AppState>() {
+                *state.front_app.lock().unwrap() = fa.clone();
+            }
+            let _ = app.emit("front_app", fa);
+        }
+    }
+
+    unsafe impl NSObjectProtocol for FrontAppObserver {}
+);
+
+#[cfg(target_os = "macos")]
+fn install_front_app_observer(app: tauri::AppHandle) {
+    use objc2::rc::Retained;
+    use objc2::{msg_send, sel, AllocAnyThread};
+    use objc2_app_kit::{NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
+
+    let observer = FrontAppObserver::alloc().set_ivars(FrontIvars { app });
+    let observer: Retained<FrontAppObserver> = unsafe { msg_send![super(observer), init] };
+
+    let center = NSWorkspace::sharedWorkspace().notificationCenter();
+    unsafe {
+        center.addObserver_selector_name_object(
+            &observer,
+            sel!(appActivated:),
+            Some(NSWorkspaceDidActivateApplicationNotification),
+            None,
+        );
+    }
+    // Keep the observer alive for the app's lifetime (it stays registered).
+    std::mem::forget(observer);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -334,7 +651,15 @@ pub fn run() {
             aerospace_workspaces,
             aerospace_focus,
             set_bar_size,
-            get_config
+            get_config,
+            front_app,
+            battery,
+            metrics_sample,
+            get_volume,
+            set_volume,
+            set_input_volume,
+            get_brightness,
+            set_brightness
         ])
         .setup(|app| {
             // Shared config (colors + geometry) — drives both the native frame
@@ -393,6 +718,20 @@ pub fn run() {
                     let _ = ws_handle.emit("workspaces", query_workspaces());
                 }
             });
+
+            // Front-app + metrics state. Seed the front-app name now (on the
+            // main thread) so the bar's first paint has it; the NSWorkspace
+            // observer keeps it fresh thereafter without polling.
+            #[cfg(target_os = "macos")]
+            let initial_front = current_front_app();
+            #[cfg(not(target_os = "macos"))]
+            let initial_front = FrontApp::default();
+            app.manage(AppState {
+                front_app: Mutex::new(initial_front),
+                sys: Mutex::new(sysinfo::System::new()),
+            });
+            #[cfg(target_os = "macos")]
+            install_front_app_observer(app.handle().clone());
 
             // Expose the config to the WebView (get_config).
             app.manage(config);
