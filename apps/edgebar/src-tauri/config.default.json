@@ -41,10 +41,11 @@
   "geometry": {
     "innerRadius": 20,
     "lineThickness": 4,
-    "pillHeight": 30,
+    "pillHeight": 32,
     "pillRadius": 16,
     "concave": 16,
     "barHeight": 64,
-    "windowHeight": 64
+    "windowHeight": 64,
+    "topOffsetPx": 1
   }
 }

@@ -85,7 +85,10 @@ body {
   padding: 0 14px;
   background: var(--pill-bg);
   border-radius: 0 0 var(--pill-radius) var(--pill-radius);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  /* drop-shadow (not box-shadow) so the shadow follows the painted silhouette —
+     including the masked concave fillets (::before/::after) — instead of the
+     rectangular border-box, which would leave the fillets shadowless. */
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
   pointer-events: auto; /* interactive (native click-through toggles to match) */
   top: calc(var(--bezel-thickness) + var(--bezel-line-thickness));
   /* start hidden above the edge; main.ts springs them down */

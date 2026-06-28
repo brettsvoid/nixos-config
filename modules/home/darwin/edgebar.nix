@@ -13,7 +13,11 @@ let
   geom = config.flake.lib.barGeometry;
   defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
   rendered = defaults // {
-    geometry = defaults.geometry // { barHeight = geom.barHeight; };
+    geometry = defaults.geometry // {
+      barHeight = geom.barHeight;
+      # fillet radius is locked to half the pill height
+      concave = defaults.geometry.pillHeight / 2;
+    };
   };
 in
 {

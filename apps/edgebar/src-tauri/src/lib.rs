@@ -83,6 +83,13 @@ struct Geometry {
     /// passes clicks through, so it doesn't cover the windows below.
     #[serde(default = "default_window_height")]
     window_height: f64,
+    /// Top offset in DEVICE pixels. This display does not show its topmost
+    /// physical row (see the inset in `create_native_frame`), so both the native
+    /// frame and the bar window are pushed down by this many device pixels to
+    /// keep their top edge on the first visible row. Device px, not points, so it
+    /// is one dead row regardless of the backing scale.
+    #[serde(default = "default_top_offset_px")]
+    top_offset_px: f64,
 }
 
 /// Fallback when an older config.json (rendered before `windowHeight` existed)
@@ -90,6 +97,11 @@ struct Geometry {
 /// fully-bundled default.
 fn default_window_height() -> f64 {
     64.0
+}
+
+/// Fallback for configs rendered before `topOffsetPx` existed.
+fn default_top_offset_px() -> f64 {
+    1.0
 }
 
 fn load_config() -> Config {
@@ -415,14 +427,28 @@ fn create_native_frame(cfg: &Config) {
         return;
     };
     view.setWantsLayer(true);
-    let Some(layer) = view.layer() else {
+    let Some(root) = view.layer() else {
         return;
     };
 
-    let bounds = CGRect::new(
-        CGPoint::new(0.0, 0.0),
-        CGSize::new(frame.size.width, frame.size.height),
-    );
+    let w = frame.size.width;
+    let h = frame.size.height;
+
+    // Work in whole FRAMEBUFFER PIXELS, not points. This display runs a scaled
+    // mode: CoreAnimation renders to a HiDPI framebuffer (points * backingScale)
+    // which the window-server then DOWNSCALES to the panel's native resolution.
+    // That non-integer downscale is what eats the topmost framebuffer row (the
+    // "dead row") — it's the scaler, not the panel. Geometry in points leaves
+    // fractional values that round unpredictably across the two grids, so we snap
+    // every dimension to an integer framebuffer pixel and convert to points
+    // (÷scale) only at the CALayer/NSBezierPath boundary. Tweak the *_px values to
+    // test in real pixels.
+    let scale = screen.backingScaleFactor();
+    let d = |px: f64| px / scale; // framebuffer device px -> points
+    let line_px = (line * scale).round(); // frame line thickness (e.g. 8)
+    let radius_px = (radius * scale).round(); // outer corner radius (e.g. 40)
+    let top_inset_px = cfg.geometry.top_offset_px; // dead-row compensation (e.g. 1)
+
     let line_color = NSColor::colorWithSRGBRed_green_blue_alpha(
         line_rgba[0], line_rgba[1], line_rgba[2], line_rgba[3],
     );
@@ -430,26 +456,58 @@ fn create_native_frame(cfg: &Config) {
         corner_rgba[0], corner_rgba[1], corner_rgba[2], corner_rgba[3],
     );
 
-    // root layer = the rounded-rect edge line
-    layer.setFrame(bounds);
-    layer.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
-    layer.setCornerRadius(radius);
-    layer.setBorderWidth(line);
-    layer.setBorderColor(Some(&line_color.CGColor()));
-    layer.setMasksToBounds(false);
+    // root: clear, non-clipping container spanning the whole screen
+    let full = CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(w, h));
+    root.setFrame(full);
+    root.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
+    root.setMasksToBounds(false);
 
-    // black corner fills = full rect minus the rounded interior (even-odd)
-    let path = NSBezierPath::bezierPath();
-    path.appendBezierPathWithRect(bounds);
-    path.appendBezierPathWithRoundedRect_xRadius_yRadius(bounds, radius, radius);
-    path.setWindingRule(NSWindingRule::EvenOdd);
+    // Outer contour: hugs the screen on the left/right/bottom, but its TOP edge is
+    // pushed down `top_inset_px` so the rounded corners' tangent clears the dead
+    // row. (Layer is non-flipped / bottom-left, so reducing the height lowers only
+    // the top edge.)
+    let outer = CGRect::new(
+        CGPoint::new(0.0, 0.0),
+        CGSize::new(w, h - d(top_inset_px)),
+    );
+    // Inner contour (the hole): a symmetric `line_px` inset from the SCREEN edges,
+    // so the line is the full `line_px` on the sides and bottom while the top ends
+    // up `line_px - top_inset_px` thick. That holds the line's BOTTOM edge where it
+    // was, so the bar's pills (a separate webview window, aligned in logical px and
+    // thus un-nudgeable by a single device px) still flare their concave fillets
+    // into it cleanly. The inset is applied to the TOP only — sides keep full width.
+    let inner = CGRect::new(
+        CGPoint::new(d(line_px), d(line_px)),
+        CGSize::new(w - 2.0 * d(line_px), h - 2.0 * d(line_px)),
+    );
 
+    // frame line = outer rounded rect minus inner rounded rect (even-odd ring)
+    let ring = NSBezierPath::bezierPath();
+    ring.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
+    ring.appendBezierPathWithRoundedRect_xRadius_yRadius(
+        inner,
+        d(radius_px - line_px),
+        d(radius_px - line_px),
+    );
+    ring.setWindingRule(NSWindingRule::EvenOdd);
+    let line_layer = CAShapeLayer::new();
+    line_layer.setFrame(full);
+    line_layer.setPath(Some(&ring.CGPath()));
+    line_layer.setFillRule(unsafe { kCAFillRuleEvenOdd });
+    line_layer.setFillColor(Some(&line_color.CGColor()));
+    root.addSublayer(&line_layer);
+
+    // black corner fills = full screen rect minus the outer rounded rect (even-odd)
+    let notch = NSBezierPath::bezierPath();
+    notch.appendBezierPathWithRect(full);
+    notch.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
+    notch.setWindingRule(NSWindingRule::EvenOdd);
     let corners = CAShapeLayer::new();
-    corners.setFrame(bounds);
-    corners.setPath(Some(&path.CGPath()));
+    corners.setFrame(full);
+    corners.setPath(Some(&notch.CGPath()));
     corners.setFillRule(unsafe { kCAFillRuleEvenOdd });
     corners.setFillColor(Some(&corner_color.CGColor()));
-    layer.addSublayer(&corners);
+    root.addSublayer(&corners);
 
     window.orderFrontRegardless();
     std::mem::forget(window); // keep it alive for the app's lifetime
@@ -968,6 +1026,11 @@ pub fn run() {
                     let size = *m.size();
                     let scale = bar.scale_factor().unwrap_or(1.0);
                     let h = (config.geometry.window_height * scale).round() as u32;
+                    // The bar is NOT offset for the dead top row: its pills sit a
+                    // full line-thickness below the top edge (nowhere near row 0)
+                    // and overlap the native frame's top line, so moving the window
+                    // down would only open a 1px seam between the two windows. Only
+                    // the native frame (drawn at the very edge) needs top_offset_px.
                     let _ = bar.set_position(PhysicalPosition::new(pos.x, pos.y));
                     let _ = bar.set_size(PhysicalSize::new(size.width, h));
                 }
