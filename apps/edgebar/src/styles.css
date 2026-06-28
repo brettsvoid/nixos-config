@@ -59,7 +59,7 @@ body {
 
 .cluster {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: flex-start;
 }
 .cluster.left {
@@ -130,6 +130,18 @@ body {
   );
 }
 
+/* ---- detached pills: a self-contained rounded pill floating just below the
+   top edge, with no concave fillets flaring into the frame ---- */
+.pill.detached {
+  border-radius: 14px;
+  height: calc(var(--pill-h) - 2px);
+  top: calc(var(--bezel-thickness) + var(--bezel-line-thickness) + 2px);
+}
+.pill.detached::before,
+.pill.detached::after {
+  display: none;
+}
+
 /* ---- corner-anchored pills: merge into the top frame corners ----
    The outer (top) corner merges flush into the frame corner; the outer top
    fillet is replaced by a fillet on the bottom that flares into the side edge. */
@@ -191,9 +203,8 @@ body {
   background: rgba(30, 30, 46, 0.3);
 }
 
-/* ---- expandable pills (notch + controls): click to expand into a panel ---- */
-#notch,
-#controls {
+/* ---- expandable notch: click to expand ---- */
+#notch {
   flex-direction: column;
   align-items: stretch;
   /* no overflow:hidden — it would clip the concave fillets. The panel is
@@ -243,34 +254,18 @@ body {
   opacity: 0.75;
 }
 
-/* ---- front app (left, next to workspaces) ---- */
-#frontapp {
+/* ---- status pill: Wi-Fi / network + battery, merged ---- */
+#status {
   color: var(--base);
-  max-width: 220px;
+  gap: 12px; /* separation between the wifi group and the battery group */
+}
+/* each group keeps its icon and text tightly paired */
+.stat-grp {
+  display: flex;
+  align-items: center;
   gap: 6px;
-}
-#frontapp .fa-icon {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  flex: 0 0 auto;
-}
-#frontapp .fa-name {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* hidden when there's no frontmost app name yet */
-#frontapp.empty {
-  display: none;
 }
 
-/* ---- battery (right, left of the clock) ---- */
-#battery {
-  color: var(--base);
-  gap: 6px;
-}
 #battery .bat-icon {
   font-size: 16px;
   line-height: 1;
@@ -287,10 +282,104 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- controls icon (collapsed state) ---- */
-#controls .ctl-icon {
+/* the Wi-Fi glyph has less side-bearing than the battery glyph, so it needs a
+   touch more gap to read the same as the battery's icon→text spacing */
+#wifi {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+#wifi .wifi-icon {
   font-size: 15px;
   line-height: 1;
+}
+#wifi .wifi-label {
+  /* Fira Code Mono (Nerd Font) — same typeface as the bar, true monospace */
+  font-family: "FiraCode Nerd Font Mono", "FiraCode Nerd Font", monospace;
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+#wifi.vpn .wifi-icon {
+  color: #179299; /* catppuccin latte teal */
+}
+#wifi.off {
+  opacity: 0.5;
+}
+
+/* ---- launcher (⌘ quick-actions menu, lives in the workspaces pill) ---- */
+.launcher-icon {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--base);
+  background: transparent;
+  border: none;
+  padding: 0;
+  /* margin gives a flex-gap-independent 8px to the dots (no fixed width, so the
+     glyph hugs the pill's left padding instead of being centered in a box) */
+  margin-right: 16px;
+  font-family: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+/* floating dropdown anchored below the ⌘ */
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--pill-bg);
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 190px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--base);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: rgba(30, 30, 46, 0.12);
+}
+.menu-item .mi-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* ---- controls: a small detached cog button ---- */
+#controls {
+  padding: 0; /* the button supplies its own padding so the pill hugs the icon */
+}
+#controls .ctl-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--pill-h);
+  padding: 0 11px;
+  border: none;
+  background: transparent;
+  color: var(--base);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 /* ---- metrics rows inside the notch panel ---- */
@@ -334,14 +423,25 @@ body {
   font-weight: 600;
 }
 
-/* ---- controls panel (volume / mic / brightness sliders) ---- */
+/* ---- controls panel (volume / mic / brightness sliders) ----
+   A floating dropdown with its own width, anchored below the cog button — so
+   the collapsed pill stays small while the popup keeps its width. */
 .ctl-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
   opacity: 0;
-  padding: 10px 16px 14px;
+  pointer-events: none;
+  background: var(--pill-bg);
+  color: var(--base); /* dark icons/text read on the light panel */
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-width: 190px;
+  min-width: 200px;
 }
 .slider-row {
   display: flex;
@@ -373,9 +473,17 @@ body {
 
 /* ---- workspaces ---- */
 #workspaces {
+  gap: 0; /* spacing handled by .launcher-icon margin-right (glyph-proof) */
+}
+.ws-dots {
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 .ws {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 8px;
   width: 8px;
   border-radius: 4px;
@@ -383,12 +491,42 @@ body {
   cursor: pointer;
   transition:
     width 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
     background-color 150ms ease;
 }
-.ws.occupied {
+
+/* ---- empty / occupied dots (no app icon) ---- */
+.ws.occupied:not(.has-icon) {
   background: var(--occupied);
 }
-.ws.active {
+.ws.active:not(.has-icon) {
   width: 22px;
   background: var(--accent);
+}
+
+/* ---- app-icon dots (occupied workspaces) ---- */
+.ws-icon {
+  display: none;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+.ws.has-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  padding: 2px;
+}
+.ws.has-icon .ws-icon {
+  display: block;
+}
+/* unfocused app icons sit back a touch so the focused one reads as active */
+.ws.has-icon:not(.active) .ws-icon {
+  opacity: 0.8;
+}
+/* focused workspace: accent ring + faint backplate behind the icon */
+.ws.has-icon.active {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 2px var(--accent);
 }

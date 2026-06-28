@@ -121,6 +121,28 @@ struct Workspace {
     name: String,
     focused: bool,
     has_windows: bool,
+    /// App name of the icon shown on this workspace's dot ("" if empty).
+    app: String,
+    /// Bundle id used to resolve `icon` (not sent to the WebView).
+    #[serde(skip)]
+    bundle_id: String,
+    /// "data:image/png;base64,…" app icon, or "" when the workspace is empty.
+    icon: String,
+}
+
+/// One window's identifying app info, parsed from `aerospace list-windows`.
+struct WinRef {
+    app: String,
+    bundle_id: String,
+}
+
+/// Parse a `workspace|app-name|app-bundle-id` row.
+fn parse_win(line: &str) -> Option<(String, WinRef)> {
+    let mut p = line.splitn(3, '|');
+    let ws = p.next()?.to_string();
+    let app = p.next()?.to_string();
+    let bundle_id = p.next().unwrap_or("").to_string();
+    Some((ws, WinRef { app, bundle_id }))
 }
 
 /// Run the AeroSpace CLI and return non-empty, trimmed stdout lines.
@@ -154,16 +176,49 @@ fn query_workspaces() -> Vec<Workspace> {
     ]);
     let non_empty = aerospace(&["list-workspaces", "--monitor", "all", "--empty", "no"]);
 
+    // One icon per workspace: the first window AeroSpace lists for it (stable
+    // order), overridden by the globally-focused window for the active workspace
+    // so its dot tracks whatever app you're actually looking at.
+    let win_rows = aerospace(&[
+        "list-windows",
+        "--all",
+        "--format",
+        "%{workspace}|%{app-name}|%{app-bundle-id}",
+    ]);
+    let mut ws_app: std::collections::HashMap<String, WinRef> = std::collections::HashMap::new();
+    for line in &win_rows {
+        if let Some((ws, win)) = parse_win(line) {
+            ws_app.entry(ws).or_insert(win);
+        }
+    }
+    if let Some((ws, win)) = aerospace(&[
+        "list-windows",
+        "--focused",
+        "--format",
+        "%{workspace}|%{app-name}|%{app-bundle-id}",
+    ])
+    .first()
+    .and_then(|l| parse_win(l))
+    {
+        ws_app.insert(ws, win);
+    }
+
     let mut workspaces: Vec<Workspace> = rows
         .into_iter()
         .filter_map(|row| {
             let mut parts = row.splitn(2, '|');
             let name = parts.next()?.to_string();
             let focused = parts.next() == Some("true");
-            WS_ORDER.contains(&name.as_str()).then(|| Workspace {
-                has_windows: non_empty.contains(&name),
-                focused,
-                name,
+            WS_ORDER.contains(&name.as_str()).then(|| {
+                let win = ws_app.get(&name);
+                Workspace {
+                    has_windows: non_empty.contains(&name),
+                    focused,
+                    app: win.map(|w| w.app.clone()).unwrap_or_default(),
+                    bundle_id: win.map(|w| w.bundle_id.clone()).unwrap_or_default(),
+                    icon: String::new(),
+                    name,
+                }
             })
         })
         .collect();
@@ -301,9 +356,84 @@ fn create_native_frame(cfg: &Config) {
     std::mem::forget(window); // keep it alive for the app's lifetime
 }
 
+/// Query workspaces and fill in each occupied dot's app icon. The AeroSpace
+/// query runs on the caller's (off-main) thread; icon resolution hops to the
+/// main thread (AppKit) and is cached by bundle id.
+fn workspaces_with_icons(app: &tauri::AppHandle) -> Vec<Workspace> {
+    let mut ws = query_workspaces();
+    attach_icons(app, &mut ws);
+    ws
+}
+
+#[cfg(not(target_os = "macos"))]
+fn attach_icons(_app: &tauri::AppHandle, _ws: &mut [Workspace]) {}
+
+/// Fill `icon` for every workspace that has an app, resolving NSImage icons on
+/// the main thread (AppKit isn't thread-safe) and caching the PNG by bundle id.
+#[cfg(target_os = "macos")]
+fn attach_icons(app: &tauri::AppHandle, ws: &mut [Workspace]) {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    let needed: Vec<String> = ws
+        .iter()
+        .filter(|w| !w.bundle_id.is_empty())
+        .filter_map(|w| seen.insert(&w.bundle_id).then(|| w.bundle_id.clone()))
+        .collect();
+    if needed.is_empty() {
+        return;
+    }
+
+    let app2 = app.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    if app
+        .run_on_main_thread(move || {
+            let _ = tx.send(resolve_icons(&app2, needed));
+        })
+        .is_err()
+    {
+        return;
+    }
+    let Ok(map) = rx.recv() else { return };
+    for w in ws.iter_mut() {
+        if let Some(icon) = map.get(&w.bundle_id) {
+            w.icon = icon.clone();
+        }
+    }
+}
+
+/// Resolve each bundle id to a PNG data URL, populating the shared cache. Must
+/// run on the main thread (touches AppKit). Returns the subset requested.
+#[cfg(target_os = "macos")]
+fn resolve_icons(
+    app: &tauri::AppHandle,
+    bundle_ids: Vec<String>,
+) -> std::collections::HashMap<String, String> {
+    use objc2_app_kit::NSRunningApplication;
+    use objc2_foundation::NSString;
+
+    let state = app.state::<AppState>();
+    let mut cache = state.icon_cache.lock().unwrap();
+    let mut out = std::collections::HashMap::new();
+    for bid in bundle_ids {
+        if !cache.contains_key(&bid) {
+            let ns = NSString::from_str(&bid);
+            let icon = NSRunningApplication::runningApplicationsWithBundleIdentifier(&ns)
+                .firstObject()
+                .and_then(|a| a.icon())
+                .and_then(|img| icon_png_data_url(&img))
+                .unwrap_or_default();
+            cache.insert(bid.clone(), icon);
+        }
+        if let Some(icon) = cache.get(&bid) {
+            out.insert(bid, icon.clone());
+        }
+    }
+    out
+}
+
 #[tauri::command]
-async fn aerospace_workspaces() -> Vec<Workspace> {
-    tauri::async_runtime::spawn_blocking(query_workspaces)
+async fn aerospace_workspaces(app: tauri::AppHandle) -> Vec<Workspace> {
+    tauri::async_runtime::spawn_blocking(move || workspaces_with_icons(&app))
         .await
         .unwrap_or_default()
 }
@@ -327,24 +457,90 @@ fn set_bar_size(app: tauri::AppHandle, width: f64, height: f64) {
     }
 }
 
-// ───────────────────────── shared app state ─────────────────────────
-// Holds the cached front-app name (pushed by the NSWorkspace observer, read
-// back by the `front_app` command for the bar's initial paint) and a persistent
-// `sysinfo::System` (kept alive so CPU usage can be computed from the delta
-// between samples — a fresh System always reports 0%).
-struct AppState {
-    front_app: Mutex<FrontApp>,
-    sys: Mutex<sysinfo::System>,
+// ───────────────────────── network (Wi-Fi / IP / VPN) ───────────────
+// Mirrors sketchybar's ip_address.sh: shows the primary IP (not the SSID, which
+// macOS now gates behind Location Services), flags an active VPN (utun), or
+// "Not Connected". Parsed from `scutil --nwi`.
+#[derive(Clone, Default, Serialize)]
+struct Network {
+    /// "wifi" | "vpn" | "off"
+    state: String,
+    label: String,
 }
 
-/// The frontmost app's name plus its real macOS icon as a PNG data URL (so the
-/// WebView can render the actual app icon — sketchybar used an app-font glyph
-/// with the macOS icon as fallback; here the icon is the primary source).
-#[derive(Clone, Default, Serialize)]
-struct FrontApp {
-    name: String,
-    /// "data:image/png;base64,…" or "" when no icon is available.
-    icon: String,
+fn read_network() -> Network {
+    let nwi = std::process::Command::new("scutil")
+        .arg("--nwi")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    // `Network interfaces:` line lists active interfaces; a utun there = VPN.
+    let is_vpn = nwi
+        .lines()
+        .find(|l| l.contains("Network interfaces:"))
+        .is_some_and(|l| l.contains("utun"));
+
+    // First `address : <ip>` line is the primary IPv4 address.
+    let ip = nwi
+        .lines()
+        .find(|l| l.trim_start().starts_with("address"))
+        .and_then(|l| l.splitn(2, ':').nth(1))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if is_vpn {
+        Network {
+            state: "vpn".into(),
+            label: "VPN".into(),
+        }
+    } else if let Some(ip) = ip {
+        Network {
+            state: "wifi".into(),
+            label: ip,
+        }
+    } else {
+        Network {
+            state: "off".into(),
+            label: "Not Connected".into(),
+        }
+    }
+}
+
+#[tauri::command]
+async fn network() -> Network {
+    tauri::async_runtime::spawn_blocking(read_network)
+        .await
+        .unwrap_or_default()
+}
+
+// ───────────────────────── launcher menu actions ────────────────────
+// Mirrors sketchybar's command.logo popup: quick links to Settings / Activity
+// Monitor and a display-sleep action. Whitelisted — never runs arbitrary input.
+#[tauri::command]
+fn launcher_action(action: String) {
+    let _ = match action.as_str() {
+        "settings" => std::process::Command::new("open")
+            .args(["-a", "System Settings"])
+            .spawn(),
+        "activity" => std::process::Command::new("open")
+            .args(["-a", "Activity Monitor"])
+            .spawn(),
+        "sleep" => std::process::Command::new("pmset")
+            .arg("displaysleepnow")
+            .spawn(),
+        _ => return,
+    };
+}
+
+// ───────────────────────── shared app state ─────────────────────────
+// Holds a persistent `sysinfo::System` (kept alive so CPU usage can be computed
+// from the delta between samples — a fresh System always reports 0%) and a cache
+// of app icons keyed by bundle id (PNG data URLs, resolved once on the main
+// thread and reused for the workspace dots).
+struct AppState {
+    sys: Mutex<sysinfo::System>,
+    icon_cache: Mutex<std::collections::HashMap<String, String>>,
 }
 
 // ───────────────────────── battery (pmset) ─────────────────────────
@@ -546,13 +742,11 @@ fn set_brightness(value: f32) {
     }
 }
 
-// ───────────────────────── front app (NSWorkspace) ──────────────────
+// ───────────────────────── app icons (NSWorkspace) ──────────────────
 // Event-driven, no polling: an NSWorkspace observer fires on every app
-// activation, re-reads the frontmost app, caches it, and emits "front_app".
-#[tauri::command]
-fn front_app(state: tauri::State<AppState>) -> FrontApp {
-    state.front_app.lock().unwrap().clone()
-}
+// activation and re-pushes the workspaces so the focused workspace's dot tracks
+// whatever app you just switched to (AeroSpace's workspace-change hook only
+// fires on workspace switches, not on focus moves within a workspace).
 
 /// Encode an NSImage as a PNG data URL (TIFF rep → bitmap rep → PNG → base64).
 #[cfg(target_os = "macos")]
@@ -567,26 +761,6 @@ fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
     }?;
     let b64 = png.base64EncodedStringWithOptions(NSDataBase64EncodingOptions::empty());
     Some(format!("data:image/png;base64,{}", &*b64))
-}
-
-/// Read the current frontmost app's name + icon. Touches AppKit, so it must run
-/// on the main thread (setup + the observer callback both do).
-#[cfg(target_os = "macos")]
-fn current_front_app() -> FrontApp {
-    use objc2_app_kit::NSWorkspace;
-    let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() else {
-        return FrontApp::default();
-    };
-    FrontApp {
-        name: app
-            .localizedName()
-            .map(|n| n.to_string())
-            .unwrap_or_default(),
-        icon: app
-            .icon()
-            .and_then(|img| icon_png_data_url(&img))
-            .unwrap_or_default(),
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -609,12 +783,13 @@ objc2::define_class!(
     impl FrontAppObserver {
         #[unsafe(method(appActivated:))]
         fn app_activated(&self, _notification: *mut objc2::runtime::AnyObject) {
-            let fa = current_front_app();
-            let app = &self.ivars().app;
-            if let Some(state) = app.try_state::<AppState>() {
-                *state.front_app.lock().unwrap() = fa.clone();
-            }
-            let _ = app.emit("front_app", fa);
+            // The callback runs on the main thread; query_workspaces shells out to
+            // AeroSpace, so do the work off-thread (it hops back to the main thread
+            // only for icon resolution) to avoid beach-balling the UI.
+            let app = self.ivars().app.clone();
+            std::thread::spawn(move || {
+                let _ = app.emit("workspaces", workspaces_with_icons(&app));
+            });
         }
     }
 
@@ -652,14 +827,15 @@ pub fn run() {
             aerospace_focus,
             set_bar_size,
             get_config,
-            front_app,
             battery,
             metrics_sample,
             get_volume,
             set_volume,
             set_input_volume,
             get_brightness,
-            set_brightness
+            set_brightness,
+            network,
+            launcher_action
         ])
         .setup(|app| {
             // Shared config (colors + geometry) — drives both the native frame
@@ -715,20 +891,15 @@ pub fn run() {
                         continue;
                     }
                     // a connection is just a "something changed" ping
-                    let _ = ws_handle.emit("workspaces", query_workspaces());
+                    let _ = ws_handle.emit("workspaces", workspaces_with_icons(&ws_handle));
                 }
             });
 
-            // Front-app + metrics state. Seed the front-app name now (on the
-            // main thread) so the bar's first paint has it; the NSWorkspace
-            // observer keeps it fresh thereafter without polling.
-            #[cfg(target_os = "macos")]
-            let initial_front = current_front_app();
-            #[cfg(not(target_os = "macos"))]
-            let initial_front = FrontApp::default();
+            // Metrics state + app-icon cache. The NSWorkspace observer re-pushes
+            // workspaces on every app activation so the focused dot stays current.
             app.manage(AppState {
-                front_app: Mutex::new(initial_front),
                 sys: Mutex::new(sysinfo::System::new()),
+                icon_cache: Mutex::new(std::collections::HashMap::new()),
             });
             #[cfg(target_os = "macos")]
             install_front_app_observer(app.handle().clone());

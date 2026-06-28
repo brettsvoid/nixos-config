@@ -12,10 +12,21 @@
     <!-- top bar: workspaces + front app left, notch center, status + clock right -->
     <div class="bar">
       <div class="cluster left">
-        <div class="pill" id="workspaces"></div>
-        <div class="pill" id="frontapp">
-          <img class="fa-icon" alt="" />
-          <span class="fa-name">—</span>
+        <!-- workspaces pill: ⌘ launcher menu on the left, then the dots -->
+        <div class="pill" id="workspaces">
+          <button class="launcher-icon" id="launcher-btn" title="Menu">󰘳</button>
+          <div class="ws-dots"></div>
+          <div class="menu-panel">
+            <button class="menu-item" data-action="settings">
+              <span class="mi-icon">󰒓</span><span>Settings</span>
+            </button>
+            <button class="menu-item" data-action="activity">
+              <span class="mi-icon">󱕍</span><span>Activity Monitor</span>
+            </button>
+            <button class="menu-item" data-action="sleep">
+              <span class="mi-icon">󰌾</span><span>Sleep</span>
+            </button>
+          </div>
         </div>
       </div>
       <div class="cluster center">
@@ -55,31 +66,34 @@
         </div>
       </div>
       <div class="cluster right">
-        <!-- Controls: volume / mic / brightness behind a button (ambxst style) -->
-        <div class="pill" id="controls">
-          <div class="notch-row">
-            <span class="ctl-icon">󰒓</span>
-          </div>
-          <div class="notch-panel-clip">
-            <div class="ctl-panel">
-              <div class="slider-row" data-k="volume">
-                <span class="s-icon">󰕾</span>
-                <input class="s-range" type="range" min="0" max="100" value="0" />
-              </div>
-              <div class="slider-row" data-k="mic">
-                <span class="s-icon">󰍬</span>
-                <input class="s-range" type="range" min="0" max="100" value="0" />
-              </div>
-              <div class="slider-row" data-k="brightness">
-                <span class="s-icon">☀</span>
-                <input class="s-range" type="range" min="0" max="100" value="0" />
-              </div>
+        <!-- Controls: a small detached button with a floating sliders popup -->
+        <div class="pill detached" id="controls">
+          <button class="ctl-icon" id="ctl-btn" title="Adjustments">󰘮</button>
+          <div class="ctl-panel">
+            <div class="slider-row" data-k="volume">
+              <span class="s-icon">󰕾</span>
+              <input class="s-range" type="range" min="0" max="100" value="0" />
+            </div>
+            <div class="slider-row" data-k="mic">
+              <span class="s-icon">󰍬</span>
+              <input class="s-range" type="range" min="0" max="100" value="0" />
+            </div>
+            <div class="slider-row" data-k="brightness">
+              <span class="s-icon">☀</span>
+              <input class="s-range" type="range" min="0" max="100" value="0" />
             </div>
           </div>
         </div>
-        <div class="pill" id="battery">
-          <span class="bat-icon">󰂎</span>
-          <span class="bat-pct">—</span>
+        <!-- Wi-Fi / network + battery, merged into one detached pill -->
+        <div class="pill detached" id="status">
+          <span class="stat-grp" id="wifi">
+            <span class="wifi-icon">󰖪</span>
+            <span class="wifi-label">—</span>
+          </span>
+          <span class="stat-grp" id="battery">
+            <span class="bat-icon">󰂎</span>
+            <span class="bat-pct">—</span>
+          </span>
         </div>
         <div class="pill" id="clock">
           <span class="time">--:--</span>

@@ -7,6 +7,8 @@ interface Workspace {
   name: string;
   focused: boolean;
   has_windows: boolean;
+  app: string; // app name shown on the dot ("" if empty)
+  icon: string; // PNG data URL, or "" when the workspace is empty
 }
 
 interface Config {
@@ -18,11 +20,6 @@ interface Config {
     pillRadius: number;
     concave: number;
   };
-}
-
-interface FrontApp {
-  name: string;
-  icon: string; // PNG data URL, or "" when unavailable
 }
 
 interface Battery {
@@ -44,6 +41,11 @@ interface Metrics {
 interface Volume {
   output: number;
   input: number;
+}
+
+interface Network {
+  state: string; // "wifi" | "vpn" | "off"
+  label: string;
 }
 
 const HIDDEN_Y = -48; // px above the top edge (clipped by the window)
@@ -336,17 +338,90 @@ function initBar(pillHeight: number) {
     debounce(() => invoke("set_brightness", { value: +briRange.value / 100 }), 40),
   );
 
-  const controlsPanel = makePanel({
-    id: "controls",
-    pill: controlsEl,
-    header: controlsEl.querySelector<HTMLElement>(".notch-row")!,
-    panel: controlsEl.querySelector<HTMLElement>(".ctl-panel")!,
-    width: 230,
-    height: 150,
-    onOpen: loadControls,
-  });
+  // The popup is a floating dropdown (own width), so the collapsed pill stays a
+  // small cog button — the panel doesn't widen it. Mirrors the launcher menu.
+  const ctlBtn = document.querySelector<HTMLElement>("#ctl-btn")!;
+  const ctlPanelEl = controlsEl.querySelector<HTMLElement>(".ctl-panel")!;
+  let controlsOpen = false;
+  animate(ctlPanelEl, { y: -8 }, { duration: 0 }); // start tucked up (hidden)
 
-  const panels = [notchPanel, controlsPanel];
+  async function openControls() {
+    if (controlsOpen) return;
+    controlsOpen = true;
+    openPanels.add("controls");
+    await syncWindowHeight();
+    await loadControls();
+    ctlPanelEl.style.pointerEvents = "auto";
+    animate(
+      ctlPanelEl,
+      { opacity: 1, y: 0 },
+      { type: "spring", stiffness: 300, damping: 26 },
+    );
+  }
+  async function closeControls() {
+    if (!controlsOpen) return;
+    controlsOpen = false;
+    ctlPanelEl.style.pointerEvents = "none";
+    await animate(ctlPanelEl, { opacity: 0, y: -8 }, { duration: 0.12 }).finished;
+    openPanels.delete("controls");
+    await syncWindowHeight();
+  }
+  ctlBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    controlsOpen ? closeControls() : openControls();
+  });
+  // Same shape as makePanel() so outside-click / mouse-leave close it.
+  const controlsPanel = {
+    pill: controlsEl,
+    isOpen: () => controlsOpen,
+    collapse: closeControls,
+  };
+
+  // ---- launcher: ⌘ quick-actions menu (drops down from the workspaces pill)
+  const wsPill = document.querySelector<HTMLElement>("#workspaces")!;
+  const launcherBtn = document.querySelector<HTMLElement>("#launcher-btn")!;
+  const menuPanel = wsPill.querySelector<HTMLElement>(".menu-panel")!;
+  let launcherOpen = false;
+  animate(menuPanel, { y: -8 }, { duration: 0 }); // start tucked up (hidden)
+
+  async function openLauncher() {
+    if (launcherOpen) return;
+    launcherOpen = true;
+    openPanels.add("launcher");
+    await syncWindowHeight();
+    menuPanel.style.pointerEvents = "auto";
+    animate(
+      menuPanel,
+      { opacity: 1, y: 0 },
+      { type: "spring", stiffness: 300, damping: 26 },
+    );
+  }
+  async function closeLauncher() {
+    if (!launcherOpen) return;
+    launcherOpen = false;
+    menuPanel.style.pointerEvents = "none";
+    await animate(menuPanel, { opacity: 0, y: -8 }, { duration: 0.12 }).finished;
+    openPanels.delete("launcher");
+    await syncWindowHeight();
+  }
+  launcherBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    launcherOpen ? closeLauncher() : openLauncher();
+  });
+  for (const btn of menuPanel.querySelectorAll<HTMLElement>(".menu-item")) {
+    btn.addEventListener("click", () => {
+      invoke("launcher_action", { action: btn.dataset.action });
+      closeLauncher();
+    });
+  }
+  // Expose the same shape as makePanel() so outside-click / mouse-leave close it.
+  const launcherPanel = {
+    pill: wsPill,
+    isOpen: () => launcherOpen,
+    collapse: closeLauncher,
+  };
+
+  const panels = [notchPanel, controlsPanel, launcherPanel];
 
   // Click outside an open panel collapses it.
   document.addEventListener("click", (e) => {
@@ -355,24 +430,6 @@ function initBar(pillHeight: number) {
       if (p.isOpen() && !p.pill.contains(t)) p.collapse();
     }
   });
-
-  // ---- front app (event-driven from NSWorkspace) -------------------------
-  const faPill = document.querySelector<HTMLElement>("#frontapp")!;
-  const faName = faPill.querySelector<HTMLElement>(".fa-name")!;
-  const faIcon = faPill.querySelector<HTMLImageElement>(".fa-icon")!;
-  function setFrontApp(fa: FrontApp) {
-    faName.textContent = fa.name || "";
-    if (fa.icon) {
-      faIcon.src = fa.icon;
-      faIcon.style.display = "";
-    } else {
-      faIcon.removeAttribute("src");
-      faIcon.style.display = "none";
-    }
-    faPill.classList.toggle("empty", !fa.name && !fa.icon);
-  }
-  listen<FrontApp>("front_app", (e) => setFrontApp(e.payload));
-  invoke<FrontApp>("front_app").then(setFrontApp).catch(() => {});
 
   // ---- battery (polled; changes slowly) ----------------------------------
   // Nerd Font (Material Design) battery glyphs, 0%..100% in 10% steps.
@@ -397,8 +454,32 @@ function initBar(pillHeight: number) {
   updateBattery();
   window.setInterval(updateBattery, 60000);
 
+  // ---- Wi-Fi / network (polled; changes slowly) --------------------------
+  // Nerd Font glyphs: connected / VPN / off (reused from sketchybar icons.sh).
+  const WIFI_ICON: Record<string, string> = {
+    wifi: "󰖩",
+    vpn: "󰦝",
+    off: "󰖪",
+  };
+  const wifiPill = document.querySelector<HTMLElement>("#wifi")!;
+  const wifiIcon = wifiPill.querySelector<HTMLElement>(".wifi-icon")!;
+  const wifiLabel = wifiPill.querySelector<HTMLElement>(".wifi-label")!;
+  async function updateNetwork() {
+    try {
+      const n = await invoke<Network>("network");
+      wifiIcon.textContent = WIFI_ICON[n.state] ?? WIFI_ICON.off;
+      wifiLabel.textContent = n.label;
+      wifiPill.classList.toggle("vpn", n.state === "vpn");
+      wifiPill.classList.toggle("off", n.state === "off");
+    } catch {
+      /* ignore */
+    }
+  }
+  updateNetwork();
+  window.setInterval(updateNetwork, 15000);
+
   // ---- workspaces: event-driven (Rust pushes on AeroSpace changes) -------
-  const wsContainer = document.querySelector<HTMLElement>("#workspaces")!;
+  const wsContainer = document.querySelector<HTMLElement>("#workspaces .ws-dots")!;
   const wsEls = new Map<string, HTMLElement>();
 
   function renderWorkspaces(list: Workspace[]) {
@@ -413,15 +494,25 @@ function initBar(pillHeight: number) {
       if (!el) {
         el = document.createElement("div");
         el.className = "ws";
-        el.title = `workspace ${w.name}`;
+        const img = document.createElement("img");
+        img.className = "ws-icon";
+        img.alt = "";
+        el.appendChild(img);
         el.addEventListener("click", () =>
           invoke("aerospace_focus", { name: w.name }),
         );
         wsEls.set(w.name, el);
         wsContainer.appendChild(el);
       }
+      // Occupied workspaces show the app icon; empty ones stay as small dots.
+      const img = el.querySelector<HTMLImageElement>(".ws-icon")!;
+      const hasIcon = !!w.icon;
+      if (hasIcon) img.src = w.icon;
+      else img.removeAttribute("src");
+      el.classList.toggle("has-icon", hasIcon);
       el.classList.toggle("active", w.focused);
       el.classList.toggle("occupied", w.has_windows && !w.focused);
+      el.title = w.app ? `${w.app} — workspace ${w.name}` : `workspace ${w.name}`;
     }
     for (const w of list) wsContainer.appendChild(wsEls.get(w.name)!);
   }
