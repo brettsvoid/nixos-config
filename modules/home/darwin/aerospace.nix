@@ -31,6 +31,8 @@ in
     let
       aerospaceToml = pkgs.replaceVars ./aerospace/aerospace.toml.in {
         outerTop = toString geom.outerTop;
+        innerGap = toString geom.innerGap;
+        outerGap = toString geom.outerGap;
       };
     in
     {

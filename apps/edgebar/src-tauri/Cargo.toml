@@ -31,6 +31,8 @@ sysinfo = "0.33"
 # pinned to the 0.3 objc2 ecosystem already in the tree via tao/wry.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
+# Objective-C blocks for the NSEvent cursor monitors that drive bar click-through.
+block2 = "0.6"
 objc2-foundation = { version = "0.3", features = [
   "NSGeometry",
   "NSString",
@@ -40,6 +42,7 @@ objc2-app-kit = { version = "0.3", features = [
   "NSWindow",
   "NSResponder",
   "NSView",
+  "NSEvent",
   "NSColor",
   "NSScreen",
   "NSBezierPath",

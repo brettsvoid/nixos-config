@@ -76,6 +76,9 @@ in
                 terminals-ghostty
                 terminals-kitty
                 darwin-sketchybar
+                darwin-edgebar
+                darwin-wallpaper
+                desktop-wallpapers
                 darwin-karabiner
                 nvim
                 apps-git

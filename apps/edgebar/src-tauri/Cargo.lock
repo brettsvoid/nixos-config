@@ -857,6 +857,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 name = "edgebar"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "objc2",
  "objc2-app-kit",
  "objc2-core-foundation",

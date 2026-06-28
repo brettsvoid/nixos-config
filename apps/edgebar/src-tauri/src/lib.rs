@@ -76,6 +76,20 @@ struct Geometry {
     pill_height: f64,
     pill_radius: f64,
     concave: f64,
+    /// Height (logical px) of the bar window itself. Taller than the bar band
+    /// AeroSpace reserves (config's `barHeight`, consumed only on the Nix side)
+    /// so the pills' shadows and the corner fillets that hang below the band
+    /// aren't clipped by the window bounds. The extra height is transparent and
+    /// passes clicks through, so it doesn't cover the windows below.
+    #[serde(default = "default_window_height")]
+    window_height: f64,
+}
+
+/// Fallback when an older config.json (rendered before `windowHeight` existed)
+/// omits the field — keeps such a config parsing instead of dropping to the
+/// fully-bundled default.
+fn default_window_height() -> f64 {
+    64.0
 }
 
 fn load_config() -> Config {
@@ -111,10 +125,6 @@ fn hex_to_rgba(hex: &str) -> [f64; 4] {
 fn get_config(config: tauri::State<Config>) -> Config {
     config.inner().clone()
 }
-
-/// Height (logical px) of the interactive top strip. Kept small so it only
-/// covers the area AeroSpace already reserves for the bar.
-const BAR_HEIGHT: f64 = 64.0;
 
 #[derive(Clone, Serialize)]
 struct Workspace {
@@ -257,6 +267,95 @@ fn make_overlay(window: &tauri::WebviewWindow) {
             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
         }
     }
+}
+
+// ───────────────────────── click-through bar window ─────────────────
+// The bar window has to be tall enough to render the pills' drop-shadows and the
+// corner fillets that hang below the bar band — but it sits over the top edge of
+// the tiled windows, and a transparent window swallows clicks across its whole
+// rect (returning nil from a view's hitTest does NOT pass the click to the app
+// below — only the window-level `ignoresMouseEvents` flag does that). So we keep
+// the window click-through by default and flip `ignoresMouseEvents` off only
+// while the cursor is over a pill. Two NSEvent monitors drive it: a local one
+// (events to us, i.e. cursor over the bar while it's interactive) and a global
+// one (events to other apps, i.e. cursor over the bar while it's click-through —
+// this is what re-arms interactivity). Event-driven, so no cursor-polling loop
+// and none of the main-thread deadlock that polling Tauri getters would cause.
+
+/// Set the bar's `ignoresMouseEvents` from the cursor position: interactive when
+/// it's over one of the reported rects (the pills, or a full-window rect while a
+/// popup is open), click-through otherwise. `mouseLocation` and the window frame
+/// are screen coords (bottom-left origin); the rects are window-relative CSS px
+/// from the top-left, so we map each rect into screen space to compare.
+#[cfg(target_os = "macos")]
+fn sync_ignore_mouse(
+    ns_window: &objc2_app_kit::NSWindow,
+    rects: &std::sync::Mutex<Vec<[f64; 4]>>,
+) {
+    let loc = objc2_app_kit::NSEvent::mouseLocation();
+    let frame = ns_window.frame();
+    let win_top = frame.origin.y + frame.size.height;
+    let over = rects.lock().unwrap().iter().any(|r| {
+        let sx0 = frame.origin.x + r[0];
+        let sx1 = sx0 + r[2];
+        let sy1 = win_top - r[1];
+        let sy0 = sy1 - r[3];
+        loc.x >= sx0 && loc.x <= sx1 && loc.y >= sy0 && loc.y <= sy1
+    });
+    ns_window.setIgnoresMouseEvents(!over);
+}
+
+/// Track the cursor with NSEvent monitors and toggle the bar's
+/// `ignoresMouseEvents` so it's interactive only over the pills.
+#[cfg(target_os = "macos")]
+fn install_cursor_tracking(
+    window: &tauri::WebviewWindow,
+    rects: std::sync::Arc<std::sync::Mutex<Vec<[f64; 4]>>>,
+) {
+    use objc2::rc::Retained;
+    use objc2_app_kit::{NSEvent, NSEventMask, NSWindow};
+
+    let Ok(ptr) = window.ns_window() else {
+        return;
+    };
+    let Some(ns_window) = (unsafe { Retained::retain(ptr as *mut NSWindow) }) else {
+        return;
+    };
+
+    // Start click-through; the monitors flip it on when the cursor reaches a pill.
+    ns_window.setIgnoresMouseEvents(true);
+
+    let mask = NSEventMask::MouseMoved | NSEventMask::LeftMouseDragged;
+
+    // Local monitor: events delivered to us. Must return the event so the bar's
+    // own handling (hover, clicks) continues.
+    let nw_local = ns_window.clone();
+    let rects_local = rects.clone();
+    let local = block2::RcBlock::new(move |event: core::ptr::NonNull<NSEvent>| -> *mut NSEvent {
+        sync_ignore_mouse(&nw_local, &rects_local);
+        event.as_ptr()
+    });
+    // Global monitor: events delivered to other apps (cursor over the bar while
+    // it's click-through, or anywhere else). Re-arms interactivity on re-entry.
+    let nw_global = ns_window.clone();
+    let rects_global = rects.clone();
+    let global = block2::RcBlock::new(move |_event: core::ptr::NonNull<NSEvent>| {
+        sync_ignore_mouse(&nw_global, &rects_global);
+    });
+
+    // The monitors copy the blocks and AppKit keeps them alive; we never remove
+    // them (they live for the app's lifetime), so the returned handles can drop.
+    unsafe {
+        let _ = NSEvent::addLocalMonitorForEventsMatchingMask_handler(mask, &local);
+        let _ = NSEvent::addGlobalMonitorForEventsMatchingMask_handler(mask, &global);
+    }
+}
+
+/// Update the interactive rects the cursor tracker checks (WebView CSS px,
+/// top-left origin). Called by the WebView whenever its layout changes.
+#[tauri::command]
+fn set_interactive_rects(state: tauri::State<AppState>, rects: Vec<[f64; 4]>) {
+    *state.interactive_rects.lock().unwrap() = rects;
 }
 
 // Commands are `async` so the IPC layer runs them off the main thread, and the
@@ -541,6 +640,9 @@ fn launcher_action(action: String) {
 struct AppState {
     sys: Mutex<sysinfo::System>,
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
+    /// Interactive rects for the bar's click-through hitTest (WebView CSS px,
+    /// top-left origin). Shared with the native `ClickThroughView`.
+    interactive_rects: std::sync::Arc<std::sync::Mutex<Vec<[f64; 4]>>>,
 }
 
 // ───────────────────────── battery (pmset) ─────────────────────────
@@ -835,12 +937,18 @@ pub fn run() {
             get_brightness,
             set_brightness,
             network,
-            launcher_action
+            launcher_action,
+            set_interactive_rects
         ])
         .setup(|app| {
             // Shared config (colors + geometry) — drives both the native frame
             // and the WebView (which fetches it via get_config and applies CSS vars).
             let config = load_config();
+
+            // Interactive rects for the bar's click-through hitTest; shared
+            // between the native ClickThroughView and the set_interactive_rects
+            // command (created before both so they hold clones of the same Arc).
+            let interactive_rects = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
             // Accessory app: no Dock icon, never becomes the active app, so it
             // never steals focus or bounces you back to the previously-active
@@ -859,7 +967,7 @@ pub fn run() {
                     let pos = *m.position();
                     let size = *m.size();
                     let scale = bar.scale_factor().unwrap_or(1.0);
-                    let h = (BAR_HEIGHT * scale).round() as u32;
+                    let h = (config.geometry.window_height * scale).round() as u32;
                     let _ = bar.set_position(PhysicalPosition::new(pos.x, pos.y));
                     let _ = bar.set_size(PhysicalSize::new(size.width, h));
                 }
@@ -867,6 +975,8 @@ pub fn run() {
                 let _ = bar.set_visible_on_all_workspaces(true);
                 #[cfg(target_os = "macos")]
                 make_overlay(&bar);
+                #[cfg(target_os = "macos")]
+                install_cursor_tracking(&bar, interactive_rects.clone());
                 let _ = bar.show();
             }
 
@@ -900,6 +1010,7 @@ pub fn run() {
             app.manage(AppState {
                 sys: Mutex::new(sysinfo::System::new()),
                 icon_cache: Mutex::new(std::collections::HashMap::new()),
+                interactive_rects,
             });
             #[cfg(target_os = "macos")]
             install_front_app_observer(app.handle().clone());

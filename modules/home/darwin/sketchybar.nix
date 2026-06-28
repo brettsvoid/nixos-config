@@ -36,7 +36,7 @@ in
       # dir (home-manager can't write into an out-of-store symlink).
       home.file.".config/sketchybar-vars.sh".text = ''
         # Generated from flake.lib.barGeometry — edit modules/home/darwin/bar-geometry.nix
-        EXTERNAL_BAR_HEIGHT=${toString geom.height}
+        EXTERNAL_BAR_HEIGHT=${toString geom.barHeight}
       '';
 
       # Re-run sketchybarrc on every `darwin-rebuild switch` so a changed

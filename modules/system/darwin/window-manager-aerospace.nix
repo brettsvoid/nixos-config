@@ -72,9 +72,11 @@ _: {
                 fi
       '';
 
-      services.sketchybar = {
-        enable = true;
-        package = pkgs.sketchybar;
-      };
+      # Disabled — replaced by the edgebar Tauri overlay (apps/edgebar).
+      # Re-enable to bring the sketchybar daemon back.
+      # services.sketchybar = {
+      #   enable = true;
+      #   package = pkgs.sketchybar;
+      # };
     };
 }

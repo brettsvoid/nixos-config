@@ -40,18 +40,18 @@ on-focused-monitor-changed = []
 exec-on-workspace-change = ['/bin/bash', '-c', 'nc -U "$HOME/.cache/edgebar/ws.sock" </dev/null >/dev/null 2>&1 &']
 
 # ─── Gaps ──────────────────────────────────────────────────────────────────
-# outer.top is substituted from flake.lib.barGeometry: it equals the sketchybar
-# bar height (EXTERNAL_BAR_HEIGHT), whose built-in bottom padding already
-# supplies the gap below the bar. The old value (60 = height + 8) double-counted
-# that padding, producing a doubled gap. Other sides + inner gaps = 8, matching
-# the bar padding / yabai window_gap. Don't hardcode outer.top here.
+# All gap values are substituted from flake.lib.barGeometry — single-sourced so
+# the bar height and every gap are tweakable in one place (bar-geometry.nix);
+# don't hardcode them here. innerGap = between windows (and below the bar);
+# outerGap = screen-edge inset; outerTop = barHeight + innerGap (the edgebar bar
+# band plus one gap below it — edgebar is an overlay with no built-in padding).
 [gaps]
-inner.horizontal = 8
-inner.vertical = 8
-outer.left = 12
-outer.right = 12
+inner.horizontal = @innerGap@
+inner.vertical = @innerGap@
+outer.left = @outerGap@
+outer.right = @outerGap@
 outer.top = @outerTop@
-outer.bottom = 12
+outer.bottom = @outerGap@
 
 # ─── Float rules (mirror yabai's apps_mgoff_* lists) ───────────────────────
 # yabai used `app=^(...)$` regex on app name; AeroSpace matches by either

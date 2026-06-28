@@ -19,6 +19,7 @@ interface Config {
     pillHeight: number;
     pillRadius: number;
     concave: number;
+    windowHeight: number;
   };
 }
 
@@ -55,9 +56,9 @@ const HIDDEN_Y = -48; // px above the top edge (clipped by the window)
 invoke<Config>("get_config")
   .then((cfg) => {
     applyConfig(cfg);
-    initBar(cfg.geometry.pillHeight);
+    initBar(cfg.geometry.pillHeight, cfg.geometry.windowHeight);
   })
-  .catch(() => initBar(30));
+  .catch(() => initBar(30, 64));
 
 function applyConfig(cfg: Config) {
   const s = document.documentElement.style;
@@ -85,7 +86,7 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
-function initBar(pillHeight: number) {
+function initBar(pillHeight: number, windowHeight: number) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
   let shown = false;
@@ -99,7 +100,13 @@ function initBar(pillHeight: number) {
   // Both the notch and the controls popup grow the (transparent) bar window so
   // their panels have room. The window is shared, so size to "tall" whenever any
   // panel is open and back to "base" once all are closed.
-  const WINDOW_BASE_H = 64; // matches BAR_HEIGHT in lib.rs
+  // Collapsed bar-window height. Matches the height lib.rs sizes the window to
+  // at startup (config.geometry.windowHeight) — taller than the bar band so the
+  // pills' shadows and the corner fillets hanging below the band aren't clipped
+  // by the window bounds. Single-sourced via config so it can't drift from the
+  // native side again. (The extra height is transparent and passes clicks
+  // through, so it doesn't cover the windows below.)
+  const WINDOW_BASE_H = windowHeight;
   const WINDOW_EXPANDED_H = 280;
   const COLLAPSED_H = pillHeight;
   const openPanels = new Set<string>();
@@ -113,7 +120,33 @@ function initBar(pillHeight: number) {
       width: window.innerWidth,
       height: tall ? WINDOW_EXPANDED_H : WINDOW_BASE_H,
     });
+    reportInteractiveRects();
   }
+
+  // Feed the native click-through hitTest (lib.rs) the regions that should stay
+  // interactive: the pills when idle, or one full-window rect while a popup is
+  // open (so clicks outside the popup still land on the bar and close it).
+  // Everywhere else the bar passes clicks through to the windows below. Coalesced
+  // to one IPC per frame; called whenever the bar's layout changes.
+  let rectsScheduled = false;
+  function reportInteractiveRects() {
+    if (rectsScheduled) return;
+    rectsScheduled = true;
+    requestAnimationFrame(() => {
+      rectsScheduled = false;
+      const rects =
+        openPanels.size > 0
+          ? [[0, 0, 1e5, 1e5]]
+          : pills
+              .map((p) => {
+                const r = p.getBoundingClientRect();
+                return [r.left, r.top, r.width, r.height];
+              })
+              .filter((r) => r[2] > 0 && r[3] > 0);
+      invoke("set_interactive_rects", { rects }).catch(() => {});
+    });
+  }
+  window.addEventListener("resize", reportInteractiveRects);
 
   interface PanelOpts {
     id: string;
@@ -515,6 +548,7 @@ function initBar(pillHeight: number) {
       el.title = w.app ? `${w.app} — workspace ${w.name}` : `workspace ${w.name}`;
     }
     for (const w of list) wsContainer.appendChild(wsEls.get(w.name)!);
+    reportInteractiveRects(); // dot count/width changes the workspaces pill
   }
 
   listen<Workspace[]>("workspaces", (e) => renderWorkspaces(e.payload));
@@ -526,4 +560,8 @@ function initBar(pillHeight: number) {
   tickMinute(); // start the per-minute clock (updates immediately)
   animate(pills, { y: HIDDEN_Y, opacity: 0 }, { duration: 0 });
   requestAnimationFrame(showBar);
+  // Seed the click-through hitTest once the reveal spring has settled (pill
+  // transforms change getBoundingClientRect mid-animation). Workspace renders,
+  // panel toggles, and resizes report again from then on.
+  setTimeout(reportInteractiveRects, 600);
 }

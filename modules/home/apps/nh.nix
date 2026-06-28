@@ -12,7 +12,7 @@
 # would leave a second, weaker GC policy that does nothing useful here.
 _: {
   flake.modules.homeManager.apps-nh =
-    { config, ... }:
+    { config, lib, ... }:
     {
       programs.nh = {
         enable = true;
@@ -20,5 +20,20 @@ _: {
         # autodiscovers the host (config name == hostname == brett-m1-mbp).
         flake = "${config.home.homeDirectory}/nixos-config";
       };
+
+      # Belt-and-suspenders re-export of NH_FLAKE. programs.nh.flake (above)
+      # writes it into home-manager's session-vars file, which is guarded by a
+      # one-shot __HM_SESS_VARS_SOURCED flag and exported. A long-lived process
+      # that snapshotted the env before this var existed (e.g. a tmux server,
+      # which freezes the environment at server start and hands it to every new
+      # pane) keeps re-supplying that guard to child shells, so they short-
+      # circuit and never pick up NH_FLAKE — leaving `nh` with no flake path.
+      # .zshrc is unguarded and runs for every interactive shell, so exporting
+      # here makes NH_FLAKE immune to a stale session/tmux snapshot.
+      programs.zsh.initContent = lib.mkIf config.programs.zsh.enable (
+        lib.mkOrder 600 ''
+          export NH_FLAKE="${config.home.homeDirectory}/nixos-config"
+        ''
+      );
     };
 }
