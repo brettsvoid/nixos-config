@@ -42,6 +42,7 @@ in
             users
             homebrew
             tailscale
+            timemachine
             nh-gc
           ])
           ++ wm.system;
