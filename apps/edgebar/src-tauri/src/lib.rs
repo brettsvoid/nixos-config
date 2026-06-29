@@ -940,11 +940,60 @@ fn set_bar_size(app: tauri::AppHandle, width: f64, height: f64) {
 // Mirrors sketchybar's ip_address.sh: shows the primary IP (not the SSID, which
 // macOS now gates behind Location Services), flags an active VPN (utun), or
 // "Not Connected". Parsed from `scutil --nwi`.
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Serialize)]
 struct Network {
     /// "wifi" | "vpn" | "off"
     state: String,
     label: String,
+    /// Wi-Fi signal strength in dBm (e.g. -65), when connected. `None` otherwise.
+    rssi: Option<i32>,
+    /// Whether the internet is actually reachable (false = connected but no WAN
+    /// / captive portal). Only meaningful when `state == "wifi"`.
+    online: bool,
+}
+
+impl Default for Network {
+    fn default() -> Self {
+        Network {
+            state: String::new(),
+            label: String::new(),
+            rssi: None,
+            online: true,
+        }
+    }
+}
+
+// True if the internet is actually reachable. Uses the same endpoint macOS's own
+// captive-portal detection hits: it returns the literal body "Success" only on a
+// working connection — a dead uplink yields nothing and a captive portal returns
+// its own page, so both read as offline. 2s cap; runs inside `spawn_blocking`.
+fn has_internet() -> bool {
+    std::process::Command::new("curl")
+        .args(["-s", "-m", "2", "http://captive.apple.com/hotspot-detect.html"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("Success"))
+        .unwrap_or(false)
+}
+
+// Current Wi-Fi RSSI in dBm, parsed from `system_profiler SPAirPortDataType`.
+// (`airport` was removed in recent macOS; system_profiler still reports
+// signal without Location Services.) Only the "Current Network Information"
+// block is the live link — everything after "Other Local Wi-Fi Networks" is a
+// scan of nearby APs. Costs ~1s, so callers should only run it when connected.
+fn read_wifi_rssi() -> Option<i32> {
+    let out = std::process::Command::new("system_profiler")
+        .arg("SPAirPortDataType")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    let current = out.split("Other Local Wi-Fi Networks:").next().unwrap_or("");
+    current
+        .lines()
+        .find(|l| l.trim_start().starts_with("Signal / Noise:"))
+        // "Signal / Noise: -70 dBm / -95 dBm" -> "-70"
+        .and_then(|l| l.split(':').nth(1))
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse::<i32>().ok())
 }
 
 fn read_network() -> Network {
@@ -972,16 +1021,21 @@ fn read_network() -> Network {
         Network {
             state: "vpn".into(),
             label: "VPN".into(),
+            ..Default::default()
         }
     } else if let Some(ip) = ip {
         Network {
             state: "wifi".into(),
             label: ip,
+            rssi: read_wifi_rssi(),
+            online: has_internet(),
         }
     } else {
         Network {
             state: "off".into(),
             label: "Not Connected".into(),
+            online: false,
+            ..Default::default()
         }
     }
 }
@@ -1644,6 +1698,62 @@ fn install_appearance_observer(app: tauri::AppHandle) {
     std::mem::forget(observer);
 }
 
+/// Watch network reachability and push a fresh `Network` to the bar whenever
+/// connectivity changes — interface up/down, IP change, VPN toggling. Replaces
+/// polling the `network` command on a timer; idle cost is zero.
+///
+/// Reachability only reports *route* changes — it can't see a dead uplink or a
+/// captive portal (the route still exists), so the real online check still runs
+/// inside `read_network()` on each change. That's the same split macOS itself
+/// uses: a passive path monitor plus an active probe.
+#[cfg(target_os = "macos")]
+fn install_network_observer(app: tauri::AppHandle) {
+    use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
+    use system_configuration::network_reachability::SCNetworkReachability;
+
+    // Worker: receives "something changed" pings, debounces a burst into one
+    // read, then pushes. `read_network()` shells out (scutil + system_profiler +
+    // curl, ≈1–3s), so it runs here and not on the run-loop thread.
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let worker_app = app.clone();
+    std::thread::spawn(move || {
+        // Initial push so the bar reflects current state without waiting for the
+        // first change event.
+        let _ = worker_app.emit("network", read_network());
+        while rx.recv().is_ok() {
+            // A re-association flaps the flags several times; collapse the burst.
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            while rx.try_recv().is_ok() {}
+            let _ = worker_app.emit("network", read_network());
+        }
+    });
+
+    // The reachability object isn't Send, so it's created and driven entirely on
+    // this thread; its run loop invokes the callback. "0.0.0.0:0" tracks the
+    // default-route reachability (general network availability).
+    std::thread::spawn(move || {
+        let addr = "0.0.0.0:0".parse::<std::net::SocketAddr>().unwrap();
+        let mut reach = SCNetworkReachability::from(addr);
+        // Mutex makes the Sender `Sync`, which the callback bound requires.
+        let tx = std::sync::Mutex::new(tx);
+        if reach
+            .set_callback(move |_flags| {
+                let _ = tx.lock().unwrap().send(());
+            })
+            .is_err()
+        {
+            return;
+        }
+        // SAFETY: kCFRunLoopCommonModes is Apple's documented run-loop mode.
+        if unsafe { reach.schedule_with_runloop(&CFRunLoop::get_current(), kCFRunLoopCommonModes) }
+            .is_err()
+        {
+            return;
+        }
+        CFRunLoop::run_current(); // blocks this thread for the app's lifetime
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1803,6 +1913,10 @@ pub fn run() {
             // Follow the system light/dark setting while in Auto mode.
             #[cfg(target_os = "macos")]
             install_appearance_observer(app.handle().clone());
+
+            // Event-driven Wi-Fi/network updates (replaces the old 15s poll).
+            #[cfg(target_os = "macos")]
+            install_network_observer(app.handle().clone());
 
             Ok(())
         })

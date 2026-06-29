@@ -55,6 +55,8 @@ interface Volume {
 interface Network {
   state: string; // "wifi" | "vpn" | "off"
   label: string;
+  rssi: number | null; // Wi-Fi signal in dBm when connected, else null
+  online: boolean; // false = connected but no internet (only meaningful for "wifi")
 }
 
 // ---- tuned constants (named so each value lives in one place) ----
@@ -70,9 +72,8 @@ const STAGGER = { reveal: 0.05, hide: 0.03 } as const; // seconds between pills
 const POLL = {
   clockSecond: 1000,
   metrics: 2000,
-  network: 15000,
   battery: 60000,
-} as const; // ms
+} as const; // ms (network is now event-driven via the reachability watcher)
 const DEBOUNCE = { volume: 60, mic: 60, brightness: 40 } as const; // ms
 const LAYOUT = {
   hiddenY: -48, // px above the top edge (clipped by the window)
@@ -583,11 +584,61 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   window.setInterval(updateBattery, POLL.battery);
 
   // ---- Wi-Fi / network (polled; changes slowly) --------------------------
-  // Inline Lucide SVGs: connected / VPN (shield) / off.
+  // The connected glyph is built from the Lucide wifi pieces (dot + 3 concentric
+  // arcs) with per-arc opacity, so it reads like macOS: a full grey outline with
+  // the arcs up to the current signal level drawn in solid color. VPN (shield)
+  // and off stay as single static glyphs.
+  const WIFI_PARTS = {
+    dot: "M12 20h.01",
+    arc1: "M8.5 16.429a5 5 0 0 1 7 0", // innermost (weakest signal)
+    arc2: "M5 12.859a10 10 0 0 1 14 0",
+    arc3: "M2 8.82a15 15 0 0 1 20 0", // outermost (strongest signal)
+  };
+  const WIFI_DIM = 0.25; // opacity of the inactive "grey base" arcs
+  const WIFI_SVG_OPEN =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  // level 0..3 = how many arcs are lit (the dot is always lit when connected).
+  function wifiSignalSvg(level: number): string {
+    const arc = (d: string, on: boolean) => `<path d="${d}" stroke-opacity="${on ? 1 : WIFI_DIM}"/>`;
+    return (
+      WIFI_SVG_OPEN +
+      arc(WIFI_PARTS.dot, true) +
+      arc(WIFI_PARTS.arc1, level >= 1) +
+      arc(WIFI_PARTS.arc2, level >= 2) +
+      arc(WIFI_PARTS.arc3, level >= 3) +
+      "</svg>"
+    );
+  }
+  // Connected but no internet: dimmed wifi waves with a solid exclamation in the
+  // gap below them (colored via the .warn class). Signal is moot here, so the
+  // arcs are just context, not a strength readout.
+  const WIFI_WARN_SVG =
+    WIFI_SVG_OPEN +
+    `<path d="${WIFI_PARTS.arc3}" stroke-opacity="${WIFI_DIM}"/>` +
+    `<path d="${WIFI_PARTS.arc2}" stroke-opacity="${WIFI_DIM}"/>` +
+    '<path d="M12 12v4"/>' +
+    '<path d="M12 20h.01"/>' +
+    "</svg>";
+
+  // dBm -> level, with hysteresis: a boundary must be crossed by WIFI_HYST dBm
+  // before the level changes, so signal jitter near a threshold doesn't flicker
+  // the icon. WIFI_BOUNDS are the dBm needed to *reach* levels 1, 2, 3.
+  const WIFI_BOUNDS = [-82, -72, -60];
+  const WIFI_HYST = 3; // dBm deadband on each side of a boundary
+  function rssiToLevel(rssi: number | null, prev: number): number {
+    if (rssi == null) return 3;
+    let level = 0;
+    for (let i = 0; i < WIFI_BOUNDS.length; i++) {
+      // Already at/above this level? Demand a deeper drop before leaving it.
+      const threshold = prev >= i + 1 ? WIFI_BOUNDS[i] - WIFI_HYST : WIFI_BOUNDS[i] + WIFI_HYST;
+      if (rssi >= threshold) level = i + 1;
+    }
+    return level;
+  }
+
+  // Inline Lucide SVGs for the non-connected states.
   const WIFI_SVG: Record<string, string> = {
-    wifi: lucide(
-      '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
-    ),
     vpn: lucide(
       '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
     ),
@@ -598,19 +649,27 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   const wifiPill = document.querySelector<HTMLElement>("#wifi")!;
   const wifiIcon = wifiPill.querySelector<HTMLElement>(".wifi-icon")!;
   const wifiLabel = wifiPill.querySelector<HTMLElement>(".wifi-label")!;
-  async function updateNetwork() {
-    try {
-      const n = await invoke<Network>("network");
-      wifiIcon.innerHTML = WIFI_SVG[n.state] ?? WIFI_SVG.off;
-      wifiLabel.textContent = n.label;
-      wifiPill.classList.toggle("vpn", n.state === "vpn");
-      wifiPill.classList.toggle("off", n.state === "off");
-    } catch {
-      /* ignore */
+  let wifiLevel = 3; // last committed signal level, kept for hysteresis
+  function renderNetwork(n: Network) {
+    const noNet = n.state === "wifi" && !n.online;
+    if (n.state === "wifi" && n.online) {
+      wifiLevel = rssiToLevel(n.rssi, wifiLevel);
+      wifiIcon.innerHTML = wifiSignalSvg(wifiLevel);
+      wifiIcon.title = n.rssi != null ? `${n.rssi} dBm` : "";
+    } else {
+      wifiIcon.innerHTML = noNet ? WIFI_WARN_SVG : (WIFI_SVG[n.state] ?? WIFI_SVG.off);
+      wifiIcon.title = noNet ? "No internet" : "";
     }
+    wifiLabel.textContent = n.label;
+    wifiPill.classList.toggle("vpn", n.state === "vpn");
+    wifiPill.classList.toggle("off", n.state === "off");
+    wifiPill.classList.toggle("warn", noNet);
   }
-  updateNetwork();
-  window.setInterval(updateNetwork, POLL.network);
+  // Event-driven: Rust's SCNetworkReachability watcher pushes on every change
+  // (connect/disconnect, IP, VPN, online). One initial fetch covers the case
+  // where the listener attaches after Rust's startup push. No polling.
+  invoke<Network>("network").then(renderNetwork).catch(() => {});
+  listen<Network>("network", (e) => renderNetwork(e.payload));
 
   // ---- workspaces: event-driven (Rust pushes on AeroSpace changes) -------
   const wsContainer = document.querySelector<HTMLElement>("#workspaces .ws-dots")!;

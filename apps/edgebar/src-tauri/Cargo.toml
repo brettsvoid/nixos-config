@@ -63,3 +63,10 @@ objc2-quartz-core = { version = "0.3", features = [
 objc2-core-graphics = { version = "0.3", features = ["CGColor", "CGPath"] }
 objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 
+# Event-driven network reachability (SCNetworkReachability): pushes a network
+# update on route/interface/VPN changes instead of polling on a timer. The 0.9
+# core-foundation matches the run-loop types this crate's reachability API expects
+# (distinct from the objc2-core-foundation above; both coexist).
+system-configuration = "0.7"
+core-foundation = "0.9"
+

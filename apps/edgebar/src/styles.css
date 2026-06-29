@@ -12,6 +12,7 @@
   --battery-charging: #40a02b; /* catppuccin latte green — reads on light pill */
   --battery-low: #d20f39; /* catppuccin latte red */
   --vpn: #179299; /* catppuccin latte teal */
+  --warn: #df8e1d; /* catppuccin latte yellow — wifi connected, no internet */
 
   /* marks layered on the (light) pill — tinted from --base so they track the
      theme instead of being a hardcoded crust color at varying alpha */
@@ -540,6 +541,9 @@ body {
 }
 #wifi.vpn .wifi-icon {
   color: var(--vpn);
+}
+#wifi.warn .wifi-icon {
+  color: var(--warn);
 }
 #wifi.off {
   opacity: var(--dim-more);
