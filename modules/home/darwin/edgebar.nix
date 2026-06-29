@@ -36,22 +36,34 @@ in
       generate-edgebar-theme = pkgs.writeShellScriptBin "generate-edgebar-theme" ''
         CONFIG_DIR="${matugenDir}"
         # Scheme: explicit --scheme arg > the persisted choice (select-scheme) >
-        # the matugen default. Reading the file means the launchd watcher's auto
-        # re-themes keep using the scheme you picked.
+        # the matugen default.
         SCHEME="$(cat "$HOME/.config/edgebar/scheme" 2>/dev/null || echo scheme-tonal-spot)"
         WALLPAPER=""
+        OUT="$HOME/.config/edgebar/palette.json"
+        PING=1
+        EXPLICIT_WALL=0
 
-        # generate-edgebar-theme [wallpaper] [--scheme scheme-*]
+        # generate-edgebar-theme [wallpaper] [--scheme X] [--out FILE]
+        #   --out FILE  render the palette to FILE and skip the socket ping — used
+        #               by edgebar to precompute per-wallpaper palette caches.
         while [ $# -gt 0 ]; do
           case "$1" in
             --scheme) SCHEME="$2"; shift 2 ;;
-            *) WALLPAPER="$1"; shift ;;
+            --out) OUT="$2"; PING=0; shift 2 ;;
+            *) WALLPAPER="$1"; EXPLICIT_WALL=1; shift ;;
           esac
         done
 
-        # Resolve the wallpaper: explicit arg > the actual current desktop picture
-        # (NSWorkspace, via desktoppr) > the rebuild default. Reading the live
-        # wallpaper means this themes correctly however the wallpaper was changed.
+        # Skip the launchd watcher's redundant run right after an in-app change:
+        # edgebar already themed it instantly, and re-running could clobber a newer
+        # pick. Only the no-arg (watcher) live invocation honours the marker.
+        MARKER="$HOME/.cache/edgebar/.inapp-change"
+        if [ "$EXPLICIT_WALL" = 0 ] && [ "$PING" = 1 ] && [ -f "$MARKER" ]; then
+          AGE=$(( $(date +%s) - $(stat -f %m "$MARKER" 2>/dev/null || echo 0) ))
+          [ "$AGE" -lt 3 ] && exit 0
+        fi
+
+        # Resolve the wallpaper: explicit arg > current desktop (desktoppr) > default.
         if [ -z "$WALLPAPER" ]; then
           WALLPAPER=$(${pkgs.desktoppr}/bin/desktoppr 2>/dev/null | head -1)
         fi
@@ -63,13 +75,37 @@ in
           exit 1
         fi
 
-        echo "edgebar theme ← $WALLPAPER (scheme: $SCHEME)"
-        if ! ${pkgs.matugen}/bin/matugen image "$WALLPAPER" \
+        echo "edgebar theme ← $WALLPAPER (scheme: $SCHEME) → $OUT"
+
+        TMP="$(mktemp -d)"
+        # matugen extracts colours from a 512px downscale (~4x faster than 4K,
+        # colour-equivalent).
+        SRC="$WALLPAPER"
+        if /usr/bin/sips -Z 512 -s format png "$WALLPAPER" --out "$TMP/src.png" >/dev/null 2>&1; then
+          SRC="$TMP/src.png"
+        fi
+
+        # Render to a staging file in OUT's directory, then atomically rename — so
+        # edgebar never reads a half-written palette and concurrent runs can't
+        # interleave.
+        mkdir -p "$(dirname "$OUT")"
+        STAGE="$OUT.staging.$$"
+        printf '[config]\n[templates.edgebar]\ninput_path = "%s/palette.json.tmpl"\noutput_path = "%s"\n' \
+          "$CONFIG_DIR" "$STAGE" > "$TMP/cfg.toml"
+
+        if ! ${pkgs.matugen}/bin/matugen image "$SRC" \
           --source-color-index 0 \
-          -c "$CONFIG_DIR/config.toml" \
+          -c "$TMP/cfg.toml" \
           -t "$SCHEME"; then
           echo "matugen failed — palette not regenerated" >&2
+          rm -rf "$TMP"; rm -f "$STAGE"
           exit 1
+        fi
+        mv -f "$STAGE" "$OUT"
+        rm -rf "$TMP"
+
+        if [ "$PING" = 1 ]; then
+          nc -U "$HOME/.cache/edgebar/theme.sock" </dev/null 2>/dev/null || true
         fi
       '';
 
@@ -100,7 +136,15 @@ in
       };
     in
     {
-      xdg.configFile."edgebar/config.json".text = builtins.toJSON rendered;
+      # Inject the binaries the in-app theme view shells out to (absolute store
+      # paths so they resolve regardless of the bar's launch environment).
+      xdg.configFile."edgebar/config.json".text = builtins.toJSON (
+        rendered
+        // {
+          themeCommand = "${generate-edgebar-theme}/bin/generate-edgebar-theme";
+          wallpaperCommand = "${pkgs.desktoppr}/bin/desktoppr";
+        }
+      );
 
       home.packages = [
         generate-edgebar-theme

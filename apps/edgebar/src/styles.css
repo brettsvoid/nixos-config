@@ -147,8 +147,8 @@ body {
   justify-content: flex-start;
 }
 .cluster.center {
+  display: flex;
   flex: 0 0 auto;
-  justify-content: center;
 }
 .cluster.right {
   flex: 1;
@@ -300,6 +300,8 @@ body {
   height: var(--pill-h);
   cursor: pointer;
   color: var(--base);
+  max-width: 576px;
+  width: 200px;
 }
 .notch-row {
   display: flex;
@@ -322,12 +324,30 @@ body {
 }
 .notch-panel {
   opacity: 0;
-  padding: var(--space-2) var(--space-9) var(--space-6);
+  padding: var(--space-2) var(--space-6) var(--space-6);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+/* one view visible at a time inside the panel (default clock+metrics / theme) */
+.view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+.view[hidden] {
+  display: none;
+}
+.view-default {
   align-items: center;
   gap: var(--space-1);
   white-space: nowrap;
+}
+.view-theme {
+  align-items: stretch;
+  gap: var(--space-4);
 }
 .notch-panel .big-time {
   font-size: var(--font-3xl);
@@ -341,12 +361,11 @@ body {
   opacity: var(--dim);
 }
 
-/* ---- appearance toggle (light / dark / auto), bottom of the notch panel ---- */
+/* ---- appearance toggle (light / dark / auto), in the theme-view header ---- */
 .theme-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: var(--space-5);
   padding: var(--space-1);
   border-radius: var(--radius-md);
   background: var(--track);
@@ -371,10 +390,113 @@ body {
   opacity: 1;
 }
 
+/* ---- theme view: header, wallpaper filmstrip, browse, scheme picker ---- */
+.view-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--base);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  opacity: var(--dim);
+}
+.view-switch:hover {
+  opacity: 1;
+}
+/* the "Theme" entry button on the default view */
+.theme-btn {
+  margin-top: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--track);
+}
+.theme-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.back-btn {
+  font-size: var(--font-xl);
+}
+.theme-head .theme-toggle {
+  margin-left: auto; /* appearance toggle sits at the right of the header */
+}
+
+.filmstrip {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-2);
+}
+.filmstrip::-webkit-scrollbar {
+  height: 6px;
+}
+.filmstrip::-webkit-scrollbar-thumb {
+  background: var(--track);
+  border-radius: 3px;
+}
+.thumb {
+  flex: 0 0 auto;
+  width: 160px;
+  height: 90px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: var(--track);
+  padding: 0;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.thumb.active {
+  border-color: var(--accent);
+}
+
+.browse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--track);
+  color: var(--base);
+  font: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.browse-btn:hover {
+  background: var(--hover);
+}
+
+.scheme-select {
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--track);
+  color: var(--base);
+  font: inherit;
+  font-size: var(--font-sm);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
 /* ---- status pill: Wi-Fi / network + battery, merged ---- */
 #status {
   color: var(--base);
-  gap: var(--space-6); /* separation between the wifi group and the battery group */
+  gap: var(
+    --space-6
+  ); /* separation between the wifi group and the battery group */
 }
 /* each group keeps its icon and text tightly paired */
 .stat-grp {

@@ -80,21 +80,31 @@ impl Palettes {
 /// (Rust) and the bar WebView (applied as CSS custom properties). Loaded from
 /// `~/.config/edgebar/config.json` if present, else the bundled default.
 #[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Config {
     #[serde(default = "default_appearance")]
     appearance: Appearance,
     colors: Themes,
     geometry: Geometry,
+    /// Binaries the bar shells out to for the in-app wallpaper/scheme picker.
+    /// Nix injects absolute store paths; absent (bundled default / dev), they
+    /// fall back to a bare name resolved on PATH.
+    #[serde(default)]
+    theme_command: Option<String>,
+    #[serde(default)]
+    wallpaper_command: Option<String>,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colors already
-/// resolved to hex for the active scheme, plus geometry and the appearance.
+/// resolved to hex for the active scheme, plus geometry, appearance, and the
+/// active matugen scheme (so the theme view can mark current selections).
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ResolvedConfig {
     colors: Colors,
     geometry: Geometry,
     appearance: Appearance,
+    scheme: String,
 }
 
 /// Resolve a role map against a palette: palette name → hex (literal `#hex`
@@ -251,6 +261,32 @@ fn load_persisted_appearance() -> Option<Appearance> {
     }
 }
 
+const DEFAULT_MATUGEN_SCHEME: &str = "scheme-tonal-spot";
+
+/// matugen scheme persisted by `select-scheme` / the theme view, read by
+/// `generate-edgebar-theme`. Lives next to the appearance file.
+fn scheme_state_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".config/edgebar/scheme"))
+}
+
+fn persisted_scheme() -> String {
+    scheme_state_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT_MATUGEN_SCHEME.to_string())
+}
+
+fn persist_scheme(scheme: &str) {
+    if let Some(path) = scheme_state_path() {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, scheme);
+    }
+}
+
 /// Shared, mutable theme state behind a `Mutex` (managed by Tauri). Holds the
 /// raw per-scheme role maps + both palettes; `get_config`/`apply_theme` resolve
 /// to hex on demand for whichever scheme is active.
@@ -260,6 +296,9 @@ struct ThemeState {
     palettes: Palettes,
     appearance: Appearance,
     scheme: Scheme,
+    /// Binaries for the picker (resolved from config, else a bare PATH name).
+    theme_command: String,
+    wallpaper_command: String,
 }
 
 /// Resolve `Auto` against the macOS system setting. `AppleInterfaceStyle` is
@@ -306,6 +345,7 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
             colors: resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme)),
             geometry: ts.geometry.clone(),
             appearance,
+            scheme: persisted_scheme(),
         }
     };
     let _ = app.emit("theme", &resolved);
@@ -358,6 +398,7 @@ fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
         colors: resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme)),
         geometry: ts.geometry.clone(),
         appearance: ts.appearance,
+        scheme: persisted_scheme(),
     }
 }
 
@@ -971,6 +1012,292 @@ fn launcher_action(action: String) {
     };
 }
 
+// ───────────────────────── theme / wallpaper picker ─────────────────
+// Backs the notch popup's theme view. Wallpaper-setting and matugen run through
+// the same desktoppr / generate-edgebar-theme binaries the CLI uses (paths
+// injected via config.json), so the in-app path and the watcher path are
+// identical — the picker just makes it instant (no launchd round-trip).
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Wallpaper {
+    name: String,
+    path: String,
+    thumb: String, // "data:image/png;base64,…"
+}
+
+fn wallpapers_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join("Pictures/Wallpapers"))
+}
+
+fn is_image(path: &std::path::Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("jpg" | "jpeg" | "png" | "webp" | "heic")
+    )
+}
+
+/// Standard base64 (with padding). Dependency-free + thread-safe, so thumbnail
+/// encoding can run off the main thread.
+fn base64_encode(bytes: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | (b[2] as u32);
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 { T[((n >> 6) & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { T[(n & 63) as usize] as char } else { '=' });
+    }
+    out
+}
+
+/// Downscale an image to a thumbnail PNG via `sips` (a subprocess, so off the
+/// main thread — no NSImage threading), returned as a base64 data URL. Cached by
+/// path + mtime.
+fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
+    let mtime = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if let Some((m, url)) = state.thumb_cache.lock().unwrap().get(path) {
+        if *m == mtime {
+            return Some(url.clone());
+        }
+    }
+    let stem: String = path
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let tmp = std::env::temp_dir().join(format!("edgebar-thumb-{stem}.png"));
+    let ok = std::process::Command::new("sips")
+        .args(["-Z", "240", "-s", "format", "png", path, "--out"])
+        .arg(&tmp)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !ok {
+        return None;
+    }
+    let bytes = std::fs::read(&tmp).ok()?;
+    let url = format!("data:image/png;base64,{}", base64_encode(&bytes));
+    state
+        .thumb_cache
+        .lock()
+        .unwrap()
+        .insert(path.to_string(), (mtime, url.clone()));
+    Some(url)
+}
+
+#[tauri::command]
+fn list_wallpapers(state: tauri::State<AppState>) -> Vec<Wallpaper> {
+    let Some(dir) = wallpapers_dir() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<std::path::PathBuf> = entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| is_image(p))
+        .collect();
+    paths.sort();
+    paths
+        .into_iter()
+        .filter_map(|p| {
+            let path = p.to_str()?.to_string();
+            let name = p.file_name()?.to_str()?.to_string();
+            let thumb = wallpaper_thumb(&state, &path).unwrap_or_default();
+            Some(Wallpaper { name, path, thumb })
+        })
+        .collect()
+}
+
+/// The current desktop picture (first display) — to highlight the active thumb.
+#[tauri::command]
+fn current_wallpaper(state: tauri::State<Mutex<ThemeState>>) -> String {
+    let cmd = state.lock().unwrap().wallpaper_command.clone();
+    std::process::Command::new(cmd)
+        .output()
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+/// Touch a marker whose mtime tells the launchd watcher an in-app change just
+/// happened, so it skips its redundant (and potentially clobbering) re-run.
+fn touch_inapp_marker() {
+    if let Some(home) = std::env::var_os("HOME") {
+        let dir = std::path::Path::new(&home).join(".cache/edgebar");
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join(".inapp-change"), b"");
+    }
+}
+
+fn palette_json_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
+}
+
+/// Per-(wallpaper, scheme) precomputed palette cache. Keyed by scheme + sanitized
+/// path + mtime, so it auto-invalidates when the image or scheme changes.
+fn palette_cache_path(path: &str, scheme: &str) -> Option<std::path::PathBuf> {
+    let mtime = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let sanitized: String = path
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    std::env::var_os("HOME").map(|home| {
+        std::path::Path::new(&home)
+            .join(".cache/edgebar/palettes")
+            .join(format!("{scheme}__{sanitized}__{mtime}.json"))
+    })
+}
+
+/// Install a precomputed palette as the live palette.json atomically (copy to a
+/// sibling temp, then rename) so edgebar never reads a partial file.
+fn install_palette(cache: &std::path::Path) -> bool {
+    let Some(dst) = palette_json_path() else {
+        return false;
+    };
+    let tmp = dst.with_extension("json.install");
+    std::fs::copy(cache, &tmp).is_ok() && std::fs::rename(&tmp, &dst).is_ok()
+}
+
+/// Background-precompute the palette for every wallpaper in the folder for
+/// `scheme` (skipping cached ones), so picking one is an instant cache hit.
+/// Sequential to avoid a matugen CPU spike; each is ~0.3s.
+fn spawn_precompute(theme_cmd: String, scheme: String) {
+    let Some(dir) = wallpapers_dir() else {
+        return;
+    };
+    std::thread::spawn(move || {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return;
+        };
+        let mut paths: Vec<std::path::PathBuf> = entries
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| is_image(p))
+            .collect();
+        paths.sort();
+        for p in paths {
+            let Some(path) = p.to_str() else { continue };
+            let Some(cache) = palette_cache_path(path, &scheme) else {
+                continue;
+            };
+            if cache.exists() {
+                continue;
+            }
+            let cache_str = cache.to_string_lossy();
+            let _ = std::process::Command::new(&theme_cmd)
+                .args(["--out", &cache_str, "--scheme", &scheme, path])
+                .status();
+        }
+    });
+}
+
+/// Precompute every wallpaper's palette for the active scheme. Called when the
+/// theme view opens so later picks are instant.
+#[tauri::command]
+fn precompute_palettes(state: tauri::State<Mutex<ThemeState>>) {
+    let theme_cmd = state.lock().unwrap().theme_command.clone();
+    spawn_precompute(theme_cmd, persisted_scheme());
+}
+
+/// Set the desktop on every display and re-theme the bar. Instant when the
+/// palette is already precomputed (atomic copy + in-process reload); otherwise
+/// generates it now. The in-app marker stops the watcher from double-running.
+#[tauri::command]
+fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, path: String) {
+    let (wallpaper_cmd, theme_cmd) = {
+        let ts = state.lock().unwrap();
+        (ts.wallpaper_command.clone(), ts.theme_command.clone())
+    };
+    touch_inapp_marker();
+    let _ = std::process::Command::new(wallpaper_cmd)
+        .args(["all", &path])
+        .spawn();
+
+    let scheme = persisted_scheme();
+    if let Some(cache) = palette_cache_path(&path, &scheme) {
+        if cache.exists() && install_palette(&cache) {
+            reload_theme(&app); // instant — no matugen, no socket round-trip
+            return;
+        }
+    }
+    // not precomputed yet: generate now (it pings the socket → reload)
+    let _ = std::process::Command::new(theme_cmd).arg(&path).spawn();
+}
+
+/// Open a Finder file picker (owned by osascript, so the accessory app's no-focus
+/// policy doesn't block it) and return the chosen image path, or None on cancel.
+#[tauri::command]
+fn pick_wallpaper_file() -> Option<String> {
+    let path = run_osa(
+        "POSIX path of (choose file with prompt \"Choose a wallpaper\" of type {\"public.image\"})",
+    )?;
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
+
+/// Set the matugen scheme: re-theme the current wallpaper with it now, and
+/// precompute the rest in the background so subsequent picks stay instant.
+#[tauri::command]
+fn set_scheme(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, scheme: String) {
+    persist_scheme(&scheme);
+    let (theme_cmd, current) = {
+        let ts = state.lock().unwrap();
+        let cur = std::process::Command::new(&ts.wallpaper_command)
+            .output()
+            .ok()
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string()
+            })
+            .unwrap_or_default();
+        (ts.theme_command.clone(), cur)
+    };
+    spawn_precompute(theme_cmd.clone(), scheme.clone());
+    // re-theme the current wallpaper now (cache is cold for the new scheme, so
+    // this usually generates once; precompute warms the rest in the background)
+    if !current.is_empty() {
+        if let Some(cache) = palette_cache_path(&current, &scheme) {
+            if cache.exists() && install_palette(&cache) {
+                reload_theme(&app);
+                return;
+            }
+        }
+        let _ = std::process::Command::new(&theme_cmd).arg(&current).spawn();
+    } else {
+        let _ = std::process::Command::new(&theme_cmd).spawn();
+    }
+}
+
 // ───────────────────────── shared app state ─────────────────────────
 // Holds a persistent `sysinfo::System` (kept alive so CPU usage can be computed
 // from the delta between samples — a fresh System always reports 0%) and a cache
@@ -979,6 +1306,9 @@ fn launcher_action(action: String) {
 struct AppState {
     sys: Mutex<sysinfo::System>,
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
+    /// Wallpaper thumbnail data URLs for the theme view, keyed by path → (mtime
+    /// secs, data URL). Avoids re-running sips on every theme-view open.
+    thumb_cache: Mutex<std::collections::HashMap<String, (u64, String)>>,
     /// Interactive rects for the bar's click-through hitTest (WebView CSS px,
     /// top-left origin). Shared with the native `ClickThroughView`.
     interactive_rects: std::sync::Arc<std::sync::Mutex<Vec<[f64; 4]>>>,
@@ -1333,7 +1663,13 @@ pub fn run() {
             set_brightness,
             network,
             launcher_action,
-            set_interactive_rects
+            set_interactive_rects,
+            list_wallpapers,
+            current_wallpaper,
+            set_wallpaper,
+            pick_wallpaper_file,
+            set_scheme,
+            precompute_palettes
         ])
         .setup(|app| {
             // Shared config (colors + geometry) — drives both the native frame
@@ -1443,6 +1779,7 @@ pub fn run() {
             app.manage(AppState {
                 sys: Mutex::new(sysinfo::System::new()),
                 icon_cache: Mutex::new(std::collections::HashMap::new()),
+                thumb_cache: Mutex::new(std::collections::HashMap::new()),
                 interactive_rects,
             });
             #[cfg(target_os = "macos")]
@@ -1456,6 +1793,12 @@ pub fn run() {
                 palettes,
                 appearance,
                 scheme,
+                theme_command: config
+                    .theme_command
+                    .unwrap_or_else(|| "generate-edgebar-theme".to_string()),
+                wallpaper_command: config
+                    .wallpaper_command
+                    .unwrap_or_else(|| "desktoppr".to_string()),
             }));
             // Follow the system light/dark setting while in Auto mode.
             #[cfg(target_os = "macos")]

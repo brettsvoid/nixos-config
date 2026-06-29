@@ -22,11 +22,13 @@ interface Config {
     windowHeight: number;
   };
   appearance: string; // "light" | "dark" | "auto"
+  scheme: string; // active matugen scheme (e.g. "scheme-tonal-spot")
 }
 
 interface ThemePayload {
   colors: Record<string, string>;
   appearance: string;
+  scheme: string;
 }
 
 interface Battery {
@@ -124,6 +126,35 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
+interface Wallpaper {
+  name: string;
+  path: string;
+  thumb: string; // data:image/png;base64,…
+}
+
+// Per-view popup geometry: the default (clock+metrics) view keeps the current
+// size; the theme view is wider/taller for the wallpaper filmstrip. `win` is the
+// bar-window height that view needs (transparent overshoot included).
+const VIEW = {
+  default: { w: 250, h: 250, win: LAYOUT.windowExpandedH },
+  // snapped to the 64px bar keyline: window = 5×64, pill a touch shorter
+  theme: { w: 704, h: 256, win: 320 },
+} as const;
+type ViewName = keyof typeof VIEW;
+
+// matugen scheme types (matches `select-scheme`'s list / the CLI order).
+const SCHEMES = [
+  "scheme-tonal-spot",
+  "scheme-vibrant",
+  "scheme-expressive",
+  "scheme-content",
+  "scheme-fidelity",
+  "scheme-neutral",
+  "scheme-monochrome",
+  "scheme-rainbow",
+  "scheme-fruit-salad",
+] as const;
+
 function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
@@ -147,15 +178,19 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   const WINDOW_BASE_H = windowHeight;
   const COLLAPSED_H = pillHeight;
   const openPanels = new Set<string>();
-  let windowTall = false;
+  // Expanded bar-window height while a panel is open. Defaults to the popup
+  // height; the notch's theme view raises it (set via switchView) since it's
+  // taller, then resets on close.
+  let expandedWindowH: number = LAYOUT.windowExpandedH;
+  let lastWindowH = -1;
 
   async function syncWindowHeight() {
-    const tall = openPanels.size > 0;
-    if (tall === windowTall) return;
-    windowTall = tall;
+    const target = openPanels.size > 0 ? expandedWindowH : WINDOW_BASE_H;
+    if (target === lastWindowH) return;
+    lastWindowH = target;
     await invoke("set_bar_size", {
       width: window.innerWidth,
-      height: tall ? LAYOUT.windowExpandedH : WINDOW_BASE_H,
+      height: target,
     });
     reportInteractiveRects();
   }
@@ -354,9 +389,10 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     pill: notchEl,
     header: notchEl.querySelector<HTMLElement>(".notch-row")!,
     panel: notchEl.querySelector<HTMLElement>(".notch-panel")!,
-    width: 250,
-    height: 250,
+    width: VIEW.default.w,
+    height: VIEW.default.h,
     onOpen: () => {
+      showView("default"); // always open on the default (clock+metrics) view
       updateNotchClock();
       secondTimer = window.setInterval(updateNotchClock, POLL.clockSecond);
       sampleMetrics();
@@ -365,6 +401,7 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     onClose: () => {
       clearInterval(secondTimer);
       clearInterval(metricsTimer);
+      expandedWindowH = VIEW.default.win; // don't leave the taller theme height
     },
   });
 
@@ -620,10 +657,40 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     .then(renderWorkspaces)
     .catch(() => {});
 
-  // ---- appearance toggle (light / dark / auto) ---------------------------
-  // The bar pushes the choice to Rust (set_appearance), which persists it,
-  // re-resolves colors for the new scheme, and emits "theme"; the native frame
-  // recolors in place. Auto follows the macOS system setting (Rust observes it).
+  // ---- theme view: switching, appearance, wallpaper picker, scheme -------
+  const notchPanelEl = notchEl.querySelector<HTMLElement>(".notch-panel")!;
+  const viewDefault = notchPanelEl.querySelector<HTMLElement>(".view-default")!;
+  const viewTheme = notchPanelEl.querySelector<HTMLElement>(".view-theme")!;
+  const filmstrip = document.querySelector<HTMLElement>("#filmstrip")!;
+  const schemeSelect = document.querySelector<HTMLSelectElement>("#scheme-select")!;
+  let currentView: ViewName = "default";
+  let themeLoaded = false;
+
+  function showView(view: ViewName) {
+    currentView = view;
+    viewDefault.hidden = view !== "default";
+    viewTheme.hidden = view !== "theme";
+    expandedWindowH = VIEW[view].win;
+  }
+
+  async function switchView(view: ViewName) {
+    if (currentView === view) return;
+    showView(view);
+    animate(notchEl, { width: VIEW[view].w, height: VIEW[view].h }, SPRING.panelOpen);
+    await syncWindowHeight();
+    if (view === "theme") loadThemeView();
+  }
+
+  for (const btn of notchPanelEl.querySelectorAll<HTMLElement>(".view-switch")) {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      switchView(btn.dataset.to as ViewName);
+    });
+  }
+
+  // Appearance: the bar pushes the choice to Rust (set_appearance), which
+  // persists it, re-resolves colors, and emits "theme"; the frame recolors in
+  // place. Auto follows the macOS system setting (Rust observes it).
   const themeOpts = [...document.querySelectorAll<HTMLElement>(".theme-opt")];
   function setActiveMode(mode: string) {
     for (const b of themeOpts)
@@ -638,9 +705,79 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
       invoke("set_appearance", { mode });
     });
   }
+
+  // Wallpaper filmstrip: clicking a thumb sets the desktop + re-themes the bar
+  // instantly (Rust shells desktoppr + generate-edgebar-theme).
+  function renderFilmstrip(wallpapers: Wallpaper[], current: string) {
+    filmstrip.replaceChildren();
+    for (const w of wallpapers) {
+      const b = document.createElement("button");
+      b.className = "thumb";
+      b.classList.toggle("active", w.path === current);
+      b.title = w.name;
+      const img = document.createElement("img");
+      img.src = w.thumb;
+      img.alt = w.name;
+      b.appendChild(img);
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        invoke("set_wallpaper", { path: w.path });
+        for (const t of filmstrip.children) t.classList.remove("active");
+        b.classList.add("active");
+      });
+      filmstrip.appendChild(b);
+    }
+  }
+
+  let schemesBuilt = false;
+  function renderSchemes(active: string) {
+    if (!schemesBuilt) {
+      for (const s of SCHEMES) {
+        const o = document.createElement("option");
+        o.value = s;
+        o.textContent = s.replace("scheme-", "").replace(/-/g, " ");
+        schemeSelect.appendChild(o);
+      }
+      schemeSelect.addEventListener("change", (e) => {
+        e.stopPropagation();
+        invoke("set_scheme", { scheme: schemeSelect.value });
+      });
+      schemesBuilt = true;
+    }
+    schemeSelect.value = active;
+  }
+
+  async function loadThemeView() {
+    const [wallpapers, current, cfg] = await Promise.all([
+      invoke<Wallpaper[]>("list_wallpapers"),
+      invoke<string>("current_wallpaper"),
+      invoke<Config>("get_config"),
+    ]);
+    renderFilmstrip(wallpapers, current);
+    renderSchemes(cfg.scheme);
+    setActiveMode(cfg.appearance);
+    themeLoaded = true;
+    // warm the per-wallpaper palette caches so thumbnail clicks are instant
+    invoke("precompute_palettes").catch(() => {});
+  }
+
+  // Browse… → native Finder picker → set + theme the chosen file in place.
+  document
+    .querySelector<HTMLElement>("#browse-btn")!
+    .addEventListener("click", (e) => {
+      e.stopPropagation();
+      invoke<string | null>("pick_wallpaper_file").then((path) => {
+        if (!path) return;
+        invoke("set_wallpaper", { path });
+        for (const t of filmstrip.children) t.classList.remove("active");
+      });
+    });
+
+  // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
   listen<ThemePayload>("theme", (e) => {
     applyColors(e.payload.colors);
     setActiveMode(e.payload.appearance);
+    if (themeLoaded && e.payload.scheme) renderSchemes(e.payload.scheme);
   });
 
   // ---- init ---------------------------------------------------------------
