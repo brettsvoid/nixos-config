@@ -222,6 +222,7 @@ body {
      frame line rather than hanging from it (exception — relational offset) */
   height: calc(var(--pill-h) - 2px);
   top: calc(var(--bezel-thickness) + var(--bezel-line-thickness) + 2px);
+  z-index: 1;
 }
 .pill.detached::before,
 .pill.detached::after {
