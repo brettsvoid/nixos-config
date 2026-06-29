@@ -16,41 +16,113 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize};
 
+/// Appearance preference. `Auto` follows the macOS system light/dark setting;
+/// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
+/// (persisted to `~/.config/edgebar/appearance`).
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Appearance {
+    Light,
+    Dark,
+    Auto,
+}
+
+fn default_appearance() -> Appearance {
+    Appearance::Auto
+}
+
+/// The concrete scheme in effect once `Auto` is resolved against the system.
+/// Selects which palette (light/dark) the color roles resolve against.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Scheme {
+    Light,
+    Dark,
+}
+
+/// Per-scheme color-role maps. Catppuccin inverts its neutral ramp between
+/// flavors, so day and night need distinct role→palette-key mappings (e.g. the
+/// on-pill ink is `base` at night but `text` by day). Each value is a palette
+/// key (resolved against the active scheme's palette) or a literal `#hex`.
+#[derive(Clone, Deserialize, Serialize)]
+struct Themes {
+    dark: Colors,
+    light: Colors,
+}
+
+impl Themes {
+    fn for_scheme(&self, s: Scheme) -> &Colors {
+        match s {
+            Scheme::Light => &self.light,
+            Scheme::Dark => &self.dark,
+        }
+    }
+}
+
+/// Light + dark palettes (palette-key → hex). Loaded from
+/// `~/.config/edgebar/palette.json` (matugen-generated) if present, else the
+/// bundled default (Catppuccin Latte / Mocha).
+#[derive(Clone, Deserialize)]
+struct Palettes {
+    light: std::collections::HashMap<String, String>,
+    dark: std::collections::HashMap<String, String>,
+}
+
+impl Palettes {
+    fn for_scheme(&self, s: Scheme) -> &std::collections::HashMap<String, String> {
+        match s {
+            Scheme::Light => &self.light,
+            Scheme::Dark => &self.dark,
+        }
+    }
+}
+
 /// Single source of truth for colors + geometry, read by both the native frame
 /// (Rust) and the bar WebView (applied as CSS custom properties). Loaded from
 /// `~/.config/edgebar/config.json` if present, else the bundled default.
 #[derive(Clone, Deserialize, Serialize)]
 struct Config {
-    /// Named colors (e.g. Catppuccin Mocha). Color fields below may reference
-    /// these by name; anything starting with '#' is treated as a literal hex.
-    #[serde(default)]
-    palette: std::collections::HashMap<String, String>,
-    colors: Colors,
+    #[serde(default = "default_appearance")]
+    appearance: Appearance,
+    colors: Themes,
     geometry: Geometry,
 }
 
-impl Config {
-    /// Resolve every color field: palette name -> hex (literal hex passes through).
-    fn resolved(mut self) -> Self {
-        let palette = self.palette.clone();
-        let resolve = |v: &str| -> String {
-            if v.starts_with('#') {
-                v.to_string()
-            } else {
-                palette.get(v).cloned().unwrap_or_else(|| v.to_string())
-            }
-        };
-        let c = &mut self.colors;
-        c.base = resolve(&c.base);
-        c.pill_bg = resolve(&c.pill_bg);
-        c.text = resolve(&c.text);
-        c.subtext = resolve(&c.subtext);
-        c.accent = resolve(&c.accent);
-        c.occupied = resolve(&c.occupied);
-        c.empty = resolve(&c.empty);
-        c.frame_line = resolve(&c.frame_line);
-        c.frame_corner = resolve(&c.frame_corner);
-        self
+/// What `get_config` and the `theme` event hand the WebView: colors already
+/// resolved to hex for the active scheme, plus geometry and the appearance.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolvedConfig {
+    colors: Colors,
+    geometry: Geometry,
+    appearance: Appearance,
+}
+
+/// Resolve a role map against a palette: palette name → hex (literal `#hex`
+/// passes through; an unknown name passes through unchanged).
+fn resolve_colors(
+    colors: &Colors,
+    palette: &std::collections::HashMap<String, String>,
+) -> Colors {
+    let r = |v: &str| -> String {
+        if v.starts_with('#') {
+            v.to_string()
+        } else {
+            palette.get(v).cloned().unwrap_or_else(|| v.to_string())
+        }
+    };
+    Colors {
+        base: r(&colors.base),
+        pill_bg: r(&colors.pill_bg),
+        text: r(&colors.text),
+        subtext: r(&colors.subtext),
+        accent: r(&colors.accent),
+        occupied: r(&colors.occupied),
+        empty: r(&colors.empty),
+        battery_charging: r(&colors.battery_charging),
+        battery_low: r(&colors.battery_low),
+        vpn: r(&colors.vpn),
+        frame_line: r(&colors.frame_line),
+        frame_corner: r(&colors.frame_corner),
     }
 }
 
@@ -64,8 +136,26 @@ struct Colors {
     accent: String,
     occupied: String,
     empty: String,
+    /// Battery-state accents. Serde defaults keep an older config.json (rendered
+    /// before these existed) parsing instead of dropping to the bundled default.
+    #[serde(default = "default_battery_charging")]
+    battery_charging: String,
+    #[serde(default = "default_battery_low")]
+    battery_low: String,
+    #[serde(default = "default_vpn")]
+    vpn: String,
     frame_line: String,
     frame_corner: String,
+}
+
+fn default_battery_charging() -> String {
+    "#40a02b".to_string()
+}
+fn default_battery_low() -> String {
+    "#d20f39".to_string()
+}
+fn default_vpn() -> String {
+    "#179299".to_string()
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -106,14 +196,142 @@ fn default_top_offset_px() -> f64 {
 
 fn load_config() -> Config {
     const DEFAULT: &str = include_str!("../config.default.json");
-    let raw: Config = std::env::var_os("HOME")
+    std::env::var_os("HOME")
         .map(|home| std::path::Path::new(&home).join(".config/edgebar/config.json"))
         .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_else(|| {
             serde_json::from_str(DEFAULT).expect("bundled config.default.json is valid")
-        });
-    raw.resolved()
+        })
+}
+
+fn load_palettes() -> Palettes {
+    const DEFAULT: &str = include_str!("../palette.default.json");
+    std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| {
+            serde_json::from_str(DEFAULT).expect("bundled palette.default.json is valid")
+        })
+}
+
+/// Runtime appearance override (a 3-way light/dark/auto toggle from the bar),
+/// persisted next to the nix-rendered config.json (which is a read-only symlink
+/// into the Nix store, so it can't hold this mutable preference).
+fn appearance_state_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".config/edgebar/appearance"))
+}
+
+fn appearance_label(a: Appearance) -> &'static str {
+    match a {
+        Appearance::Light => "light",
+        Appearance::Dark => "dark",
+        Appearance::Auto => "auto",
+    }
+}
+
+fn persist_appearance(a: Appearance) {
+    if let Some(path) = appearance_state_path() {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, appearance_label(a));
+    }
+}
+
+fn load_persisted_appearance() -> Option<Appearance> {
+    let text = std::fs::read_to_string(appearance_state_path()?).ok()?;
+    match text.trim() {
+        "light" => Some(Appearance::Light),
+        "dark" => Some(Appearance::Dark),
+        "auto" => Some(Appearance::Auto),
+        _ => None,
+    }
+}
+
+/// Shared, mutable theme state behind a `Mutex` (managed by Tauri). Holds the
+/// raw per-scheme role maps + both palettes; `get_config`/`apply_theme` resolve
+/// to hex on demand for whichever scheme is active.
+struct ThemeState {
+    colors: Themes,
+    geometry: Geometry,
+    palettes: Palettes,
+    appearance: Appearance,
+    scheme: Scheme,
+}
+
+/// Resolve `Auto` against the macOS system setting. `AppleInterfaceStyle` is
+/// "Dark" in dark mode and absent in light mode (NSUserDefaults is thread-safe,
+/// so this needs no main-thread hop).
+#[cfg(target_os = "macos")]
+fn system_scheme() -> Scheme {
+    use objc2_foundation::{NSString, NSUserDefaults};
+    let defaults = NSUserDefaults::standardUserDefaults();
+    let key = NSString::from_str("AppleInterfaceStyle");
+    let dark = defaults
+        .stringForKey(&key)
+        .map(|s| s.to_string().eq_ignore_ascii_case("dark"))
+        .unwrap_or(false);
+    if dark {
+        Scheme::Dark
+    } else {
+        Scheme::Light
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn system_scheme() -> Scheme {
+    Scheme::Dark
+}
+
+fn resolve_scheme(appearance: Appearance) -> Scheme {
+    match appearance {
+        Appearance::Light => Scheme::Light,
+        Appearance::Dark => Scheme::Dark,
+        Appearance::Auto => system_scheme(),
+    }
+}
+
+/// Switch the active appearance: re-resolve colors for the new scheme, push them
+/// to the WebView (one repaint) and recolor the native frame's layers in place.
+fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
+    let resolved: ResolvedConfig = {
+        let state = app.state::<Mutex<ThemeState>>();
+        let mut ts = state.lock().unwrap();
+        ts.appearance = appearance;
+        ts.scheme = resolve_scheme(appearance);
+        ResolvedConfig {
+            colors: resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme)),
+            geometry: ts.geometry.clone(),
+            appearance,
+        }
+    };
+    let _ = app.emit("theme", &resolved);
+    #[cfg(target_os = "macos")]
+    {
+        let line = resolved.colors.frame_line.clone();
+        let corner = resolved.colors.frame_corner.clone();
+        let _ = app.run_on_main_thread(move || recolor_native_frame(&line, &corner));
+    }
+}
+
+/// Reload palettes + role maps from disk (after matugen rewrites palette.json,
+/// or a config.json edit) and re-apply the current appearance. Triggered by a
+/// ping on `theme.sock`. Geometry changes still need a relaunch.
+fn reload_theme(app: &tauri::AppHandle) {
+    let palettes = load_palettes();
+    let config = load_config();
+    let appearance = {
+        let state = app.state::<Mutex<ThemeState>>();
+        let mut ts = state.lock().unwrap();
+        ts.palettes = palettes;
+        ts.colors = config.colors;
+        ts.geometry = config.geometry;
+        ts.appearance
+    };
+    apply_theme(app, appearance);
 }
 
 /// "#rrggbb" or "#rrggbbaa" -> [r, g, b, a] in 0..1 (defaults to opaque black).
@@ -134,8 +352,26 @@ fn hex_to_rgba(hex: &str) -> [f64; 4] {
 }
 
 #[tauri::command]
-fn get_config(config: tauri::State<Config>) -> Config {
-    config.inner().clone()
+fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
+    let ts = state.lock().unwrap();
+    ResolvedConfig {
+        colors: resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme)),
+        geometry: ts.geometry.clone(),
+        appearance: ts.appearance,
+    }
+}
+
+/// 3-way appearance toggle from the bar (light / dark / auto). Persists the
+/// choice and re-themes live.
+#[tauri::command]
+fn set_appearance(app: tauri::AppHandle, mode: String) {
+    let appearance = match mode.as_str() {
+        "light" => Appearance::Light,
+        "dark" => Appearance::Dark,
+        _ => Appearance::Auto,
+    };
+    persist_appearance(appearance);
+    apply_theme(&app, appearance);
 }
 
 #[derive(Clone, Serialize)]
@@ -379,7 +615,7 @@ fn set_interactive_rects(state: tauri::State<AppState>, rects: Vec<[f64; 4]>) {
 /// border) plus black fills in the four corner notches outside that rounded rect
 /// (an even-odd CAShapeLayer). Click-through, all-spaces, stationary.
 #[cfg(target_os = "macos")]
-fn create_native_frame(cfg: &Config) {
+fn create_native_frame(geometry: &Geometry, frame_line: &str, frame_corner: &str) {
     use objc2::{MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSBackingStoreType, NSBezierPath, NSColor, NSScreen, NSWindow,
@@ -388,11 +624,11 @@ fn create_native_frame(cfg: &Config) {
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
     use objc2_quartz_core::{kCAFillRuleEvenOdd, CAShapeLayer};
 
-    // Look comes from the shared config (config.json).
-    let radius = cfg.geometry.inner_radius;
-    let line = cfg.geometry.line_thickness;
-    let line_rgba = hex_to_rgba(&cfg.colors.frame_line);
-    let corner_rgba = hex_to_rgba(&cfg.colors.frame_corner);
+    // Look comes from the shared config (config.json) + active palette.
+    let radius = geometry.inner_radius;
+    let line = geometry.line_thickness;
+    let line_rgba = hex_to_rgba(frame_line);
+    let corner_rgba = hex_to_rgba(frame_corner);
 
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -447,7 +683,7 @@ fn create_native_frame(cfg: &Config) {
     let d = |px: f64| px / scale; // framebuffer device px -> points
     let line_px = (line * scale).round(); // frame line thickness (e.g. 8)
     let radius_px = (radius * scale).round(); // outer corner radius (e.g. 40)
-    let top_inset_px = cfg.geometry.top_offset_px; // dead-row compensation (e.g. 1)
+    let top_inset_px = geometry.top_offset_px; // dead-row compensation (e.g. 1)
 
     let line_color = NSColor::colorWithSRGBRed_green_blue_alpha(
         line_rgba[0], line_rgba[1], line_rgba[2], line_rgba[3],
@@ -509,8 +745,53 @@ fn create_native_frame(cfg: &Config) {
     corners.setFillColor(Some(&corner_color.CGColor()));
     root.addSublayer(&corners);
 
+    // Retain both shape layers so day/night + wallpaper changes can recolor them
+    // in place (cheap setFillColor) instead of rebuilding the window.
+    FRAME_LAYERS.with(|cell| {
+        *cell.borrow_mut() = Some(FrameLayers {
+            line: line_layer.clone(),
+            corners: corners.clone(),
+        });
+    });
+
     window.orderFrontRegardless();
     std::mem::forget(window); // keep it alive for the app's lifetime
+}
+
+/// The native frame's two fill layers, retained on the main thread so a theme
+/// change can recolor them without recreating the window. CALayer isn't `Send`,
+/// so this lives in a main-thread `thread_local!`, not Tauri's managed state.
+#[cfg(target_os = "macos")]
+struct FrameLayers {
+    line: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
+    corners: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
+}
+
+#[cfg(target_os = "macos")]
+thread_local! {
+    static FRAME_LAYERS: std::cell::RefCell<Option<FrameLayers>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Recolor the native frame's line + corner layers. Must run on the main thread
+/// (AppKit); callers hop via `run_on_main_thread`.
+#[cfg(target_os = "macos")]
+fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSColor;
+    if MainThreadMarker::new().is_none() {
+        return;
+    }
+    let l = hex_to_rgba(line_hex);
+    let c = hex_to_rgba(corner_hex);
+    FRAME_LAYERS.with(|cell| {
+        if let Some(f) = cell.borrow().as_ref() {
+            let lc = NSColor::colorWithSRGBRed_green_blue_alpha(l[0], l[1], l[2], l[3]);
+            let cc = NSColor::colorWithSRGBRed_green_blue_alpha(c[0], c[1], c[2], c[3]);
+            f.line.setFillColor(Some(&lc.CGColor()));
+            f.corners.setFillColor(Some(&cc.CGColor()));
+        }
+    });
 }
 
 /// Query workspaces and fill in each occupied dot's app icon. The AeroSpace
@@ -978,6 +1259,61 @@ fn install_front_app_observer(app: tauri::AppHandle) {
     std::mem::forget(observer);
 }
 
+#[cfg(target_os = "macos")]
+struct AppearanceIvars {
+    app: tauri::AppHandle,
+}
+
+#[cfg(target_os = "macos")]
+objc2::define_class!(
+    #[unsafe(super(objc2::runtime::NSObject))]
+    #[name = "EdgebarAppearanceObserver"]
+    #[ivars = AppearanceIvars]
+    struct AppearanceObserver;
+
+    impl AppearanceObserver {
+        #[unsafe(method(appearanceChanged:))]
+        fn appearance_changed(&self, _notification: *mut objc2::runtime::AnyObject) {
+            // Fires on the main thread when the system flips light/dark. Only act
+            // in Auto mode — a pinned light/dark choice ignores the system.
+            let app = self.ivars().app.clone();
+            let is_auto = {
+                app.state::<Mutex<ThemeState>>().lock().unwrap().appearance == Appearance::Auto
+            };
+            if is_auto {
+                apply_theme(&app, Appearance::Auto);
+            }
+        }
+    }
+
+    unsafe impl NSObjectProtocol for AppearanceObserver {}
+);
+
+/// Observe macOS light/dark changes (`AppleInterfaceThemeChangedNotification` on
+/// the distributed center) so Auto mode follows the system. Event-driven — no
+/// polling.
+#[cfg(target_os = "macos")]
+fn install_appearance_observer(app: tauri::AppHandle) {
+    use objc2::rc::Retained;
+    use objc2::{msg_send, sel, AllocAnyThread};
+    use objc2_foundation::{NSDistributedNotificationCenter, NSString};
+
+    let observer = AppearanceObserver::alloc().set_ivars(AppearanceIvars { app });
+    let observer: Retained<AppearanceObserver> = unsafe { msg_send![super(observer), init] };
+
+    let center = NSDistributedNotificationCenter::defaultCenter();
+    let name = NSString::from_str("AppleInterfaceThemeChangedNotification");
+    unsafe {
+        center.addObserver_selector_name_object(
+            &observer,
+            sel!(appearanceChanged:),
+            Some(&name),
+            None,
+        );
+    }
+    std::mem::forget(observer);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -987,6 +1323,7 @@ pub fn run() {
             aerospace_focus,
             set_bar_size,
             get_config,
+            set_appearance,
             battery,
             metrics_sample,
             get_volume,
@@ -1002,6 +1339,11 @@ pub fn run() {
             // Shared config (colors + geometry) — drives both the native frame
             // and the WebView (which fetches it via get_config and applies CSS vars).
             let config = load_config();
+            let palettes = load_palettes();
+            // Runtime override (the bar's light/dark/auto toggle) wins over the
+            // config's default; Auto then resolves against the live system setting.
+            let appearance = load_persisted_appearance().unwrap_or(config.appearance);
+            let scheme = resolve_scheme(appearance);
 
             // Interactive rects for the bar's click-through hitTest; shared
             // between the native ClickThroughView and the set_interactive_rects
@@ -1015,9 +1357,13 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             // Frame: a native borderless NSWindow drawn with CALayer — no
-            // WebView, so it costs no extra web-content process.
+            // WebView, so it costs no extra web-content process. Built with the
+            // frame colors resolved for the active scheme; recolored live after.
             #[cfg(target_os = "macos")]
-            create_native_frame(&config);
+            {
+                let fc = resolve_colors(config.colors.for_scheme(scheme), palettes.for_scheme(scheme));
+                create_native_frame(&config.geometry, &fc.frame_line, &fc.frame_corner);
+            }
 
             // Bar: full-width strip pinned to the top, normally interactive.
             if let Some(bar) = app.get_webview_window("bar") {
@@ -1068,6 +1414,30 @@ pub fn run() {
                 }
             });
 
+            // Theme reload: `generate-edgebar-theme` / matugen writes a new
+            // palette.json then pings this socket; each ping reloads from disk and
+            // re-themes the running bar live (no relaunch). Same pattern as ws.sock.
+            let theme_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                use std::os::unix::net::UnixListener;
+                let Some(home) = std::env::var_os("HOME") else {
+                    return;
+                };
+                let dir = std::path::Path::new(&home).join(".cache/edgebar");
+                let _ = std::fs::create_dir_all(&dir);
+                let sock = dir.join("theme.sock");
+                let _ = std::fs::remove_file(&sock); // clear any stale socket
+                let Ok(listener) = UnixListener::bind(&sock) else {
+                    return;
+                };
+                for conn in listener.incoming() {
+                    if conn.is_err() {
+                        continue;
+                    }
+                    reload_theme(&theme_handle);
+                }
+            });
+
             // Metrics state + app-icon cache. The NSWorkspace observer re-pushes
             // workspaces on every app activation so the focused dot stays current.
             app.manage(AppState {
@@ -1078,8 +1448,18 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             install_front_app_observer(app.handle().clone());
 
-            // Expose the config to the WebView (get_config).
-            app.manage(config);
+            // Shared theme state (raw role maps + both palettes), resolved on
+            // demand by get_config / apply_theme. Replaces the old immutable config.
+            app.manage(Mutex::new(ThemeState {
+                colors: config.colors,
+                geometry: config.geometry,
+                palettes,
+                appearance,
+                scheme,
+            }));
+            // Follow the system light/dark setting while in Auto mode.
+            #[cfg(target_os = "macos")]
+            install_appearance_observer(app.handle().clone());
 
             Ok(())
         })

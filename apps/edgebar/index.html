@@ -10,21 +10,24 @@
   <body>
     <!-- screen frame is drawn natively (src-tauri); this window is just the bar -->
     <!-- top bar: workspaces + front app left, notch center, status + clock right -->
+    <!-- Icons are inline Lucide SVGs in a shared .icon cell (see styles.css). -->
     <div class="bar">
       <div class="cluster left">
         <!-- workspaces pill: ⌘ launcher menu on the left, then the dots -->
         <div class="pill" id="workspaces">
-          <button class="launcher-icon" id="launcher-btn" title="Menu">󰘳</button>
+          <button class="launcher-icon icon" id="launcher-btn" title="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+          </button>
           <div class="ws-dots"></div>
           <div class="menu-panel">
             <button class="menu-item" data-action="settings">
-              <span class="mi-icon">󰒓</span><span>Settings</span>
+              <span class="mi-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></span><span>Settings</span>
             </button>
             <button class="menu-item" data-action="activity">
-              <span class="mi-icon">󱕍</span><span>Activity Monitor</span>
+              <span class="mi-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></span><span>Activity Monitor</span>
             </button>
             <button class="menu-item" data-action="sleep">
-              <span class="mi-icon">󰌾</span><span>Sleep</span>
+              <span class="mi-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg></span><span>Sleep</span>
             </button>
           </div>
         </div>
@@ -41,25 +44,37 @@
               <!-- Metrics: lazy-polled only while the notch is open (ambxst style) -->
               <div class="metrics">
                 <div class="metric" data-k="cpu">
-                  <span class="m-icon">󰘚</span>
+                  <span class="m-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
                   <span class="m-bar"><i></i></span>
                   <span class="m-val">—</span>
                 </div>
                 <div class="metric" data-k="mem">
-                  <span class="m-icon">󰓅</span>
+                  <span class="m-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12v-2"/><path d="M12 18v-2"/><path d="M16 12v-2"/><path d="M16 18v-2"/><path d="M2 11h1.5"/><path d="M20 18v-2"/><path d="M20.5 11H22"/><path d="M4 18v-2"/><path d="M8 12v-2"/><path d="M8 18v-2"/><rect x="2" y="6" width="20" height="10" rx="2"/></svg></span>
                   <span class="m-bar"><i></i></span>
                   <span class="m-val">—</span>
                 </div>
                 <div class="metric" data-k="disk">
-                  <span class="m-icon">󰋊</span>
+                  <span class="m-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 16h.01"/><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M21.946 12.013H2.054"/><path d="M6 16h.01"/></svg></span>
                   <span class="m-bar"><i></i></span>
                   <span class="m-val">—</span>
                 </div>
                 <div class="metric" data-k="swap">
-                  <span class="m-icon">󰁯</span>
+                  <span class="m-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg></span>
                   <span class="m-bar"><i></i></span>
                   <span class="m-val">—</span>
                 </div>
+              </div>
+              <!-- Appearance: light / dark / auto (auto follows macOS) -->
+              <div class="theme-toggle" role="group" aria-label="Appearance">
+                <button class="theme-opt" data-mode="light" title="Light">
+                  <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+                </button>
+                <button class="theme-opt" data-mode="dark" title="Dark">
+                  <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+                </button>
+                <button class="theme-opt" data-mode="auto" title="Auto (system)">
+                  <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
+                </button>
               </div>
             </div>
           </div>
@@ -68,30 +83,33 @@
       <div class="cluster right">
         <!-- Controls: a small detached button with a floating sliders popup -->
         <div class="pill detached" id="controls">
-          <button class="ctl-icon" id="ctl-btn" title="Adjustments">󰘮</button>
+          <button class="ctl-icon icon" id="ctl-btn" title="Adjustments">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
+          </button>
           <div class="ctl-panel">
             <div class="slider-row" data-k="volume">
-              <span class="s-icon">󰕾</span>
+              <span class="s-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg></span>
               <input class="s-range" type="range" min="0" max="100" value="0" />
             </div>
             <div class="slider-row" data-k="mic">
-              <span class="s-icon">󰍬</span>
+              <span class="s-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg></span>
               <input class="s-range" type="range" min="0" max="100" value="0" />
             </div>
             <div class="slider-row" data-k="brightness">
-              <span class="s-icon">☀</span>
+              <span class="s-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
               <input class="s-range" type="range" min="0" max="100" value="0" />
             </div>
           </div>
         </div>
-        <!-- Wi-Fi / network + battery, merged into one detached pill -->
+        <!-- Wi-Fi / network + battery, merged into one detached pill. The icon
+             SVGs are swapped by main.ts to reflect state. -->
         <div class="pill detached" id="status">
           <span class="stat-grp" id="wifi">
-            <span class="wifi-icon">󰖪</span>
+            <span class="wifi-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg></span>
             <span class="wifi-label">—</span>
           </span>
           <span class="stat-grp" id="battery">
-            <span class="bat-icon">󰂎</span>
+            <span class="bat-icon icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 14v-4"/><rect x="2" y="6" width="16" height="12" rx="2"/></svg></span>
             <span class="bat-pct">—</span>
           </span>
         </div>

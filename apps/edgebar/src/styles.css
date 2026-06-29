@@ -1,5 +1,6 @@
 :root {
-  /* Defaults / fallbacks only — the live values come from config.json
+  /* ---- theme colors ----
+     Defaults / fallbacks only — the live values come from config.json
      (src-tauri/config.default.json), applied as CSS vars at runtime. */
   --base: #1e1e2e;
   --pill-bg: #a6e3a1; /* catppuccin green */
@@ -8,13 +9,70 @@
   --accent: #89b4fa;
   --occupied: #a6adc8;
   --empty: #45475a;
+  --battery-charging: #40a02b; /* catppuccin latte green — reads on light pill */
+  --battery-low: #d20f39; /* catppuccin latte red */
+  --vpn: #179299; /* catppuccin latte teal */
 
-  /* geometry (defaults; overridden from config.json at runtime) */
+  /* marks layered on the (light) pill — tinted from --base so they track the
+     theme instead of being a hardcoded crust color at varying alpha */
+  --separator: color-mix(in srgb, var(--base) 30%, transparent);
+  --handle: color-mix(in srgb, var(--base) 45%, transparent);
+  --track: color-mix(in srgb, var(--base) 18%, transparent);
+  --hover: color-mix(in srgb, var(--base) 12%, transparent);
+
+  /* shadows (the black is the cast shadow, not a theme color) */
+  --shadow-pill: 0 3px 6px rgba(0, 0, 0, 0.4);
+  --shadow-popup: 0 6px 16px rgba(0, 0, 0, 0.35);
+
+  /* ---- geometry (defaults; overridden from config.json at runtime) ---- */
   --bezel-thickness: 0px;
   --bezel-line-thickness: 4px; /* matches native frame LINE */
   --pill-h: 30px;
   --pill-radius: 16px; /* rounded bottom of each pill */
   --concave: 16px; /* radius of the concave fillets flanking each pill */
+  --window-h: 64px; /* webview window height (geometry.windowHeight) */
+  --bar-overshoot: 26px; /* extra transparent DOM height for spring overshoot */
+
+  /* ---- spacing scale (2px grid) ---- */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+
+  /* ---- radius scale (panel / pill rounding) ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+
+  /* ---- type scale ---- */
+  --font-2xs: 10px;
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-md: 13px;
+  --font-lg: 14px;
+  --font-xl: 16px;
+  --font-2xl: 18px;
+  --font-3xl: 30px;
+
+  /* ---- motion ---- */
+  --dur-fast: 0.12s;
+  --dur-med: 0.25s;
+  --dur-slow: 0.4s;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---- de-emphasis opacity steps ---- */
+  --dim: 0.75;
+  --dim-more: 0.5;
+  --dim-icon: 0.8;
+
+  /* ---- workspace dots (repeated sizes) ---- */
+  --ws-dot: 8px;
+  --ws-dot-active: 22px;
 }
 
 * {
@@ -33,11 +91,31 @@ body {
 
 body {
   font-family: "FiraCode Nerd Font", ui-monospace, "SF Mono", monospace;
-  font-size: 13px;
+  font-size: var(--font-md);
   color: var(--text);
   -webkit-user-select: none;
   user-select: none;
   cursor: default;
+}
+
+/* shared icon cell: an inline-SVG icon centered in a box that scales with the
+   element's font-size. The icon (svg) is 1em; the cell is a touch larger so the
+   icon keeps even breathing room. Set font-size per context to size the icon. */
+.icon {
+  display: grid;
+  place-items: center;
+  width: 1.2em;
+  height: 1.2em;
+  font-size: var(--font-2xl);
+  line-height: 1;
+  flex: none;
+}
+/* Lucide SVGs are stroke-based (fill="none" stroke="currentColor"), so they're
+   centered by viewBox geometry and colored by the inherited text color. */
+.icon svg {
+  width: 1em;
+  height: 1em;
+  display: block;
 }
 
 /* The screen frame is drawn natively (src-tauri/src/lib.rs) — no DOM here. */
@@ -48,7 +126,9 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 90px; /* transparent; gives the spring room to overshoot */
+  /* transparent; the overshoot beyond the window height gives the spring room
+     to overshoot without clipping the pills' shadows and corner fillets */
+  height: calc(var(--window-h) + var(--bar-overshoot));
   display: flex;
   align-items: flex-start;
   /* top inset handled via .pill `top`; sides flush to the frame line so the
@@ -59,7 +139,7 @@ body {
 
 .cluster {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
   align-items: flex-start;
 }
 .cluster.left {
@@ -81,14 +161,13 @@ body {
   height: var(--pill-h);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-6);
   background: var(--pill-bg);
   border-radius: 0 0 var(--pill-radius) var(--pill-radius);
-  /* drop-shadow (not box-shadow) so the shadow follows the painted silhouette —
-     including the masked concave fillets (::before/::after) — instead of the
-     rectangular border-box, which would leave the fillets shadowless. */
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+  /* drop-shadow traces the masked fillets; box-shadow would skip them */
+  filter: drop-shadow(var(--shadow-pill));
   pointer-events: auto; /* interactive (native click-through toggles to match) */
   top: calc(var(--bezel-thickness) + var(--bezel-line-thickness));
   /* start hidden above the edge; main.ts springs them down */
@@ -108,6 +187,8 @@ body {
 }
 .pill::before {
   left: calc(-1 * var(--concave));
+  /* +0.5px: anti-alias fudge so the radial-gradient mask meets the fillet
+     cleanly (exception — a sub-pixel rendering correction, not a design value) */
   -webkit-mask-image: radial-gradient(
     circle at 0 100%,
     transparent var(--concave),
@@ -136,7 +217,9 @@ body {
 /* ---- detached pills: a self-contained rounded pill floating just below the
    top edge, with no concave fillets flaring into the frame ---- */
 .pill.detached {
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
+  /* -2px: tuck the detached pill in by a hair so it reads as floating below the
+     frame line rather than hanging from it (exception — relational offset) */
   height: calc(var(--pill-h) - 2px);
   top: calc(var(--bezel-thickness) + var(--bezel-line-thickness) + 2px);
 }
@@ -197,18 +280,19 @@ body {
   letter-spacing: 0.5px;
 }
 #clock .date {
-  font-size: 12px;
-  opacity: 0.75;
+  font-size: var(--font-sm);
+  opacity: var(--dim);
 }
 #clock .sep {
-  width: 1px;
-  height: 14px;
-  background: rgba(30, 30, 46, 0.3);
+  width: 1px; /* hairline (exception — a 1-device-px rule) */
+  height: var(--space-7);
+  background: var(--separator);
 }
 
 /* ---- expandable notch: click to expand ---- */
 #notch {
   flex-direction: column;
+  gap: 0;
   align-items: stretch;
   /* no overflow:hidden — it would clip the concave fillets. The panel is
      clipped by .notch-panel-clip instead. */
@@ -222,14 +306,14 @@ body {
   align-items: center;
   justify-content: center;
   height: var(--pill-h);
-  padding: 0 18px;
+  padding: 0 var(--space-9);
   flex: 0 0 auto;
 }
 .notch-handle {
-  width: 26px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(30, 30, 46, 0.45);
+  width: 26px; /* handle bar width (component-intrinsic) */
+  height: var(--space-2);
+  border-radius: var(--space-1); /* round the thin bar's ends */
+  background: var(--handle);
 }
 .notch-panel-clip {
   flex: 1 1 auto;
@@ -238,47 +322,76 @@ body {
 }
 .notch-panel {
   opacity: 0;
-  padding: 4px 18px 12px;
+  padding: var(--space-2) var(--space-9) var(--space-6);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   white-space: nowrap;
 }
 .notch-panel .big-time {
-  font-size: 30px;
+  font-size: var(--font-3xl);
   font-weight: 700;
   letter-spacing: 1px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 .notch-panel .full-date {
-  font-size: 12px;
-  opacity: 0.75;
+  font-size: var(--font-sm);
+  opacity: var(--dim);
+}
+
+/* ---- appearance toggle (light / dark / auto), bottom of the notch panel ---- */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-5);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--track);
+}
+.theme-opt {
+  display: grid;
+  place-items: center;
+  padding: var(--space-2) var(--space-5);
+  border: none;
+  background: transparent;
+  color: var(--base);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: var(--dim-more);
+  font-size: var(--font-lg);
+}
+.theme-opt:hover {
+  opacity: var(--dim);
+}
+.theme-opt.active {
+  background: var(--pill-bg);
+  opacity: 1;
 }
 
 /* ---- status pill: Wi-Fi / network + battery, merged ---- */
 #status {
   color: var(--base);
-  gap: 12px; /* separation between the wifi group and the battery group */
+  gap: var(--space-6); /* separation between the wifi group and the battery group */
 }
 /* each group keeps its icon and text tightly paired */
 .stat-grp {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 #battery .bat-icon {
-  font-size: 16px;
-  line-height: 1;
+  font-size: var(--font-2xl);
 }
 #battery.charging .bat-icon {
-  color: #40a02b; /* catppuccin latte green — reads on the light pill */
+  color: var(--battery-charging);
 }
 #battery.low .bat-icon,
 #battery.low .bat-pct {
-  color: #d20f39; /* catppuccin latte red */
+  color: var(--battery-low);
 }
 #battery .bat-pct {
   font-weight: 700;
@@ -290,80 +403,70 @@ body {
 #wifi {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: var(--space-6);
 }
 #wifi .wifi-icon {
-  font-size: 15px;
-  line-height: 1;
+  font-size: var(--font-2xl);
 }
 #wifi .wifi-label {
   /* Fira Code Mono (Nerd Font) — same typeface as the bar, true monospace */
   font-family: "FiraCode Nerd Font Mono", "FiraCode Nerd Font", monospace;
-  font-size: 10px;
+  font-size: var(--font-2xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 #wifi.vpn .wifi-icon {
-  color: #179299; /* catppuccin latte teal */
+  color: var(--vpn);
 }
 #wifi.off {
-  opacity: 0.5;
+  opacity: var(--dim-more);
 }
 
 /* ---- launcher (⌘ quick-actions menu, lives in the workspaces pill) ---- */
 .launcher-icon {
-  font-size: 15px;
-  line-height: 1;
   color: var(--base);
   background: transparent;
   border: none;
-  padding: 0;
-  /* margin gives a flex-gap-independent 8px to the dots (no fixed width, so the
-     glyph hugs the pill's left padding instead of being centered in a box) */
-  margin-right: 16px;
-  font-family: inherit;
+  margin-right: var(--space-8); /* gap to the dots */
   cursor: pointer;
-  flex: 0 0 auto;
 }
 /* floating dropdown anchored below the ⌘ */
 .menu-panel {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--space-3));
   left: 0;
   z-index: 10;
   opacity: 0;
   pointer-events: none;
   background: var(--pill-bg);
-  border-radius: 12px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-  padding: 6px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popup);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 190px;
+  gap: var(--space-1);
+  min-width: 190px; /* popup width (component-intrinsic) */
 }
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: var(--space-5);
+  padding: 7px var(--space-5); /* 7px: intentional vertical tightening */
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--base);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--font-md);
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
 }
 .menu-item:hover {
-  background: rgba(30, 30, 46, 0.12);
+  background: var(--hover);
 }
 .menu-item .mi-icon {
-  width: 18px;
-  text-align: center;
-  font-size: 14px;
+  font-size: var(--font-xl);
 }
 
 /* ---- controls: a small detached cog button ---- */
@@ -371,44 +474,39 @@ body {
   padding: 0; /* the button supplies its own padding so the pill hugs the icon */
 }
 #controls .ctl-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--pill-h);
-  padding: 0 11px;
   border: none;
   background: transparent;
   color: var(--base);
-  font: inherit;
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
+  /* square button filling the pill height, so the detached pill reads as a
+     rounded square rather than a tall sliver (-2px matches .detached height) */
+  width: calc(var(--pill-h) - 2px);
+  height: calc(var(--pill-h) - 2px);
 }
 
 /* ---- metrics rows inside the notch panel ---- */
 .metrics {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
   width: 100%;
-  margin-top: 10px;
+  margin-top: var(--space-5);
 }
 .metric {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: var(--space-4);
+  font-size: var(--font-xs);
 }
 .metric .m-icon {
-  width: 16px;
-  text-align: center;
-  opacity: 0.8;
+  font-size: var(--font-lg);
+  opacity: var(--dim-icon);
 }
 .metric .m-bar {
   flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(30, 30, 46, 0.18);
+  height: 6px; /* bar thickness (component-intrinsic) */
+  border-radius: 3px; /* round the thin bar's ends */
+  background: var(--track);
   overflow: hidden;
 }
 .metric .m-bar i {
@@ -417,10 +515,10 @@ body {
   width: 0%;
   background: var(--base);
   border-radius: 3px;
-  transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: width var(--dur-slow) var(--ease-out);
 }
 .metric .m-val {
-  width: 34px;
+  width: 34px; /* value column (component-intrinsic) */
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -431,44 +529,42 @@ body {
    the collapsed pill stays small while the popup keeps its width. */
 .ctl-panel {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--space-3));
   right: 0;
   z-index: 10;
   opacity: 0;
   pointer-events: none;
   background: var(--pill-bg);
   color: var(--base); /* dark icons/text read on the light panel */
-  border-radius: 12px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popup);
+  padding: var(--space-7) var(--space-8);
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-width: 200px;
+  gap: var(--space-7);
+  min-width: 200px; /* popup width (component-intrinsic) */
 }
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .slider-row .s-icon {
-  width: 18px;
-  text-align: center;
-  font-size: 14px;
+  font-size: var(--font-xl);
 }
 .s-range {
   flex: 1;
   -webkit-appearance: none;
   appearance: none;
-  height: 5px;
-  border-radius: 3px;
-  background: rgba(30, 30, 46, 0.2);
+  height: 5px; /* track thickness (component-intrinsic) */
+  border-radius: 3px; /* round the thin track's ends */
+  background: var(--track);
   cursor: pointer;
 }
 .s-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
+  width: 14px; /* thumb diameter (component-intrinsic) */
   height: 14px;
   border-radius: 50%;
   background: var(--base);
@@ -481,20 +577,20 @@ body {
 .ws-dots {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .ws {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 8px;
-  width: 8px;
-  border-radius: 4px;
+  height: var(--ws-dot);
+  width: var(--ws-dot);
+  border-radius: 4px; /* round the dot */
   background: var(--empty);
   cursor: pointer;
   transition:
-    width 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 150ms var(--ease-out),
+    height 150ms var(--ease-out),
     background-color 150ms ease;
 }
 
@@ -503,33 +599,33 @@ body {
   background: var(--occupied);
 }
 .ws.active:not(.has-icon) {
-  width: 22px;
+  width: var(--ws-dot-active);
   background: var(--accent);
 }
 
 /* ---- app-icon dots (occupied workspaces) ---- */
 .ws-icon {
   display: none;
-  width: 18px;
-  height: 18px;
+  width: var(--font-2xl);
+  height: var(--font-2xl);
   object-fit: contain;
 }
 .ws.has-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: var(--ws-dot-active);
+  height: var(--ws-dot-active);
+  border-radius: 6px; /* icon backplate rounding */
   background: transparent;
-  padding: 2px;
+  padding: var(--space-1);
 }
 .ws.has-icon .ws-icon {
   display: block;
 }
 /* unfocused app icons sit back a touch so the focused one reads as active */
 .ws.has-icon:not(.active) .ws-icon {
-  opacity: 0.8;
+  opacity: var(--dim-icon);
 }
 /* focused workspace: accent ring + faint backplate behind the icon */
 .ws.has-icon.active {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent); /* 2px accent ring */
 }
