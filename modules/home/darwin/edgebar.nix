@@ -29,13 +29,16 @@ let
 in
 {
   flake.modules.homeManager.darwin-edgebar =
-    { pkgs, lib, ... }:
+    { config, pkgs, lib, ... }:
     let
       # Default wallpaper kept in sync with darwin/wallpaper.nix.
       defaultWallpaper = "$HOME/Pictures/Wallpapers/chisato_petals_of_silence_4k.jpg";
       generate-edgebar-theme = pkgs.writeShellScriptBin "generate-edgebar-theme" ''
         CONFIG_DIR="${matugenDir}"
-        SCHEME="scheme-tonal-spot"
+        # Scheme: explicit --scheme arg > the persisted choice (select-scheme) >
+        # the matugen default. Reading the file means the launchd watcher's auto
+        # re-themes keep using the scheme you picked.
+        SCHEME="$(cat "$HOME/.config/edgebar/scheme" 2>/dev/null || echo scheme-tonal-spot)"
         WALLPAPER=""
 
         # generate-edgebar-theme [wallpaper] [--scheme scheme-*]
@@ -46,10 +49,11 @@ in
           esac
         done
 
-        # Resolve the wallpaper: explicit arg > ambxst's current selection > the
-        # rebuild default (the image darwin/wallpaper.nix sets).
-        if [ -z "$WALLPAPER" ] && [ -f "$HOME/.cache/ambxst/wallpapers.json" ]; then
-          WALLPAPER=$(${pkgs.jq}/bin/jq -r '.currentWall // empty' "$HOME/.cache/ambxst/wallpapers.json")
+        # Resolve the wallpaper: explicit arg > the actual current desktop picture
+        # (NSWorkspace, via desktoppr) > the rebuild default. Reading the live
+        # wallpaper means this themes correctly however the wallpaper was changed.
+        if [ -z "$WALLPAPER" ]; then
+          WALLPAPER=$(${pkgs.desktoppr}/bin/desktoppr 2>/dev/null | head -1)
         fi
         if [ -z "$WALLPAPER" ] || [ ! -f "$WALLPAPER" ]; then
           WALLPAPER="${defaultWallpaper}"
@@ -68,11 +72,36 @@ in
           exit 1
         fi
       '';
+
+      # Wallpaper commands. They only SET the desktop picture; the launchd watcher
+      # below re-themes edgebar from whatever the wallpaper becomes, so the theme
+      # follows the wallpaper however it was changed.
+      cycle-wallpaper = pkgs.writeShellApplication {
+        name = "cycle-wallpaper";
+        runtimeInputs = [ pkgs.desktoppr ];
+        text = builtins.readFile ./edgebar/cycle-wallpaper.sh;
+      };
+      select-wallpaper = pkgs.writeShellApplication {
+        name = "select-wallpaper";
+        runtimeInputs = [ pkgs.desktoppr ];
+        text = builtins.readFile ./edgebar/select-wallpaper.sh;
+      };
+      # Picks the matugen scheme type and re-themes the current wallpaper.
+      select-scheme = pkgs.writeShellApplication {
+        name = "select-scheme";
+        runtimeInputs = [ generate-edgebar-theme ];
+        text = builtins.readFile ./edgebar/select-scheme.sh;
+      };
     in
     {
       xdg.configFile."edgebar/config.json".text = builtins.toJSON rendered;
 
-      home.packages = [ generate-edgebar-theme ];
+      home.packages = [
+        generate-edgebar-theme
+        cycle-wallpaper
+        select-wallpaper
+        select-scheme
+      ];
 
       # Seed palette.json from the wallpaper on first build (later wallpaper
       # changes are driven by running generate-edgebar-theme). Absent the file,
@@ -83,5 +112,23 @@ in
           run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
         fi
       '';
+
+      # Re-theme on ANY wallpaper change. macOS rewrites this plist whenever the
+      # desktop picture changes (verified: desktoppr and System Settings both
+      # touch it); launchd WatchPaths fires generate-edgebar-theme, which reads
+      # the now-current wallpaper and pings the bar. Event-driven, no polling.
+      launchd.agents.edgebar-wallpaper-theme = {
+        enable = true;
+        config = {
+          ProgramArguments = [ "${generate-edgebar-theme}/bin/generate-edgebar-theme" ];
+          WatchPaths = [
+            "${config.home.homeDirectory}/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
+          ];
+          RunAtLoad = false;
+          ProcessType = "Background";
+          StandardOutPath = "/tmp/edgebar-wallpaper-theme.log";
+          StandardErrorPath = "/tmp/edgebar-wallpaper-theme.log";
+        };
+      };
     };
 }

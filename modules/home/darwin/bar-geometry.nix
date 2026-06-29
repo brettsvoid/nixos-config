@@ -29,6 +29,6 @@ _: {
     outerGap = 10;
 
     # Where AeroSpace starts tiling windows
-    outerTop = barHeight + outerGap - 2;
+    outerTop = barHeight + outerGap;
   };
 }
