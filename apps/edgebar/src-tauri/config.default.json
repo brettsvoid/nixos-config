@@ -17,7 +17,7 @@
     },
     "light": {
       "base": "text",
-      "pillBg": "base",
+      "pillBg": "rosewater",
       "text": "text",
       "subtext": "subtext0",
       "accent": "blue",
@@ -26,7 +26,7 @@
       "batteryCharging": "#40a02b",
       "batteryLow": "#d20f39",
       "vpn": "#179299",
-      "frameLine": "base",
+      "frameLine": "rosewater",
       "frameCorner": "#000000"
     }
   },
