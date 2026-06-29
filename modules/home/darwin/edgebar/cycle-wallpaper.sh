@@ -1,7 +1,8 @@
 # Advance the desktop wallpaper to the next image in ~/Pictures/Wallpapers
-# (wrapping around). The launchd watcher (edgebar.nix) re-themes edgebar from the
-# new wallpaper, so the bar follows within ~1s. `desktoppr` is on PATH via
-# writeShellApplication's runtimeInputs.
+# (wrapping around), then re-theme edgebar directly so the bar follows instantly.
+# (The launchd watcher in edgebar.nix still handles wallpaper changes made
+# OUTSIDE edgebar, e.g. via System Settings.) `desktoppr` and
+# `generate-edgebar-theme` are on PATH via writeShellApplication's runtimeInputs.
 wall_dir="$HOME/Pictures/Wallpapers"
 cd "$wall_dir" || exit 1
 shopt -s nullglob
@@ -27,3 +28,4 @@ next=$(((idx + 1) % ${#files[@]}))
 pick="${files[$next]}"
 desktoppr all "$wall_dir/$pick" >/dev/null
 echo "wallpaper → $pick"
+generate-edgebar-theme "$wall_dir/$pick"

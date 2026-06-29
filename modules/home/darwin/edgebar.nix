@@ -78,12 +78,18 @@ in
       # follows the wallpaper however it was changed.
       cycle-wallpaper = pkgs.writeShellApplication {
         name = "cycle-wallpaper";
-        runtimeInputs = [ pkgs.desktoppr ];
+        runtimeInputs = [
+          pkgs.desktoppr
+          generate-edgebar-theme
+        ];
         text = builtins.readFile ./edgebar/cycle-wallpaper.sh;
       };
       select-wallpaper = pkgs.writeShellApplication {
         name = "select-wallpaper";
-        runtimeInputs = [ pkgs.desktoppr ];
+        runtimeInputs = [
+          pkgs.desktoppr
+          generate-edgebar-theme
+        ];
         text = builtins.readFile ./edgebar/select-wallpaper.sh;
       };
       # Picks the matugen scheme type and re-themes the current wallpaper.
@@ -113,10 +119,13 @@ in
         fi
       '';
 
-      # Re-theme on ANY wallpaper change. macOS rewrites this plist whenever the
-      # desktop picture changes (verified: desktoppr and System Settings both
-      # touch it); launchd WatchPaths fires generate-edgebar-theme, which reads
-      # the now-current wallpaper and pings the bar. Event-driven, no polling.
+      # Catch wallpaper changes made OUTSIDE edgebar (System Settings, other
+      # tools) — edgebar's own commands re-theme directly and instantly. macOS
+      # rewrites this plist whenever the desktop picture changes (verified:
+      # desktoppr and System Settings both touch it); launchd WatchPaths fires
+      # generate-edgebar-theme, which reads the now-current wallpaper and pings
+      # the bar. Event-driven, no polling. ThrottleInterval=1 trims launchd's
+      # default 10s minimum respawn so external changes still follow within ~1s.
       launchd.agents.edgebar-wallpaper-theme = {
         enable = true;
         config = {
@@ -125,6 +134,7 @@ in
             "${config.home.homeDirectory}/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
           ];
           RunAtLoad = false;
+          ThrottleInterval = 1;
           ProcessType = "Background";
           StandardOutPath = "/tmp/edgebar-wallpaper-theme.log";
           StandardErrorPath = "/tmp/edgebar-wallpaper-theme.log";
