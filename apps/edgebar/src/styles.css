@@ -74,6 +74,11 @@
   /* ---- workspace dots (repeated sizes) ---- */
   --ws-dot: 8px;
   --ws-dot-active: 22px;
+  /* dot fills are marks on the light pill, tinted from --base ink so they read
+     in any scheme. (matugen flips primary/secondary/tertiary to LIGHT tones in
+     dark mode — meant for a dark surface — which washed out on the light pill.) */
+  --ws-empty: color-mix(in srgb, var(--base) 28%, transparent);
+  --ws-occupied: color-mix(in srgb, var(--base) 55%, transparent);
 }
 
 * {
@@ -704,7 +709,7 @@ body {
 .ws-dots {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2); /* tighter — app icons sat too far apart at --space-3 */
 }
 .ws {
   display: flex;
@@ -712,22 +717,29 @@ body {
   justify-content: center;
   height: var(--ws-dot);
   width: var(--ws-dot);
-  border-radius: 4px; /* round the dot */
-  background: var(--empty);
+  border-radius: 50%; /* true circle */
+  background: var(--ws-empty);
   cursor: pointer;
   transition:
     width 150ms var(--ease-out),
     height 150ms var(--ease-out),
-    background-color 150ms ease;
+    background-color 150ms ease,
+    box-shadow 150ms var(--ease-out);
 }
 
 /* ---- empty / occupied dots (no app icon) ---- */
 .ws.occupied:not(.has-icon) {
-  background: var(--occupied);
+  background: var(--ws-occupied);
 }
+/* selected: keep the dot a circle and draw an accent ring around it, mirroring
+   the square ring on active app icons. The 1px pill-colored gap floats the ring
+   off the dot; the dark ink center keeps the selection legible even when the
+   accent itself is low-contrast on the pill. */
 .ws.active:not(.has-icon) {
-  width: var(--ws-dot-active);
-  background: var(--accent);
+  background: var(--base);
+  box-shadow:
+    0 0 0 1px var(--pill-bg),
+    0 0 0 3px var(--accent);
 }
 
 /* ---- app-icon dots (occupied workspaces) ---- */
