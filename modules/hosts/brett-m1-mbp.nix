@@ -40,6 +40,7 @@ in
             common
             defaults
             users
+            openssh
             homebrew
             tailscale
             timemachine
@@ -74,6 +75,7 @@ in
                 shell-starship
                 shell-tools
                 terminals-tmux
+                terminals-herdr
                 terminals-ghostty
                 terminals-kitty
                 darwin-sketchybar

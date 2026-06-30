@@ -49,6 +49,14 @@
     # homebrew/{core,cask,bundle} tap inputs aren't needed.
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
 
+    # Terminal agent-multiplexer (run coding agents in one terminal, persists
+    # over ssh). Trialled alongside tmux. Pinned to a release tag; bump on
+    # `nix flake update`.
+    herdr = {
+      url = "github:ogulcancelik/herdr/v0.7.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     agenix = {
       url = "github:ryantm/agenix";
       inputs.nixpkgs.follows = "nixpkgs";

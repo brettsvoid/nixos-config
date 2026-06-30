@@ -131,6 +131,7 @@
                 terminals-kitty
                 terminals-ghostty
                 terminals-tmux
+                terminals-herdr
                 desktop-hyprland
                 desktop-hyprlock
                 desktop-ambxst
