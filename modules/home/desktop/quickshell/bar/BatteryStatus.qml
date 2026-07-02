@@ -9,7 +9,9 @@ Item {
     readonly property var device: UPower.displayDevice
     readonly property bool available: device !== null && device.isLaptopBattery
     readonly property int percentage: available ? Math.round(device.percentage * 100) : 0
-    readonly property bool charging: available && device.state === UPowerDeviceState.Charging
+    readonly property bool charging: available
+        && (device.state === UPowerDeviceState.Charging
+            || device.state === UPowerDeviceState.PendingCharge)
 
     visible: available
 
@@ -41,7 +43,7 @@ Item {
             text: root.batteryIcon()
             color: root.batteryColor()
             font.family: Theme.fontFamily
-            font.pixelSize: 16
+            font.pixelSize: Theme.iconSize
             Layout.alignment: Qt.AlignVCenter
         }
 

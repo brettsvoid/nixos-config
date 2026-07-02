@@ -20,9 +20,9 @@ Item {
         layer.enabled: Theme.barOpacity > 0
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: "#000000"
-            shadowOpacity: 0.5
-            shadowBlur: 1.0
+            shadowColor: Theme.shadowColor
+            shadowOpacity: Theme.shadowOpacity
+            shadowBlur: Theme.shadowBlur
             shadowVerticalOffset: 0
             shadowHorizontalOffset: 0
         }

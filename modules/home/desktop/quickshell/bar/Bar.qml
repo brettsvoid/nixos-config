@@ -22,7 +22,7 @@ PanelWindow {
     implicitHeight: Theme.barHeight + Theme.barMargin * 2
 
     exclusionMode: ExclusionMode.Normal
-    exclusiveZone: Theme.barHeight + Theme.barMargin * 2
+    exclusiveZone: implicitHeight
 
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "custom-bar"
@@ -45,10 +45,10 @@ PanelWindow {
 
         RowLayout {
             anchors.fill: parent
-            spacing: 4
+            spacing: Theme.barSpacing
 
             BarSegment {
-                implicitWidth: workspaces.implicitWidth + 24
+                implicitWidth: workspaces.implicitWidth + Theme.segmentPadding * 2
 
                 Workspaces {
                     id: workspaces
@@ -60,7 +60,7 @@ PanelWindow {
             Item { Layout.fillWidth: true }
 
             BarSegment {
-                implicitWidth: clock.implicitWidth + 24
+                implicitWidth: clock.implicitWidth + Theme.segmentPadding * 2
 
                 Clock {
                     id: clock
@@ -71,7 +71,7 @@ PanelWindow {
             Item { Layout.fillWidth: true }
 
             BarSegment {
-                implicitWidth: battery.implicitWidth + 24
+                implicitWidth: battery.implicitWidth + Theme.segmentPadding * 2
                 visible: battery.available
 
                 BatteryStatus {

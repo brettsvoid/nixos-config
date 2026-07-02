@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell.Hyprland._Ipc
+import Quickshell.Hyprland
 import "../theme"
 
 Item {
@@ -30,13 +30,11 @@ Item {
                 readonly property int wsId: index + 1
                 readonly property bool isActive: wsId === root.activeWorkspaceId
                 readonly property bool hasWindows: {
-                    for (var i = 0; i < Hyprland.workspaces.count; i++) {
-                        var ws = Hyprland.workspaces.get(i)
-                        if (ws && ws.id === wsId) {
-                            return ws.toplevels.count > 0
-                        }
-                    }
-                    return false
+                    // Hyprland.workspaces is an ObjectModel — iterate .values, not
+                    // a non-existent .count/.get(). Reading .toplevels.values keeps
+                    // this binding reactive to windows opening/closing.
+                    const ws = Hyprland.workspaces.values.find(w => w.id === wsId)
+                    return ws ? ws.toplevels.values.length > 0 : false
                 }
 
                 Layout.preferredWidth: isActive ? 24 : 8
@@ -45,10 +43,10 @@ Item {
                 color: isActive ? Theme.wsActive : (hasWindows ? Theme.wsOccupied : Theme.wsEmpty)
 
                 Behavior on Layout.preferredWidth {
-                    NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                    NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutQuad }
                 }
                 Behavior on color {
-                    ColorAnimation { duration: 150 }
+                    ColorAnimation { duration: Theme.animDuration }
                 }
 
                 MouseArea {

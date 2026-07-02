@@ -1,12 +1,13 @@
 pragma Singleton
 import QtQuick
+import Quickshell
 import Quickshell.Io
 
 QtObject {
     property var colors: ({})
 
     readonly property var _colorsFile: FileView {
-        path: "/home/brett/.cache/qs-theme/colors.json"
+        path: Quickshell.env("HOME") + "/.cache/qs-theme/colors.json"
         watchChanges: true
         onLoaded: {
             try {
@@ -53,11 +54,23 @@ QtObject {
         return roundness > 0 ? Math.max(roundness + offset, 0) : 0
     }
 
-    // Bar config
-    readonly property int barHeight: 36
+    // Bar config. barHeight/fontSize track docs/bar-spec.md (parity with edgebar).
+    readonly property int barHeight: 32
     readonly property int barMargin: 4
     readonly property int barRadius: radius(0)
     readonly property real barOpacity: 1.0
     readonly property string fontFamily: "FiraCode Nerd Font"
-    readonly property int fontSize: 14
+    readonly property int fontSize: 13
+    readonly property int fontSizeSmall: fontSize - 1
+
+    // Spacing / sizing tokens (single source for the segments).
+    readonly property int barSpacing: barMargin
+    readonly property int segmentPadding: 12
+    readonly property int iconSize: 16
+    readonly property int animDuration: 150
+
+    // Segment shadow (BarSegment MultiEffect).
+    readonly property color shadowColor: "#000000"
+    readonly property real shadowOpacity: 0.5
+    readonly property real shadowBlur: 1.0
 }

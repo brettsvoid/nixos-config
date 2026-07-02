@@ -1,27 +1,19 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import "../theme"
 
 Item {
     id: root
 
-    property string timeStr: ""
-    property string dateStr: ""
-
     implicitWidth: clockLayout.implicitWidth
     implicitHeight: clockLayout.implicitHeight
     Layout.alignment: Qt.AlignVCenter
 
-    Timer {
-        interval: 1000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            var now = new Date()
-            root.timeStr = Qt.formatDateTime(now, "hh:mm")
-            root.dateStr = Qt.formatDateTime(now, "ddd, MMM d")
-        }
+    // Minute precision: wakes once a minute instead of the old 1s Timer.
+    SystemClock {
+        id: clock
+        precision: SystemClock.Minutes
     }
 
     RowLayout {
@@ -30,7 +22,7 @@ Item {
         spacing: 8
 
         Text {
-            text: root.timeStr
+            text: Qt.formatDateTime(clock.date, "hh:mm")
             color: Theme.barText
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
@@ -45,10 +37,10 @@ Item {
         }
 
         Text {
-            text: root.dateStr
+            text: Qt.formatDateTime(clock.date, "ddd, MMM d")
             color: Theme.subtext
             font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize - 1
+            font.pixelSize: Theme.fontSizeSmall
         }
     }
 }
