@@ -4,6 +4,25 @@
             "complex_modifications": {
                 "rules": [
                     {
+                        "description": "caps_lock -> F18 (built-in keyboard only) — hyper-mode trigger for skhd/aerospace",
+                        "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "identifiers": [{ "is_built_in_keyboard": true }],
+                                        "type": "device_if"
+                                    }
+                                ],
+                                "from": {
+                                    "key_code": "caps_lock",
+                                    "modifiers": { "optional": ["any"] }
+                                },
+                                "to": [{ "key_code": "f18" }],
+                                "type": "basic"
+                            }
+                        ]
+                    },
+                    {
                         "manipulators": [
                             {
                                 "description": "Change caps_lock to backspace.",

@@ -43,7 +43,7 @@ exec-on-workspace-change = ['/bin/bash', '-c', 'nc -U "$HOME/.cache/edgebar/ws.s
 # All gap values are substituted from flake.lib.barGeometry — single-sourced so
 # the bar height and every gap are tweakable in one place (bar-geometry.nix);
 # don't hardcode them here. innerGap = between windows (and below the bar);
-# outerGap = screen-edge inset; outerTop = barHeight + innerGap (the edgebar bar
+# outerGap = screen-edge inset; outerTop = barHeight + outerGap (the edgebar bar
 # band plus one gap below it — edgebar is an overlay with no built-in padding).
 [gaps]
 inner.horizontal = @innerGap@

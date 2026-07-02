@@ -23,6 +23,3 @@ fi
 sketchybar --set $NAME background.color=$COLOR \
 	icon=$ICON \
 	label="$LABEL"
-sketchybar --set $NAME background.color=$COLOR \
-	icon=$ICON \
-	label="$LABEL"

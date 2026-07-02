@@ -8,9 +8,9 @@
 #     and no scripting addition are needed.
 #   - Built-in hotkey engine (no skhd). The aerospace.toml under
 #     modules/home/darwin/aerospace/ holds all bindings.
-#   - Sketchybar still works; it doesn't depend on yabai. We keep it
-#     enabled here so the menubar reservation (gaps.outer.top = 60)
-#     continues to make sense.
+#   - The top-of-screen band for the edgebar overlay is reserved via
+#     gaps.outer.top (= barHeight + outerGap = 42 from flake.lib.barGeometry).
+#     The sketchybar daemon is disabled below — edgebar replaced it.
 #
 # nix-darwin has no `services.aerospace` module yet, so we register a
 # launchd user agent manually. `--start-at-login`-style behaviour is
