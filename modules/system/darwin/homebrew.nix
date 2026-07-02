@@ -15,7 +15,13 @@
 # activation (cask user-data is preserved; "zap" would also wipe that).
 _: {
   flake.modules.darwin.homebrew =
-    { config, lib, inputs, ... }:
+    {
+      config,
+      lib,
+      inputs,
+      flake,
+      ...
+    }:
     {
       imports = [ inputs.nix-homebrew.darwinModules.nix-homebrew ];
 
@@ -24,7 +30,7 @@ _: {
       # /opt/homebrew (keeping installed packages) rather than erroring.
       nix-homebrew = {
         enable = true;
-        user = "brett";
+        user = flake.lib.username;
         autoMigrate = true;
         # Baked into the `brew` launcher, so it applies to every brew call
         # including the activation bundle — not just interactive shells.
@@ -46,7 +52,7 @@ _: {
         # exist until this activation, so no earlier phase could do it.
         (lib.mkOrder 600 ''
           if [ -x /opt/homebrew/bin/brew ]; then
-            sudo --user=brett --set-home /opt/homebrew/bin/brew trust --tap ${
+            sudo --user=${flake.lib.username} --set-home /opt/homebrew/bin/brew trust --tap ${
               lib.concatStringsSep " " (map (t: lib.escapeShellArg t.name) config.homebrew.taps)
             } || true
           fi
@@ -57,7 +63,7 @@ _: {
         # `brew cleanup`. mkAfter (1500) runs this after the bundle.
         (lib.mkAfter ''
           if [ -x /opt/homebrew/bin/brew ]; then
-            sudo --user=brett --set-home /opt/homebrew/bin/brew cleanup || true
+            sudo --user=${flake.lib.username} --set-home /opt/homebrew/bin/brew cleanup || true
           fi
         '')
       ];

@@ -1,6 +1,8 @@
 # Brett's M1 MacBook Pro (16 GB, aarch64-darwin).
 { config, inputs, ... }:
 let
+  username = config.flake.lib.username;
+
   # ─── Window-manager stack swap ──────────────────────────────────────
   # One switch drives BOTH halves of the WM stack — the system-side
   # launchd agents and the home-manager config — so the two can't drift
@@ -61,7 +63,7 @@ in
           useUserPackages = true;
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
-          users.brett = {
+          users.${username} = {
             # WM stack (home half) is appended below via `wm.home`; the
             # `wmStack` switch at the top of this file selects it.
             # `darwin-sketchybar` stays enabled for either stack.
@@ -96,7 +98,7 @@ in
               ])
               ++ wm.home;
             home = {
-              username = "brett";
+              inherit username;
               homeDirectory = "/Users/brett";
             };
           };

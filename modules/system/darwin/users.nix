@@ -3,10 +3,10 @@
 # originally own (would fail on existing systems).
 _: {
   flake.modules.darwin.users =
-    { pkgs, ... }:
+    { pkgs, flake, ... }:
     {
-      users.knownUsers = [ "brett" ];
-      users.users.brett = {
+      users.knownUsers = [ flake.lib.username ];
+      users.users.${flake.lib.username} = {
         uid = 501;
         gid = 20;
         home = "/Users/brett";

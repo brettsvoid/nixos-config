@@ -1,5 +1,8 @@
 # MSI GE75 Raider 8SF — NVIDIA RTX 2070 Mobile + Intel UHD 630, btrfs root.
 { config, inputs, ... }:
+let
+  username = config.flake.lib.username;
+in
 {
   flake.nixosConfigurations.brett-msi-laptop = inputs.nixpkgs.lib.nixosSystem {
     specialArgs = {
@@ -98,7 +101,7 @@
             wantedBy = [ "post-resume.target" ];
             serviceConfig = {
               Type = "oneshot";
-              User = "brett";
+              User = username;
               ExecStart = pkgs.writeShellScript "hyprland-resume-monitors" ''
                 INSTANCE_DIR="/run/user/1000/hypr"
                 [ ! -d "$INSTANCE_DIR" ] && exit 0
@@ -121,13 +124,14 @@
             useUserPackages = true;
             backupFileExtension = "backup";
             extraSpecialArgs = { inherit inputs; };
-            users.brett = {
+            users.${username} = {
               imports = with config.flake.modules.homeManager; [
                 base
                 shell-zsh
                 shell-aliases
                 shell-starship
                 shell-tools
+                apps-nh
                 terminals-kitty
                 terminals-ghostty
                 terminals-tmux
@@ -150,7 +154,7 @@
                 profile-gaming
               ];
               home = {
-                username = "brett";
+                inherit username;
                 homeDirectory = "/home/brett";
               };
 

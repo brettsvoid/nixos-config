@@ -10,15 +10,19 @@
 # here — that runs `nh clean user`, which can't prune the *system*
 # generations that actually accumulate (it refuses to run as root), so it
 # would leave a second, weaker GC policy that does nothing useful here.
-_: {
+{ config, ... }:
+let
+  repoDir = config.flake.lib.repoDir;
+in
+{
   flake.modules.homeManager.apps-nh =
     { config, lib, ... }:
     {
       programs.nh = {
         enable = true;
         # Sets NH_FLAKE (nh ≥ 4.0), so `nh darwin switch` needs no path and
-        # autodiscovers the host (config name == hostname == brett-m1-mbp).
-        flake = "${config.home.homeDirectory}/nixos-config";
+        # autodiscovers the host (config name == hostname).
+        flake = "${config.home.homeDirectory}/${repoDir}";
       };
 
       # Belt-and-suspenders re-export of NH_FLAKE. programs.nh.flake (above)
@@ -32,7 +36,7 @@ _: {
       # here makes NH_FLAKE immune to a stale session/tmux snapshot.
       programs.zsh.initContent = lib.mkIf config.programs.zsh.enable (
         lib.mkOrder 600 ''
-          export NH_FLAKE="${config.home.homeDirectory}/nixos-config"
+          export NH_FLAKE="${config.home.homeDirectory}/${repoDir}"
         ''
       );
     };

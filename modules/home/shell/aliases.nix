@@ -1,4 +1,8 @@
-_: {
+{ config, ... }:
+let
+  repoDir = config.flake.lib.repoDir;
+in
+{
   flake.modules.homeManager.shell-aliases =
     { lib, pkgs, ... }:
     {
@@ -7,12 +11,8 @@ _: {
         # the host config matching `hostname` (autodiscovered, so no `#name`)
         # and shows a dix diff first. Flake path comes from NH_FLAKE
         # (programs.nh.flake) and nh self-elevates — hence no `--flake`/`sudo`.
-        edit = "cd ~/nixos-config && $EDITOR .";
-        nix-rebuild =
-          if pkgs.stdenv.isDarwin then
-            "nh darwin switch"
-          else
-            "nh os switch";
+        edit = "cd ~/${repoDir} && $EDITOR .";
+        nix-rebuild = if pkgs.stdenv.isDarwin then "nh darwin switch" else "nh os switch";
 
         # Editor shortcut (vim/vi handled by programs.neovim's
         # viAlias/vimAlias options)
@@ -20,9 +20,9 @@ _: {
         v = "nvim";
         vimdiff = "nvim -d";
 
-        # Modern replacements. ls/grep/find/ps are deliberately NOT
-        # aliased — they'd break scripts and pasted commands that expect
-        # coreutils flags.
+        # Modern replacements (interactive shells only — zsh aliases don't
+        # expand in scripts). grep/find/ps/cat are left un-aliased so their
+        # coreutils flags keep working in muscle memory and pasted commands.
         ls = "eza";
         ll = "eza -la";
         la = "eza -a";

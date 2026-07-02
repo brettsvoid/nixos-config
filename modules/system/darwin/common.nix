@@ -8,45 +8,47 @@
 # if needed; the worst case is a one-line config rollback + manual plist
 # restore.
 _: {
-  flake.modules.darwin.common = {
-    nix.settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-      trusted-users = [
-        "@admin"
-        "brett"
-      ];
-    };
-
-    # Garbage collection is handled by `nh clean all` (a strict superset of
-    # nix-collect-garbage — it also prunes stale gcroots / nix-direnv roots)
-    # in modules/system/darwin/nh-gc.nix. Kept out of here so there is a
-    # single GC retention policy on the system profile.
-
-    # Hard-link identical store files to reclaim disk. Weekly, alongside GC.
-    nix.optimise = {
-      automatic = true;
-      interval = {
-        Weekday = 7;
-        Hour = 3;
-        Minute = 45;
+  flake.modules.darwin.common =
+    { flake, ... }:
+    {
+      nix.settings = {
+        experimental-features = [
+          "nix-command"
+          "flakes"
+        ];
+        trusted-users = [
+          "@admin"
+          flake.lib.username
+        ];
       };
+
+      # Garbage collection is handled by `nh clean all` (a strict superset of
+      # nix-collect-garbage — it also prunes stale gcroots / nix-direnv roots)
+      # in modules/system/darwin/nh-gc.nix. Kept out of here so there is a
+      # single GC retention policy on the system profile.
+
+      # Hard-link identical store files to reclaim disk. Weekly, alongside GC.
+      nix.optimise = {
+        automatic = true;
+        interval = {
+          Weekday = 7;
+          Hour = 3;
+          Minute = 45;
+        };
+      };
+
+      programs.zsh.enable = true;
+
+      # nix-darwin requires this. Pinned at first switch; do NOT change.
+      system.stateVersion = 5;
+
+      # Touch ID for sudo.
+      security.pam.services.sudo_local.touchIdAuth = true;
+
+      nixpkgs.config.allowUnfree = true;
+
+      # Required by nix-darwin's user-defaults migration. Identifies which
+      # user owns user-scoped defaults (NSGlobalDomain, finder, dock, etc.).
+      system.primaryUser = flake.lib.username;
     };
-
-    programs.zsh.enable = true;
-
-    # nix-darwin requires this. Pinned at first switch; do NOT change.
-    system.stateVersion = 5;
-
-    # Touch ID for sudo.
-    security.pam.services.sudo_local.touchIdAuth = true;
-
-    nixpkgs.config.allowUnfree = true;
-
-    # Required by nix-darwin's user-defaults migration. Identifies which
-    # user owns user-scoped defaults (NSGlobalDomain, finder, dock, etc.).
-    system.primaryUser = "brett";
-  };
 }

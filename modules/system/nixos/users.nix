@@ -1,9 +1,9 @@
 # Brett's NixOS user account.
 _: {
   flake.modules.nixos.users =
-    { pkgs, ... }:
+    { pkgs, flake, ... }:
     {
-      users.users.brett = {
+      users.users.${flake.lib.username} = {
         isNormalUser = true;
         extraGroups = [
           "wheel"

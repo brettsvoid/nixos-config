@@ -1,6 +1,9 @@
 # Custom Quickshell-based bar with matugen-generated theme. Coexists with
 # ambxst (the prior bar); `toggle-shell` switches between them.
-{ inputs, ... }:
+{ inputs, config, ... }:
+let
+  repoDir = config.flake.lib.repoDir;
+in
 {
   flake.modules.homeManager.desktop-custom-shell =
     { config, pkgs, ... }:
@@ -132,7 +135,7 @@
       '';
 
       qs-dev = pkgs.writeShellScriptBin "qs-dev" ''
-        SHELL_DIR="''${1:-$HOME/nixos-config/modules/home/desktop/quickshell}"
+        SHELL_DIR="''${1:-$HOME/${repoDir}/modules/home/desktop/quickshell}"
         if [ ! -f "$SHELL_DIR/shell.qml" ]; then
           echo "Error: $SHELL_DIR/shell.qml not found"
           exit 1

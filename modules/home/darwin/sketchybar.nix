@@ -12,13 +12,15 @@
 # binary committed here is Mach-O arm64; if you ever need to rebuild:
 #   cd modules/home/darwin/sketchybar/helper && make
 #
-# The daemon is owned by nix-darwin's `services.sketchybar` (enabled in the
-# active window-manager system module); this home module only manages the
-# config tree. Verified single daemon — `launchctl list | grep sketchybar`
-# shows org.nixos.sketchybar, no brew plist.
+# The daemon is enabled only under the yabai window-manager stack
+# (services.sketchybar in modules/system/darwin/window-manager.nix). The active
+# aerospace stack disables it — edgebar (apps/edgebar) replaced it — so there
+# this home module just keeps the config tree live-editable for the yabai A/B
+# and any future re-enable.
 { config, ... }:
 let
   geom = config.flake.lib.barGeometry;
+  repoDir = config.flake.lib.repoDir;
 in
 {
   flake.modules.homeManager.darwin-sketchybar =
@@ -30,7 +32,7 @@ in
     }:
     {
       xdg.configFile."sketchybar".source =
-        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nixos-config/modules/home/darwin/sketchybar";
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/${repoDir}/modules/home/darwin/sketchybar";
 
       # Sourced by sketchybar/config.sh. Kept outside the symlinked sketchybar
       # dir (home-manager can't write into an out-of-store symlink).

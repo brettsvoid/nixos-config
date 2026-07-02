@@ -5,11 +5,15 @@
 # still owns the daemon. nix-darwin's services.yabai is intentionally NOT
 # enabled here — switching the launchd ownership during Phase C is high-risk
 # and the brew binary works fine.
-_: {
+{ config, ... }:
+let
+  repoDir = config.flake.lib.repoDir;
+in
+{
   flake.modules.homeManager.darwin-yabai =
     { config, ... }:
     {
       xdg.configFile."yabai".source =
-        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nixos-config/modules/home/darwin/yabai";
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/${repoDir}/modules/home/darwin/yabai";
     };
 }

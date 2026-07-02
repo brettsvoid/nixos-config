@@ -6,7 +6,11 @@
 # path). Editing a .lua file in the repo updates nvim immediately; no rebuild
 # needed. lazy-lock.json is one such managed child, so `:Lazy update` writes
 # the pinned commits straight back into the repo.
-_: {
+{ config, ... }:
+let
+  repoDir = config.flake.lib.repoDir;
+in
+{
   flake.modules.homeManager.nvim =
     {
       config,
@@ -15,7 +19,7 @@ _: {
       ...
     }:
     let
-      configRoot = "${config.home.homeDirectory}/nixos-config/modules/home/nvim/config";
+      configRoot = "${config.home.homeDirectory}/${repoDir}/modules/home/nvim/config";
 
       # Treesitter parsers, version-locked to this flake's nixpkgs instead of
       # compiled at runtime by `:TSUpdate`. Each nvim-treesitter-parsers.<lang>

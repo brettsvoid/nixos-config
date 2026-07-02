@@ -8,11 +8,13 @@
 # - "SSH ID @brettsvoid" is the mobile key from https://sshid.io/brettsvoid.
 _:
 let
-  shared = {
-    users.users.brett.openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHR5ymoo2RDbdGoOktlNbJfw2VW1VEgNXbie7TFWnKi9 SSH ID @brettsvoid"
-    ];
-  };
+  shared =
+    { flake, ... }:
+    {
+      users.users.${flake.lib.username}.openssh.authorizedKeys.keys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHR5ymoo2RDbdGoOktlNbJfw2VW1VEgNXbie7TFWnKi9 SSH ID @brettsvoid"
+      ];
+    };
 in
 {
   flake.modules.darwin.openssh = shared;
