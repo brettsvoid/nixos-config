@@ -55,7 +55,6 @@ return {
 		default_format_opts = {
 			lsp_format = "fallback",
 		},
-		-- Define formatters by filetype
 		formatters_by_ft = {
 			bash = { "shfmt" },
 			lua = { "stylua" },
@@ -70,20 +69,7 @@ return {
 			hcl = { "terragrunt_hclfmt" },
 			terraform = { "terraform_fmt" },
 
-			-- You can use a sub-list to tell conform to run *until* a formatter
-			-- is found.
-			-- css = { "prettierd", "prettier", stop_after_first = true },
-			-- html = { "prettierd", "prettier", stop_after_first = true },
-			-- javascript = { "prettierd", "prettier", stop_after_first = true },
-			-- javascriptreact = { "prettierd", "prettier", stop_after_first = true },
-			-- json = { "prettierd", "prettier", stop_after_first = true },
-			-- jsonc = { "prettierd", "prettier", stop_after_first = true },
-			-- markdown = { "prettierd", "prettier", stop_after_first = true },
-			-- scss = { "prettierd", "prettier", stop_after_first = true },
-			-- typescript = { "prettierd", "prettier", stop_after_first = true },
-			-- typescriptreact = { "prettierd", "prettier", stop_after_first = true },
-			-- yaml = { "prettierd", "prettier", stop_after_first = true },
-			-- Dynamic Biome/Prettier selection based on project config
+			-- Biome if biome.json is present, else Prettier (see get_web_formatter).
 			javascript = get_web_formatter,
 			javascriptreact = get_web_formatter,
 			typescript = get_web_formatter,

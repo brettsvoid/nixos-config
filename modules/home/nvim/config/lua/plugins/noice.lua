@@ -46,7 +46,7 @@ return {
 			},
 		},
 	},
-	config = function(opts)
+	config = function(_, opts)
 		local noice = require("noice")
 		local lualine = require("lualine")
 

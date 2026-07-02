@@ -40,7 +40,6 @@ return {
 			},
 		},
 		spec = {
-			{ "<leader>a", group = "[A]vante" },
 			{ "<leader>c", group = "[C]ode" },
 			{ "<leader>d", group = "[D]ocument" },
 			{ "<leader>h", group = "[H]arpoon" },

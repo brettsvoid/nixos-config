@@ -20,13 +20,14 @@ return {
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",
-		"nvim-telescope/telescope.nvim",
+		"ibhagwan/fzf-lua",
 		"nvim-treesitter",
 	},
 	opts = {
 		new_notes_location = ".notes_subdir",
 		notes_subdir = ".inbox",
 		ui = { enable = false },
+		picker = { name = "fzf-lua" },
 		workspaces = {
 			{
 				name = "personal",

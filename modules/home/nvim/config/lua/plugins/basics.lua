@@ -2,8 +2,7 @@ return {
   -- Detect tabstop and shiftwidth automatically
   'tpope/vim-sleuth',
 
-  -- tmux & split window navigation
-  'christoomey/vim-tmux-navigator',
+  -- vim-tmux-navigator lives in its own file (lazy-loaded on keys/cmd).
 
   -- replace with register contents using motion (gr + motion)
   --'inkarkat/vim-ReplaceWithRegister',

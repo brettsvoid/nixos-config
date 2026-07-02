@@ -1,6 +1,6 @@
 return {
 	on_attach = function(client)
-		-- Using different formatter (ruff_format)
+		-- Formatting is owned by conform (isort + black)
 		client.server_capabilities.documentFormattingProvider = false
 		client.server_capabilities.documentRangeFormattingProvider = false
 	end,

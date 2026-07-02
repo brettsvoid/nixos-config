@@ -5,17 +5,8 @@ return {
   config = function()
     local neocodeium = require 'neocodeium'
     neocodeium.setup {
-      manual = true, -- recommended to not conflict with nvim-cmp
+      manual = true,
     }
-
-    -- create an autocommand which closes cmp when ai completions are displayed
-    vim.api.nvim_create_autocmd('User', {
-      pattern = 'NeoCodeiumCompletionDisplayed',
-      callback = function()
-        -- Disable default completion
-        --require('cmp').abort()
-      end,
-    })
 
     -- make sure to have a mapping to accept a completion
     vim.keymap.set('i', '<M-f>', function()

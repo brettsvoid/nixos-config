@@ -8,7 +8,6 @@ vim.loader.enable()
 -- line numbers
 -- shows absolute line number on cursor line (when relative number is on)
 vim.opt.number = true
--- show relative line numbers
 vim.opt.relativenumber = true
 
 -- don't show the mode, since it's already in the status line
@@ -39,8 +38,7 @@ vim.opt.smartcase = true -- if you include mixed case in your search, assumes yo
 vim.opt.scrolloff = 8
 vim.opt.isfname:append("@-@")
 
--- cursor line
-vim.opt.cursorline = true -- highlight the current cursor line
+vim.opt.cursorline = true
 
 -- updatetime
 -- the length of time that vim waits before updating the swapfile
@@ -57,7 +55,6 @@ vim.opt.inccommand = "split"
 vim.opt.hlsearch = false
 vim.opt.incsearch = true
 
--- turn on termguicolors for 24-bit color
 vim.opt.termguicolors = true
 vim.opt.signcolumn = "yes" -- show sign column so that text doesn't shift
 
@@ -75,16 +72,9 @@ vim.opt.backspace = "indent,eol,start" -- allow backspace on indent, end of line
 
 -- split windows
 vim.opt.splitright = true -- split vertical window to the right
---opt.splitbelow = true -- split horizontal window to the bottom
-
--- colorcolumn
---vim.opt.colorcolumn = '80'
 
 -- avoid showing extra completion messages (blink.cmp manages completeopt itself)
 vim.opt.shortmess = vim.opt.shortmess + { c = true }
-
--- When pressing `p`, clipboard will be pasted
---vim.opt.clipboard = 'unnamedplus'
 
 -- Make sure sessionoptions contains localoptions so that filetype and highlighting work correctly after a session is restores
 -- Suggested by rmagatti/auto-session

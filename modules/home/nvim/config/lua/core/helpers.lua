@@ -1,8 +1,7 @@
-function SearchQuickfixFiles()
-  local qflist = vim.fn.getqflist()
+-- Live-grep across only the files currently in the quickfix list.
+local function search_quickfix_files()
   local files = {}
-
-  for _, item in ipairs(qflist) do
+  for _, item in ipairs(vim.fn.getqflist()) do
     local filepath = vim.fn.bufname(item.bufnr)
     if filepath ~= '' then
       local abs_path = vim.fn.fnamemodify(filepath, ':p')
@@ -12,66 +11,50 @@ function SearchQuickfixFiles()
     end
   end
 
-  -- files = vim.fn.uniq(files)
-  -- require('telescope.builtin').live_grep { search_dirs = files }
-
-  -- Remove duplicates manually to avoid type issues with vim.fn.uniq
+  -- Dedupe manually (vim.fn.uniq has type quirks with this list).
   local unique_files = {}
-  local hash = {}
-
+  local seen = {}
   for _, file in ipairs(files) do
-    if not hash[file] then
+    if not seen[file] then
       unique_files[#unique_files + 1] = file
-      hash[file] = true
+      seen[file] = true
     end
   end
 
   if #unique_files > 0 then
-    require('telescope.builtin').live_grep { search_dirs = unique_files }
+    require('fzf-lua').live_grep { search_paths = unique_files }
   else
     print 'No valid files found in the quickfix list'
   end
 end
 
--- Create a Vim command to run the Lua function
-vim.api.nvim_create_user_command('SearchQuickfixFiles', function()
-  SearchQuickfixFiles()
-end, {})
+vim.api.nvim_create_user_command('SearchQuickfixFiles', search_quickfix_files, {})
 
--- Highlight when yanking text
--- Try it with `yap` in normal mode
--- See `:help vim.hightlight.on_yank()`
+-- Highlight yanked text. Try it with `yap`. See :help vim.highlight.on_yank()
 vim.api.nvim_create_autocmd('TextYankPost', {
-  desc = 'Highlight when yangking text',
+  desc = 'Highlight when yanking text',
   group = vim.api.nvim_create_augroup('highlight-yank', { clear = true }),
   callback = function()
     vim.highlight.on_yank()
   end,
 })
 
--- One way to show unsaved buffers
-function OpenUnsavedBuffers()
-  local buffers = vim.api.nvim_list_bufs()
-  local unsaved_buffers = {}
-
+-- Open each unsaved buffer in its own tab.
+local function open_unsaved_buffers()
+  local unsaved = {}
   local original_bufnr = vim.api.nvim_get_current_buf()
 
-  for _, bufnr in ipairs(buffers) do
-    --local is_saved = vim.api.nvim_buf_get_option(bufnr, 'modified')
-    local is_saved = vim.api.nvim_get_option_value('modified', { buf = bufnr })
-
-    if is_saved and bufnr ~= original_bufnr then
-      local bufname = vim.api.nvim_buf_get_name(bufnr)
-
-      table.insert(unsaved_buffers, bufnr)
-
-      vim.cmd('tabnew ' .. bufname)
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    local modified = vim.api.nvim_get_option_value('modified', { buf = bufnr })
+    if modified and bufnr ~= original_bufnr then
+      table.insert(unsaved, bufnr)
+      vim.cmd('tabnew ' .. vim.api.nvim_buf_get_name(bufnr))
     end
   end
 
-  if #unsaved_buffers > 0 then
-    vim.notify('Opened ' .. #unsaved_buffers .. ' unsaved buffers')
+  if #unsaved > 0 then
+    vim.notify('Opened ' .. #unsaved .. ' unsaved buffers')
   end
 end
 
-vim.api.nvim_create_user_command('OpenUnsavedBuffers', OpenUnsavedBuffers, {})
+vim.api.nvim_create_user_command('OpenUnsavedBuffers', open_unsaved_buffers, {})

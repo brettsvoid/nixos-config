@@ -79,5 +79,17 @@ return {
 		{ "<leader>sd", "<cmd>FzfLua diagnostics_workspace<cr>", desc = "[S]earch [D]iagnostics" },
 		{ "<leader>sr", "<cmd>FzfLua resume<cr>", desc = "[S]earch [R]esume" },
 		{ "<leader>s.", "<cmd>FzfLua oldfiles<cr>", desc = '[S]earch Recent Files ("." for repeat)' },
+
+		-- Ported from the retired telescope config.
+		{ "<leader><leader>", "<cmd>FzfLua buffers<cr>", desc = "[ ] Find existing buffers" },
+		{ "<leader>/", "<cmd>FzfLua blines<cr>", desc = "[/] Fuzzily search in current buffer" },
+		{ "<leader>s/", "<cmd>FzfLua lines<cr>", desc = "[S]earch [/] in Open Files" },
+		{
+			"<leader>sn",
+			function()
+				require("fzf-lua").files({ cwd = vim.fn.stdpath("config") })
+			end,
+			desc = "[S]earch [N]eovim files",
+		},
 	},
 }
