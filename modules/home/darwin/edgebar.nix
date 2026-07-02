@@ -17,6 +17,7 @@
 { config, lib, ... }:
 let
   geom = config.flake.lib.barGeometry;
+  wp = config.flake.lib.wallpaper;
   defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
   rendered = defaults // {
     geometry = defaults.geometry // {
@@ -29,10 +30,14 @@ let
 in
 {
   flake.modules.homeManager.darwin-edgebar =
-    { config, pkgs, lib, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     let
-      # Default wallpaper kept in sync with darwin/wallpaper.nix.
-      defaultWallpaper = "$HOME/Pictures/Wallpapers/chisato_petals_of_silence_4k.jpg";
+      defaultWallpaper = "$HOME/${wp.dir}/${wp.default}";
       generate-edgebar-theme = pkgs.writeShellScriptBin "generate-edgebar-theme" ''
         CONFIG_DIR="${matugenDir}"
         # Scheme: explicit --scheme arg > the persisted choice (select-scheme) >

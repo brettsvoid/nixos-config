@@ -1,7 +1,10 @@
-_: {
+{ config, ... }:
+let
+  theme = config.flake.lib.theme;
+in
+{
   flake.modules.homeManager.terminals-kitty =
     {
-      config,
       lib,
       pkgs,
       ...
@@ -9,11 +12,10 @@ _: {
     let
       terminal = {
         font = {
-          family = "FiraCode Nerd Font Mono";
-          size = 13;
+          family = theme.font.mono;
+          inherit (theme.font) size;
         };
-        opacity = 0.95;
-        padding = 8;
+        inherit (theme.terminal) opacity padding;
         margin = 8;
         scrollback = 4000;
       };

@@ -7,7 +7,11 @@
 # requires that one to be imported alongside it (done in the host's imports).
 # Pointing at the home copy rather than a /nix/store path keeps the wallpaper
 # stable across GC and visible in Finder.
-_: {
+{ config, ... }:
+let
+  wp = config.flake.lib.wallpaper;
+in
+{
   flake.modules.homeManager.darwin-wallpaper =
     {
       config,
@@ -22,7 +26,7 @@ _: {
       # the wallpaper file (linked by desktop-wallpapers) exists first.
       home.activation.setWallpaper = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         run ${pkgs.desktoppr}/bin/desktoppr all \
-          "${config.home.homeDirectory}/Pictures/Wallpapers/chisato_petals_of_silence_4k.jpg" || true
+          "${config.home.homeDirectory}/${wp.dir}/${wp.default}" || true
       '';
     };
 }

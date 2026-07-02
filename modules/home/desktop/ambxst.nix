@@ -1,4 +1,8 @@
-_: {
+{ config, ... }:
+let
+  wp = config.flake.lib.wallpaper;
+in
+{
   flake.modules.homeManager.desktop-ambxst =
     { config, pkgs, ... }:
     let
@@ -19,7 +23,7 @@ _: {
         WALLPAPERS_JSON="${cacheDir}/wallpapers.json"
         NEW_PATH="$(readlink -f "${config.home.homeDirectory}/Pictures/Wallpapers")"
 
-        DEFAULT_WALL="$NEW_PATH/chisato_petals_of_silence_4k.jpg"
+        DEFAULT_WALL="$NEW_PATH/${wp.default}"
 
         if [ -f "$WALLPAPERS_JSON" ]; then
           ${jq} --arg p "$NEW_PATH" --arg w "$DEFAULT_WALL" '

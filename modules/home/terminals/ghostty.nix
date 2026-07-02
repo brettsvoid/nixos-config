@@ -4,10 +4,13 @@
 # On Darwin the package install is skipped — nixpkgs.ghostty currently
 # blocks aarch64-darwin, so we let the homebrew cask own the binary and
 # nix only manages the config file.
-_: {
+{ config, ... }:
+let
+  theme = config.flake.lib.theme;
+in
+{
   flake.modules.homeManager.terminals-ghostty =
     {
-      config,
       lib,
       pkgs,
       ...
@@ -15,11 +18,10 @@ _: {
     let
       terminal = {
         font = {
-          family = "FiraCode Nerd Font Mono";
-          size = 13;
+          family = theme.font.mono;
+          inherit (theme.font) size;
         };
-        opacity = 0.95;
-        padding = 8;
+        inherit (theme.terminal) opacity padding;
         scrollback = 10000;
       };
     in

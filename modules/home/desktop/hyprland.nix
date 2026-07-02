@@ -1,6 +1,12 @@
-_: {
+{ config, lib, ... }:
+let
+  mocha = config.flake.lib.theme.catppuccin.mocha;
+  # hyprland colours are rgba(RRGGBBAA) with no leading '#'.
+  rgba = role: alpha: "rgba(${lib.removePrefix "#" role}${alpha})";
+in
+{
   flake.modules.homeManager.desktop-hyprland =
-    { config, pkgs, ... }:
+    { pkgs, ... }:
     let
       hypr-cheatsheet = pkgs.writeShellScriptBin "hypr-cheatsheet" ''
         hyprctl binds -j | ${pkgs.jq}/bin/jq -r '
@@ -135,8 +141,8 @@ _: {
             gaps_in = 4;
             gaps_out = 8;
             border_size = 2;
-            "col.active_border" = "rgba(cba6f7ff) rgba(89b4faff) 45deg"; # mauve → blue
-            "col.inactive_border" = "rgba(313244ff)"; # surface0
+            "col.active_border" = "${rgba mocha.mauve "ff"} ${rgba mocha.blue "ff"} 45deg";
+            "col.inactive_border" = rgba mocha.surface0 "ff";
           };
 
           decoration = {
@@ -147,7 +153,7 @@ _: {
               enabled = true;
               range = 8;
               render_power = 2;
-              color = "rgba(1e1e2eee)";
+              color = rgba mocha.base "ee";
             };
             blur = {
               enabled = true;
