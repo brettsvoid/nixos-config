@@ -81,7 +81,9 @@ const LAYOUT = {
   popupTuck: -8, // px a dropdown starts tucked up (hidden) before sliding in
   settleDelay: 600, // ms to let the reveal spring settle before hit-testing
 } as const;
-const FALLBACK = { pillHeight: 30, windowHeight: 64 } as const; // if get_config fails
+const FALLBACK = { pillHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
+// Interactive-rect sentinel: the whole window is hit-testable while a panel is open.
+const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
 // Pull the shared config (same one the native frame uses) and apply it as CSS
 // variables, then start the bar. styles.css keeps matching defaults as fallback.
@@ -209,7 +211,7 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
       rectsScheduled = false;
       const rects =
         openPanels.size > 0
-          ? [[0, 0, 1e5, 1e5]]
+          ? [RECT_WHOLE_WINDOW]
           : pills
               .map((p) => {
                 const r = p.getBoundingClientRect();

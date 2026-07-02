@@ -28,7 +28,7 @@
   /* ---- geometry (defaults; overridden from config.json at runtime) ---- */
   --bezel-thickness: 0px;
   --bezel-line-thickness: 4px; /* matches native frame LINE */
-  --pill-h: 30px;
+  --pill-h: 32px;
   --pill-radius: 16px; /* rounded bottom of each pill */
   --concave: 16px; /* radius of the concave fillets flanking each pill */
   --window-h: 64px; /* webview window height (geometry.windowHeight) */

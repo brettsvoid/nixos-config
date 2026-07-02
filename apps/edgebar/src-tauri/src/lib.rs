@@ -376,8 +376,13 @@ fn reload_theme(app: &tauri::AppHandle) {
 
 /// "#rrggbb" or "#rrggbbaa" -> [r, g, b, a] in 0..1 (defaults to opaque black).
 fn hex_to_rgba(hex: &str) -> [f64; 4] {
-    let h = hex.trim().trim_start_matches('#');
-    let byte = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).map(|v| v as f64 / 255.0);
+    // Operate on bytes: a multi-byte char in a hand-edited config.json color
+    // would panic a str byte-slice on a non-char-boundary.
+    let h = hex.trim().trim_start_matches('#').as_bytes();
+    let byte = |i: usize| -> Option<f64> {
+        let pair = std::str::from_utf8(h.get(i..i + 2)?).ok()?;
+        u8::from_str_radix(pair, 16).ok().map(|v| v as f64 / 255.0)
+    };
     if h.len() >= 6 {
         let a = if h.len() >= 8 { byte(6).unwrap_or(1.0) } else { 1.0 };
         [
@@ -694,10 +699,17 @@ fn create_native_frame(geometry: &Geometry, frame_line: &str, frame_corner: &str
     // tao sets always-on-top windows (the bar) to kCGFloatingWindowLevelKey (the
     // key value 5), not the real NSFloatingWindowLevel (3) — so the bar sits at
     // level 5. Put the frame just above it so the edge line renders over the pills.
-    window.setLevel(6);
+    const FRAME_WINDOW_LEVEL: isize = 6;
+    window.setLevel(FRAME_WINDOW_LEVEL);
     window.setIgnoresMouseEvents(true);
-    // CanJoinAllSpaces | Stationary | IgnoresCycle | FullScreenAuxiliary
-    window.setCollectionBehavior(NSWindowCollectionBehavior(1 | (1 << 4) | (1 << 6) | (1 << 8)));
+    // Same collection behavior as the bar (see make_overlay).
+    const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
+    const STATIONARY: usize = 1 << 4;
+    const IGNORES_CYCLE: usize = 1 << 6;
+    const FULLSCREEN_AUXILIARY: usize = 1 << 8;
+    window.setCollectionBehavior(NSWindowCollectionBehavior(
+        CAN_JOIN_ALL_SPACES | STATIONARY | IGNORES_CYCLE | FULLSCREEN_AUXILIARY,
+    ));
     unsafe { window.setReleasedWhenClosed(false) };
 
     let Some(view) = window.contentView() else {
@@ -1149,34 +1161,39 @@ fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
     Some(url)
 }
 
+// Runs `sips` per uncached thumbnail, so it goes through `spawn_blocking` off the
+// main thread; the AppState is re-fetched inside the closure from the AppHandle.
 #[tauri::command]
-fn list_wallpapers(state: tauri::State<AppState>) -> Vec<Wallpaper> {
-    let Some(dir) = wallpapers_dir() else {
-        return Vec::new();
-    };
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-    let mut paths: Vec<std::path::PathBuf> = entries
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| is_image(p))
-        .collect();
-    paths.sort();
-    paths
-        .into_iter()
-        .filter_map(|p| {
-            let path = p.to_str()?.to_string();
-            let name = p.file_name()?.to_str()?.to_string();
-            let thumb = wallpaper_thumb(&state, &path).unwrap_or_default();
-            Some(Wallpaper { name, path, thumb })
-        })
-        .collect()
+async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let Some(dir) = wallpapers_dir() else {
+            return Vec::new();
+        };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let mut paths: Vec<std::path::PathBuf> = entries
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| is_image(p))
+            .collect();
+        paths.sort();
+        paths
+            .into_iter()
+            .filter_map(|p| {
+                let path = p.to_str()?.to_string();
+                let name = p.file_name()?.to_str()?.to_string();
+                let thumb = wallpaper_thumb(&state, &path).unwrap_or_default();
+                Some(Wallpaper { name, path, thumb })
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
 }
 
-/// The current desktop picture (first display) — to highlight the active thumb.
-#[tauri::command]
-fn current_wallpaper(state: tauri::State<Mutex<ThemeState>>) -> String {
-    let cmd = state.lock().unwrap().wallpaper_command.clone();
+/// Runs the wallpaper command and returns the first display's picture path.
+fn query_current_wallpaper(cmd: &str) -> String {
     std::process::Command::new(cmd)
         .output()
         .ok()
@@ -1189,6 +1206,22 @@ fn current_wallpaper(state: tauri::State<Mutex<ThemeState>>) -> String {
                 .to_string()
         })
         .unwrap_or_default()
+}
+
+/// The current desktop picture (first display) — to highlight the active thumb.
+#[tauri::command]
+async fn current_wallpaper(app: tauri::AppHandle) -> String {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cmd = app
+            .state::<Mutex<ThemeState>>()
+            .lock()
+            .unwrap()
+            .wallpaper_command
+            .clone();
+        query_current_wallpaper(&cmd)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 /// Touch a marker whose mtime tells the launchd watcher an in-app change just
@@ -1303,11 +1336,18 @@ fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, 
 
 /// Open a Finder file picker (owned by osascript, so the accessory app's no-focus
 /// policy doesn't block it) and return the chosen image path, or None on cancel.
+// Blocks until the user dismisses the Finder dialog, so it runs off the main
+// thread via `spawn_blocking` — otherwise the bar freezes while the dialog is up.
 #[tauri::command]
-fn pick_wallpaper_file() -> Option<String> {
-    let path = run_osa(
-        "POSIX path of (choose file with prompt \"Choose a wallpaper\" of type {\"public.image\"})",
-    )?;
+async fn pick_wallpaper_file() -> Option<String> {
+    let path = tauri::async_runtime::spawn_blocking(|| {
+        run_osa(
+            "POSIX path of (choose file with prompt \"Choose a wallpaper\" of type {\"public.image\"})",
+        )
+    })
+    .await
+    .ok()
+    .flatten()?;
     if path.is_empty() {
         None
     } else {
@@ -1318,38 +1358,33 @@ fn pick_wallpaper_file() -> Option<String> {
 /// Set the matugen scheme: re-theme the current wallpaper with it now, and
 /// precompute the rest in the background so subsequent picks stay instant.
 #[tauri::command]
-fn set_scheme(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, scheme: String) {
-    persist_scheme(&scheme);
-    let (theme_cmd, current) = {
-        let ts = state.lock().unwrap();
-        let cur = std::process::Command::new(&ts.wallpaper_command)
-            .output()
-            .ok()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .next()
-                    .unwrap_or("")
-                    .trim()
-                    .to_string()
-            })
-            .unwrap_or_default();
-        (ts.theme_command.clone(), cur)
-    };
-    spawn_precompute(theme_cmd.clone(), scheme.clone());
-    // re-theme the current wallpaper now (cache is cold for the new scheme, so
-    // this usually generates once; precompute warms the rest in the background)
-    if !current.is_empty() {
-        if let Some(cache) = palette_cache_path(&current, &scheme) {
-            if cache.exists() && install_palette(&cache) {
-                reload_theme(&app);
-                return;
+async fn set_scheme(app: tauri::AppHandle, scheme: String) {
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        persist_scheme(&scheme);
+        // Clone the commands out and drop the guard before shelling out, so the
+        // ThemeState lock isn't held across the wallpaper subprocess.
+        let (wallpaper_cmd, theme_cmd) = {
+            let state = app.state::<Mutex<ThemeState>>();
+            let ts = state.lock().unwrap();
+            (ts.wallpaper_command.clone(), ts.theme_command.clone())
+        };
+        let current = query_current_wallpaper(&wallpaper_cmd);
+        spawn_precompute(theme_cmd.clone(), scheme.clone());
+        // re-theme the current wallpaper now (cache is cold for the new scheme, so
+        // this usually generates once; precompute warms the rest in the background)
+        if !current.is_empty() {
+            if let Some(cache) = palette_cache_path(&current, &scheme) {
+                if cache.exists() && install_palette(&cache) {
+                    reload_theme(&app);
+                    return;
+                }
             }
+            let _ = std::process::Command::new(&theme_cmd).arg(&current).spawn();
+        } else {
+            let _ = std::process::Command::new(&theme_cmd).spawn();
         }
-        let _ = std::process::Command::new(&theme_cmd).arg(&current).spawn();
-    } else {
-        let _ = std::process::Command::new(&theme_cmd).spawn();
-    }
+    })
+    .await;
 }
 
 // ───────────────────────── shared app state ─────────────────────────
@@ -1466,10 +1501,17 @@ fn sample_metrics(sys: &mut sysinfo::System) -> Metrics {
     }
 }
 
+// Disks::new_with_refreshed_list() rescans all mounts, so sample off the main
+// thread — this ticks every 2s while the notch is open.
 #[tauri::command]
-fn metrics_sample(state: tauri::State<AppState>) -> Metrics {
-    let mut sys = state.sys.lock().unwrap();
-    sample_metrics(&mut sys)
+async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut sys = state.sys.lock().unwrap();
+        sample_metrics(&mut sys)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 // ───────────────────────── volume / mic (osascript) ─────────────────
@@ -1590,7 +1632,8 @@ fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 struct FrontIvars {
-    app: tauri::AppHandle,
+    // A ping to the debounced worker; the worker owns the AppHandle.
+    tx: std::sync::mpsc::Sender<()>,
 }
 
 #[cfg(target_os = "macos")]
@@ -1608,13 +1651,10 @@ objc2::define_class!(
     impl FrontAppObserver {
         #[unsafe(method(appActivated:))]
         fn app_activated(&self, _notification: *mut objc2::runtime::AnyObject) {
-            // The callback runs on the main thread; query_workspaces shells out to
-            // AeroSpace, so do the work off-thread (it hops back to the main thread
-            // only for icon resolution) to avoid beach-balling the UI.
-            let app = self.ivars().app.clone();
-            std::thread::spawn(move || {
-                let _ = app.emit("workspaces", workspaces_with_icons(&app));
-            });
+            // Runs on the main thread. Just ping the worker: it collapses a burst
+            // (rapid cmd-tab) into one AeroSpace query, so activations can't spawn
+            // racing threads whose out-of-order emits leave stale dot state.
+            let _ = self.ivars().tx.send(());
         }
     }
 
@@ -1627,7 +1667,20 @@ fn install_front_app_observer(app: tauri::AppHandle) {
     use objc2::{msg_send, sel, AllocAnyThread};
     use objc2_app_kit::{NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
 
-    let observer = FrontAppObserver::alloc().set_ivars(FrontIvars { app });
+    // Single worker: collapse a burst of activations into one AeroSpace query +
+    // emit. query_workspaces shells out, so it never runs on the main thread.
+    // Mirrors install_network_observer's debounce.
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let worker_app = app;
+    std::thread::spawn(move || {
+        while rx.recv().is_ok() {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            while rx.try_recv().is_ok() {}
+            let _ = worker_app.emit("workspaces", workspaces_with_icons(&worker_app));
+        }
+    });
+
+    let observer = FrontAppObserver::alloc().set_ivars(FrontIvars { tx });
     let observer: Retained<FrontAppObserver> = unsafe { msg_send![super(observer), init] };
 
     let center = NSWorkspace::sharedWorkspace().notificationCenter();
@@ -1757,7 +1810,6 @@ fn install_network_observer(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             aerospace_workspaces,
             aerospace_focus,
