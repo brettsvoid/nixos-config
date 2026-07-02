@@ -12,23 +12,32 @@ title = "brettsvoid/nixos-config"
 [extend]
 useDefault = true
 
-# ─── Allowlist: legitimate nix-shaped strings ─────────────────────────────
-# These look high-entropy but are public-by-design.
+# ─── Allowlist: distinctive nix-shaped strings (safe everywhere) ──────────
+# These carry a distinctive prefix (/nix/store/, sha256-, ssh-ed25519 …) so
+# allowlisting them repo-wide can't mask an unrelated secret.
 [[allowlists]]
-description = "nix store hashes / narHashes / public keys"
+description = "nix store paths / narHashes / SSH public keys"
 regexes = [
   # nix store paths (32-char base32 hash + name)
   '''/nix/store/[0-9a-z]{32}-[A-Za-z0-9._+\-]+''',
-  # narHash format: sha256-<base64>= or sha256:<hex>
+  # narHash / SRI format: sha256-<base64>= or sha256:<hex>
   '''sha256[-:][A-Za-z0-9+/=]{43,}=?''',
   '''sha512[-:][A-Za-z0-9+/=]{86,}=?''',
   # ssh-ed25519 / ssh-rsa public keys (signature-shaped but public)
   '''ssh-(rsa|ed25519|ecdsa-sha2-nistp[0-9]+) +AAAA[A-Za-z0-9+/=]+''',
-  # PGP fingerprints (16 or 40 hex chars in PGP context)
-  '''[0-9A-F]{40}''',
-  # Git commit SHAs in flake.lock / commit messages
-  '''[0-9a-f]{40}''',
-  # Generic 32-char base32 (very common in nix)
+]
+
+# ─── Allowlist: bare hex/base32 hashes — ONLY inside lock files ───────────
+# These regexes are broad enough to shadow real 40-hex / 32-char secrets, so
+# `condition = "AND"` requires BOTH a regex match AND a lock-file path. Without
+# it, gitleaks ORs the two and the regexes would suppress secrets repo-wide.
+[[allowlists]]
+description = "bare commit SHAs / PGP fingerprints / base32 hashes in lock files"
+condition = "AND"
+regexes = [
+  # 40-hex: git commit SHAs (flake.lock) and PGP fingerprints
+  '''[0-9A-Fa-f]{40}''',
+  # generic 32-char base32 (nix store hash without the /nix/store/ prefix)
   '''(?i)\b[a-z0-9]{32}\b''',
 ]
 paths = [
@@ -44,8 +53,6 @@ paths = [
   '''.*/secrets\.nix$''',
   # nvim plugin lockfiles
   '''lazy-lock\.json$''',
-  # GitHub workflows reference run-tokens but those are ephemeral
-  '''\.github/workflows/.*\.yml$''',
 ]
 
 # ─── Custom rules: catch things the default misses ────────────────────────

@@ -13,6 +13,9 @@ _: {
       enable = true;
       settings = {
         PasswordAuthentication = false;
+        # NixOS runs sshd with UsePAM yes, where keyboard-interactive would
+        # otherwise still accept the account password. Close that path too.
+        KbdInteractiveAuthentication = false;
         PermitRootLogin = "no";
       };
     };
