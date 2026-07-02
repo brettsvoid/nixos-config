@@ -92,7 +92,7 @@ Each host needs a unique SSH host key (used by agenix as the decryption identity
    age.secrets.my-new-secret.file = "${inputs.secrets}/my-new-secret.age";
    age.secrets.my-new-secret.path = "/etc/my-secret";   # where it gets decrypted to
    ```
-4. Push both repos. Run `rebuild` on the affected host(s).
+4. Push both repos. Run `nix-rebuild` on the affected host(s).
 
 ## Things that must NEVER be committed to the public repo
 

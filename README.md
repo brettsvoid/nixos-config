@@ -18,13 +18,15 @@ pattern](https://github.com/mightyiam/dendritic) (flake-parts + import-tree).
 ```
 flake.nix                  # inputs + flake-parts + import-tree
 modules/
-  flake/                   # flake-parts wiring (parts, systems, formatter, hooks, agenix)
+  flake/                   # flake-parts wiring (parts, systems, formatter, hooks, agenix, lib)
   system/{nixos,darwin}/   # platform-specific composables
   home/                    # cross-platform home-manager modules
   profiles/                # opt-in module bundles (code, work, gaming)
   hosts/                   # one file per machine
+apps/edgebar/              # Tauri overlay status bar (macOS), replaces sketchybar
 hardware/                  # nixos-generate-config output, per host
 docs/SECRETS.md            # secrets architecture & operational guide
+docs/bar-spec.md           # shared edgebar ⇄ quickshell design spec
 .gitleaks.toml             # secret-scanner config
 .semgrep.yml               # custom static-analysis rules
 ```
@@ -32,7 +34,7 @@ docs/SECRETS.md            # secrets architecture & operational guide
 ## Daily use
 
 ```sh
-nix-rebuild       # alias: nixos-rebuild / darwin-rebuild for the current host
+nix-rebuild       # nh os/darwin switch for the current host (diff, then activate)
 edit              # cd ~/nixos-config && $EDITOR .
 ```
 
