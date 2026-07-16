@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["bar"],
+  "description": "Capability for the per-monitor bar windows",
+  "windows": ["bar", "bar-*"],
   "permissions": [
     "core:default"
   ]

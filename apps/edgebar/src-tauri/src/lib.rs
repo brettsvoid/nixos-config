@@ -14,7 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize};
+use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
 /// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
@@ -449,19 +449,47 @@ fn parse_win(line: &str) -> Option<(String, WinRef)> {
     Some((ws, WinRef { app, bundle_id }))
 }
 
-/// Run the AeroSpace CLI and return non-empty, trimmed stdout lines.
+/// Run the AeroSpace CLI and return non-empty, trimmed stdout lines. Capped at
+/// 5s: a wedged server otherwise blocks the caller forever (observed in the
+/// wild — a hung `list-workspaces` froze the ws.sock loop for days and piled
+/// its pending pings into the listen backlog). On timeout the child is killed
+/// and the query degrades to "no output".
 fn aerospace(args: &[&str]) -> Vec<String> {
-    std::process::Command::new("aerospace")
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    let Ok(mut child) = Command::new("aerospace")
         .args(args)
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
-                .collect()
-        })
-        .unwrap_or_default()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return Vec::new();
+    };
+    // Drain stdout on a side thread so a full pipe can't wedge the child, and
+    // so the deadline can be enforced from here. kill() forces the pipe to EOF,
+    // which unblocks the reader; the second recv then returns what was read.
+    let mut stdout = child.stdout.take();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(out) = stdout.as_mut() {
+            let _ = out.read_to_string(&mut text);
+        }
+        let _ = tx.send(text);
+    });
+    let text = match rx.recv_timeout(std::time::Duration::from_secs(5)) {
+        Ok(text) => text,
+        Err(_) => {
+            let _ = child.kill();
+            rx.recv().unwrap_or_default()
+        }
+    };
+    let _ = child.wait();
+    text.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
 }
 
 /// Query AeroSpace for all workspaces with focused + occupied state.
@@ -563,6 +591,11 @@ fn make_overlay(window: &tauri::WebviewWindow) {
     }
 }
 
+/// Interactive rects per bar window (WebView CSS px, top-left origin), keyed by
+/// window label. Written by each bar's WebView via `set_interactive_rects`,
+/// read by the shared cursor monitors.
+type RectMap = std::sync::Arc<Mutex<std::collections::HashMap<String, Vec<[f64; 4]>>>>;
+
 // ───────────────────────── click-through bar window ─────────────────
 // The bar window has to be tall enough to render the pills' drop-shadows and the
 // corner fillets that hang below the bar band — but it sits over the top edge of
@@ -576,20 +609,27 @@ fn make_overlay(window: &tauri::WebviewWindow) {
 // this is what re-arms interactivity). Event-driven, so no cursor-polling loop
 // and none of the main-thread deadlock that polling Tauri getters would cause.
 
-/// Set the bar's `ignoresMouseEvents` from the cursor position: interactive when
+// The bar NSWindows the shared cursor monitors hit-test, keyed by window
+// label. Main-thread only (NSWindow isn't Send); bars register here when
+// created and deregister when their monitor unplugs.
+#[cfg(target_os = "macos")]
+thread_local! {
+    static TRACKED_BARS: std::cell::RefCell<
+        std::collections::HashMap<String, objc2::rc::Retained<objc2_app_kit::NSWindow>>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Set one bar's `ignoresMouseEvents` from the cursor position: interactive when
 /// it's over one of the reported rects (the pills, or a full-window rect while a
 /// popup is open), click-through otherwise. `mouseLocation` and the window frame
 /// are screen coords (bottom-left origin); the rects are window-relative CSS px
 /// from the top-left, so we map each rect into screen space to compare.
 #[cfg(target_os = "macos")]
-fn sync_ignore_mouse(
-    ns_window: &objc2_app_kit::NSWindow,
-    rects: &std::sync::Mutex<Vec<[f64; 4]>>,
-) {
+fn sync_ignore_mouse(ns_window: &objc2_app_kit::NSWindow, rects: &[[f64; 4]]) {
     let loc = objc2_app_kit::NSEvent::mouseLocation();
     let frame = ns_window.frame();
     let win_top = frame.origin.y + frame.size.height;
-    let over = rects.lock().unwrap().iter().any(|r| {
+    let over = rects.iter().any(|r| {
         let sx0 = frame.origin.x + r[0];
         let sx1 = sx0 + r[2];
         let sy1 = win_top - r[1];
@@ -599,42 +639,40 @@ fn sync_ignore_mouse(
     ns_window.setIgnoresMouseEvents(!over);
 }
 
-/// Track the cursor with NSEvent monitors and toggle the bar's
-/// `ignoresMouseEvents` so it's interactive only over the pills.
+/// Hit-test every tracked bar against the current cursor position.
 #[cfg(target_os = "macos")]
-fn install_cursor_tracking(
-    window: &tauri::WebviewWindow,
-    rects: std::sync::Arc<std::sync::Mutex<Vec<[f64; 4]>>>,
-) {
-    use objc2::rc::Retained;
-    use objc2_app_kit::{NSEvent, NSEventMask, NSWindow};
+fn sync_all_bars(rects: &RectMap) {
+    TRACKED_BARS.with(|bars| {
+        let bars = bars.borrow();
+        if bars.is_empty() {
+            return;
+        }
+        let map = rects.lock().unwrap();
+        for (label, win) in bars.iter() {
+            sync_ignore_mouse(win, map.get(label).map(Vec::as_slice).unwrap_or(&[]));
+        }
+    });
+}
 
-    let Ok(ptr) = window.ns_window() else {
-        return;
-    };
-    let Some(ns_window) = (unsafe { Retained::retain(ptr as *mut NSWindow) }) else {
-        return;
-    };
-
-    // Start click-through; the monitors flip it on when the cursor reaches a pill.
-    ns_window.setIgnoresMouseEvents(true);
+/// Install the two NSEvent cursor monitors ONCE for the app; they serve every
+/// tracked bar window (monitors are per-app, not per-window). Local monitor:
+/// events delivered to us (cursor over an interactive bar) — must return the
+/// event so the bar's own handling continues. Global monitor: events delivered
+/// to other apps (cursor over a click-through bar, or anywhere else) — re-arms
+/// interactivity on re-entry. Event-driven, so no cursor-polling loop and none
+/// of the main-thread deadlock that polling Tauri getters would cause.
+#[cfg(target_os = "macos")]
+fn install_cursor_monitors(rects: RectMap) {
+    use objc2_app_kit::{NSEvent, NSEventMask};
 
     let mask = NSEventMask::MouseMoved | NSEventMask::LeftMouseDragged;
-
-    // Local monitor: events delivered to us. Must return the event so the bar's
-    // own handling (hover, clicks) continues.
-    let nw_local = ns_window.clone();
     let rects_local = rects.clone();
     let local = block2::RcBlock::new(move |event: core::ptr::NonNull<NSEvent>| -> *mut NSEvent {
-        sync_ignore_mouse(&nw_local, &rects_local);
+        sync_all_bars(&rects_local);
         event.as_ptr()
     });
-    // Global monitor: events delivered to other apps (cursor over the bar while
-    // it's click-through, or anywhere else). Re-arms interactivity on re-entry.
-    let nw_global = ns_window.clone();
-    let rects_global = rects.clone();
     let global = block2::RcBlock::new(move |_event: core::ptr::NonNull<NSEvent>| {
-        sync_ignore_mouse(&nw_global, &rects_global);
+        sync_all_bars(&rects);
     });
 
     // The monitors copy the blocks and AppKit keeps them alive; we never remove
@@ -645,27 +683,76 @@ fn install_cursor_tracking(
     }
 }
 
+/// Register a bar window with the cursor monitors (idempotent). Starts
+/// click-through; the monitors flip it on when the cursor reaches a pill.
+#[cfg(target_os = "macos")]
+fn track_bar_window(label: &str, window: &tauri::WebviewWindow) {
+    use objc2::rc::Retained;
+    use objc2_app_kit::NSWindow;
+
+    let Ok(ptr) = window.ns_window() else {
+        return;
+    };
+    let Some(ns_window) = (unsafe { Retained::retain(ptr as *mut NSWindow) }) else {
+        return;
+    };
+    TRACKED_BARS.with(|bars| {
+        let mut bars = bars.borrow_mut();
+        if !bars.contains_key(label) {
+            ns_window.setIgnoresMouseEvents(true);
+            bars.insert(label.to_string(), ns_window);
+        }
+    });
+}
+
+/// Forget a bar window (its monitor unplugged): drop the NSWindow handle and
+/// its interactive rects.
+#[cfg(target_os = "macos")]
+fn untrack_bar_window(label: &str, rects: &RectMap) {
+    TRACKED_BARS.with(|bars| {
+        bars.borrow_mut().remove(label);
+    });
+    rects.lock().unwrap().remove(label);
+}
+
 /// Update the interactive rects the cursor tracker checks (WebView CSS px,
-/// top-left origin). Called by the WebView whenever its layout changes.
+/// top-left origin). Called by each bar's WebView whenever its layout changes;
+/// stored per window label.
 #[tauri::command]
-fn set_interactive_rects(state: tauri::State<AppState>, rects: Vec<[f64; 4]>) {
-    *state.interactive_rects.lock().unwrap() = rects;
+fn set_interactive_rects(
+    window: tauri::WebviewWindow,
+    state: tauri::State<AppState>,
+    rects: Vec<[f64; 4]>,
+) {
+    state
+        .interactive_rects
+        .lock()
+        .unwrap()
+        .insert(window.label().to_string(), rects);
 }
 
 // Commands are `async` so the IPC layer runs them off the main thread, and the
 // blocking subprocess work goes through `spawn_blocking` — a sync command would
 // run the `aerospace` calls on the main thread and beach-ball the UI.
-/// Create the screen frame as a native borderless NSWindow drawn with CALayer —
+/// Create one screen's frame as a native borderless NSWindow drawn with CALayer —
 /// no WebView, so it costs no web-content process. Replicates the old CSS frame:
 /// a green rounded-rect line hugging the screen edge (root layer cornerRadius +
 /// border) plus black fills in the four corner notches outside that rounded rect
-/// (an even-odd CAShapeLayer). Click-through, all-spaces, stationary.
+/// (an even-odd CAShapeLayer). Click-through, all-spaces, stationary. Called once
+/// per NSScreen; the window is retained in FRAME_WINDOWS so a display-config
+/// change can close and rebuild it.
 #[cfg(target_os = "macos")]
-fn create_native_frame(geometry: &Geometry, frame_line: &str, frame_corner: &str) {
-    use objc2::{MainThreadMarker, MainThreadOnly};
+fn create_native_frame(
+    mtm: objc2::MainThreadMarker,
+    screen: &objc2_app_kit::NSScreen,
+    geometry: &Geometry,
+    frame_line: &str,
+    frame_corner: &str,
+) {
+    use objc2::MainThreadOnly;
     use objc2_app_kit::{
-        NSBackingStoreType, NSBezierPath, NSColor, NSScreen, NSWindow,
-        NSWindowCollectionBehavior, NSWindowStyleMask, NSWindingRule,
+        NSBackingStoreType, NSBezierPath, NSColor, NSWindow, NSWindowCollectionBehavior,
+        NSWindowStyleMask, NSWindingRule,
     };
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
     use objc2_quartz_core::{kCAFillRuleEvenOdd, CAShapeLayer};
@@ -676,12 +763,6 @@ fn create_native_frame(geometry: &Geometry, frame_line: &str, frame_corner: &str
     let line_rgba = hex_to_rgba(frame_line);
     let corner_rgba = hex_to_rgba(frame_corner);
 
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
-    let Some(screen) = NSScreen::mainScreen(mtm) else {
-        return;
-    };
     let frame = screen.frame();
 
     let window = unsafe {
@@ -798,36 +879,50 @@ fn create_native_frame(geometry: &Geometry, frame_line: &str, frame_corner: &str
     corners.setFillColor(Some(&corner_color.CGColor()));
     root.addSublayer(&corners);
 
-    // Retain both shape layers so day/night + wallpaper changes can recolor them
-    // in place (cheap setFillColor) instead of rebuilding the window.
-    FRAME_LAYERS.with(|cell| {
-        *cell.borrow_mut() = Some(FrameLayers {
-            line: line_layer.clone(),
-            corners: corners.clone(),
+    window.orderFrontRegardless();
+
+    // Retain the window + both shape layers: day/night + wallpaper changes
+    // recolor the layers in place (cheap setFillColor), and a display-config
+    // change closes the window and rebuilds for the new screen set.
+    FRAME_WINDOWS.with(|cell| {
+        cell.borrow_mut().push(FrameWindow {
+            window,
+            line: line_layer,
+            corners,
         });
     });
-
-    window.orderFrontRegardless();
-    std::mem::forget(window); // keep it alive for the app's lifetime
 }
 
-/// The native frame's two fill layers, retained on the main thread so a theme
-/// change can recolor them without recreating the window. CALayer isn't `Send`,
-/// so this lives in a main-thread `thread_local!`, not Tauri's managed state.
+/// One screen's native frame: the NSWindow plus its two fill layers, retained
+/// on the main thread so a theme change can recolor in place and a display
+/// change can close it. CALayer/NSWindow aren't `Send`, so this lives in a
+/// main-thread `thread_local!`, not Tauri's managed state.
 #[cfg(target_os = "macos")]
-struct FrameLayers {
+struct FrameWindow {
+    window: objc2::rc::Retained<objc2_app_kit::NSWindow>,
     line: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
     corners: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
 }
 
 #[cfg(target_os = "macos")]
 thread_local! {
-    static FRAME_LAYERS: std::cell::RefCell<Option<FrameLayers>> =
-        const { std::cell::RefCell::new(None) };
+    static FRAME_WINDOWS: std::cell::RefCell<Vec<FrameWindow>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Recolor the native frame's line + corner layers. Must run on the main thread
-/// (AppKit); callers hop via `run_on_main_thread`.
+/// Close every native frame window (before rebuilding for a new screen set).
+/// Main thread only.
+#[cfg(target_os = "macos")]
+fn remove_native_frames() {
+    FRAME_WINDOWS.with(|cell| {
+        for f in cell.borrow_mut().drain(..) {
+            f.window.close();
+        }
+    });
+}
+
+/// Recolor every native frame's line + corner layers. Must run on the main
+/// thread (AppKit); callers hop via `run_on_main_thread`.
 #[cfg(target_os = "macos")]
 fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
     use objc2::MainThreadMarker;
@@ -837,8 +932,8 @@ fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
     }
     let l = hex_to_rgba(line_hex);
     let c = hex_to_rgba(corner_hex);
-    FRAME_LAYERS.with(|cell| {
-        if let Some(f) = cell.borrow().as_ref() {
+    FRAME_WINDOWS.with(|cell| {
+        for f in cell.borrow().iter() {
             let lc = NSColor::colorWithSRGBRed_green_blue_alpha(l[0], l[1], l[2], l[3]);
             let cc = NSColor::colorWithSRGBRed_green_blue_alpha(c[0], c[1], c[2], c[3]);
             f.line.setFillColor(Some(&lc.CGColor()));
@@ -939,13 +1034,12 @@ async fn aerospace_focus(name: String) {
     .await;
 }
 
-/// Resize the bar window (logical px). Used to make room for the clock's
-/// expanded panel; the window is transparent so the resize itself is invisible.
+/// Resize the calling bar window (logical px). Used to make room for the
+/// clock's expanded panel; the window is transparent so the resize itself is
+/// invisible. Per-window: each monitor's bar expands independently.
 #[tauri::command]
-fn set_bar_size(app: tauri::AppHandle, width: f64, height: f64) {
-    if let Some(bar) = app.get_webview_window("bar") {
-        let _ = bar.set_size(tauri::LogicalSize::new(width, height));
-    }
+fn set_bar_size(window: tauri::WebviewWindow, width: f64, height: f64) {
+    let _ = window.set_size(LogicalSize::new(width, height));
 }
 
 // ───────────────────────── network (Wi-Fi / IP / VPN) ───────────────
@@ -1398,9 +1492,9 @@ struct AppState {
     /// Wallpaper thumbnail data URLs for the theme view, keyed by path → (mtime
     /// secs, data URL). Avoids re-running sips on every theme-view open.
     thumb_cache: Mutex<std::collections::HashMap<String, (u64, String)>>,
-    /// Interactive rects for the bar's click-through hitTest (WebView CSS px,
-    /// top-left origin). Shared with the native `ClickThroughView`.
-    interactive_rects: std::sync::Arc<std::sync::Mutex<Vec<[f64; 4]>>>,
+    /// Interactive rects for each bar's click-through hitTest (WebView CSS px,
+    /// top-left origin), keyed by window label. Shared with the cursor monitors.
+    interactive_rects: RectMap,
 }
 
 // ───────────────────────── battery (pmset) ─────────────────────────
@@ -1807,6 +1901,169 @@ fn install_network_observer(app: tauri::AppHandle) {
     });
 }
 
+// ───────────────────────── multi-monitor windows ────────────────────
+// One bar + one frame per display. Geometry is never computed once and left
+// stale: NSApplicationDidChangeScreenParametersNotification triggers a full
+// re-sync, so dock/undock/rearrange/resolution changes reposition everything.
+
+/// Label for the i-th monitor's bar window: the config-defined "bar" for the
+/// first, "bar-1"/"bar-2"/… clones for the rest.
+fn bar_label(i: usize) -> String {
+    if i == 0 {
+        "bar".to_string()
+    } else {
+        format!("bar-{i}")
+    }
+}
+
+/// Inverse of `bar_label` (None for non-bar windows).
+fn bar_index(label: &str) -> Option<usize> {
+    if label == "bar" {
+        return Some(0);
+    }
+    label.strip_prefix("bar-")?.parse().ok()
+}
+
+/// Create/position one bar window per monitor. The i-th monitor (left-to-right)
+/// gets `bar_label(i)`, created from the tauri.conf.json "bar" template if
+/// missing. Position/size are set in LOGICAL coordinates: converting each
+/// monitor's physical origin with its own scale factor yields global points,
+/// which tao hands straight to NSWindow — mixed-DPI safe (a 2x built-in next to
+/// 1x externals breaks if you position with physical coords, because tao would
+/// convert them with whichever screen the window currently sits on). Bars for
+/// unplugged monitors are destroyed. Main thread only.
+#[cfg(target_os = "macos")]
+fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &RectMap) {
+    let Ok(mut monitors) = app.available_monitors() else {
+        return;
+    };
+    if monitors.is_empty() {
+        return;
+    }
+    // Stable order: left-to-right, then top-to-bottom.
+    monitors.sort_by_key(|m| (m.position().x, m.position().y));
+    let template = app.config().app.windows.first().cloned();
+    for (i, m) in monitors.iter().enumerate() {
+        let label = bar_label(i);
+        let bar = app.get_webview_window(&label).or_else(|| {
+            let mut cfg = template.clone()?;
+            cfg.label = label.clone();
+            tauri::WebviewWindowBuilder::from_config(app, &cfg)
+                .ok()?
+                .build()
+                .ok()
+        });
+        let Some(bar) = bar else { continue };
+        let scale = m.scale_factor();
+        let pos: LogicalPosition<f64> = m.position().to_logical(scale);
+        let size: LogicalSize<f64> = m.size().to_logical(scale);
+        // The bar is NOT offset for the dead top row: its pills sit a full
+        // line-thickness below the top edge (nowhere near row 0) and overlap the
+        // native frame's top line, so moving the window down would only open a
+        // 1px seam between the two windows. Only the native frame (drawn at the
+        // very edge) needs top_offset_px.
+        let _ = bar.set_position(pos);
+        let _ = bar.set_size(LogicalSize::new(size.width, window_height));
+        let _ = bar.set_always_on_top(true);
+        let _ = bar.set_visible_on_all_workspaces(true);
+        make_overlay(&bar);
+        track_bar_window(&label, &bar);
+        let _ = bar.show();
+    }
+    for (label, w) in app.webview_windows() {
+        if bar_index(&label).is_some_and(|i| i >= monitors.len()) {
+            untrack_bar_window(&label, rects);
+            let _ = w.destroy();
+        }
+    }
+}
+
+/// (Re)build all per-display chrome: one native frame per NSScreen, one bar per
+/// monitor. Called at setup and on every display-configuration change. Main
+/// thread only; needs ThemeState + AppState managed.
+#[cfg(target_os = "macos")]
+fn rebuild_displays(app: &tauri::AppHandle) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSScreen;
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let (geometry, line, corner) = {
+        let state = app.state::<Mutex<ThemeState>>();
+        let ts = state.lock().unwrap();
+        let c = resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme));
+        (ts.geometry.clone(), c.frame_line, c.frame_corner)
+    };
+    remove_native_frames();
+    let screens = NSScreen::screens(mtm);
+    for screen in screens.iter() {
+        create_native_frame(mtm, &screen, &geometry, &line, &corner);
+    }
+    let rects = app.state::<AppState>().interactive_rects.clone();
+    sync_bars_to_monitors(app, geometry.window_height, &rects);
+}
+
+#[cfg(target_os = "macos")]
+struct ScreenIvars {
+    /// A ping to the debounced rebuild worker.
+    tx: std::sync::mpsc::Sender<()>,
+}
+
+#[cfg(target_os = "macos")]
+objc2::define_class!(
+    #[unsafe(super(objc2::runtime::NSObject))]
+    #[name = "EdgebarScreenObserver"]
+    #[ivars = ScreenIvars]
+    struct ScreenObserver;
+
+    impl ScreenObserver {
+        #[unsafe(method(screensChanged:))]
+        fn screens_changed(&self, _notification: *mut objc2::runtime::AnyObject) {
+            // Fires on the main thread for every display-config change (plug,
+            // unplug, rearrange, resolution). A dock/undock flaps it several
+            // times, so just ping the worker, which collapses the burst.
+            let _ = self.ivars().tx.send(());
+        }
+    }
+
+    unsafe impl NSObjectProtocol for ScreenObserver {}
+);
+
+/// Rebuild frames + bars whenever the display configuration changes
+/// (NSApplicationDidChangeScreenParametersNotification). Debounced off-thread,
+/// then hopped back to main for the AppKit work.
+#[cfg(target_os = "macos")]
+fn install_screen_observer(app: tauri::AppHandle) {
+    use objc2::rc::Retained;
+    use objc2::{msg_send, sel, AllocAnyThread};
+    use objc2_app_kit::NSApplicationDidChangeScreenParametersNotification;
+    use objc2_foundation::NSNotificationCenter;
+
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        while rx.recv().is_ok() {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            while rx.try_recv().is_ok() {}
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || rebuild_displays(&handle));
+        }
+    });
+
+    let observer = ScreenObserver::alloc().set_ivars(ScreenIvars { tx });
+    let observer: Retained<ScreenObserver> = unsafe { msg_send![super(observer), init] };
+    let center = NSNotificationCenter::defaultCenter();
+    unsafe {
+        center.addObserver_selector_name_object(
+            &observer,
+            sel!(screensChanged:),
+            Some(NSApplicationDidChangeScreenParametersNotification),
+            None,
+        );
+    }
+    std::mem::forget(observer);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1843,53 +2100,59 @@ pub fn run() {
             let appearance = load_persisted_appearance().unwrap_or(config.appearance);
             let scheme = resolve_scheme(appearance);
 
-            // Interactive rects for the bar's click-through hitTest; shared
-            // between the native ClickThroughView and the set_interactive_rects
-            // command (created before both so they hold clones of the same Arc).
-            let interactive_rects = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-
             // Accessory app: no Dock icon, never becomes the active app, so it
             // never steals focus or bounces you back to the previously-active
             // app (e.g. Arc) when its windows are shown or touched.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            // Frame: a native borderless NSWindow drawn with CALayer — no
-            // WebView, so it costs no extra web-content process. Built with the
-            // frame colors resolved for the active scheme; recolored live after.
+            // Interactive rects per bar window; shared between the cursor
+            // monitors and the set_interactive_rects command.
+            let interactive_rects: RectMap = Default::default();
+
+            // Both states go in before rebuild_displays, which reads them.
+            app.manage(AppState {
+                sys: Mutex::new(sysinfo::System::new()),
+                icon_cache: Mutex::new(std::collections::HashMap::new()),
+                thumb_cache: Mutex::new(std::collections::HashMap::new()),
+                interactive_rects: interactive_rects.clone(),
+            });
+            // Shared theme state (raw role maps + both palettes), resolved on
+            // demand by get_config / apply_theme.
+            app.manage(Mutex::new(ThemeState {
+                colors: config.colors,
+                geometry: config.geometry,
+                palettes,
+                appearance,
+                scheme,
+                theme_command: config
+                    .theme_command
+                    .unwrap_or_else(|| "generate-edgebar-theme".to_string()),
+                wallpaper_command: config
+                    .wallpaper_command
+                    .unwrap_or_else(|| "desktoppr".to_string()),
+            }));
+
+            // Per-display chrome: one native frame per screen, one bar per
+            // monitor — built now and rebuilt on every display-config change,
+            // so geometry never goes stale when screens come, go, or move.
             #[cfg(target_os = "macos")]
             {
-                let fc = resolve_colors(config.colors.for_scheme(scheme), palettes.for_scheme(scheme));
-                create_native_frame(&config.geometry, &fc.frame_line, &fc.frame_corner);
+                install_cursor_monitors(interactive_rects.clone());
+                rebuild_displays(app.handle());
+                install_screen_observer(app.handle().clone());
             }
-
-            // Bar: full-width strip pinned to the top, normally interactive.
+            #[cfg(not(target_os = "macos"))]
             if let Some(bar) = app.get_webview_window("bar") {
-                if let Ok(Some(m)) = bar.current_monitor() {
-                    let pos = *m.position();
-                    let size = *m.size();
-                    let scale = bar.scale_factor().unwrap_or(1.0);
-                    let h = (config.geometry.window_height * scale).round() as u32;
-                    // The bar is NOT offset for the dead top row: its pills sit a
-                    // full line-thickness below the top edge (nowhere near row 0)
-                    // and overlap the native frame's top line, so moving the window
-                    // down would only open a 1px seam between the two windows. Only
-                    // the native frame (drawn at the very edge) needs top_offset_px.
-                    let _ = bar.set_position(PhysicalPosition::new(pos.x, pos.y));
-                    let _ = bar.set_size(PhysicalSize::new(size.width, h));
-                }
-                let _ = bar.set_always_on_top(true);
-                let _ = bar.set_visible_on_all_workspaces(true);
-                #[cfg(target_os = "macos")]
-                make_overlay(&bar);
-                #[cfg(target_os = "macos")]
-                install_cursor_tracking(&bar, interactive_rects.clone());
                 let _ = bar.show();
             }
 
             // Event-driven workspace updates: AeroSpace's exec-on-workspace-change
-            // callback pings this unix socket; each ping triggers one query and a
-            // push to the bar. No polling — idle cost is zero.
+            // callback pings this unix socket. The accept loop only ACKS (accept +
+            // drop, so the nc client exits immediately) and pings a debounced
+            // worker that runs the actual query — if a query wedges (a hung
+            // `aerospace` CLI has frozen this loop before), pings keep draining
+            // instead of piling stuck clients into the listen backlog.
             let ws_handle = app.handle().clone();
             std::thread::spawn(move || {
                 use std::os::unix::net::UnixListener;
@@ -1903,12 +2166,20 @@ pub fn run() {
                 let Ok(listener) = UnixListener::bind(&sock) else {
                     return;
                 };
-                for conn in listener.incoming() {
-                    if conn.is_err() {
-                        continue;
+                let (tx, rx) = std::sync::mpsc::channel::<()>();
+                let query_handle = ws_handle.clone();
+                std::thread::spawn(move || {
+                    while rx.recv().is_ok() {
+                        // Collapse a burst of pings into one query + push.
+                        std::thread::sleep(std::time::Duration::from_millis(60));
+                        while rx.try_recv().is_ok() {}
+                        let _ = query_handle
+                            .emit("workspaces", workspaces_with_icons(&query_handle));
                     }
-                    // a connection is just a "something changed" ping
-                    let _ = ws_handle.emit("workspaces", workspaces_with_icons(&ws_handle));
+                });
+                for conn in listener.incoming() {
+                    drop(conn); // a connection is just a "something changed" ping
+                    let _ = tx.send(());
                 }
             });
 
@@ -1936,32 +2207,11 @@ pub fn run() {
                 }
             });
 
-            // Metrics state + app-icon cache. The NSWorkspace observer re-pushes
-            // workspaces on every app activation so the focused dot stays current.
-            app.manage(AppState {
-                sys: Mutex::new(sysinfo::System::new()),
-                icon_cache: Mutex::new(std::collections::HashMap::new()),
-                thumb_cache: Mutex::new(std::collections::HashMap::new()),
-                interactive_rects,
-            });
+            // The NSWorkspace observer re-pushes workspaces on every app
+            // activation so the focused dot stays current.
             #[cfg(target_os = "macos")]
             install_front_app_observer(app.handle().clone());
 
-            // Shared theme state (raw role maps + both palettes), resolved on
-            // demand by get_config / apply_theme. Replaces the old immutable config.
-            app.manage(Mutex::new(ThemeState {
-                colors: config.colors,
-                geometry: config.geometry,
-                palettes,
-                appearance,
-                scheme,
-                theme_command: config
-                    .theme_command
-                    .unwrap_or_else(|| "generate-edgebar-theme".to_string()),
-                wallpaper_command: config
-                    .wallpaper_command
-                    .unwrap_or_else(|| "desktoppr".to_string()),
-            }));
             // Follow the system light/dark setting while in Auto mode.
             #[cfg(target_os = "macos")]
             install_appearance_observer(app.handle().clone());

@@ -40,6 +40,7 @@ objc2-foundation = { version = "0.3", features = [
   "NSUserDefaults",
 ] }
 objc2-app-kit = { version = "0.3", features = [
+  "NSApplication",
   "NSWindow",
   "NSResponder",
   "NSView",
