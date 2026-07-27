@@ -102,7 +102,11 @@ in
             "trufflehog"
             "visidata"
             "watch"
-            "worktrunk"
+            # worktrunk moved to nixpkgs — see modules/home/apps/worktrunk.nix.
+            # The brew copy here was 0.51.0 against 0.68.0 in nixpkgs after the
+            # lock update, and it must go: leaving it installed would put
+            # /opt/homebrew/bin/wt ahead of the nix profile on PATH for anything
+            # not using WORKTRUNK_BIN. Activation uninstalls it.
             "yarn"
           ];
           casks = [
@@ -165,6 +169,7 @@ in
                 apps-sql-formatter
                 apps-nh
                 apps-comma
+                apps-worktrunk
                 profile-base
                 profile-code
                 profile-work

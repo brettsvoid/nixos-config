@@ -155,6 +155,7 @@ in
                 apps-sql-formatter
                 apps-nh
                 apps-comma
+                apps-worktrunk
                 profile-base
                 profile-code
                 profile-work
