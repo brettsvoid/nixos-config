@@ -29,6 +29,7 @@ the one that has to catch up (it currently has ~3 segments to edgebar's ~8).
 | Network / Wi-Fi | Event-driven RSSI arc icon, SSID, VPN, no-internet warn | **not implemented** | ✗ |
 | Volume/brightness/mic | Controls dropdown, 3 sliders | **not implemented** | ✗ |
 | Metrics (cpu/mem/disk) | Notch panel, sampled 2s while open | **not implemented** | ✗ |
+| CPU graph | Bar pill: 108×1px stacked system/user histogram (2s, always on) + top process name/pid (6s); also feeds the notch's CPU metric | **not implemented** | ✗ |
 | Theming source | matugen → `~/.config/edgebar/palette.json` (dark+light), socket reload, light/dark/auto | matugen → `~/.cache/qs-theme/colors.json` (single mode), file-watch | ✗ |
 | Default scheme | `scheme-tonal-spot`, appearance auto | `scheme-neutral`, mode pinned light | ✗ |
 | Fonts | FiraCode Nerd Font, base 13, Lucide SVG icons | FiraCode Nerd Font, base 14, Nerd Font glyph icons | ~ |

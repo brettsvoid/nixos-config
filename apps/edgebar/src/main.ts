@@ -47,6 +47,24 @@ interface Metrics {
   diskTotal: number;
 }
 
+// One point on the CPU graph: fractions of total capacity, 0..1.
+interface CpuSample {
+  sys: number;
+  user: number;
+}
+
+interface CpuStat extends CpuSample {
+  total: number;
+  topProc: string;
+  topProcPct: number; // percent of ONE core, so >100 for a threaded process
+  topPid: number; // 0 before the first process walk lands
+}
+
+interface CpuSnapshot {
+  history: CpuSample[];
+  latest: CpuStat;
+}
+
 interface Volume {
   output: number;
   input: number;
@@ -75,6 +93,19 @@ const POLL = {
   battery: 60000,
 } as const; // ms (network is now event-driven via the reachability watcher)
 const DEBOUNCE = { volume: 60, mic: 60, brightness: 40 } as const; // ms
+// CPU histogram. `samples` matches CPU_HISTORY in lib.rs, and is deliberately
+// equal to `w` so every column is exactly 1px with no gap — keep them in step if
+// either changes, or the columns land on fractional pixels and blur. 108 columns
+// at the sampler's 2s cadence ≈ 3.6 min of history. `w`/`h` must match the
+// .cpu-graph box in styles.css, since the canvas backing store is sized from
+// them times the DPR.
+const CPU_GRAPH = {
+  w: 108,
+  h: 14,
+  samples: 108,
+  // Load ladder from the sketchybar helper; the colors live in styles.css.
+  thresholds: { hot: 0.7, warm: 0.3, mild: 0.1 },
+} as const;
 const LAYOUT = {
   hiddenY: -48, // px above the top edge (clipped by the window)
   windowExpandedH: 280, // bar-window height while a panel is open
@@ -107,6 +138,8 @@ function applyColors(c: Record<string, string>) {
   s.setProperty("--battery-charging", c.batteryCharging);
   s.setProperty("--battery-low", c.batteryLow);
   s.setProperty("--vpn", c.vpn);
+  s.setProperty("--cpu-sys", c.cpuSys);
+  s.setProperty("--cpu-user", c.cpuUser);
 }
 
 function applyConfig(cfg: Config) {
@@ -673,6 +706,91 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   invoke<Network>("network").then(renderNetwork).catch(() => {});
   listen<Network>("network", (e) => renderNetwork(e.payload));
 
+  // ---- CPU pill: load graph + hungriest process (always on) --------------
+  // Rust samples on its own thread and pushes a "cpu" event every CPU_POLL, so
+  // unlike the notch's metrics this keeps running whether or not a panel is
+  // open. The rolling history lives in Rust as well — a bar rebuilt by a display
+  // change seeds itself from cpu_state instead of redrawing from empty.
+  const cpuPill = document.querySelector<HTMLElement>("#cpu")!;
+  const cpuTopEl = cpuPill.querySelector<HTMLElement>(".cpu-top")!;
+  const cpuNameEl = cpuPill.querySelector<HTMLElement>(".cpu-name")!;
+  const cpuPidEl = cpuPill.querySelector<HTMLElement>(".cpu-pid")!;
+  const cpuPctEl = cpuPill.querySelector<HTMLElement>(".cpu-pct")!;
+  const cpuCanvas = cpuPill.querySelector<HTMLCanvasElement>(".cpu-graph")!;
+  const cpuCtx = cpuCanvas.getContext("2d");
+  const cpuHistory: CpuSample[] = [];
+
+  const cssVar = (name: string) =>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  function drawCpuGraph() {
+    if (!cpuCtx) return;
+    const ctx = cpuCtx;
+    const { w, h } = CPU_GRAPH;
+    // Re-size the backing store whenever the DPR changes — the bar window can be
+    // rebuilt onto a display with a different scale factor.
+    const dpr = window.devicePixelRatio || 1;
+    if (cpuCanvas.width !== Math.round(w * dpr)) {
+      cpuCanvas.width = Math.round(w * dpr);
+      cpuCanvas.height = Math.round(h * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if (cpuHistory.length === 0) return;
+
+    // One stacked column per sample: system from the baseline, user above it, so
+    // a column's full height is total load. (The sketchybar original overlaid
+    // two independent traces in one box, where the top of the user trace was NOT
+    // the total — stacking is what makes a histogram readable.)
+    const colW = w / CPU_GRAPH.samples; // 1px, butted up with no gap
+    const sysColor = cssVar("--cpu-sys");
+    const userColor = cssVar("--cpu-user");
+
+    cpuHistory.forEach((s, i) => {
+      // Newest column flush to the right edge; a partly-filled buffer leaves the
+      // left blank and scrolls in, the way the graph filled up after launch.
+      const x = w - (cpuHistory.length - i) * colW;
+      // Clamp the stack, not each part: a rounding overshoot past 100% should
+      // cost the upper segment rather than draw outside the box.
+      const sysH = Math.max(0, Math.min(1, s.sys)) * h;
+      const userH = Math.max(0, Math.min(1 - s.sys, s.user)) * h;
+      ctx.fillStyle = sysColor;
+      ctx.fillRect(x, h - sysH, colW, sysH);
+      ctx.fillStyle = userColor;
+      ctx.fillRect(x, h - sysH - userH, colW, userH);
+    });
+  }
+
+  function renderCpu(stat: CpuStat) {
+    cpuNameEl.textContent = stat.topProc || "—";
+    cpuPidEl.textContent = stat.topPid ? String(stat.topPid) : "";
+    cpuTopEl.title = stat.topProc
+      ? `${stat.topProc} (pid ${stat.topPid}) — ${Math.round(stat.topProcPct)}% of one core`
+      : "";
+    cpuPctEl.textContent = `${Math.round(stat.total * 100)}%`;
+    const t = CPU_GRAPH.thresholds;
+    cpuPill.classList.toggle("hot", stat.total >= t.hot);
+    cpuPill.classList.toggle("warm", stat.total >= t.warm && stat.total < t.hot);
+    cpuPill.classList.toggle("mild", stat.total >= t.mild && stat.total < t.warm);
+  }
+
+  listen<CpuStat>("cpu", (e) => {
+    cpuHistory.push({ sys: e.payload.sys, user: e.payload.user });
+    if (cpuHistory.length > CPU_GRAPH.samples) cpuHistory.shift();
+    renderCpu(e.payload);
+    drawCpuGraph();
+  });
+  invoke<CpuSnapshot>("cpu_state")
+    .then((s) => {
+      // Skip if the sampler's first push already beat this reply — the event is
+      // the newer of the two.
+      if (cpuHistory.length > 0 || s.history.length === 0) return;
+      cpuHistory.push(...s.history.slice(-CPU_GRAPH.samples));
+      renderCpu(s.latest);
+      drawCpuGraph();
+    })
+    .catch(() => {});
+
   // ---- workspaces: event-driven (Rust pushes on AeroSpace changes) -------
   const wsContainer = document.querySelector<HTMLElement>("#workspaces .ws-dots")!;
   const wsEls = new Map<string, HTMLElement>();
@@ -839,6 +957,7 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     applyColors(e.payload.colors);
     setActiveMode(e.payload.appearance);
     if (themeLoaded && e.payload.scheme) renderSchemes(e.payload.scheme);
+    drawCpuGraph(); // canvas pixels don't follow CSS vars — repaint them by hand
   });
 
   // ---- init ---------------------------------------------------------------

@@ -1,9 +1,9 @@
 # edgebar
 
 An ambxst-style top status bar for macOS, built with Tauri. It replaces
-sketchybar on the aerospace window-manager stack: workspace dots (AeroSpace),
-clock, battery, Wi-Fi, and an expandable notch with system metrics and a theme
-picker.
+sketchybar on the aerospace window-manager stack: workspace dots (AeroSpace), a
+CPU load graph, clock, battery, Wi-Fi, and an expandable notch with system
+metrics and a theme picker.
 
 ## How it works
 

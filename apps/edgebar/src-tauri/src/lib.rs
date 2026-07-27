@@ -131,6 +131,8 @@ fn resolve_colors(
         battery_charging: r(&colors.battery_charging),
         battery_low: r(&colors.battery_low),
         vpn: r(&colors.vpn),
+        cpu_sys: r(&colors.cpu_sys),
+        cpu_user: r(&colors.cpu_user),
         frame_line: r(&colors.frame_line),
         frame_corner: r(&colors.frame_corner),
     }
@@ -154,6 +156,11 @@ struct Colors {
     battery_low: String,
     #[serde(default = "default_vpn")]
     vpn: String,
+    /// The CPU graph's two traces (filled system load, stroked user load).
+    #[serde(default = "default_cpu_sys")]
+    cpu_sys: String,
+    #[serde(default = "default_cpu_user")]
+    cpu_user: String,
     frame_line: String,
     frame_corner: String,
 }
@@ -166,6 +173,12 @@ fn default_battery_low() -> String {
 }
 fn default_vpn() -> String {
     "#179299".to_string()
+}
+fn default_cpu_sys() -> String {
+    "#d20f39".to_string()
+}
+fn default_cpu_user() -> String {
+    "#1e66f5".to_string()
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -1482,8 +1495,9 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
 }
 
 // ───────────────────────── shared app state ─────────────────────────
-// Holds a persistent `sysinfo::System` (kept alive so CPU usage can be computed
-// from the delta between samples — a fresh System always reports 0%) and a cache
+// Holds a persistent `sysinfo::System` (kept alive so the delta-based readings
+// have a baseline — a fresh System always reports 0%; on macOS the CPU figure
+// now comes from CpuState instead, leaving this to memory and swap) and a cache
 // of app icons keyed by bundle id (PNG data URLs, resolved once on the main
 // thread and reused for the workspace dots).
 struct AppState {
@@ -1556,8 +1570,10 @@ async fn battery() -> Battery {
 }
 
 // ───────────────────────── system metrics (sysinfo) ─────────────────
-// Sampled on demand (lazy poll) only while the notch's Metrics view is open —
-// mirrors ambxst, which polls SystemResources only when the dashboard is open.
+// Memory, swap and disk are sampled on demand (lazy poll) only while the notch's
+// Metrics view is open — mirrors ambxst, which polls SystemResources only when
+// the dashboard is open. CPU is the exception: it's read from the bar's
+// always-on sampler (see `cpu_percent`), which is running anyway.
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Metrics {
@@ -1570,8 +1586,26 @@ struct Metrics {
     disk_total: u64,
 }
 
-fn sample_metrics(sys: &mut sysinfo::System) -> Metrics {
+/// The notch's CPU figure comes from the bar's always-on sampler rather than a
+/// second `refresh_cpu_usage()` here. Two independent samplers disagreed at the
+/// same instant (mach tick delta over exactly CPU_POLL vs sysinfo's per-core
+/// average), and sysinfo derives its percentage from the delta since *its* last
+/// refresh — so the first reading after opening a notch that had been shut for
+/// an hour was the average over that hour, self-correcting a tick later.
+#[cfg(target_os = "macos")]
+fn cpu_percent(app: &tauri::AppHandle, _sys: &mut sysinfo::System) -> f32 {
+    app.state::<CpuState>().latest.lock().unwrap().total * 100.0
+}
+
+/// `host_statistics` is macOS-only, so the sampler never runs elsewhere — fall
+/// back to sysinfo's own aggregate there.
+#[cfg(not(target_os = "macos"))]
+fn cpu_percent(_app: &tauri::AppHandle, sys: &mut sysinfo::System) -> f32 {
     sys.refresh_cpu_usage();
+    sys.global_cpu_usage()
+}
+
+fn sample_metrics(sys: &mut sysinfo::System, cpu: f32) -> Metrics {
     sys.refresh_memory();
 
     // Root volume (the boot disk). Fall back to the largest disk if "/" isn't
@@ -1585,7 +1619,7 @@ fn sample_metrics(sys: &mut sysinfo::System) -> Metrics {
     let (disk_total, disk_avail) = root.map_or((0, 0), |d| (d.total_space(), d.available_space()));
 
     Metrics {
-        cpu: sys.global_cpu_usage(),
+        cpu,
         mem_used: sys.used_memory(),
         mem_total: sys.total_memory(),
         swap_used: sys.used_swap(),
@@ -1602,10 +1636,218 @@ async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let mut sys = state.sys.lock().unwrap();
-        sample_metrics(&mut sys)
+        // Lock order: AppState.sys then CpuState. The sampler thread never takes
+        // AppState.sys, so the two can't invert on each other.
+        let cpu = cpu_percent(&app, &mut sys);
+        sample_metrics(&mut sys, cpu)
     })
     .await
     .unwrap_or_default()
+}
+
+// ───────────────────────── cpu load graph ───────────────────────────
+// Always-on, unlike the notch's lazy Metrics view: the bar's CPU pill draws a
+// rolling history, so it has to keep sampling whether or not anything is open.
+// Ported from the old sketchybar mach helper — same system/user tick split from
+// `host_statistics(HOST_CPU_LOAD_INFO)`, same top-process readout, same
+// percentage thresholds (the colors now live in styles.css).
+
+/// Sampling period. sketchybar's helper ran at `update_freq=4`; 2s matches the
+/// cadence the notch's metrics already use and keeps the graph from looking
+/// stepped. CPU_HISTORY samples at this rate is the window the graph covers.
+const CPU_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+/// Ring-buffer depth — one entry per histogram column, each 1px wide. Must match
+/// CPU_GRAPH.samples in main.ts, which is in turn pinned to the graph's pixel
+/// width so columns land on whole pixels.
+const CPU_HISTORY: usize = 108;
+/// How many ticks between top-process lookups. The graph itself is nearly free
+/// (one `host_statistics` call, ~11µs measured), but naming the hungriest
+/// process means walking every PID — ~13ms with 600 processes, which every tick
+/// would make a sustained 0.65% of a core. The name moves far more slowly than
+/// the graph, so it lags a little instead; at CPU_POLL=2s this lands near the
+/// 4s cadence the sketchybar helper ran at.
+const CPU_TOP_PROC_EVERY: u32 = 3;
+
+/// One point on the graph: fractions of total CPU capacity in 0..1, kept split
+/// so the graph can draw the same filled-system / stroked-user pair sketchybar
+/// layered into one box.
+#[derive(Clone, Copy, Default, Serialize)]
+struct CpuSample {
+    sys: f32,
+    user: f32,
+}
+
+/// The pill's current readout. `top_proc_pct` is percent of a single core (so it
+/// can exceed 100 on a threaded process) — the same convention `ps pcpu` used.
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CpuStat {
+    sys: f32,
+    user: f32,
+    total: f32,
+    top_proc: String,
+    top_proc_pct: f32,
+    /// 0 when no process has been sampled yet — the bar hides the pid then.
+    top_pid: u32,
+}
+
+/// Seed for a bar that just loaded: the full history plus the latest readout.
+/// Bars are rebuilt on every display change, so a newly-created one would
+/// otherwise draw an empty graph and fill in over the next two and a half
+/// minutes; this hands it the buffer the sampler has been keeping all along.
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CpuSnapshot {
+    history: Vec<CpuSample>,
+    latest: CpuStat,
+}
+
+#[derive(Default)]
+struct CpuState {
+    history: Mutex<std::collections::VecDeque<CpuSample>>,
+    latest: Mutex<CpuStat>,
+}
+
+#[tauri::command]
+fn cpu_state(app: tauri::AppHandle) -> CpuSnapshot {
+    let state = app.state::<CpuState>();
+    let history = state.history.lock().unwrap().iter().copied().collect();
+    let latest = state.latest.lock().unwrap().clone();
+    CpuSnapshot { history, latest }
+}
+
+/// Cumulative CPU ticks since boot, indexed by `CPU_STATE_*`. Percentages come
+/// from the delta between two reads, so a single sample means nothing on its own.
+#[cfg(target_os = "macos")]
+fn read_cpu_ticks(host: libc::host_t) -> Option<[u32; libc::CPU_STATE_MAX as usize]> {
+    let mut info: libc::host_cpu_load_info = unsafe { std::mem::zeroed() };
+    let mut count = libc::HOST_CPU_LOAD_INFO_COUNT;
+    // SAFETY: `info` is the layout HOST_CPU_LOAD_INFO writes, and `count` tells
+    // the kernel how many words it may write (the matching _COUNT constant).
+    let err = unsafe {
+        libc::host_statistics(
+            host,
+            libc::HOST_CPU_LOAD_INFO,
+            &mut info as *mut _ as libc::host_info_t,
+            &mut count,
+        )
+    };
+    (err == libc::KERN_SUCCESS).then_some(info.cpu_ticks)
+}
+
+/// Daemons commonly carry reverse-DNS executable names (`com.apple.WebKit
+/// .WebContent`); the leading domain is noise in a bar this narrow, so drop it
+/// exactly as the sketchybar helper's FILTER_PATTERN did.
+fn trim_proc_name(name: &str) -> &str {
+    name.strip_prefix("com.apple.").unwrap_or(name)
+}
+
+/// Background sampler: reads the tick split, finds the hungriest process, pushes
+/// both to every bar. Runs on its own thread — a display-config rebuild replaces
+/// the bar windows but leaves this and its history untouched.
+#[cfg(target_os = "macos")]
+fn install_cpu_sampler(app: tauri::AppHandle) {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
+
+    std::thread::spawn(move || {
+        // `mach_host_self` adds a send right per call, so take the port once and
+        // reuse it for the process's lifetime rather than leaking one per tick.
+        #[allow(deprecated)]
+        let host = unsafe { libc::mach_host_self() };
+
+        // Its own `System`, not the AppState one the notch samples: sysinfo
+        // derives CPU from the delta since that instance's last refresh, so two
+        // refreshers sharing one instance would measure each other's
+        // milliseconds-apart deltas and report nonsense.
+        let mut sys = sysinfo::System::new();
+        let proc_cpu = ProcessRefreshKind::nothing().with_cpu();
+        // Prime both baselines — the first delta of either is meaningless.
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, proc_cpu);
+        let mut prev = read_cpu_ticks(host);
+        // Last known hungriest process (name, percent, pid), carried across the
+        // ticks that skip the walk so every emitted stat still names one.
+        let mut top: (String, f32, u32) = Default::default();
+        let mut tick: u32 = 0;
+
+        loop {
+            std::thread::sleep(CPU_POLL);
+
+            let Some(now) = read_cpu_ticks(host) else {
+                continue;
+            };
+            let Some(before) = prev else {
+                prev = Some(now);
+                continue;
+            };
+            prev = Some(now);
+
+            // Ticks are monotonic but wrap at u32; wrapping_sub keeps the delta
+            // right across the rollover instead of yielding a huge bogus jump.
+            let delta = |i: libc::c_int| {
+                now[i as usize].wrapping_sub(before[i as usize]) as f64
+            };
+            let user = delta(libc::CPU_STATE_USER);
+            let system = delta(libc::CPU_STATE_SYSTEM);
+            let idle = delta(libc::CPU_STATE_IDLE);
+            // The helper this is ported from left NICE out of the denominator;
+            // it's counted here so the fractions still total 1 if anything ever
+            // runs re-niced (it's ~always 0 on macOS, so the two agree in
+            // practice).
+            let nice = delta(libc::CPU_STATE_NICE);
+            let busy_total = user + system + idle + nice;
+            if busy_total <= 0.0 {
+                continue; // no elapsed ticks (clock skew / suspend) — nothing to plot
+            }
+            let sample = CpuSample {
+                sys: (system / busy_total) as f32,
+                // NICE is user-space work, so it belongs on the user trace.
+                user: ((user + nice) / busy_total) as f32,
+            };
+
+            // `tick` starts at 0, so the first pass through names a process
+            // immediately rather than leaving the pill blank for CPU_POLL ×
+            // CPU_TOP_PROC_EVERY. Per-process usage is a delta since that
+            // process's own last refresh, so skipping ticks widens the window
+            // it averages over — which only steadies the reading.
+            if tick % CPU_TOP_PROC_EVERY == 0 {
+                sys.refresh_processes_specifics(ProcessesToUpdate::All, true, proc_cpu);
+                top = sys
+                    .processes()
+                    .values()
+                    .max_by(|a, b| a.cpu_usage().total_cmp(&b.cpu_usage()))
+                    .map(|p| {
+                        let name = p.name().to_string_lossy();
+                        (
+                            trim_proc_name(&name).to_string(),
+                            p.cpu_usage(),
+                            p.pid().as_u32(),
+                        )
+                    })
+                    .unwrap_or_default();
+            }
+            tick = tick.wrapping_add(1);
+
+            let stat = CpuStat {
+                sys: sample.sys,
+                user: sample.user,
+                total: sample.sys + sample.user,
+                top_proc: top.0.clone(),
+                top_proc_pct: top.1,
+                top_pid: top.2,
+            };
+
+            {
+                let state = app.state::<CpuState>();
+                let mut history = state.history.lock().unwrap();
+                if history.len() == CPU_HISTORY {
+                    history.pop_front();
+                }
+                history.push_back(sample);
+                *state.latest.lock().unwrap() = stat.clone();
+            }
+            let _ = app.emit("cpu", &stat);
+        }
+    });
 }
 
 // ───────────────────────── volume / mic (osascript) ─────────────────
@@ -2075,6 +2317,7 @@ pub fn run() {
             set_appearance,
             battery,
             metrics_sample,
+            cpu_state,
             get_volume,
             set_volume,
             set_input_volume,
@@ -2117,6 +2360,10 @@ pub fn run() {
                 thumb_cache: Mutex::new(std::collections::HashMap::new()),
                 interactive_rects: interactive_rects.clone(),
             });
+            // CPU history + latest readout. Managed before the sampler starts
+            // (which happens below, after the bars exist) so `cpu_state` can
+            // answer a bar that asks before the first tick lands.
+            app.manage(CpuState::default());
             // Shared theme state (raw role maps + both palettes), resolved on
             // demand by get_config / apply_theme.
             app.manage(Mutex::new(ThemeState {
@@ -2219,6 +2466,11 @@ pub fn run() {
             // Event-driven Wi-Fi/network updates (replaces the old 15s poll).
             #[cfg(target_os = "macos")]
             install_network_observer(app.handle().clone());
+
+            // Always-on CPU sampling for the bar's graph pill (the notch's other
+            // metrics stay lazy — only this one is visible at rest).
+            #[cfg(target_os = "macos")]
+            install_cpu_sampler(app.handle().clone());
 
             Ok(())
         })

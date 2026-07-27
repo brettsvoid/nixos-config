@@ -14,6 +14,17 @@
   --vpn: #179299; /* catppuccin latte teal */
   --warn: #df8e1d; /* catppuccin latte yellow — wifi connected, no internet */
 
+  /* CPU graph traces (overridden from config.json, like the battery accents).
+     The sketchybar original used the Macchiato red/blue, which were picked for a
+     dark bar; these are the Latte equivalents, which read on the light pill. */
+  --cpu-sys: #d20f39;
+  --cpu-user: #1e66f5;
+  /* Load thresholds for the percentage readout — CSS-only state colors, same as
+     --warn. Ports the helper's ≥70 / ≥30 / ≥10 / else-default ladder. */
+  --cpu-hot: #d20f39; /* catppuccin latte red */
+  --cpu-warm: #fe640b; /* catppuccin latte peach */
+  --cpu-mild: #df8e1d; /* catppuccin latte yellow */
+
   /* marks layered on the (light) pill — tinted from --base so they track the
      theme instead of being a hardcoded crust color at varying alpha */
   --separator: color-mix(in srgb, var(--base) 30%, transparent);
@@ -51,6 +62,7 @@
   --radius-lg: 14px;
 
   /* ---- type scale ---- */
+  --font-3xs: 9px; /* caption under a readout (the CPU pill's process name) */
   --font-2xs: 10px;
   --font-xs: 11px;
   --font-sm: 12px;
@@ -552,6 +564,83 @@ body {
 }
 #wifi.off {
   opacity: var(--dim-more);
+}
+
+/* ---- CPU pill: top-process + percentage stacked beside the load graph ----
+   The sketchybar original gave its two text items width=0 so they overlaid the
+   graph box. That worked on a dark bar; over a red fill on this light pill it
+   doesn't, so the same pair sits beside the graph instead of on top of it. */
+#cpu {
+  color: var(--base);
+  gap: var(--space-4);
+}
+#cpu .cpu-icon {
+  font-size: var(--font-xl);
+  opacity: var(--dim-icon);
+}
+/* the process name captions the pair below it: percentage, then the graph */
+#cpu .cpu-readout {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+}
+#cpu .cpu-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+#cpu .cpu-top {
+  font-family: "FiraCode Nerd Font Mono", "FiraCode Nerd Font", monospace;
+  font-size: var(--font-3xs);
+  font-weight: 500;
+  line-height: 1;
+  opacity: var(--dim);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* spans the row beneath it, and fixed so a change of top process can't resize
+     the pill — the width feeds the native click-through rects, which would
+     otherwise need re-reporting on every sample */
+  width: 144px;
+}
+/* the name takes the slack so the pid sits flush right, and yields first: it
+   ellipsizes rather than pushing the pid out of view */
+#cpu .cpu-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#cpu .cpu-pid {
+  flex: none;
+  opacity: var(--dim-more);
+  font-variant-numeric: tabular-nums;
+}
+#cpu .cpu-pct {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  width: 30px; /* fits "100%" — keeps the graph from shifting as load changes */
+}
+/* load ladder, ported from the helper's thresholds (≥70 / ≥30 / ≥10) */
+#cpu.hot .cpu-pct {
+  color: var(--cpu-hot);
+}
+#cpu.warm .cpu-pct {
+  color: var(--cpu-warm);
+}
+#cpu.mild .cpu-pct {
+  color: var(--cpu-mild);
+}
+#cpu .cpu-graph {
+  /* the box the canvas paints into; main.ts scales the backing store to DPR and
+     divides the width into CPU_GRAPH.samples columns. Must match CPU_GRAPH.w /
+     .h in main.ts. */
+  width: 108px;
+  height: 14px;
+  display: block;
 }
 
 /* ---- launcher (⌘ quick-actions menu, lives in the workspaces pill) ---- */

@@ -29,6 +29,9 @@ sysinfo = "0.37"
 # the native frame window drawn with CALayer/CAShapeLayer (no webview). All
 # pinned to the 0.3 objc2 ecosystem already in the tree via tao/wry.
 [target.'cfg(target_os = "macos")'.dependencies]
+# mach `host_statistics(HOST_CPU_LOAD_INFO)` for the CPU pill's system/user tick
+# split — sysinfo only exposes an aggregate percentage, with no such breakdown.
+libc = "0.2"
 objc2 = "0.6"
 # Objective-C blocks for the NSEvent cursor monitors that drive bar click-through.
 block2 = "0.6"

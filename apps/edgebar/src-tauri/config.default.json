@@ -12,6 +12,8 @@
       "batteryCharging": "#40a02b",
       "batteryLow": "#d20f39",
       "vpn": "#179299",
+      "cpuSys": "#d20f39",
+      "cpuUser": "#1e66f5",
       "frameLine": "rosewater",
       "frameCorner": "#000000"
     },
@@ -26,6 +28,8 @@
       "batteryCharging": "#40a02b",
       "batteryLow": "#d20f39",
       "vpn": "#179299",
+      "cpuSys": "#d20f39",
+      "cpuUser": "#1e66f5",
       "frameLine": "rosewater",
       "frameCorner": "#000000"
     }
