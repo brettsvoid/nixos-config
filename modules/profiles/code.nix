@@ -15,7 +15,9 @@ _: {
         git-lfs
 
         # Universal CLI dev tools
-        delta
+        # `delta` is installed by programs.delta in apps/git.nix, which also
+        # configures git to use it — listing it here too would be a second,
+        # silent source of truth for the same package.
         direnv
         nix-direnv
         just
