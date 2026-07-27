@@ -41,6 +41,29 @@ _: {
 
         oh-my-zsh = {
           enable = true;
+
+          # Just `git`. The pre-nix config also loaded aws, brew and python
+          # (plus chezmoi, now obsolete, and the autosuggestions/completions/
+          # syntax-highlighting plugins, which the options above provide
+          # natively). Each was reviewed and dropped deliberately:
+          #
+          #   aws    — asp/agp/acp switch AWS_PROFILE for the whole shell.
+          #            direnv (profile-code) already sets it per-directory,
+          #            which is both narrower and automatic, and starship's
+          #            `aws` module already renders the active profile, so the
+          #            plugin's aws_prompt_info was redundant too.
+          #   brew   — 36 aliases and nothing else. Worse than merely
+          #            redundant: Homebrew here is declarative with
+          #            `onActivation.cleanup = "uninstall"`, so anything `bi`
+          #            installs imperatively is removed at the next
+          #            activation. The plugin makes that mistake frictionless.
+          #   python — 3 trivial aliases plus venv helpers, of which only
+          #            auto_vrun mattered; it hooks chpwd to activate venvs on
+          #            every cd, racing direnv for the same job.
+          #
+          # Lost with aws: `aws <TAB>` subcommand completion, which the plugin
+          # sourced from aws_zsh_completer.sh. If that is ever wanted it can be
+          # enabled directly — it does not need oh-my-zsh.
           plugins = [ "git" ];
         };
 
