@@ -66,7 +66,10 @@ in
           "sql"
           "ssh_config"
           "terraform"
-          "tmux"
+          # "tmux" — dropped: nvim-treesitter-parsers.tmux no longer exists in
+          # nixpkgs (removed upstream between the 2026-05-07 and 2026-07-27
+          # nixpkgs revs). Costs syntax highlighting for tmux.conf only. Restore
+          # this line if the parser reappears.
           "toml"
           "tsx"
           "typescript"

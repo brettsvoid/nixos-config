@@ -20,7 +20,11 @@ _: {
         {
           enable = true;
           settings.default_session = {
-            command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --asterisks --remember --sessions ${sessions}";
+            # pkgs.tuigreet, not pkgs.greetd.tuigreet: nixpkgs moved tuigreet to
+            # the top level between the 2026-05-07 and 2026-07-27 revs, and
+            # `pkgs.greetd` is now the greetd derivation itself rather than an
+            # attrset of the greeters.
+            command = "${pkgs.tuigreet}/bin/tuigreet --time --asterisks --remember --sessions ${sessions}";
             user = "greeter";
           };
         };
