@@ -13,6 +13,19 @@
 # `onActivation.cleanup = "uninstall"` — the brews/casks lists are
 # authoritative: anything installed but not declared here is uninstalled on
 # activation (cask user-data is preserved; "zap" would also wipe that).
+#
+# ─── Shared vs. per-host ────────────────────────────────────────────────
+# The lists below are the SHARED set: everything installed on every Mac.
+# Host-only packages live in the host file (modules/hosts/*.nix), which
+# appends to the same options — `taps`/`brews`/`casks` are list options, so
+# the module system concatenates them and the authoritative Brewfile for a
+# given machine is shared ++ that host's extras. Adding a package to only
+# one Mac means editing only that host file; nothing here needs to change.
+#
+# Because cleanup is authoritative, a package missing from BOTH lists is
+# uninstalled on the next switch — so when adding a host, snapshot its
+# `brew leaves --installed-on-request` first and put anything worth keeping
+# in its host file.
 _: {
   flake.modules.darwin.homebrew =
     {
@@ -86,21 +99,13 @@ _: {
 
         # Third-party taps. homebrew/{core,cask,bundle} are auto-tapped by
         # brew on first use and don't need to be declared here.
-        taps = [
-          "anirudhg07/anirudhg07"
-          "auth0/auth0-cli"
-          "aws/tap"
-          "facebook/fb"
-          "felixkratz/formulae"
-          "gabotechs/taps"
-          "hashicorp/tap"
-          "julien-cpsn/atac"
-          "koekeishiya/formulae"
-          "libsql/sqld"
-          "stripe/stripe-cli"
-          "tursodatabase/tap"
-          "wix/brew"
-        ];
+        #
+        # Empty: no *shared* brew comes from a third-party tap — every
+        # tapped formula belongs to a single host, so the taps are declared
+        # alongside them in the host files. Kept as an explicit `[ ]` so the
+        # shared/per-host split is visible rather than looking like an
+        # oversight.
+        taps = [ ];
 
         # `brew leaves --installed-on-request`. Anything migratable to
         # nixpkgs without losing platform-specific behaviour should move
@@ -115,46 +120,30 @@ _: {
         brews = [
           "age"
           "angband"
-          "anirudhg07/anirudhg07/cheatshh"
-          "ansible"
-          "auth0/auth0-cli/auth0"
           "bore-cli"
           "bundletool"
           "caddy"
           "cmake"
           "cocoapods"
           "dive"
-          "docker"
           "dua-cli"
           "duckdb"
           "entr"
-          "facebook/fb/idb-companion"
           "fastlane"
-          "felixkratz/formulae/borders"
           "ffmpegthumbnailer"
           "fnm"
-          "gabotechs/taps/dep-tree"
-          "gcc"
-          "gdu"
           "git"
-          "git-cliff"
           "git-gui"
           "gitleaks"
           "glow"
           "go"
           "graphviz"
-          "hashicorp/tap/nomad"
-          "hashicorp/tap/terraform"
           "humanlog"
           "imagemagick"
           "inframap"
           "ios-deploy"
-          "julien-cpsn/atac/atac"
           "lazydocker"
-          "lazyjournal"
           "libsixel"
-          "lima"
-          "llvm"
           "lsd"
           "luarocks"
           "mkcert"
@@ -162,7 +151,6 @@ _: {
           "neomutt"
           "nethack"
           "nmap"
-          "node"
           "nushell"
           "openjdk@17"
           "pandoc"
@@ -175,39 +163,25 @@ _: {
           "pnpm"
           "poppler"
           "portal"
-          "postgresql@15"
           "posting"
-          "pre-commit"
           "python@3.10"
           "python@3.11"
-          "python@3.12"
-          "qemu"
-          "qrencode"
-          "qt@5"
           "rogue"
           "rustup"
-          "sesh"
           "sevenzip"
           "sshs"
-          "stripe/stripe-cli/stripe"
           "taskwarrior-tui"
           "terragrunt"
           "tflint"
           "tfsec"
           "timewarrior"
-          "tlrc"
-          "tmuxinator"
           "tree-sitter-cli"
-          "tursodatabase/tap/turso"
           "uv"
           "w3m"
           "watchman"
           "wget"
-          "wireguard-tools"
           "wireshark"
-          "wix/brew/applesimutils"
           "yazi"
-          "yt-dlp"
           "zsh-autosuggestions"
           "zsh-syntax-highlighting"
         ];
@@ -218,7 +192,6 @@ _: {
         casks = [
           "amethyst"
           "anaconda"
-          "arduino-ide"
           "bitwarden"
           "burp-suite"
           "dbeaver-community"
@@ -227,13 +200,11 @@ _: {
           "font-fira-mono-nerd-font"
           "font-symbols-only-nerd-font"
           "ghostty"
-          "godot"
           "hammerspoon"
           "karabiner-elements"
           "loopback"
           "macdown"
           "mos"
-          "mqtt-explorer"
           "ngrok"
           "postman"
           "raspberry-pi-imager"
@@ -241,7 +212,6 @@ _: {
           "shortcat"
           "syncthing-app"
           "vivaldi"
-          "vlc"
           "vnc-viewer"
           "wezterm"
           "zen"

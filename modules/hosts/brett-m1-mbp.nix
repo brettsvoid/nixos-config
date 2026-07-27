@@ -57,6 +57,69 @@ in
 
         nixpkgs.hostPlatform = "aarch64-darwin";
 
+        # ─── Homebrew (host-only) ──────────────────────────────────────
+        # Appended to the shared lists in modules/system/darwin/homebrew.nix
+        # — these options are lists, so the effective Brewfile is shared ++
+        # this. Everything here is on the MBP and not the mac mini: iOS/
+        # Android build tooling, the work HashiCorp/Stripe/Auth0 CLIs, and
+        # the yabai-stack helper `borders`.
+        homebrew = {
+          taps = [
+            "anirudhg07/anirudhg07"
+            "auth0/auth0-cli"
+            "aws/tap"
+            "facebook/fb"
+            "felixkratz/formulae"
+            "gabotechs/taps"
+            "hashicorp/tap"
+            "julien-cpsn/atac"
+            "koekeishiya/formulae"
+            "libsql/sqld"
+            "stripe/stripe-cli"
+            "tursodatabase/tap"
+            "wix/brew"
+          ];
+          brews = [
+            "anirudhg07/anirudhg07/cheatshh"
+            "ansible"
+            "auth0/auth0-cli/auth0"
+            "docker"
+            "facebook/fb/idb-companion"
+            "felixkratz/formulae/borders"
+            "gabotechs/taps/dep-tree"
+            "gcc"
+            "gdu"
+            "git-cliff"
+            "hashicorp/tap/nomad"
+            "hashicorp/tap/terraform"
+            "julien-cpsn/atac/atac"
+            "lazyjournal"
+            "lima"
+            "llvm"
+            "node"
+            "postgresql@15"
+            "pre-commit"
+            "python@3.12"
+            "qemu"
+            "qrencode"
+            "qt@5"
+            "sesh"
+            "stripe/stripe-cli/stripe"
+            "tlrc"
+            "tmuxinator"
+            "tursodatabase/tap/turso"
+            "wireguard-tools"
+            "wix/brew/applesimutils"
+            "yt-dlp"
+          ];
+          casks = [
+            "arduino-ide"
+            "godot"
+            "mqtt-explorer"
+            "vlc"
+          ];
+        };
+
         # ─── Home Manager wiring ───────────────────────────────────────
         home-manager = {
           useGlobalPkgs = true;
