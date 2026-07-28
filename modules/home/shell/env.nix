@@ -36,6 +36,28 @@ _: {
         [ -f "$HOME/.env_vars" ] && source "$HOME/.env_vars"
       '';
 
+      # Put Homebrew on PATH. Nothing else does, on either host:
+      # /etc/paths, /etc/paths.d, macOS's /etc/zprofile (which only runs
+      # path_helper over those) and nix-darwin's environment.systemPath all
+      # omit /opt/homebrew/bin.
+      #
+      # This has to be an ABSOLUTE path. nix-darwin's generated /etc/zshrc
+      # already runs `eval "$(brew shellenv 2>/dev/null || true)"`, but by
+      # bare name — and zsh reads /etc/zshenv, ~/.zshenv, /etc/zprofile,
+      # ~/.zprofile, then /etc/zshrc, so nothing has put brew on PATH by the
+      # time it runs. The lookup fails and `|| true` hides it.
+      #
+      # profileExtra, not initContent: `brew shellenv` is login-shell setup
+      # (it exports HOMEBREW_PREFIX / _CELLAR / _REPOSITORY and extends
+      # MANPATH and INFOPATH, not just PATH), and the PATH block below is
+      # guarded by `command -v brew`, so brew must already resolve by then.
+      #
+      # Pre-nix this lived in a hand-written ~/.zprofile that home-manager now
+      # owns and overwrites — which is exactly how it went missing.
+      programs.zsh.profileExtra = lib.mkIf pkgs.stdenv.isDarwin ''
+        [ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
+      '';
+
       programs.zsh.initContent = lib.mkIf pkgs.stdenv.isDarwin (
         lib.mkOrder 600 ''
           # ─── PATH additions (Mac) ─────────────────────────────────────
