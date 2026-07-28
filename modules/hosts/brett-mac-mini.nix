@@ -170,6 +170,7 @@ in
                 apps-nh
                 apps-comma
                 apps-worktrunk
+                apps-sesh
                 profile-base
                 profile-code
                 profile-work

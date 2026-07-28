@@ -42,9 +42,6 @@ in
         "..." = "cd ../..";
         "...." = "cd ../../..";
 
-        # tmuxinator
-        mux = "tmuxinator";
-
         # Personal scripts
         commitrefine = "python ~/projects/github.com/brettsvoid/commit-refine/main.py";
         download_website = "wget --mirror -p --convert-links --no-parent";

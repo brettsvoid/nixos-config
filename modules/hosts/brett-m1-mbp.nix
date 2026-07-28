@@ -103,10 +103,8 @@ in
             "qemu"
             "qrencode"
             "qt@5"
-            "sesh"
             "stripe/stripe-cli/stripe"
             "tlrc"
-            "tmuxinator"
             "tursodatabase/tap/turso"
             "wireguard-tools"
             "wix/brew/applesimutils"
@@ -156,6 +154,8 @@ in
                 apps-nh
                 apps-comma
                 apps-worktrunk
+                apps-sesh
+                apps-tmuxinator
                 profile-base
                 profile-code
                 profile-work
