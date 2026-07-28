@@ -42,6 +42,32 @@ _: {
           # Highlights hunks in `git add -p` / `git add -i`.
           interactive.diffFilter = "${delta} --color-only";
         };
+
+        # Work identity, for repos under ~/work/projects only.
+        #
+        # `path` is a plain string, NOT a nix path, and there is deliberately
+        # no `contents`: setting contents would make home-manager generate the
+        # file into the nix store from this tracked, PUBLIC repo, which is
+        # exactly where a work email address should not end up. The include
+        # file is untracked and lives outside the repo, the same split as
+        # ~/.config/zsh/local.zsh — see local.zsh.example.
+        #
+        # Git silently ignores an include whose path does not exist, so hosts
+        # without the file just keep the personal identity above.
+        #
+        # Directory-based rather than matching on the remote URL: `tyto` is a
+        # personal-identity repo that lives in the SAME GitHub org (irj-io) as
+        # work's `irj-www`, so no `hasconfig:remote.*.url` pattern can separate
+        # them. The path is where the rule actually lives.
+        #
+        # The trailing slash matters — `gitdir:` with one matches everything
+        # BELOW the directory; without it, only the directory itself.
+        includes = [
+          {
+            condition = "gitdir:~/work/projects/";
+            path = "~/.config/git/work.inc";
+          }
+        ];
       };
 
       # Syntax-highlighting pager for diffs. Previously `delta` was installed by
