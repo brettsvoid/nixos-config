@@ -8,6 +8,15 @@
 # Karabiner-Elements itself is installed as a Homebrew cask (see
 # modules/system/darwin/homebrew.nix). Current key map: caps_lock →
 # backspace, right_command → Hyper (⌃⌥⇧⌘) with vim-style sublayers.
+#
+# There used to be a rule ahead of that one mapping caps_lock → F18 on the
+# built-in keyboard, to trigger skhd's `hyper_mode`. It was removed: skhd is
+# only imported by the yabai branch of the wmStack switch in modules/hosts,
+# and both hosts select aerospace, which binds nothing to F18. Because
+# Karabiner takes the FIRST matching manipulator, that rule also shadowed the
+# backspace mapping on the MacBook's built-in keyboard — external keyboards
+# got backspace, the built-in one got a dead key. Re-adding it only makes
+# sense together with skhd.
 { config, ... }:
 let
   repoDir = config.flake.lib.repoDir;
