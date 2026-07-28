@@ -7,19 +7,38 @@
 # Keep sensitive/machine-specific values (internal hostnames, secret
 # lookup IDs, work tokens, account-specific resource IDs) here, never in
 # the tracked Nix files.
+#
+# This file is per-machine by design, so not every block belongs on every
+# host. Blocks below are marked [mac mini] / [macbook] where they are known
+# to be host-specific; unmarked blocks go everywhere.
 
 # ─── Work secrets (Bitwarden Secrets Manager, runtime-fetched) ──────────
 # Each fetch falls back to empty on failure so a missing BWS_ACCESS_TOKEN
-# doesn't break the shell.
+# doesn't break the shell. BWS_ACCESS_TOKEN itself comes from ~/.env_vars,
+# which .zshenv sources BEFORE this file — see the comment in env.nix.
 if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
   _bws() {
     bws secret get "$1" --access-token "$BWS_ACCESS_TOKEN" 2>/dev/null \
       | jq -r '.value' 2>/dev/null
   }
 
-  # Nomad
-  export NOMAD_ADDR="http://<nomad-host>:4646"
-  export NOMAD_OPERATOR_TOKEN="$(_bws <nomad-token-secret-id>)"
+  # Nomad — two separate clusters, each with its own token.
+  #
+  # These were previously two blocks that both assigned NOMAD_ADDR /
+  # NOMAD_OPERATOR_TOKEN / NOMAD_TOKEN, so the second silently won and the
+  # first cluster was unreachable. Name them apart, then pick a default
+  # explicitly: the Nomad CLI only ever reads NOMAD_ADDR / NOMAD_TOKEN, so
+  # something has to set those or every `nomad` command breaks.
+  export NOMAD_ADDR_PI="http://<pi-cluster-host>:4646"
+  export NOMAD_TOKEN_PI="$(_bws <pi-nomad-token-secret-id>)"
+
+  export NOMAD_ADDR_TYTO="http://<tyto-nomad-host>:4646"
+  export NOMAD_TOKEN_TYTO="$(_bws <tyto-nomad-token-secret-id>)"
+
+  # Default target. Override per-command for the other cluster:
+  #   NOMAD_ADDR=$NOMAD_ADDR_PI NOMAD_TOKEN=$NOMAD_TOKEN_PI nomad status
+  export NOMAD_ADDR="$NOMAD_ADDR_TYTO"
+  export NOMAD_OPERATOR_TOKEN="$NOMAD_TOKEN_TYTO"
   export NOMAD_TOKEN="$NOMAD_OPERATOR_TOKEN"
 
   # Sentry MCP / release auth
@@ -37,6 +56,10 @@ if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
 
   # Cloudflare (Birdie)
   export CLOUDFLARE_BIRDIE_API_TOKEN="<api-key>"
+
+  # [mac mini] Tyto API key, and the S3-backed Nx build cache.
+  export TY_API_KEY="$(_bws <tyto-api-key-secret-id>)"
+  export NX_KEY="$(_bws <nx-s3-cache-key-secret-id>)"
 fi
 
 # ─── AWS-managed EC2 instance shortcuts (account-specific resource IDs) ──
@@ -44,5 +67,12 @@ alias vpn-start='aws ec2 start-instances --profile <profile> --region <region> -
 alias vpn-stop='aws ec2 stop-instances --profile <profile> --region <region> --instance-ids <instance-id>'
 alias vpn-status="aws ec2 describe-instances --profile <profile> --region <region> | jq '.Reservations[0].Instances[0].State'"
 
+# [macbook] Factorio server, a different AWS profile and region to the VPN box.
+alias factorio-start='aws ec2 start-instances --profile <profile> --region <region> --instance-ids <instance-id>'
+alias factorio-stop='aws ec2 stop-instances --profile <profile> --region <region> --instance-ids <instance-id>'
+alias factorio-status="aws ec2 describe-instances --profile <profile> --region <region> | jq '.Reservations[0].Instances[0].State'"
+
 # ─── Misc machine-local aliases ─────────────────────────────────────────
+# `factorio` launches the game; the factorio-* aliases above start and stop
+# the EC2 box the server runs on. Similar names, unrelated jobs.
 alias factorio='<launch-command>'
