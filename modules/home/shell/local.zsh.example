@@ -30,9 +30,19 @@ if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
   # Grafana
   export GRAFANA_TOKEN_TYTO_CLAUDE_MCP="$(_bws <grafana-token-secret-id>)"
   export GRAFANA_SERVICE_ACCOUNT_TOKEN_MCP="$GRAFANA_TOKEN_TYTO_CLAUDE_MCP"
+
+  # Home Assistant AWS credentials
+  export AWS_ACCESS_KEY_ID_HOME_ASSISTANT="<access-key-id>"
+  export AWS_SECRET_ACCESS_KEY_HOME_ASSISTANT="<secret-access-key>"
+
+  # Cloudflare (Birdie)
+  export CLOUDFLARE_BIRDIE_API_TOKEN="<api-key>"
 fi
 
 # ─── AWS-managed EC2 instance shortcuts (account-specific resource IDs) ──
 alias vpn-start='aws ec2 start-instances --profile <profile> --region <region> --instance-ids <instance-id>'
 alias vpn-stop='aws ec2 stop-instances --profile <profile> --region <region> --instance-ids <instance-id>'
 alias vpn-status="aws ec2 describe-instances --profile <profile> --region <region> | jq '.Reservations[0].Instances[0].State'"
+
+# ─── Misc machine-local aliases ─────────────────────────────────────────
+alias factorio='<launch-command>'
