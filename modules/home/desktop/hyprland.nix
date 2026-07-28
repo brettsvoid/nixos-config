@@ -77,9 +77,25 @@ in
     in
 
     {
+      # xdg-desktop-portal 1.17 stopped guessing which portal backend serves
+      # which interface. The system side already declares this in
+      # modules/system/nixos/hyprland.nix, but home-manager ships its own
+      # xdg.portal module with its own config, and warns separately when that
+      # one is left empty. "*" keeps the pre-1.17 behaviour: use the first
+      # implementation found in lexicographical order.
+      xdg.portal.config.common.default = "*";
+
       wayland.windowManager.hyprland = {
         enable = true;
         package = null; # installed system-wide via programs.hyprland.enable
+
+        # Home-manager 26.05 switches this default to "lua". Pinned to the
+        # legacy value because the `settings` block below is hyprlang — the
+        # config is currently generated as hyprland.conf, and adopting "lua"
+        # means rewriting it, not flipping a flag. Until then this is only
+        # implicit via home.stateVersion ("24.11"), which is a fragile place
+        # to leave a behaviour switch.
+        configType = "hyprlang";
 
         # Source the dynamically generated DRM device config (created by
         # systemd service hyprland-drm-config in configuration.nix)
