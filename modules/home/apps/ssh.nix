@@ -5,10 +5,10 @@ _: {
   flake.modules.homeManager.apps-ssh = {
     programs.ssh = {
       enable = true;
-      # HM 25.x deprecated the standalone `programs.ssh.addKeysToAgent`
-      # option in favour of putting defaults under matchBlocks."*". Disabling
-      # the auto-generated default block silences the deprecation warning
-      # and keeps everything explicit here.
+      # Keep home-manager from emitting its own `Host *` block on top of the
+      # one below. Home-manager's docs say this option will itself be
+      # deprecated, and give the replacement as exactly what we already do:
+      # declare `settings."*"` by hand.
       enableDefaultConfig = false;
       # Per-host blocks (internal IPs, work hostnames, which key unlocks which
       # box) are infrastructure recon and this repo is public, so they live in
@@ -16,18 +16,28 @@ _: {
       # nix only emits the `Include` line; the global defaults below are generic
       # and safe to publish.
       includes = [ "config.local" ];
-      matchBlocks."*" = {
-        identityFile = "~/.ssh/id_ed25519";
-        addKeysToAgent = "yes";
-        forwardAgent = false;
-        compression = false;
-        serverAliveInterval = 0;
-        serverAliveCountMax = 3;
-        hashKnownHosts = false;
-        userKnownHostsFile = "~/.ssh/known_hosts";
-        controlMaster = "no";
-        controlPath = "~/.ssh/master-%r@%n:%p";
-        controlPersist = "no";
+      # `settings`, not the older `matchBlocks`, which home-manager now warns
+      # on. The keys are upstream ssh_config(5) directive names, verbatim —
+      # `settings` is a freeform attrset that passes them straight through,
+      # instead of the curated camelCase mapping matchBlocks used
+      # (`identityFile`, `addKeysToAgent`, …).
+      #
+      # The cost of freeform: nothing type-checks these any more. Under
+      # matchBlocks a typo failed at eval; here `IdentiyFile` would sail
+      # through and render a directive ssh silently ignores. Check the
+      # generated ~/.ssh/config after editing this block.
+      settings."*" = {
+        IdentityFile = "~/.ssh/id_ed25519";
+        AddKeysToAgent = "yes";
+        ForwardAgent = false;
+        Compression = false;
+        ServerAliveInterval = 0;
+        ServerAliveCountMax = 3;
+        HashKnownHosts = false;
+        UserKnownHostsFile = "~/.ssh/known_hosts";
+        ControlMaster = "no";
+        ControlPath = "~/.ssh/master-%r@%n:%p";
+        ControlPersist = "no";
       };
     };
   };
