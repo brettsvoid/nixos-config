@@ -34,6 +34,7 @@ the one that has to catch up (it currently has ~3 segments to edgebar's ~8).
 | Default scheme | `scheme-tonal-spot`, appearance auto | `scheme-neutral`, mode pinned light | ✗ |
 | Fonts | FiraCode Nerd Font, base 13, Lucide SVG icons | FiraCode Nerd Font, base 14, Nerd Font glyph icons | ~ |
 | Click-through | Per-pill interactive rects, cursor-tracked | Whole-strip mask | ✗ |
+| Fullscreen apps | Bar + frame order out while a window covers that display (500ms window-list poll) | layer-shell `Top`, left to the compositor | ~ |
 | Systray / media | not implemented (roadmapped last) | not implemented | ✓ |
 
 `~` = format agrees but mechanism/values differ.

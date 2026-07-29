@@ -2244,6 +2244,9 @@ fn rebuild_displays(app: &tauri::AppHandle) {
     }
     let rects = app.state::<AppState>().interactive_rects.clone();
     sync_bars_to_monitors(app, geometry.window_height, &rects);
+    // Re-arm the fullscreen watcher against the new screen set: everything we
+    // just built is visible, whatever the old per-screen state said.
+    snapshot_screen_bounds(mtm);
 }
 
 #[cfg(target_os = "macos")]
@@ -2304,6 +2307,211 @@ fn install_screen_observer(app: tauri::AppHandle) {
         );
     }
     std::mem::forget(observer);
+}
+
+// ───────────────────────── hide under fullscreen apps ───────────────
+// A native-fullscreen window gets its own space, and our chrome joins every
+// space (CanJoinAllSpaces), so the frame's edge line and the bar draw on top of
+// fullscreen video and games. The collection-behavior knobs don't fix this —
+// measured on this machine: dropping FullScreenAuxiliary still leaves the
+// window visible in the fullscreen space, and dropping CanJoinAllSpaces does
+// hide it there but also pins it to whichever space it was built on. macOS
+// exposes no public "is this space fullscreen" query either, so detect it from
+// the window list: an app that covers a whole display at layer 0 is fullscreen
+// (native, or borderless with no space of its own), and we order that display's
+// chrome out until it goes away.
+
+/// How often the fullscreen check runs. `CGWindowListCopyWindowInfo` measured
+/// ~1ms per call with ~20 windows on screen, so this costs ~0.2% of one core;
+/// it's also the worst-case lag before the bar comes back on exiting fullscreen.
+#[cfg(target_os = "macos")]
+const FULLSCREEN_POLL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Every screen's frame in CG display coordinates (top-left origin), in
+/// `NSScreen::screens` order — the space `CGWindowList` reports window bounds
+/// in. Snapshotted on the main thread by `rebuild_displays` so the watcher
+/// thread can compare without touching AppKit off-main.
+#[cfg(target_os = "macos")]
+static SCREEN_BOUNDS: Mutex<Vec<[f64; 4]>> = Mutex::new(Vec::new());
+
+/// Per-screen hidden state as last applied, so the watcher only hops to the
+/// main thread when something actually changed. Cleared alongside a screen
+/// snapshot: a rebuild makes fresh (visible) windows that need re-hiding.
+#[cfg(target_os = "macos")]
+static FULLSCREEN_APPLIED: Mutex<Vec<bool>> = Mutex::new(Vec::new());
+
+/// Snapshot the screen frames for the watcher thread. Main thread only.
+#[cfg(target_os = "macos")]
+fn snapshot_screen_bounds(mtm: objc2::MainThreadMarker) {
+    use objc2_app_kit::NSScreen;
+
+    let screens = NSScreen::screens(mtm);
+    // CG measures from the top-left of the primary screen, NSScreen from each
+    // screen's bottom-left. screens[0] is the primary and sits at (0, 0), so its
+    // height is the whole conversion.
+    let flip = screens
+        .firstObject()
+        .map(|s| s.frame().size.height)
+        .unwrap_or(0.0);
+    let bounds = screens
+        .iter()
+        .map(|s| {
+            let f = s.frame();
+            [
+                f.origin.x,
+                flip - (f.origin.y + f.size.height),
+                f.size.width,
+                f.size.height,
+            ]
+        })
+        .collect();
+    *SCREEN_BOUNDS.lock().unwrap() = bounds;
+    FULLSCREEN_APPLIED.lock().unwrap().clear();
+}
+
+/// Read one CFNumber field out of a `CGWindowList` entry.
+#[cfg(target_os = "macos")]
+fn window_int(
+    win: &objc2_core_foundation::CFDictionary,
+    key: &objc2_core_foundation::CFString,
+) -> Option<i32> {
+    use objc2_core_foundation::{CFNumber, CFNumberType, CFString};
+
+    let value = unsafe { win.value((key as *const CFString).cast()) } as *const CFNumber;
+    let value = unsafe { value.as_ref() }?;
+    let mut out: i32 = 0;
+    unsafe { value.value(CFNumberType::SInt32Type, (&mut out as *mut i32).cast()) }.then_some(out)
+}
+
+/// Which screens are fully covered by an app window right now, in the order of
+/// `bounds` (i.e. `NSScreen::screens` order). Runs off the main thread —
+/// `CGWindowList` is thread-safe, and bounds/layer need no screen-recording
+/// permission (only window *titles* do).
+#[cfg(target_os = "macos")]
+fn covered_screens(bounds: &[[f64; 4]]) -> Vec<bool> {
+    use objc2_core_foundation::{CFDictionary, CFString, CGRect};
+    use objc2_core_graphics::{
+        kCGNullWindowID, kCGWindowBounds, kCGWindowLayer, CGRectMakeWithDictionaryRepresentation,
+        CGWindowListCopyWindowInfo, CGWindowListOption,
+    };
+
+    let mut covered = vec![false; bounds.len()];
+    let Some(list) = CGWindowListCopyWindowInfo(
+        CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements,
+        kCGNullWindowID,
+    ) else {
+        return covered;
+    };
+
+    for i in 0..list.count() {
+        let win = unsafe { list.value_at_index(i) } as *const CFDictionary;
+        let Some(win) = (unsafe { win.as_ref() }) else {
+            continue;
+        };
+        // Layer 0 is where ordinary app windows live. Our own bar (5) and frame
+        // (6) sit above it, so they can never be read as a fullscreen app.
+        if window_int(win, unsafe { kCGWindowLayer }) != Some(0) {
+            continue;
+        }
+        let rect = unsafe { win.value((kCGWindowBounds as *const CFString).cast()) }
+            as *const CFDictionary;
+        let Some(rect) = (unsafe { rect.as_ref() }) else {
+            continue;
+        };
+        let mut r = CGRect::ZERO;
+        if !unsafe { CGRectMakeWithDictionaryRepresentation(Some(rect), &mut r) } {
+            continue;
+        }
+        // Covers the screen edge to edge, menu-bar strip included. A tiled or
+        // dragged window can't reach that: AeroSpace reserves the bar's height
+        // as its top outer gap, and macOS won't let a normal window own the
+        // menu-bar row.
+        for (c, s) in covered.iter_mut().zip(bounds) {
+            *c |= r.origin.x <= s[0] + 1.0
+                && r.origin.y <= s[1] + 1.0
+                && r.origin.x + r.size.width >= s[0] + s[2] - 1.0
+                && r.origin.y + r.size.height >= s[1] + s[3] - 1.0;
+        }
+    }
+    covered
+}
+
+/// Order a window in or out, skipping the call when it's already there.
+#[cfg(target_os = "macos")]
+fn set_window_hidden(window: &objc2_app_kit::NSWindow, hide: bool) {
+    // Already where we want it (visible == !hide).
+    if window.isVisible() != hide {
+        return;
+    }
+    if hide {
+        window.orderOut(None);
+    } else {
+        // Not makeKeyAndOrderFront: the bar must never steal focus.
+        window.orderFrontRegardless();
+    }
+}
+
+/// Show or hide each screen's frame + bar. Main thread only (AppKit).
+#[cfg(target_os = "macos")]
+fn apply_fullscreen_hiding(mtm: objc2::MainThreadMarker, hidden: &[bool]) {
+    use objc2_app_kit::NSScreen;
+
+    let screens = NSScreen::screens(mtm);
+    if screens.len() != hidden.len() {
+        // Displays changed between the snapshot and now; the rebuild takes a
+        // fresh snapshot and the next tick re-applies.
+        return;
+    }
+    // Frames are built one per screen in NSScreen order, so index == screen.
+    FRAME_WINDOWS.with(|cell| {
+        for (f, &hide) in cell.borrow().iter().zip(hidden) {
+            set_window_hidden(&f.window, hide);
+        }
+    });
+    // Bars are keyed by monitor, which isn't NSScreen order — match each one to
+    // the screen its origin sits on. `frame` survives orderOut, so a hidden bar
+    // still finds its screen when it's time to come back.
+    TRACKED_BARS.with(|bars| {
+        for win in bars.borrow().values() {
+            let o = win.frame().origin;
+            let on = screens.iter().position(|s| {
+                let f = s.frame();
+                o.x >= f.origin.x
+                    && o.x < f.origin.x + f.size.width
+                    && o.y >= f.origin.y
+                    && o.y < f.origin.y + f.size.height
+            });
+            if let Some(&hide) = on.and_then(|i| hidden.get(i)) {
+                set_window_hidden(win, hide);
+            }
+        }
+    });
+}
+
+/// Poll for fullscreen apps and keep each display's chrome hidden while one is
+/// up. Off-thread; only hops to main when the answer changes.
+#[cfg(target_os = "macos")]
+fn install_fullscreen_watcher(app: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(FULLSCREEN_POLL);
+        let bounds = SCREEN_BOUNDS.lock().unwrap().clone();
+        if bounds.is_empty() {
+            continue;
+        }
+        let hidden = covered_screens(&bounds);
+        {
+            let mut applied = FULLSCREEN_APPLIED.lock().unwrap();
+            if *applied == hidden {
+                continue;
+            }
+            applied.clone_from(&hidden);
+        }
+        let _ = app.run_on_main_thread(move || {
+            if let Some(mtm) = objc2::MainThreadMarker::new() {
+                apply_fullscreen_hiding(mtm, &hidden);
+            }
+        });
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2388,6 +2596,8 @@ pub fn run() {
                 install_cursor_monitors(interactive_rects.clone());
                 rebuild_displays(app.handle());
                 install_screen_observer(app.handle().clone());
+                // Get out of the way of fullscreen apps (see FULLSCREEN_POLL).
+                install_fullscreen_watcher(app.handle().clone());
             }
             #[cfg(not(target_os = "macos"))]
             if let Some(bar) = app.get_webview_window("bar") {

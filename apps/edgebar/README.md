@@ -16,6 +16,11 @@ Click-through is solved with window *geometry*, not by toggling
 Anything outside the top strip lands on the frame and passes through to the app
 underneath. See the header of `src-tauri/src/lib.rs` for the full rationale.
 
+Both windows join every space, so they'd otherwise draw on top of native
+fullscreen. A watcher polls the window list twice a second and orders a display's
+bar + frame out while an app covers it edge to edge — see `FULLSCREEN_POLL` for
+why detection, and not `NSWindowCollectionBehavior`, does the work.
+
 ## Config & theming
 
 Both are Nix-rendered, not committed live files:

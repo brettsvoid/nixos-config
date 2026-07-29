@@ -63,8 +63,22 @@ objc2-quartz-core = { version = "0.3", features = [
   "CAShapeLayer",
   "objc2-core-foundation",
 ] }
-objc2-core-graphics = { version = "0.3", features = ["CGColor", "CGPath"] }
-objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
+# CGWindow/CGGeometry: the on-screen window list that tells us when an app has
+# taken a whole display (native fullscreen), so the bar + frame can get out of
+# the way. Reading bounds/layer needs no screen-recording permission.
+objc2-core-graphics = { version = "0.3", features = [
+  "CGColor",
+  "CGPath",
+  "CGWindow",
+  "CGGeometry",
+] }
+objc2-core-foundation = { version = "0.3", features = [
+  "CFCGTypes",
+  "CFArray",
+  "CFDictionary",
+  "CFNumber",
+  "CFString",
+] }
 
 # Event-driven network reachability (SCNetworkReachability): pushes a network
 # update on route/interface/VPN changes instead of polling on a timer. The 0.9
