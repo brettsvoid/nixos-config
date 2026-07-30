@@ -62,6 +62,24 @@ _: {
         #
         # The trailing slash matters — `gitdir:` with one matches everything
         # BELOW the directory; without it, only the directory itself.
+        #
+        # Evaluated PER REPOSITORY, against the repo's own .git path. So this
+        # reads as a failure but is not:
+        #
+        #   git -C ~/work/projects config user.email     -> brettsvoid@gmail.com
+        #   git -C ~/work/projects/m2north-www ...       -> BrettH@m2north.com
+        #
+        # ~/work/projects is a plain directory with no .git, so there is
+        # nothing for the condition to match and git falls back to the global
+        # identity. Verify against an actual repo, never the parent. A fresh
+        # `git init` or `git clone` under that tree picks up the work identity
+        # immediately — confirmed, not assumed.
+        #
+        # The inverse is the real hazard and has no config fix: a work repo
+        # cloned OUTSIDE ~/work/projects silently commits as the personal
+        # identity. Inherent to matching on path. `user.useConfigOnly` would
+        # turn it into a hard error, at the cost of every personal repo needing
+        # an explicit identity first — not worth it here.
         includes = [
           {
             condition = "gitdir:~/work/projects/";
