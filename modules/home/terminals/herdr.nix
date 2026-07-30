@@ -10,5 +10,19 @@
       home.packages = [
         inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default
       ];
+
+      # Only the keys we deviate on — everything else stays on herdr's
+      # defaults (see `herdr --default-config`). Herdr reads this at start-up;
+      # `herdr server reload-config` picks up changes in a running session.
+      xdg.configFile."herdr/config.toml".text = ''
+        [keys]
+        # Alt+arrow moves between panes without the prefix, matching the
+        # tmux bindings in terminals-tmux. The prefix+hjkl defaults are
+        # listed alongside so they keep working.
+        focus_pane_left = ["prefix+h", "alt+left"]
+        focus_pane_down = ["prefix+j", "alt+down"]
+        focus_pane_up = ["prefix+k", "alt+up"]
+        focus_pane_right = ["prefix+l", "alt+right"]
+      '';
     };
 }
