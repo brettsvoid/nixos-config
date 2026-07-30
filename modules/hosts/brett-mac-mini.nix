@@ -75,9 +75,37 @@ in
         # deliberately dropped and `cleanup = "uninstall"` removes them.
         homebrew = {
           taps = [
-            # Only for the `tabularis` cask below; every host-only formula
-            # here comes from homebrew/core.
+            # For the `tabularis` cask below.
             "tabularisdb/tabularis"
+
+            # Taps backing the tap-qualified formulae in `brews` below.
+            #
+            # Declaring a tap is what makes its formulae ACTIONABLE, not just
+            # available: activation runs `brew trust --tap` over exactly this
+            # list (see modules/system/darwin/homebrew.nix), and `brew bundle`
+            # refuses to touch a formula from an untrusted tap — it skips it
+            # with "tap formula is not trusted". So an undeclared tap means
+            # its formulae are neither installed nor removed, just orphaned:
+            # left on disk, cut off from their source, unupgradable.
+            #
+            # That is why the six taps below whose formulae are all being
+            # dropped still appear here. Undeclaring them would not remove
+            # anything, it would strand it. Once the first switch has run
+            # they serve no purpose and can go: auth0/auth0-cli,
+            # gabotechs/taps, julien-cpsn/atac, localstack/tap,
+            # stripe/stripe-cli, wix-incubator/brew.
+            #
+            # aws/tap and asmvik/formulae are absent on purpose — nothing
+            # from either is installed, so untapping them is correct.
+            "anirudhg07/anirudhg07"
+            "auth0/auth0-cli"
+            "felixkratz/formulae"
+            "gabotechs/taps"
+            "hashicorp/tap"
+            "julien-cpsn/atac"
+            "localstack/tap"
+            "stripe/stripe-cli"
+            "wix-incubator/brew"
           ];
           brews = [
             "ack"
@@ -94,6 +122,25 @@ in
             "cloudflared"
             "d2"
             "livekit"
+            # ── Tap-qualified formulae ────────────────────────────────
+            # None of these are in homebrew/core or nixpkgs, so declaring
+            # them here is the only thing keeping them installed. Kept
+            # because they are actually used; the count is uses found in
+            # ~/.zsh_history.
+            #
+            # NOT kept, and uninstalled on the first switch:
+            #   terraform (23)  — nixpkgs provides it via profile-work, so
+            #                     the brew copy is the redundant one
+            #   sketchybar (6)  — daemon is disabled under the aerospace
+            #   borders (7)       stack (edgebar replaced it); on the yabai
+            #                     stack nixpkgs supplies both
+            #   auth0, stripe, atac, dep-tree, applesimutils (0 uses)
+            #   localstack-cli  — no longer used
+            "anirudhg07/anirudhg07/cheatshh" # 2
+            "felixkratz/formulae/svim" # 4
+            "hashicorp/tap/consul" # 7
+            "hashicorp/tap/nomad" # NOMAD_ADDR/_TOKEN in ~/.config/zsh/local.zsh
+            "hashicorp/tap/packer" # 2
             "redis"
             "sccache"
             "semgrep"
