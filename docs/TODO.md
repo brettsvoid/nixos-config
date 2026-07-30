@@ -104,6 +104,17 @@ tar -C ~ -xzf ~/mozilla-firefox-backup-<date>.tar.gz
 
 ---
 
+## Retire chezmoi (both Macs)
+
+Planned in [chezmoi-retirement.md](chezmoi-retirement.md). One item there is
+**blocking the first switch**: `~/.gitconfig` is neither chezmoi-managed nor
+written by home-manager, and it takes precedence over the
+`~/.config/git/config` that home-manager does write — so it would silently
+restore the work git identity and the old credential helpers. Move it aside
+before switching.
+
+---
+
 ## Known warnings that are not ours to fix (brett-msi-laptop)
 
 Both come from flake inputs, not from this repo. They are harmless — the host
