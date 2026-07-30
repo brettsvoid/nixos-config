@@ -88,12 +88,12 @@ in
             # its formulae are neither installed nor removed, just orphaned:
             # left on disk, cut off from their source, unupgradable.
             #
-            # That is why the six taps below whose formulae are all being
+            # That is why the seven taps below whose formulae are all being
             # dropped still appear here. Undeclaring them would not remove
             # anything, it would strand it. Once the first switch has run
-            # they serve no purpose and can go: auth0/auth0-cli,
-            # gabotechs/taps, julien-cpsn/atac, localstack/tap,
-            # stripe/stripe-cli, wix-incubator/brew.
+            # they serve no purpose and can go: anirudhg07/anirudhg07,
+            # auth0/auth0-cli, gabotechs/taps, julien-cpsn/atac,
+            # localstack/tap, stripe/stripe-cli, wix-incubator/brew.
             #
             # aws/tap and asmvik/formulae are absent on purpose — nothing
             # from either is installed, so untapping them is correct.
@@ -136,7 +136,13 @@ in
             #                     stack nixpkgs supplies both
             #   auth0, stripe, atac, dep-tree, applesimutils (0 uses)
             #   localstack-cli  — no longer used
-            "anirudhg07/anirudhg07/cheatshh" # 2
+            #   cheatshh (2)    — not worth its dependency tail: it drags in
+            #                     fzf, jq, yq, oniguruma, openssl@3, sqlite,
+            #                     readline, xz, mpdecimal, ca-certificates and
+            #                     a whole python@3.13. fzf and jq are also
+            #                     provided by nixpkgs, and since `brew
+            #                     shellenv` prepends /opt/homebrew/bin the brew
+            #                     copies would shadow them.
             "felixkratz/formulae/svim" # 4
             "hashicorp/tap/consul" # 7
             "hashicorp/tap/nomad" # NOMAD_ADDR/_TOKEN in ~/.config/zsh/local.zsh
