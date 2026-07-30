@@ -171,7 +171,20 @@ in
             "google-chrome"
             "grok-build"
             "keymapp"
-            "kitty"
+            # kitty is NOT a cask here — nixpkgs ships the same version
+            # (0.48.1) including kitty.app, and terminals-kitty already
+            # configures it, so the cask was a second copy of one app. The
+            # nix build lands in ~/Applications/Home Manager Apps/ rather
+            # than /Applications/.
+            #
+            # It also broke activation. nix-homebrew pins the brew CODE (the
+            # brew-src input, 2026-07-20) while cask DEFINITIONS come from
+            # Homebrew's live JSON API. The kitty cask started declaring a
+            # `command_wrapper` artifact that the pinned brew does not
+            # implement, so `brew bundle` aborted with "undefined method
+            # 'command_wrapper' for Cask 'kitty'". Removing the duplicate
+            # fixes the symptom; the underlying skew is filed separately —
+            # any declared cask can gain a new artifact type at any time.
             "sonobus"
             # Installed as a cask here rather than importing the
             # `apps-spotify` home module — that module pulls pkgs.spotify,
