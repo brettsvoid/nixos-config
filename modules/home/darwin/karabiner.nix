@@ -7,7 +7,14 @@
 #
 # Karabiner-Elements itself is installed as a Homebrew cask (see
 # modules/system/darwin/homebrew.nix). Current key map: caps_lock →
-# backspace, right_command → Hyper (⌃⌥⇧⌘) with vim-style sublayers.
+# backspace ON THE BUILT-IN KEYBOARD ONLY, right_command → Hyper (⌃⌥⇧⌘)
+# with vim-style sublayers.
+#
+# One karabiner.json is shared by both Macs, so there is no host condition
+# to work with — only device conditions. `is_built_in_keyboard` is the
+# machine discriminator: the MacBook has one, the Mac mini does not. That
+# scopes caps_lock → backspace to the MacBook, and leaves caps_lock alone on
+# the mini's Moonlander, which handles its own remapping in firmware.
 #
 # There used to be a rule ahead of that one mapping caps_lock → F18 on the
 # built-in keyboard, to trigger skhd's `hyper_mode`. It was removed: skhd is

@@ -21,6 +21,16 @@ _: {
         direnv
         nix-direnv
         just
+
+        # LLVM's linker, used as the Rust linker — `-C link-arg=-fuse-ld=lld`
+        # in .cargo/config.toml, or via a `[target.*] linker` setting. Much
+        # faster than the default on large crate graphs.
+        #
+        # Was a Homebrew formula before the mac mini migration and got
+        # uninstalled by the first switch, which is what surfaced the gap: it
+        # had never been declared anywhere. Here rather than on a single host
+        # because both Macs and the MSI laptop build Rust.
+        lld
       ];
 
       programs.direnv = {

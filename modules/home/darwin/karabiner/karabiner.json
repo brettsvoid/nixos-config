@@ -6,7 +6,13 @@
                     {
                         "manipulators": [
                             {
-                                "description": "Change caps_lock to backspace.",
+                                "description": "Change caps_lock to backspace (built-in keyboard only).",
+                                "conditions": [
+                                    {
+                                        "identifiers": [{ "is_built_in_keyboard": true }],
+                                        "type": "device_if"
+                                    }
+                                ],
                                 "from": {
                                     "key_code": "caps_lock",
                                     "modifiers": { "optional": ["any"] }
