@@ -8,7 +8,7 @@
         palette = "catppuccin_mocha";
 
         aws = {
-          format = "aws [$symbol($profile )(\($region\) )(\[$duration\] )]($style)";
+          format = "aws [$symbol($profile )(\\($region\\) )(\\[$duration\\] )]($style)";
           symbol = "☁️ ";
         };
 
@@ -35,7 +35,7 @@
         };
 
         gcloud = {
-          format = "gcloud [$symbol$account(@$domain)(\($region\))]($style) ";
+          format = "gcloud [$symbol$account(@$domain)(\\($region\\))]($style) ";
           symbol = "☁️ ";
         };
 
@@ -51,7 +51,7 @@
         };
 
         nix_shell = {
-          format = "[$symbol$state( \($name\))]($style) ";
+          format = "[$symbol$state( \\($name\\))]($style) ";
           symbol = "❄️ ";
         };
 
