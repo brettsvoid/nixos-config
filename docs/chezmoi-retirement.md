@@ -77,11 +77,11 @@ still has its copy. Review them after the switch, then delete.
 `chezmoi status` flags three files. All three are accounted for, so no content
 needs rescuing before retirement:
 
-| file | drift | where it went |
-|---|---|---|
-| `.zshrc` | live has bun, pnpm, worktrunk and direnv blocks absent from the source | bun dropped (#9); pnpm already in `env.nix`; worktrunk is `apps-worktrunk`; direnv is `profile-code` |
-| `.zsh-custom/env.zsh` | live has `TY_API_KEY` and `NX_KEY`, source does not | both now in `~/.config/zsh/local.zsh` (#14) |
-| `.config/tmux/tmux.conf` | live lacks the sesh binding the source has | now in `apps-sesh` (#25) |
+| file                     | drift                                                                  | where it went                                                                                        |
+| ------------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `.zshrc`                 | live has bun, pnpm, worktrunk and direnv blocks absent from the source | bun dropped (#9); pnpm already in `env.nix`; worktrunk is `apps-worktrunk`; direnv is `profile-code` |
+| `.zsh-custom/env.zsh`    | live has `TY_API_KEY` and `NX_KEY`, source does not                    | both now in `~/.config/zsh/local.zsh` (#14)                                                          |
+| `.config/tmux/tmux.conf` | live lacks the sesh binding the source has                             | now in `apps-sesh` (#25)                                                                             |
 
 ## 4. What chezmoi manages that nix does not
 
@@ -93,14 +93,14 @@ They can be deleted with the chezmoi source.
 
 **Superseded by nix:**
 
-| chezmoi | replaced by |
-|---|---|
-| `.p10k.zsh` | starship (`shell-starship`) |
-| `.gitignore_global` | `~/.config/git/ignore` via `programs.git.ignores` — and `core.excludesfile` is already unset, so it is inert today |
-| `.zsh-custom/{00-path,env,aliases,functions,tools}.zsh` | `shell-env`, `shell-aliases`, `shell-functions`, `shell-tools` |
-| `install.sh`, `install/brew*.sh`, `brew-import.sh` | `bootstrap.sh` + the declarative `homebrew` module |
-| `.config/kitty/*.png`, `.config/ghostty/*.jpg` | the repo's own copies — `kitty.nix:56` and `ghostty.nix:54` reference `${./kitty/...}` / `${./ghostty/...}` store paths, so the chezmoi images are redundant |
-| `.config/{colors,icons,config}.sh` | the repo's `modules/home/darwin/sketchybar/` tree, symlinked over `~/.config/sketchybar`; its scripts source `$CONFIG_DIR/...` from there |
+| chezmoi                                                 | replaced by                                                                                                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.p10k.zsh`                                             | starship (`shell-starship`)                                                                                                                                  |
+| `.gitignore_global`                                     | `~/.config/git/ignore` via `programs.git.ignores` — and `core.excludesfile` is already unset, so it is inert today                                           |
+| `.zsh-custom/{00-path,env,aliases,functions,tools}.zsh` | `shell-env`, `shell-aliases`, `shell-functions`, `shell-tools`                                                                                               |
+| `install.sh`, `install/brew*.sh`, `brew-import.sh`      | `bootstrap.sh` + the declarative `homebrew` module                                                                                                           |
+| `.config/kitty/*.png`, `.config/ghostty/*.jpg`          | the repo's own copies — `kitty.nix:56` and `ghostty.nix:54` reference `${./kitty/...}` / `${./ghostty/...}` store paths, so the chezmoi images are redundant |
+| `.config/{colors,icons,config}.sh`                      | the repo's `modules/home/darwin/sketchybar/` tree, symlinked over `~/.config/sketchybar`; its scripts source `$CONFIG_DIR/...` from there                    |
 
 **Never used:** `.config/tmuxinator/sample.yml` (placeholder, never filled in —
 see #21), `iterm-colors/`, `wezterm/`
