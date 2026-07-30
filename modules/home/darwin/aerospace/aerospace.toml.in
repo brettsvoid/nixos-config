@@ -11,6 +11,22 @@
 # bar height lives in one place (modules/home/darwin/bar-geometry.nix). Edits
 # here need a rebuild (`darwin-rebuild switch`) then `aerospace reload-config`.
 
+# Opt in to the current config schema. Omitting this key means version 1,
+# which AeroSpace warns about on every reload. Set explicitly rather than
+# left implicit — the fallback is silent until it is not.
+#
+# Version 2 is what upstream's own default-config.toml ships for this
+# release (0.21.2-Beta), and it is additive for everything used here: the
+# only key it documents as v2-only is `persistent-workspaces`, which this
+# config does not set.
+#
+# Verify after a rebuild — there is no way to check a candidate config
+# without making it live, since AeroSpace has no config-path flag and
+# errors out if it finds two configs:
+#
+#   aerospace reload-config --dry-run --warnings-as-errors
+config-version = 2
+
 start-at-login = false # nix-darwin launchd agent handles startup instead.
 
 # After AeroSpace starts, settle into tiles as the default layout. The yabai
