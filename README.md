@@ -8,8 +8,8 @@ pattern](https://github.com/mightyiam/dendritic) (flake-parts + import-tree).
 | Host | Platform | Profiles | Status |
 |---|---|---|---|
 | `brett-msi-laptop` | NixOS (x86_64-linux, Hyprland, NVIDIA, greetd) | base, code, gaming | active |
-| `brett-m1-mbp` | nix-darwin (aarch64-darwin) | base, code, work | active |
-| `brett-mac-mini` | nix-darwin (aarch64-darwin) | base, code, work | planned (Phase D) |
+| `brett-m1-mbp` | nix-darwin (aarch64-darwin, AeroSpace) | base, code, work | active |
+| `brett-mac-mini` | nix-darwin (aarch64-darwin, AeroSpace) | base, code, work | config landed, first switch pending |
 | `brett-main-desktop` | NixOS (x86_64-linux) | base, code, gaming, art | planned (Phase E) |
 | `server-pi` | NixOS (aarch64-linux, headless, colmena-deployed) | base, server | planned (Phase F) |
 
@@ -27,6 +27,9 @@ apps/edgebar/              # Tauri overlay status bar (macOS), replaces sketchyb
 hardware/                  # nixos-generate-config output, per host
 docs/SECRETS.md            # secrets architecture & operational guide
 docs/bar-spec.md           # shared edgebar ⇄ quickshell design spec
+docs/TODO.md               # work that can only be done on a particular machine
+docs/chezmoi-retirement.md # plan for switching the old dotfile manager off
+docs/refactor-plan.md      # dendritic-pattern refactor notes and findings
 .gitleaks.toml             # secret-scanner config
 .semgrep.yml               # custom static-analysis rules
 ```
@@ -64,3 +67,5 @@ rules, community auto-rulesets, and the OWASP Top Ten preset.
 ## See also
 
 - [docs/SECRETS.md](docs/SECRETS.md) — secrets architecture
+- [docs/TODO.md](docs/TODO.md) — pending work that is tied to a specific machine
+- [docs/chezmoi-retirement.md](docs/chezmoi-retirement.md) — retiring the old dotfile manager
