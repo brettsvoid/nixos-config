@@ -47,7 +47,35 @@
     # Homebrew on a fresh Mac with no separate install step. We keep
     # mutableTaps (the default) and manage taps imperatively, so the
     # homebrew/{core,cask,bundle} tap inputs aren't needed.
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+    nix-homebrew = {
+      url = "github:zhaofengli/nix-homebrew";
+      inputs.brew-src.follows = "brew-src";
+    };
+
+    # Homebrew itself, pinned ahead of what nix-homebrew ships.
+    #
+    # This pin is load-bearing, not cosmetic. nix-homebrew fixes the brew CODE
+    # to a tag, but cask DEFINITIONS come from Homebrew's live JSON API and
+    # always move. When the API starts using a DSL feature the pinned code
+    # lacks, `brew bundle` aborts — which is exactly what happened on the mac
+    # mini's first switch:
+    #
+    #   Error: Cask 'kitty' definition is invalid:
+    #          undefined method 'command_wrapper' for Cask 'kitty'
+    #
+    # 6.0.13 adds Library/Homebrew/cask/artifact/command_wrapper.rb; 6.0.12,
+    # which nix-homebrew pins, does not. Keep this at or near Homebrew's
+    # latest release, and expect to bump it when a cask breaks rather than on
+    # a schedule.
+    #
+    # Note nix-homebrew derives its derivation name from ITS OWN lock, so the
+    # store path still reads brew-6.0.12 while containing 6.0.13. That is
+    # metadata only — `name` and `version` in flake.nix:25-26 — and does not
+    # affect the brew code or the version brew reports at runtime.
+    brew-src = {
+      url = "github:Homebrew/brew/6.0.13";
+      flake = false;
+    };
 
     # Terminal agent-multiplexer (run coding agents in one terminal, persists
     # over ssh). Trialled alongside tmux. Pinned to a release tag; bump on
