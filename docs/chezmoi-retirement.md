@@ -14,9 +14,11 @@ live-vs-source diff, not from reading the source.
 
 ---
 
-## 1. Before the first switch — blocking
+## 1. `~/.gitconfig` — handled automatically, verify afterwards
 
-### Remove `~/.gitconfig`
+This was going to be a manual pre-switch step. It is now done by an activation
+script in `modules/home/apps/git.nix`, so no action is needed before switching —
+but it is worth understanding, and worth verifying afterwards.
 
 It is **not chezmoi-managed** and **not written by home-manager**, so nothing
 removes it, and — because there is no collision — nothing backs it up either. It
@@ -37,11 +39,11 @@ work-identity split, the delta pager and the zdiff3 conflict style in one go —
 with no error and no obvious symptom beyond commits attributed to the wrong
 address.
 
-```sh
-mv ~/.gitconfig ~/.gitconfig.pre-nix
-```
+`home.activation.retireLegacyGitconfig` renames it to `~/.gitconfig.pre-nix` on
+activation — never overwriting an existing rescue copy (it appends a timestamp
+instead), skipping symlinks, and going quiet once there is nothing to move.
 
-Then after the switch, confirm the nix config is the one in force:
+After the switch, confirm the nix config is the one in force:
 
 ```sh
 git config --list --show-origin --global | grep -E 'user\.|pager|conflictstyle'

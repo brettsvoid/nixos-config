@@ -98,5 +98,32 @@ _: {
           line-numbers = true;
         };
       };
+
+      # Retire a hand-written ~/.gitconfig on first activation.
+      #
+      # Everything above lands in ~/.config/git/config. git reads BOTH that and
+      # ~/.gitconfig, in that order, so a leftover ~/.gitconfig silently wins
+      # every conflict. On the mac mini that file set user.email to the work
+      # address globally and installed credential helpers — it would have undone
+      # the identity split, the delta pager and zdiff3 with no error and no
+      # symptom beyond commits carrying the wrong address.
+      #
+      # home-manager cannot catch this itself: backupFileExtension only fires
+      # where home-manager writes a file, and it never writes ~/.gitconfig. No
+      # collision, no backup, no warning.
+      #
+      # Renamed rather than deleted, and never overwriting an existing rescue
+      # copy, so this is reversible and safe to re-run. Once no machine has one
+      # left, this block can go.
+      home.activation.retireLegacyGitconfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if [ -f "$HOME/.gitconfig" ] && [ ! -L "$HOME/.gitconfig" ]; then
+          _dest="$HOME/.gitconfig.pre-nix"
+          if [ -e "$_dest" ]; then
+            _dest="$_dest.$(date +%Y%m%d%H%M%S)"
+          fi
+          echo "apps-git: ~/.gitconfig would shadow ~/.config/git/config; moving it to $_dest"
+          run mv $VERBOSE_ARG "$HOME/.gitconfig" "$_dest"
+        fi
+      '';
     };
 }
