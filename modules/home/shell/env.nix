@@ -67,15 +67,21 @@ _: {
 
           # Personal/local
           #
-          # ~/.cargo/bin holds cargo-installed binaries (wasm-bindgen,
-          # wasm-opt, wasm-server-runner, cargo-binstall, cargo-nextest,
-          # cargo-generate, invy). Pre-nix a hand-written ~/.zshenv sourced
-          # ~/.cargo/env for this; home-manager now owns .zshenv, so the line
-          # went with it and those binaries fell off PATH entirely. Prepended
-          # HERE, ahead of the brew block, so `$(brew --prefix rustup)/bin`
-          # still wins for the rustup shims (cargo, rustc, rust-analyzer) —
-          # which is the pre-nix ordering, since brew's shellenv ran after
-          # ~/.cargo/env.
+          # ~/.cargo/bin holds whatever `cargo install` has put there, which
+          # is a different set on each machine — wasm tooling, cargo-binstall
+          # and cargo-generate on brett-m1-mbp; cargo-chef, cargo-watch and
+          # sqlx on brett-mac-mini. Pre-nix a hand-written ~/.zshenv sourced
+          # ~/.cargo/env; home-manager now owns .zshenv, so that line went
+          # with it and every one of those binaries fell off PATH on both
+          # Macs. Same failure as the brew shellenv in .zprofile below:
+          # home-manager takes over a file that had hand-written content.
+          #
+          # Prepended HERE, ahead of the brew block, so the rustup shims still
+          # win — that block's _prepend calls run later and therefore land
+          # further forward. This restores the pre-nix ordering, where brew's
+          # shellenv ran after ~/.cargo/env. Verified on brett-mac-mini after
+          # a rebuild: rustup/bin at PATH position 4 and ~/.cargo/bin at 10,
+          # with cargo, rustc and rust-analyzer all resolving through rustup.
           _prepend "$HOME/.cargo/bin"
           _prepend "$HOME/.local/bin"
           _prepend "$HOME/.amplify/bin"
