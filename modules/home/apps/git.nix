@@ -18,7 +18,16 @@ _: {
           "*.swp"
           "*.tmp"
           ".DS_Store"
-          ".claude/settings.local.json"
+          # `**/` is load-bearing. A pattern with a slash anywhere but the end
+          # is anchored to the directory holding the ignore file, so a bare
+          # `.claude/settings.local.json` matches only at a repository's root
+          # and misses every nested one — subprojects, and the worktrees
+          # apps-worktrunk creates. Verified with `git check-ignore`: without
+          # the prefix, `sub/.claude/settings.local.json` is NOT ignored.
+          #
+          # The pre-nix ~/.gitignore_global had the prefix; it was dropped in
+          # translation and only surfaced when diffing the migration backups.
+          "**/.claude/settings.local.json"
         ];
         settings = {
           user.name = "Brett Henderson";
