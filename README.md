@@ -28,7 +28,6 @@ hardware/                  # nixos-generate-config output, per host
 docs/SECRETS.md            # secrets architecture & operational guide
 docs/bar-spec.md           # shared edgebar ⇄ quickshell design spec
 docs/TODO.md               # work that can only be done on a particular machine
-docs/chezmoi-retirement.md # plan for switching the old dotfile manager off
 docs/refactor-plan.md      # dendritic-pattern refactor notes and findings
 .gitleaks.toml             # secret-scanner config
 .semgrep.yml               # custom static-analysis rules
@@ -68,4 +67,3 @@ rules, community auto-rulesets, and the OWASP Top Ten preset.
 
 - [docs/SECRETS.md](docs/SECRETS.md) — secrets architecture
 - [docs/TODO.md](docs/TODO.md) — pending work that is tied to a specific machine
-- [docs/chezmoi-retirement.md](docs/chezmoi-retirement.md) — retiring the old dotfile manager

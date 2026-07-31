@@ -115,10 +115,6 @@ in
             "cargo-llvm-cov"
             "cargo-nextest"
             "cargo-sweep"
-            # Transitional: the old dotfile manager. Keep it installed until
-            # the chezmoi source at ~/.local/share/chezmoi is fully retired,
-            # so the pre-nix config stays readable/diffable during migration.
-            "chezmoi"
             "cloudflared"
             "d2"
             "livekit"
