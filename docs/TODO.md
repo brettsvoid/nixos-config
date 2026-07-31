@@ -104,34 +104,6 @@ tar -C ~ -xzf ~/mozilla-firefox-backup-<date>.tar.gz
 
 ---
 
-## Retire chezmoi (brett-m1-mbp)
-
-Done on brett-mac-mini: source removed, `github.com/brettsvoid/dotfiles`
-archived, `chezmoi` dropped from the mini's brews.
-
-**Still to do on the MacBook**, and it needs its own pass rather than an
-assumption that it matches the mini. Two things that machine has which the
-mini's retirement had to fix by hand:
-
-- **`~/.ssh/config.local`.** `apps-ssh` emits `Include config.local` but
-  nothing creates that file. On the mini, home-manager rewrote
-  `~/.ssh/config` and all 12 per-host blocks went to `.backup` — every work
-  host silently resolved to the wrong user, address and key. Recover the
-  blocks from `~/.ssh/config.backup` into `~/.ssh/config.local` (mode 600)
-  **before** deleting backups.
-- **Unmanaged launchd agents.** `~/Library/LaunchAgents` held five pre-nix
-  agents running the old yabai stack; two were fighting AeroSpace and caused
-  visible flicker, and one had never been loaded so would only have appeared
-  after a reboot. nix-darwin only manages agents it created, so these are
-  invisible to it. Audit that directory.
-
-Then follow the same sequence: review every `*.backup` by diffing it against
-its live replacement, recover anything only present there, delete them, remove
-`~/.local/share/chezmoi` + `~/.config/chezmoi` + `~/.cache/chezmoi`, and drop
-`"chezmoi"` from the host's brews.
-
----
-
 ## Known warnings that are not ours to fix (brett-msi-laptop)
 
 Both come from flake inputs, not from this repo. They are harmless — the host

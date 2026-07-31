@@ -62,7 +62,11 @@ in
         # — these options are lists, so the effective Brewfile is shared ++
         # this. Everything here is on the MBP and not the mac mini: iOS/
         # Android build tooling, the work HashiCorp/Stripe/Auth0 CLIs, and
-        # the yabai-stack helper `borders`.
+        # `borders`. The mini dropped `borders` when it moved to the aerospace
+        # stack; this host kept it, and its brew-installed launchd agent
+        # (`homebrew.mxcl.borders`) is still running alongside AeroSpace.
+        # Nothing here depends on it — it is a standing decision to revisit,
+        # not a requirement.
         homebrew = {
           taps = [
             "anirudhg07/anirudhg07"

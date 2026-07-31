@@ -66,6 +66,17 @@ _: {
           _append()  { case ":$PATH:" in *":$1:"*) ;; *) PATH="$PATH:$1" ;; esac; }
 
           # Personal/local
+          #
+          # ~/.cargo/bin holds cargo-installed binaries (wasm-bindgen,
+          # wasm-opt, wasm-server-runner, cargo-binstall, cargo-nextest,
+          # cargo-generate, invy). Pre-nix a hand-written ~/.zshenv sourced
+          # ~/.cargo/env for this; home-manager now owns .zshenv, so the line
+          # went with it and those binaries fell off PATH entirely. Prepended
+          # HERE, ahead of the brew block, so `$(brew --prefix rustup)/bin`
+          # still wins for the rustup shims (cargo, rustc, rust-analyzer) —
+          # which is the pre-nix ordering, since brew's shellenv ran after
+          # ~/.cargo/env.
+          _prepend "$HOME/.cargo/bin"
           _prepend "$HOME/.local/bin"
           _prepend "$HOME/.amplify/bin"
           _prepend "$HOME/.yarn/bin"

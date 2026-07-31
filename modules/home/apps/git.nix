@@ -64,6 +64,22 @@ _: {
         # Git silently ignores an include whose path does not exist, so hosts
         # without the file just keep the personal identity above.
         #
+        # SET THIS UP ON EVERY NEW HOST. That silence is the whole hazard, and
+        # it is the same trap as `Include config.local` in apps-ssh: nix emits
+        # the include, nothing creates the target, and there is no warning —
+        # work commits just carry the personal address until someone notices.
+        # It bit brett-m1-mbp: the file was simply never created there, and it
+        # took a `--show-origin` check during the chezmoi retirement to spot
+        # it. The work identity was recovered from the pre-nix
+        # `~/.work.gitconfig`, which that host still had. Two lines:
+        #
+        #   printf '[user]\n\tname = ...\n\temail = ...\n' > ~/.config/git/work.inc
+        #   chmod 600 ~/.config/git/work.inc
+        #
+        # Verify against an actual repo under the tree, not the parent:
+        #
+        #   git -C ~/work/projects/<repo> config --show-origin user.email
+        #
         # Directory-based rather than matching on the remote URL: `tyto` is a
         # personal-identity repo that lives in the SAME GitHub org (irj-io) as
         # work's `irj-www`, so no `hasconfig:remote.*.url` pattern can separate
