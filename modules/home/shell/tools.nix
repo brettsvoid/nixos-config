@@ -53,6 +53,8 @@ _: {
       programs.zsh.initContent = lib.mkOrder 800 ''
         # fnm (Fast Node Manager). Currently provided by homebrew; the
         # `--use-on-cd` switch picks up .nvmrc when entering a project.
+        # The version a shell starts on when nothing is pinned comes from
+        # fnm's `default` alias, which modules/home/apps/fnm.nix pins.
         if command -v fnm &>/dev/null; then
           eval "$(fnm env --use-on-cd)"
         fi

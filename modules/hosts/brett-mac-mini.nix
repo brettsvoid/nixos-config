@@ -237,6 +237,7 @@ in
                 apps-worktrunk
                 apps-claude-code
                 apps-sesh
+                apps-fnm
                 profile-base
                 profile-code
                 profile-work

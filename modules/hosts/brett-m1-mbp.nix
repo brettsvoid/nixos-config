@@ -161,6 +161,7 @@ in
                 apps-claude-code
                 apps-sesh
                 apps-tmuxinator
+                apps-fnm
                 profile-base
                 profile-code
                 profile-work
