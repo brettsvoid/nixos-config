@@ -158,6 +158,7 @@ in
                 apps-nh
                 apps-comma
                 apps-worktrunk
+                apps-claude-code
                 apps-sesh
                 apps-tmuxinator
                 profile-base

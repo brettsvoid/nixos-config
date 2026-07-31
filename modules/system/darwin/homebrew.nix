@@ -171,6 +171,14 @@ _: {
           "sevenzip"
           "sshs"
           "taskwarrior-tui"
+          # Desktop notifications for the skhd bindings (darwin/skhd/skhdrc)
+          # and the Claude Code notify hook (apps-claude-code). Until now it
+          # was present only as a transitive dependency of `fastlane`, so both
+          # of those depended on an undeclared package that would vanish the
+          # moment fastlane was dropped. Homebrew rather than nixpkgs because
+          # macOS binds notification authorisation to the delivering bundle,
+          # and this is the copy both Macs have already authorised.
+          "terminal-notifier"
           "terragrunt"
           "tflint"
           "tfsec"

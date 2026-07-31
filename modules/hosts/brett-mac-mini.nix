@@ -232,6 +232,7 @@ in
                 apps-nh
                 apps-comma
                 apps-worktrunk
+                apps-claude-code
                 apps-sesh
                 profile-base
                 profile-code
