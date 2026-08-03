@@ -119,7 +119,16 @@ in
           # Vim-style cursor motion in shells
           "alt+h" = "send_text all \\x1b[D";
           "alt+l" = "send_text all \\x1b[C";
-        };
+        }
+        // lib.optionalAttrs pkgs.stdenv.isDarwin (
+          # Hand cmd+1..9 to the program instead of kitty. Kitty's default
+          # binds them to first_window..ninth_window, which is dead weight
+          # under herdr — it owns the splits, so kitty only ever has one.
+          # Freeing them gives herdr the last indexed namespace on this
+          # machine: aerospace has taken every alt+N and ctrl+N variant.
+          # no_op means "stop intercepting", not "swallow".
+          lib.genAttrs (map (n: "cmd+${toString n}") (lib.range 1 9)) (_: "no_op")
+        );
       };
     };
 }
