@@ -112,16 +112,20 @@ outer.bottom = @outerGap@
 # app-id (CFBundleIdentifier) or app-name-regex-substring. We use the regex
 # form to stay close to the yabai rules without needing bundle IDs.
 #
-# Hybrid apps (DBeaver) — yabai floats the first window per pid and tiles
-# the rest via a custom signal script. AeroSpace has no per-pid window-count
-# primitive, so we float DBeaver entirely. Revisit if that hurts.
+# DBeaver is deliberately absent, though yabai listed it. yabai needed a
+# window_created signal to float the first window per pid and tile the rest;
+# AeroSpace sorts every new window into window / dialog / popup from its AX
+# attributes and binds dialogs to the floating container itself, before any
+# rule here is consulted. A window whose subrole isn't AXStandardWindow, or
+# with no enabled fullscreen button, counts as a dialog — which covers the
+# Eclipse dialogs DBeaver throws, while the main shell tiles.
+#
+# If some dialog does slip through and get tiled, float that one by title
+# rather than reinstating an app-wide rule, and put it above these: only the
+# first matching rule runs, since check-further-callbacks defaults to false.
 
 [[on-window-detected]]
 if.app-name-regex-substring = '^(System Settings|Calculator|Hammerspoon|Notes|Activity Monitor|App Store|Software Update|Raycast|Photo Booth|Jitsi Meet|Shortcat|Screen Sharing|Godot|Finder)$'
-run = "layout floating"
-
-[[on-window-detected]]
-if.app-name-regex-substring = '^(DBeaver|DBeaver Community)$'
 run = "layout floating"
 
 # ─── Keybindings ───────────────────────────────────────────────────────────
