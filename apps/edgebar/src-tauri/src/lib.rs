@@ -505,20 +505,20 @@ fn aerospace(args: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// Query AeroSpace for all workspaces with focused + occupied state.
-/// Two CLI calls: focused flag via --format, occupied set via --empty no.
-/// Canonical dot order: 1-9 then 0. AeroSpace lists `0` first and may surface
-/// stray on-demand workspaces (e.g. `11`, where Spotify lives); we render only
-/// these ten, with `alt-0` shown last to match the keyboard row.
+/// The dots we always draw, in order: 1-9 then 0, with `alt-0` last to match the
+/// keyboard row. This list — not AeroSpace — decides which dots exist.
+///
+/// AeroSpace garbage-collects workspaces that are empty and not visible, so
+/// `list-workspaces --all` reports only the occupied ones (plus whatever is on
+/// screen); it also surfaces stray on-demand workspaces (e.g. `11`, where
+/// Spotify lives). Driving the dots off that list made empty workspaces vanish
+/// from the bar entirely. AeroSpace now only supplies per-workspace state.
 const WS_ORDER: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 
+/// Query AeroSpace for the state of each dot in `WS_ORDER`: which one is
+/// focused, which hold windows, and the app icon to show on the occupied ones.
 fn query_workspaces() -> Vec<Workspace> {
-    let rows = aerospace(&[
-        "list-workspaces",
-        "--all",
-        "--format",
-        "%{workspace}|%{workspace-is-focused}",
-    ]);
+    let focused = aerospace(&["list-workspaces", "--focused"]).into_iter().next();
     let non_empty = aerospace(&["list-workspaces", "--monitor", "all", "--empty", "no"]);
 
     // One icon per workspace: the first window AeroSpace lists for it (stable
@@ -548,33 +548,20 @@ fn query_workspaces() -> Vec<Workspace> {
         ws_app.insert(ws, win);
     }
 
-    let mut workspaces: Vec<Workspace> = rows
-        .into_iter()
-        .filter_map(|row| {
-            let mut parts = row.splitn(2, '|');
-            let name = parts.next()?.to_string();
-            let focused = parts.next() == Some("true");
-            WS_ORDER.contains(&name.as_str()).then(|| {
-                let win = ws_app.get(&name);
-                Workspace {
-                    has_windows: non_empty.contains(&name),
-                    focused,
-                    app: win.map(|w| w.app.clone()).unwrap_or_default(),
-                    bundle_id: win.map(|w| w.bundle_id.clone()).unwrap_or_default(),
-                    icon: String::new(),
-                    name,
-                }
-            })
+    WS_ORDER
+        .iter()
+        .map(|name| {
+            let win = ws_app.get(*name);
+            Workspace {
+                has_windows: non_empty.iter().any(|n| n == name),
+                focused: focused.as_deref() == Some(*name),
+                app: win.map(|w| w.app.clone()).unwrap_or_default(),
+                bundle_id: win.map(|w| w.bundle_id.clone()).unwrap_or_default(),
+                icon: String::new(),
+                name: (*name).to_string(),
+            }
         })
-        .collect();
-
-    workspaces.sort_by_key(|w| {
-        WS_ORDER
-            .iter()
-            .position(|n| *n == w.name)
-            .unwrap_or(usize::MAX)
-    });
-    workspaces
+        .collect()
 }
 
 /// Mark a window as a stationary, all-spaces overlay so Mission Control /
