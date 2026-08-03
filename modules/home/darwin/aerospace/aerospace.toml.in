@@ -69,6 +69,44 @@ outer.right = @outerGap@
 outer.top = @outerTop@
 outer.bottom = @outerGap@
 
+# ─── Workspace → monitor pinning ───────────────────────────────────────────
+# Split the workspaces across two displays: 1–5 on the main one, 6–0 on the
+# other. Degrades to a single display on its own, with no monitor-count
+# detection needed — `secondary` only resolves when there are *exactly* two
+# monitors, and a pattern that resolves to nothing leaves the workspace
+# unpinned, which falls back to the main monitor. So:
+#
+#   1 monitor   — 6–0 unpin and share the only display with 1–5.
+#   2 monitors  — the split above.
+#   3+ monitors — `secondary` stops resolving, so 6–0 unpin again while 1–5
+#                 stay put. Relevant on the MBP, where an open lid counts as
+#                 a monitor: clamshell + 2 externals splits, lid-open + 2
+#                 externals does not.
+#
+# Resolution happens per lookup rather than at config load, so unplugging a
+# display strands nothing — workspace 6 just becomes an ordinary workspace on
+# what's left, and comes back when the display does.
+#
+# `main` is System Settings → Displays → Use as, not a physical position. Use
+# sequence numbers (1, 2 — left to right) instead if position is what matters,
+# though those reshuffle when a display is added to the left.
+#
+# Side effects: alt-6..0 now move focus to the other display rather than
+# switching the current one (use `summon-workspace N` to pull a workspace onto
+# the focused display instead), and `move-workspace-to-monitor` is a no-op for
+# every workspace listed here.
+[workspace-to-monitor-force-assignment]
+1 = 'main'
+2 = 'main'
+3 = 'main'
+4 = 'main'
+5 = 'main'
+6 = 'secondary'
+7 = 'secondary'
+8 = 'secondary'
+9 = 'secondary'
+0 = 'secondary'
+
 # ─── Float rules (mirror yabai's apps_mgoff_* lists) ───────────────────────
 # yabai used `app=^(...)$` regex on app name; AeroSpace matches by either
 # app-id (CFBundleIdentifier) or app-name-regex-substring. We use the regex
