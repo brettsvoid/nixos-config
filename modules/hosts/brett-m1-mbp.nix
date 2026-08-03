@@ -62,7 +62,10 @@ in
         # — these options are lists, so the effective Brewfile is shared ++
         # this. Everything here is on the MBP and not the mac mini: iOS/
         # Android build tooling, the work HashiCorp/Stripe/Auth0 CLIs, and
-        # `borders`. The mini dropped `borders` when it moved to the aerospace
+        # `borders`. The one exception is `sonobus`, declared on both hosts
+        # because it is the two ends of one audio bridge (see the cask
+        # comment below).
+        # The mini dropped `borders` when it moved to the aerospace
         # stack; this host kept it, and its brew-installed launchd agent
         # (`homebrew.mxcl.borders`) is still running alongside AeroSpace.
         # Nothing here depends on it — it is a standing decision to revisit,
@@ -116,8 +119,35 @@ in
           ];
           casks = [
             "arduino-ide"
+            # ─── Audio bridge to the mac mini ──────────────────────────
+            # Video calls run on this machine (it has the webcam) while the
+            # headset stays plugged into the KVM on the mini. SonoBus
+            # carries audio both ways over the LAN, reading from and
+            # writing to two virtual devices on this side:
+            #
+            #   call app  ──out──▶ BlackHole 16ch ──▶ SonoBus ──▶ mini
+            #   call app ◀──mic─── BlackHole 2ch  ◀── SonoBus ◀── mini
+            #
+            # Two distinct devices are required: with one, SonoBus would
+            # read back its own output and loop. The channel-count variants
+            # ship as separate installers with distinct device UIDs, so
+            # they coexist as independent devices without recompiling.
+            # 2ch is deliberately the microphone side — call apps are
+            # fussier about input devices than output devices, and a
+            # 16-channel device offered as a mic invites misbehaviour.
+            #
+            # The mini needs no virtual devices at all; it already declares
+            # `sonobus` and uses the real headset for both directions, so
+            # nothing driver-level lands on the work machine.
+            #
+            # Both BlackHole casks are .pkg installers and need a reboot
+            # before the devices appear.
+            "blackhole-16ch"
+            "blackhole-2ch"
             "godot"
             "mqtt-explorer"
+            # This end of the audio bridge above; the mini declares its own.
+            "sonobus"
             "vlc"
           ];
         };
