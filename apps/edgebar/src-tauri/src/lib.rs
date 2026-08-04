@@ -1939,12 +1939,34 @@ fn set_brightness(value: f32) {
 // fires on workspace switches, not on focus moves within a workspace).
 
 /// Encode an NSImage as a PNG data URL (TIFF rep → bitmap rep → PNG → base64).
+/// Edge of the rasterised app icon, in points. App bundles ship 1024² icons and
+/// `TIFFRepresentation` hands back the largest representation, so encoding one
+/// straight produced a ~1MB data URL — per workspace dot, and again on every
+/// notch change. Nothing displays them above 24pt; 64 covers that at 2x.
+#[cfg(target_os = "macos")]
+const ICON_PX: f64 = 64.0;
+
 #[cfg(target_os = "macos")]
 fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
-    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep};
-    use objc2_foundation::{NSDataBase64EncodingOptions, NSDictionary};
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSCompositingOperation, NSImage};
+    use objc2_foundation::{NSDataBase64EncodingOptions, NSDictionary, NSPoint, NSRect, NSSize};
 
-    let tiff = img.TIFFRepresentation()?;
+    // Redraw at display size first, so what gets encoded is a 64² icon and not
+    // the bundle's 1024² master.
+    let size = NSSize::new(ICON_PX, ICON_PX);
+    let src: objc2::rc::Retained<NSImage> = objc2::rc::Retained::from(img);
+    let handler = block2::RcBlock::new(move |rect: NSRect| {
+        src.drawInRect_fromRect_operation_fraction(
+            rect,
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)), // whole source
+            NSCompositingOperation::SourceOver,
+            1.0,
+        );
+        objc2::runtime::Bool::YES
+    });
+    let scaled = NSImage::imageWithSize_flipped_drawingHandler(size, false, &handler);
+
+    let tiff = scaled.TIFFRepresentation()?;
     let rep = NSBitmapImageRep::imageRepWithData(&tiff)?;
     let png = unsafe {
         rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
