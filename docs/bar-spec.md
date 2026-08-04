@@ -35,7 +35,8 @@ the one that has to catch up (it currently has ~3 segments to edgebar's ~8).
 | Fonts | FiraCode Nerd Font, base 13, Lucide SVG icons | FiraCode Nerd Font, base 14, Nerd Font glyph icons | ~ |
 | Click-through | Per-pill interactive rects, cursor-tracked | Whole-strip mask | ✗ |
 | Fullscreen apps | Bar + frame order out while a window covers that display (500ms window-list poll) | layer-shell `Top`, left to the compositor | ~ |
-| Systray / media | not implemented (roadmapped last) | not implemented | ✓ |
+| Notch content | Priority slot: OSD flash > per-workspace rule > audible app (CoreAudio + AppleScript metadata for Spotify/Music) > idle | **not implemented** (MPRIS is available, so the media tier is nearly free) | ✗ |
+| Systray | not implemented (roadmapped last) | not implemented | ✓ |
 
 `~` = format agrees but mechanism/values differ.
 
@@ -124,8 +125,14 @@ Catppuccin Latte/Mocha (`palette.default.json`).
    `wsEmpty`; occupied circle `wsOccupied` or 22px app-icon cell where the WM exposes
    icons; active = `base` dot + ring `1px pillBg / 3px accent` (or `accent@22%`
    backplate + 2px ring when icon).
-2. **notch** (center, expandable) — compact 26×4 handle; expanded 250×250 = big clock
-   (3xl) + metrics rows; theme view 704×256.
+2. **notch** (center, expandable) — collapsed row is a content slot at one of two
+   fixed widths: 200 idle (the 26×4 handle), 320 with an item. An item is a square
+   art/glyph cell of `pillHeight − 8` (24 at the default 32px row) + `xs`/600
+   headline over `3xs`/dim subline, with a 2px
+   progress hairline in `track` along the bottom. Text that overflows marquees
+   (dwell, travel, dwell, back) rather than widening the pill — a width that
+   tracked content made the whole bar twitch on every song change. Expanded
+   250×250 = big clock (3xl) + metrics rows; theme view 704×256.
 3. **controls** (detached cog) — dropdown ≥200px, sliders volume/mic/brightness,
    track 5px `track`, thumb 14px `base`.
 4. **status** — Wi-Fi arc icon (dBm bounds −82/−72/−60, ±3 hysteresis) + SSID (`2xs`
@@ -212,4 +219,11 @@ template keys == the role list in §3.2.
 
 13. Consume `tokens` from shared config (delete duplicated `styles.css :root` defaults or keep as fallback only).
 14. Adopt renamed roles end-to-end; move hardcoded `warn` into the palette template.
-15. Later, per roadmap: front-app title, systray, media — spec'd when one bar grows them.
+15. Later, per roadmap: systray — spec'd when one bar grows it.
+
+**quickshell (notch content)**
+
+16. Port the notch's priority slot (§1 table): OSD flash > per-workspace rule >
+    media > idle. The media tier is `Quickshell.Services.Mpris` rather than
+    edgebar's CoreAudio + AppleScript pair — Linux still has a real Now Playing
+    bus — so it lands as a straight `activePlayer` binding.

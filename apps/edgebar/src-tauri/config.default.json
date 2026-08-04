@@ -34,6 +34,11 @@
       "frameCorner": "#000000"
     }
   },
+  "notch": {
+    "idle": "handle",
+    "transientMs": 1600,
+    "workspaces": {}
+  },
   "geometry": {
     "innerRadius": 20,
     "lineThickness": 4,

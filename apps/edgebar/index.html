@@ -127,8 +127,30 @@
       </div>
       <div class="cluster center">
         <div class="pill" id="notch">
+          <!-- The collapsed row is one slot: the handle bar at rest, or the
+               winning notch item (media / workspace context / an OSD flash)
+               pushed by Rust's `notch` event. -->
           <div class="notch-row">
             <span class="notch-handle"></span>
+            <span class="notch-item" hidden>
+              <span class="ni-icon icon"></span>
+              <!-- Inner spans are what the marquee translates; the outer ones
+                   are the clipping windows. -->
+              <span class="ni-text">
+                <span class="ni-primary"><span></span></span>
+                <span class="ni-secondary"><span></span></span>
+              </span>
+              <span class="ni-progress"><i></i></span>
+            </span>
+            <!-- Media with transport: an inset pill over blurred album art —
+                 play/pause, a wavy playhead, and the source app's icon. No
+                 title: the art and the icon already say what it is. -->
+            <span class="ni-media" hidden>
+              <span class="nm-art"></span>
+              <button class="nm-play" type="button" aria-label="Play/pause"></button>
+              <canvas class="nm-wave"></canvas>
+              <span class="nm-source"></span>
+            </span>
           </div>
           <div class="notch-panel-clip">
             <div class="notch-panel">

@@ -320,6 +320,8 @@ body {
   cursor: pointer;
   color: var(--base);
   max-width: 576px;
+  /* Starting width only: once content arrives, main.ts drives the width from
+     what the winning notch item measures (NOTCH.minW/maxW). */
   width: 200px;
 }
 .notch-row {
@@ -335,6 +337,128 @@ body {
   height: var(--space-2);
   border-radius: var(--space-1); /* round the thin bar's ends */
   background: var(--handle);
+}
+.notch-handle[hidden],
+.notch-item[hidden],
+.ni-media[hidden],
+.ni-icon[hidden],
+.ni-secondary[hidden] {
+  display: none;
+}
+/* The media pill fills the notch, so the row gives up its wide side padding. */
+.notch-row.media {
+  padding: 0 var(--space-2);
+}
+
+/* ---- dynamic notch content (media / workspace context / OSD flash) ----
+   The box is a fixed width (NOTCH.itemW in main.ts), so text that doesn't fit
+   marquees rather than widening the pill. */
+.notch-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  line-height: 1.15;
+}
+.notch-item.dim {
+  opacity: var(--dim); /* a paused player still says what it's holding */
+}
+/* Album art when a player gives us one, else the tier's glyph. Square and
+   lightly rounded, the way every player draws it. */
+.ni-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  /* Art fills the row's height less 4px of breathing room top and bottom, so it
+     tracks the pill height instead of pinning to whatever that is today. */
+  width: calc(var(--pill-h) - 8px);
+  height: calc(var(--pill-h) - 8px);
+}
+.ni-icon svg {
+  width: var(--space-7);
+  height: var(--space-7);
+}
+.ni-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--space-2);
+}
+.ni-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Each line is a clipping window; the inner span is what scrolls. */
+.ni-primary,
+.ni-secondary {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ni-primary > span,
+.ni-secondary > span {
+  display: inline-block;
+  white-space: nowrap;
+}
+.ni-primary {
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+.ni-secondary {
+  font-size: var(--font-3xs);
+  opacity: var(--dim);
+}
+/* Marquee: dwell, travel, dwell, travel back. Distance and duration come from
+   main.ts, which knows how far the text actually overflows. */
+@keyframes ni-marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  50%,
+  62% {
+    transform: translateX(calc(-1 * var(--ni-shift)));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+.ni-primary.scroll > span,
+.ni-secondary.scroll > span {
+  animation: ni-marquee var(--ni-dur) ease-in-out infinite;
+}
+/* Track position / level: a hairline along the bottom of the row, inset by the
+   row's own padding so it clears the pill's rounded ends. Hidden unless the
+   item carries a progress value; the text lifts to make room when it does. */
+.ni-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--space-2);
+  height: var(--space-1);
+  border-radius: var(--space-1);
+  background: var(--track);
+  opacity: 0;
+}
+.notch-item.has-progress .ni-progress {
+  opacity: 1;
+}
+.notch-item.has-progress .ni-text {
+  transform: translateY(calc(-1 * var(--space-1)));
+}
+.ni-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  /* The media poll lands every 2s; ease between samples so the fill creeps
+     rather than jumping. */
+  transition: width 0.45s linear;
 }
 .notch-panel-clip {
   flex: 1 1 auto;
@@ -378,6 +502,113 @@ body {
 .notch-panel .full-date {
   font-size: var(--font-sm);
   opacity: var(--dim);
+}
+
+/* ---- media pill: art backdrop + wavy playhead + transport ----
+   An inset pill inside the notch. The album art is the *background*, blurred
+   hard and knocked back behind a scrim, rather than a thumbnail — at this size
+   a 24px cover reads as noise, while a wash of the record's colour reads as
+   identity. Title and artist live in the tooltip; the art and the source icon
+   already say what's playing. */
+.ni-media {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  height: calc(var(--pill-h) - 4px);
+  margin: -2px 2px 0;
+  padding: 0 var(--space-2);
+  border-radius: calc((var(--pill-h) - 8px) / 2);
+  background: var(--track);
+  overflow: hidden; /* clips the blurred art to the pill */
+}
+/* No `filter` here, deliberately. A filter promotes the element to its own
+   compositing layer, and WebKit doesn't clip a composited layer to a parent's
+   *rounded* overflow — it clips to the square box, so the art's corners
+   escaped the pill. The softness instead comes from scale: the cover arrives
+   64px wide and is stretched across ~310px, which the browser interpolates
+   into a wash. No filter also means no overscan is needed, since nothing
+   samples past the element's edges any more. */
+.nm-art {
+  position: absolute;
+  inset: 0;
+  /* 400%, not `cover`: at cover the 64px art only scales ~5× and the sleeve's
+     detail — text especially — stays legible enough to read as clutter. Zooming
+     further shows a smaller crop over more pixels, which interpolates into the
+     colour field we're after. Lower it for more of the sleeve, raise it for a
+     flatter wash. */
+  background-size: 400%;
+  background-position: center;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease-out);
+}
+.ni-media.has-art .nm-art {
+  opacity: 1;
+}
+/* Scrim: a dark wash over the art, the way Android's lock-screen player does
+   it. Deep enough that white marks read over any sleeve, shallow enough that
+   the record's colour still tints the pill. */
+.ni-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45);
+  pointer-events: none;
+}
+/* Playhead colours, read by the canvas in main.ts rather than applied here —
+   they're stroke colours, not styles the element can inherit. Kept as custom
+   properties so they stay next to the rest of the pill's look. */
+.nm-wave {
+  --nm-played: #ffffff;
+  --nm-remaining: rgb(255 255 255 / 0.38);
+}
+.nm-play,
+.nm-source,
+.nm-wave {
+  position: relative; /* above the art + scrim */
+  z-index: 1;
+}
+.nm-play {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: calc(var(--pill-h) - 12px);
+  height: calc(var(--pill-h) - 12px);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--pill-bg) 85%, var(--base));
+  color: var(--base);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.nm-play:active {
+  transform: scale(0.88);
+}
+.nm-play svg {
+  width: 60%;
+  height: 60%;
+}
+.nm-wave {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  cursor: pointer; /* click to seek */
+}
+.nm-source {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: calc(var(--pill-h) - 12px);
+  height: calc(var(--pill-h) - 12px);
+}
+.nm-source img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
 }
 
 /* ---- appearance toggle (light / dark / auto), in the theme-view header ---- */
@@ -522,6 +753,11 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+/* `display: flex` would otherwise beat the UA's [hidden] rule — the battery
+   group is hidden outright on machines with no battery */
+.stat-grp[hidden] {
+  display: none;
 }
 
 #battery .bat-icon {

@@ -16,6 +16,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 
+/// Dynamic content for the collapsed notch (media / per-workspace / OSD).
+mod notch;
+
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
 /// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
 /// (persisted to `~/.config/edgebar/appearance`).
@@ -93,6 +96,9 @@ struct Config {
     theme_command: Option<String>,
     #[serde(default)]
     wallpaper_command: Option<String>,
+    /// Per-workspace notch rules + the idle fallback. See `notch.rs`.
+    #[serde(default)]
+    notch: notch::NotchConfig,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colors already
@@ -105,6 +111,10 @@ struct ResolvedConfig {
     geometry: Geometry,
     appearance: Appearance,
     scheme: String,
+    /// What the notch shows when no provider has anything to say. Rendered
+    /// entirely in the WebView (a clock ticks, and that shouldn't cost an event
+    /// stream), so it travels with the config rather than the `notch` event.
+    notch_idle: String,
 }
 
 /// Resolve a role map against a palette: palette name → hex (literal `#hex`
@@ -228,6 +238,24 @@ fn load_config() -> Config {
         })
 }
 
+/// Resolve `notch.idle` to what the WebView should draw when no provider owns
+/// the slot. `handle` and `clock` are rendered there; `userHost` is expanded
+/// here (the WebView has no way to ask who or where it is) and anything else is
+/// passed through as literal text.
+fn resolve_notch_idle(idle: Option<&str>) -> String {
+    match idle {
+        None | Some("handle") => "handle".to_string(),
+        Some("userHost") => {
+            let user = std::env::var("USER").unwrap_or_else(|_| "user".into());
+            let host = run_osa("host name of (system info)")
+                .filter(|h| !h.is_empty())
+                .unwrap_or_else(|| "mac".into());
+            format!("{user}@{host}")
+        }
+        Some(other) => other.to_string(),
+    }
+}
+
 fn load_palettes() -> Palettes {
     const DEFAULT: &str = include_str!("../palette.default.json");
     std::env::var_os("HOME")
@@ -312,6 +340,8 @@ struct ThemeState {
     /// Binaries for the picker (resolved from config, else a bare PATH name).
     theme_command: String,
     wallpaper_command: String,
+    /// `notch.idle` from config, passed through to the WebView.
+    notch_idle: String,
 }
 
 /// Resolve `Auto` against the macOS system setting. `AppleInterfaceStyle` is
@@ -359,6 +389,7 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
             geometry: ts.geometry.clone(),
             appearance,
             scheme: persisted_scheme(),
+            notch_idle: ts.notch_idle.clone(),
         }
     };
     let _ = app.emit("theme", &resolved);
@@ -417,6 +448,7 @@ fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
         geometry: ts.geometry.clone(),
         appearance: ts.appearance,
         scheme: persisted_scheme(),
+        notch_idle: ts.notch_idle.clone(),
     }
 }
 
@@ -467,7 +499,7 @@ fn parse_win(line: &str) -> Option<(String, WinRef)> {
 /// wild — a hung `list-workspaces` froze the ws.sock loop for days and piled
 /// its pending pings into the listen backlog). On timeout the child is killed
 /// and the query degrades to "no output".
-fn aerospace(args: &[&str]) -> Vec<String> {
+pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
     use std::io::Read;
     use std::process::{Command, Stdio};
     let Ok(mut child) = Command::new("aerospace")
@@ -1017,6 +1049,126 @@ fn resolve_icons(
     out
 }
 
+/// How far up the process tree to look for the app behind an audio stream.
+/// Chrome's audio service sits two hops below the browser; four is slack.
+#[cfg(target_os = "macos")]
+const PID_WALK_LIMIT: usize = 4;
+
+/// One bundle id → its cached PNG data URL ("" when the app isn't running or
+/// has no icon). Same main-thread hop and cache as the workspace dots, for
+/// callers that need a single icon rather than a workspace sweep.
+///
+/// Off-main-thread callers only: it blocks on the main thread doing the work.
+#[cfg(target_os = "macos")]
+pub(crate) fn icon_for_bundle(app: &tauri::AppHandle, bundle_id: &str) -> String {
+    if bundle_id.is_empty() {
+        return String::new();
+    }
+    {
+        // Scoped so the cache lock is released before the main thread — which
+        // takes the same lock in resolve_icons — is asked to do anything.
+        let state = app.state::<AppState>();
+        let cache = state.icon_cache.lock().unwrap();
+        if let Some(icon) = cache.get(bundle_id) {
+            return icon.clone();
+        }
+    }
+    let app2 = app.clone();
+    let bid = bundle_id.to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    if app
+        .run_on_main_thread(move || {
+            let _ = tx.send(resolve_icons(&app2, vec![bid]));
+        })
+        .is_err()
+    {
+        return String::new();
+    }
+    rx.recv()
+        .ok()
+        .and_then(|m| m.into_values().next())
+        .unwrap_or_default()
+}
+
+/// Identify the app a pid belongs to: `(bundle id, display name, icon)`.
+///
+/// Audio is emitted by helper processes — Chrome's audio service, a WebKit GPU
+/// process — which AppKit does know about but which are the wrong answer to
+/// "what's playing". So walk up the parent chain and prefer the first *regular*
+/// (Dock-showing) app; a menu-bar-only app that never has one is accepted as
+/// the fallback rather than losing the readout entirely.
+#[cfg(target_os = "macos")]
+pub(crate) fn app_info_for_pid(
+    app: &tauri::AppHandle,
+    pid: i32,
+) -> Option<(String, String, String)> {
+    use objc2_app_kit::{NSApplicationActivationPolicy, NSRunningApplication};
+
+    let mut fallback: Option<(String, String)> = None;
+    let mut pid = pid;
+    for _ in 0..PID_WALK_LIMIT {
+        // NSRunningApplication is documented thread-safe, so the lookup and its
+        // string accessors need no main-thread hop (the icon does, and takes
+        // one below).
+        if let Some(running) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
+            let bundle_id = running
+                .bundleIdentifier()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            let name = running
+                .localizedName()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            if !bundle_id.is_empty() {
+                let found = (bundle_id, name);
+                if running.activationPolicy() == NSApplicationActivationPolicy::Regular {
+                    let icon = icon_for_bundle(app, &found.0);
+                    return Some((found.0, found.1, icon));
+                }
+                fallback.get_or_insert(found);
+            }
+        }
+        pid = parent_pid(pid)?;
+    }
+    fallback.map(|(bundle_id, name)| {
+        let icon = icon_for_bundle(app, &bundle_id);
+        (bundle_id, name, icon)
+    })
+}
+
+/// BSD process info for `pid`, or None if it just exited.
+#[cfg(target_os = "macos")]
+fn proc_info(pid: i32) -> Option<libc::proc_bsdinfo> {
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as i32;
+    // SAFETY: `info` is a live proc_bsdinfo and `size` is exactly its size,
+    // which is what PROC_PIDTBSDINFO writes.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDTBSDINFO,
+            0,
+            &mut info as *mut libc::proc_bsdinfo as *mut libc::c_void,
+            size,
+        )
+    };
+    (written == size).then_some(info)
+}
+
+/// Parent of `pid`, or None at the top of the tree (or if it just exited).
+#[cfg(target_os = "macos")]
+fn parent_pid(pid: i32) -> Option<i32> {
+    let ppid = proc_info(pid)?.pbi_ppid as i32;
+    (ppid > 1).then_some(ppid) // launchd (1) is nobody's app
+}
+
+/// Unix seconds `pid` started, or 0 if it can't be read. Used to rank several
+/// simultaneously-audible apps by which stream began most recently.
+#[cfg(target_os = "macos")]
+pub(crate) fn proc_start_secs(pid: i32) -> u64 {
+    proc_info(pid).map(|i| i.pbi_start_tvsec).unwrap_or(0)
+}
+
 #[tauri::command]
 async fn aerospace_workspaces(app: tauri::AppHandle) -> Vec<Workspace> {
     tauri::async_runtime::spawn_blocking(move || workspaces_with_icons(&app))
@@ -1501,6 +1653,9 @@ struct AppState {
 // ───────────────────────── battery (pmset) ─────────────────────────
 #[derive(Clone, Default, Serialize)]
 struct Battery {
+    /// False on machines with no battery (Mac mini, Studio, …), where the bar
+    /// hides the battery readout entirely rather than showing a bogus 0%.
+    present: bool,
     percent: u8,
     /// "charging" | "discharging" | "charged" | "AC attached" | …
     state: String,
@@ -1510,6 +1665,8 @@ struct Battery {
 
 /// Parse `pmset -g batt`, whose battery line looks like:
 ///   ` -InternalBattery-0 (id=…)\t29%; charging; 2:38 remaining present: true`
+/// A desktop prints only `Now drawing from 'AC Power'` — no percentage line —
+/// which is how we detect that there is no battery at all.
 fn read_battery() -> Battery {
     let text = std::process::Command::new("pmset")
         .args(["-g", "batt"])
@@ -1543,6 +1700,7 @@ fn read_battery() -> Battery {
     });
 
     Battery {
+        present: true,
         percent,
         state,
         time,
@@ -1844,7 +2002,7 @@ struct Volume {
     input: u8,
 }
 
-fn run_osa(script: &str) -> Option<String> {
+pub(crate) fn run_osa(script: &str) -> Option<String> {
     let out = std::process::Command::new("osascript")
         .args(["-e", script])
         .output()
@@ -1869,17 +2027,31 @@ async fn get_volume() -> Volume {
 }
 
 #[tauri::command]
-async fn set_volume(output: u8) {
+async fn set_volume(app: tauri::AppHandle, output: u8) {
+    let level = output.min(100);
+    notch::flash(
+        &app,
+        "volume",
+        format!("Volume {level}%"),
+        Some(level as f64 / 100.0),
+    );
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        run_osa(&format!("set volume output volume {}", output.min(100)))
+        run_osa(&format!("set volume output volume {level}"))
     })
     .await;
 }
 
 #[tauri::command]
-async fn set_input_volume(input: u8) {
+async fn set_input_volume(app: tauri::AppHandle, input: u8) {
+    let level = input.min(100);
+    notch::flash(
+        &app,
+        "mic",
+        format!("Mic {level}%"),
+        Some(level as f64 / 100.0),
+    );
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        run_osa(&format!("set volume input volume {}", input.min(100)))
+        run_osa(&format!("set volume input volume {level}"))
     })
     .await;
 }
@@ -1921,7 +2093,14 @@ fn get_brightness() -> f32 {
 }
 
 #[tauri::command]
-fn set_brightness(value: f32) {
+fn set_brightness(app: tauri::AppHandle, value: f32) {
+    let level = value.clamp(0.0, 1.0);
+    notch::flash(
+        &app,
+        "brightness",
+        format!("Brightness {}%", (level * 100.0).round() as u8),
+        Some(level as f64),
+    );
     #[cfg(target_os = "macos")]
     {
         brightness::set(value);
@@ -2022,6 +2201,8 @@ fn install_front_app_observer(app: tauri::AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(60));
             while rx.try_recv().is_ok() {}
             let _ = worker_app.emit("workspaces", workspaces_with_icons(&worker_app));
+            // Focus moved: a focused-window rule's headline moves with it.
+            notch::refresh_workspace(&worker_app);
         }
     });
 
@@ -2548,7 +2729,10 @@ pub fn run() {
             set_wallpaper,
             pick_wallpaper_file,
             set_scheme,
-            precompute_palettes
+            precompute_palettes,
+            notch::notch_state,
+            notch::media_toggle,
+            notch::media_seek
         ])
         .setup(|app| {
             // Shared config (colors + geometry) — drives both the native frame
@@ -2595,7 +2779,11 @@ pub fn run() {
                 wallpaper_command: config
                     .wallpaper_command
                     .unwrap_or_else(|| "desktoppr".to_string()),
+                notch_idle: resolve_notch_idle(config.notch.idle.as_deref()),
             }));
+            // Notch providers: the store, then the watchers that feed it. Both
+            // go in before the workspace socket below, which publishes into it.
+            app.manage(notch::NotchState::new(config.notch));
 
             // Per-display chrome: one native frame per screen, one bar per
             // monitor — built now and rebuilt on every display-config change,
@@ -2641,6 +2829,7 @@ pub fn run() {
                         while rx.try_recv().is_ok() {}
                         let _ = query_handle
                             .emit("workspaces", workspaces_with_icons(&query_handle));
+                        notch::refresh_workspace(&query_handle);
                     }
                 });
                 for conn in listener.incoming() {
@@ -2690,6 +2879,13 @@ pub fn run() {
             // metrics stay lazy — only this one is visible at rest).
             #[cfg(target_os = "macos")]
             install_cpu_sampler(app.handle().clone());
+
+            // Notch providers: what's making noise, and the focused workspace's
+            // rule (seeded once here, then re-run on every workspace/focus event).
+            notch::install_media_watcher(app.handle().clone());
+            notch::install_rule_ticker(app.handle().clone());
+            let seed = app.handle().clone();
+            std::thread::spawn(move || notch::refresh_workspace(&seed));
 
             Ok(())
         })

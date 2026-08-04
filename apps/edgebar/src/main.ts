@@ -23,6 +23,23 @@ interface Config {
   };
   appearance: string; // "light" | "dark" | "auto"
   scheme: string; // active matugen scheme (e.g. "scheme-tonal-spot")
+  notchIdle: string; // "handle" | "clock" | literal text
+}
+
+// One line of collapsed-notch content. Rust picks the winner across its
+// providers (an OSD flash beats workspace context beats whatever is playing)
+// and pushes just that; null means "nothing to say" and the idle look wins.
+interface NotchItem {
+  tier: "transient" | "workspace" | "media";
+  glyph: string; // icon name, used when `icon` is empty
+  icon: string; // app icon PNG data URL, or ""
+  art: string; // album art data URL, or "" — the media pill's backdrop
+  primary: string;
+  secondary: string;
+  progress: number | null; // 0..1 hairline fill
+  duration: number; // track length in seconds, 0 when unknown
+  controls: boolean; // transport commands reach this source
+  active: boolean; // false dims it (paused player)
 }
 
 interface ThemePayload {
@@ -32,6 +49,7 @@ interface ThemePayload {
 }
 
 interface Battery {
+  present: boolean; // false on desktops — the readout is hidden entirely
   percent: number;
   state: string;
   time: string | null;
@@ -112,6 +130,36 @@ const LAYOUT = {
   popupTuck: -8, // px a dropdown starts tucked up (hidden) before sliding in
   settleDelay: 600, // ms to let the reveal spring settle before hit-testing
 } as const;
+// Collapsed notch sizing. The pill grows to fit whatever the winning provider
+// published, between these bounds; `padX` is the .notch-row padding the
+// measured content sits inside. Long titles ellipsis at `maxW` rather than
+// pushing the workspace/status clusters around.
+// The notch keeps ONE width per state rather than sizing to its content: a
+// pill that resized on every track change made the whole bar twitch. Long text
+// marquees inside the fixed box instead of widening it.
+const NOTCH = {
+  idleW: 200, // the bare handle
+  itemW: 320, // any published item
+  marquee: { pxPerSec: 26, minSec: 4, pause: 0.18 }, // scroll speed / dwell at each end
+} as const;
+// The media playhead, after Android's lock-screen player: a travelling sine
+// over the played portion, a rounded thumb at the position, a flat rule for
+// what's left. The sine flattens when paused, so "is it playing" reads at a
+// glance without a separate indicator.
+//
+// `wavelength` is in px rather than cycles-across-the-bar, so the squiggle
+// keeps the same pitch whatever width the pill ends up at. `ease` is the
+// per-frame approach to the target amplitude; `speed` the drift in rad/sec.
+const WAVE = {
+  amp: 2.2,
+  wavelength: 22,
+  speed: 2.4,
+  ease: 0.15,
+  line: 2,
+  thumb: { w: 4, h: 12, gap: 2.5 }, // px; `gap` clears it either side
+  rampPx: 8, // px of played track over which the wave swells to full amplitude
+  fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
+} as const;
 const FALLBACK = { pillHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
 // Interactive-rect sentinel: the whole window is hit-testable while a panel is open.
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
@@ -121,9 +169,14 @@ const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 invoke<Config>("get_config")
   .then((cfg) => {
     applyConfig(cfg);
-    initBar(cfg.geometry.pillHeight, cfg.geometry.windowHeight, cfg.appearance);
+    initBar(
+      cfg.geometry.pillHeight,
+      cfg.geometry.windowHeight,
+      cfg.appearance,
+      cfg.notchIdle,
+    );
   })
-  .catch(() => initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "auto"));
+  .catch(() => initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "auto", "handle"));
 
 // Color vars only — re-applied live on day/night or wallpaper changes.
 function applyColors(c: Record<string, string>) {
@@ -191,7 +244,12 @@ const SCHEMES = [
   "scheme-fruit-salad",
 ] as const;
 
-function initBar(pillHeight: number, windowHeight: number, appearance: string) {
+function initBar(
+  pillHeight: number,
+  windowHeight: number,
+  appearance: string,
+  notchIdle: string,
+) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
   let shown = false;
@@ -236,6 +294,11 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   // open (so clicks outside the popup still land on the bar and close it).
   // Everywhere else the bar passes clicks through to the windows below. Coalesced
   // to one IPC per frame; called whenever the bar's layout changes.
+  // True while the playhead is being dragged. Like an open panel, it makes the
+  // whole window hit-testable: a scrub that wanders off the notch pill would
+  // otherwise cross into click-through territory mid-drag and the pointer
+  // stream would stop reaching us.
+  let scrubbing = false;
   let rectsScheduled = false;
   function reportInteractiveRects() {
     if (rectsScheduled) return;
@@ -243,7 +306,7 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     requestAnimationFrame(() => {
       rectsScheduled = false;
       const rects =
-        openPanels.size > 0
+        openPanels.size > 0 || scrubbing
           ? [RECT_WHOLE_WINDOW]
           : pills
               .map((p) => {
@@ -265,6 +328,10 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     height: number;
     onOpen?: () => void;
     onClose?: () => void;
+    /// Width to collapse back to. Panels whose collapsed size is fixed can omit
+    /// it and get the width captured at expand time; the notch can't, because
+    /// its content — and so its width — changes while the panel is open.
+    collapsedWidth?: () => number;
   }
 
   interface Panel {
@@ -293,12 +360,16 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
       open = false;
       o.onClose?.();
       animate(o.panel, { opacity: 0 }, { duration: FADE.out });
+      const target = o.collapsedWidth?.() ?? collapsedW;
       await animate(
         o.pill,
-        { width: collapsedW, height: COLLAPSED_H },
+        { width: target, height: COLLAPSED_H },
         SPRING.panelClose,
       ).finished;
-      o.pill.style.width = "";
+      // Panels with a fixed collapsed size hand the width back to CSS; a
+      // content-sized one keeps the pixel value it just settled on, since CSS
+      // has no idea how wide its current content is.
+      if (!o.collapsedWidth) o.pill.style.width = "";
       o.pill.style.height = "";
       openPanels.delete(o.id);
       await syncWindowHeight();
@@ -369,6 +440,9 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   }
   function tickMinute() {
     updateCompactClock();
+    // The notch's idle clock, when that's the configured idle look. Only while
+    // no provider owns the slot — a pushed item is Rust's to update.
+    if (notchIdle === "clock" && !notchLive) renderNotch(null);
     // self-reschedule to the next minute boundary (no drift, one wake/min)
     window.setTimeout(tickMinute, 60000 - (Date.now() % 60000));
   }
@@ -420,6 +494,10 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   let secondTimer: number | undefined;
   let metricsTimer: number | undefined;
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
+  // Collapsed width of the notch, recomputed whenever its content changes (see
+  // the notch-content section below). Read back on collapse so the pill returns
+  // to the width its *current* content needs, not the one it had on expand.
+  let notchCollapsedW: number = NOTCH.idleW;
   const notchPanel = makePanel({
     id: "notch",
     pill: notchEl,
@@ -427,6 +505,7 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     panel: notchEl.querySelector<HTMLElement>(".notch-panel")!,
     width: VIEW.default.w,
     height: VIEW.default.h,
+    collapsedWidth: () => notchCollapsedW,
     onOpen: () => {
       showView("default"); // always open on the default (clock+metrics) view
       updateNotchClock();
@@ -597,9 +676,17 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
   const batPill = document.querySelector<HTMLElement>("#battery")!;
   const batIcon = batPill.querySelector<HTMLElement>(".bat-icon")!;
   const batPct = batPill.querySelector<HTMLElement>(".bat-pct")!;
+  let batTimer = 0;
   async function updateBattery() {
     try {
       const b = await invoke<Battery>("battery");
+      // No battery (Mac mini and friends): drop the group and stop polling —
+      // the answer can't change without a reboot into different hardware.
+      if (!b.present) {
+        batPill.hidden = true;
+        window.clearInterval(batTimer);
+        return;
+      }
       const charging = b.state !== "discharging";
       batIcon.innerHTML = charging
         ? BAT_SVG.charging
@@ -616,7 +703,7 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     }
   }
   updateBattery();
-  window.setInterval(updateBattery, POLL.battery);
+  batTimer = window.setInterval(updateBattery, POLL.battery);
 
   // ---- Wi-Fi / network (polled; changes slowly) --------------------------
   // The connected glyph is built from the Lucide wifi pieces (dot + 3 concentric
@@ -836,6 +923,416 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     .then(renderWorkspaces)
     .catch(() => {});
 
+  // ---- notch content: whatever the winning provider published ------------
+  // Rust decides *what* the notch says (see notch.rs — an OSD flash outranks
+  // per-workspace context, which outranks whatever is making noise) and pushes
+  // one item, or null. The WebView owns only the idle look, because a clock
+  // ticks and that shouldn't cost an event stream.
+  const NOTCH_GLYPH: Record<string, string> = {
+    music: lucide(
+      '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    ),
+    volume: lucide(
+      '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+    ),
+    mic: lucide(
+      '<path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/>',
+    ),
+    brightness: lucide(
+      '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+    ),
+    window: lucide(
+      '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
+    ),
+    terminal: lucide('<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>'),
+    clock: lucide('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  };
+
+  const notchRow = notchEl.querySelector<HTMLElement>(".notch-row")!;
+  const notchHandle = notchRow.querySelector<HTMLElement>(".notch-handle")!;
+  const notchItem = notchRow.querySelector<HTMLElement>(".notch-item")!;
+  const niIcon = notchItem.querySelector<HTMLElement>(".ni-icon")!;
+  const niPrimary = notchItem.querySelector<HTMLElement>(".ni-primary")!;
+  const niSecondary = notchItem.querySelector<HTMLElement>(".ni-secondary")!;
+  const niProgress = notchItem.querySelector<HTMLElement>(".ni-progress i")!;
+
+  // Set a line's text and, when it doesn't fit the fixed box, marquee it the
+  // way a player does — the alternative at this width is an ellipsis that hides
+  // the half of the title that tells tracks apart.
+  function setLine(box: HTMLElement, text: string) {
+    const inner = box.firstElementChild as HTMLElement;
+    if (inner.textContent !== text) inner.textContent = text;
+    box.classList.remove("scroll");
+    box.style.removeProperty("--ni-shift");
+    box.style.removeProperty("--ni-dur");
+    // Measured after the text lands; scrollWidth is the unclipped content.
+    const overflow = inner.scrollWidth - box.clientWidth;
+    if (overflow <= 1) return;
+    const travel = Math.max(
+      NOTCH.marquee.minSec,
+      overflow / NOTCH.marquee.pxPerSec,
+    );
+    box.style.setProperty("--ni-shift", `${overflow}px`);
+    // Two passes plus a dwell at each end, so one cycle is there-and-back.
+    box.style.setProperty(
+      "--ni-dur",
+      `${(travel + NOTCH.marquee.pause * travel) * 2}s`,
+    );
+    box.classList.add("scroll");
+  }
+
+  // The idle look is a synthetic item, so one renderer covers both cases.
+  function idleItem(): NotchItem | null {
+    if (notchIdle === "handle") return null;
+    const now = new Date();
+    const clock = notchIdle === "clock";
+    return {
+      tier: "media",
+      glyph: clock ? "clock" : "",
+      icon: "",
+      art: "",
+      primary: clock
+        ? now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+        : notchIdle,
+      secondary: clock
+        ? now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+        : "",
+      progress: null,
+      duration: 0,
+      controls: false,
+      active: true,
+    };
+  }
+
+  // ---- media pill: art backdrop, wavy playhead, working transport ---------
+  const niMedia = notchRow.querySelector<HTMLElement>(".ni-media")!;
+  const nmArt = niMedia.querySelector<HTMLElement>(".nm-art")!;
+  const nmPlay = niMedia.querySelector<HTMLButtonElement>(".nm-play")!;
+  const nmWave = niMedia.querySelector<HTMLCanvasElement>(".nm-wave")!;
+  const nmSource = niMedia.querySelector<HTMLElement>(".nm-source")!;
+  const waveCtx = nmWave.getContext("2d");
+  // Playhead colours live on .nm-wave, not :root, so they sit with the rest of
+  // the pill's styles — hence reading them off the element rather than cssVar.
+  const mediaVar = (name: string) =>
+    getComputedStyle(nmWave).getPropertyValue(name).trim();
+  // Solid glyphs (Lucide's are outlines, which read as hollow at 10px).
+  const TRANSPORT_SVG = {
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.1-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"/></svg>',
+    pause:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h3.2v16H7zm6.8 0H17v16h-3.2z"/></svg>',
+  };
+
+  // Playhead state. `progress` is the last figure Rust published and `t0` when
+  // it arrived, so the head advances smoothly between the 2s polls instead of
+  // stepping. `amp`/`phase` drive the wave itself.
+  const media = { progress: 0, duration: 0, playing: false, t0: 0, amp: 0, phase: 0, last: 0 };
+
+  function playedFraction(): number {
+    const p =
+      media.playing && media.duration > 0
+        ? media.progress + (performance.now() - media.t0) / 1000 / media.duration
+        : media.progress;
+    return Math.max(0, Math.min(1, p));
+  }
+
+  function paintWave() {
+    if (!waveCtx) return;
+    const w = nmWave.clientWidth;
+    const h = nmWave.clientHeight;
+    if (!w || !h) return;
+    // The bar window can be rebuilt onto a display with a different scale, so
+    // re-size the backing store whenever the DPR moves (as the CPU graph does).
+    const dpr = window.devicePixelRatio || 1;
+    if (nmWave.width !== Math.round(w * dpr)) {
+      nmWave.width = Math.round(w * dpr);
+      nmWave.height = Math.round(h * dpr);
+    }
+    waveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    waveCtx.clearRect(0, 0, w, h);
+
+    const y = h / 2;
+    // Inset by a full stroke width, not half. A round cap is a dome of radius
+    // line/2 centred on the endpoint, so starting at half puts its outer edge
+    // exactly on x=0 — where antialiasing shaves it and the cap reads as cut
+    // off. A full width leaves the dome clear of the boundary.
+    const pad = WAVE.line;
+    const t = WAVE.thumb;
+    // The thumb needs the same clearance plus its own half-width, or it clips
+    // against the canvas edge at 0% and 100%.
+    const lo = pad + t.w / 2;
+    const hi = w - pad - t.w / 2;
+    // Map the fraction across the travel the thumb can actually use, rather
+    // than across the full width and then clamping. Clamping parked the thumb
+    // at `lo` for the whole first stretch of the track — on a 250px canvas that
+    // was the first ~1.5%, several seconds during which the position didn't
+    // move and no wave could exist. Mapping means the very first fraction of a
+    // percent moves it.
+    const head = lo + (hi - lo) * playedFraction();
+    waveCtx.lineWidth = WAVE.line;
+    // Round caps finish the squiggle, the rule and the thumb with a dome rather
+    // than a cut edge; round joins keep the sine's crests from mitring to a
+    // point. Both are ~half the line width, so raise WAVE.line to see more of
+    // them.
+    waveCtx.lineCap = "round";
+    waveCtx.lineJoin = "round";
+
+    // Remainder: a flat rule in the muted tone, starting clear of the thumb.
+    waveCtx.strokeStyle = mediaVar("--nm-remaining");
+    const restFrom = head + t.w / 2 + t.gap;
+    if (restFrom < w - pad) {
+      waveCtx.beginPath();
+      waveCtx.moveTo(restFrom, y);
+      waveCtx.lineTo(w - pad, y);
+      waveCtx.stroke();
+    }
+
+    // Played: the wave. Amplitude eases to 0 on pause, so this same path draws
+    // the flat line at rest — no second code path for the paused look.
+    waveCtx.strokeStyle = mediaVar("--nm-played");
+    const waveTo = head - t.w / 2 - t.gap;
+    if (waveTo > pad) {
+      const len = waveTo - pad;
+      // Swell the amplitude in over the first stretch, so the squiggle grows
+      // out of the left edge instead of arriving at full height.
+      const grow = Math.min(1, len / WAVE.rampPx);
+      // Fade it in over a shorter run. A round cap gives any stroke a minimum
+      // rendered size of one line width, so even a hairline-long wave paints as
+      // a 2px blob — which is what made it look like it appeared already 2px
+      // long. Ramping alpha lets those first fractions of a pixel arrive at
+      // near-zero opacity instead of popping.
+      const fade = Math.min(1, len / WAVE.fadeInPx);
+      const waveY = (x: number) =>
+        y + media.amp * grow * Math.sin((2 * Math.PI * x) / WAVE.wavelength + media.phase);
+      waveCtx.globalAlpha = fade;
+      waveCtx.beginPath();
+      waveCtx.moveTo(pad, waveY(pad));
+      for (let x = pad + 1; x < waveTo; x += 1) waveCtx.lineTo(x, waveY(x));
+      // Finish exactly at waveTo rather than at the last whole pixel before it.
+      // Sampling on an integer grid left the tip parked on that grid while the
+      // playhead moved continuously, so the gap to the thumb grew to a pixel and
+      // snapped back — once per pixel of travel, which on a 3-minute track is
+      // roughly once a second.
+      waveCtx.lineTo(waveTo, waveY(waveTo));
+      waveCtx.stroke();
+      waveCtx.globalAlpha = 1;
+    }
+
+    // Thumb: the rounded upright between the two, marking the position.
+    waveCtx.lineWidth = t.w;
+    waveCtx.beginPath();
+    waveCtx.moveTo(head, y - t.h / 2 + t.w / 2);
+    waveCtx.lineTo(head, y + t.h / 2 - t.w / 2);
+    waveCtx.stroke();
+  }
+
+  let waveRaf = 0;
+  function waveFrame(now: number) {
+    waveRaf = 0;
+    const dt = media.last ? Math.min(0.05, (now - media.last) / 1000) : 0;
+    media.last = now;
+    media.amp += ((media.playing ? WAVE.amp : 0) - media.amp) * WAVE.ease;
+    if (!media.playing && media.amp < 0.05) media.amp = 0; // settle, don't wobble
+    if (media.playing) media.phase += WAVE.speed * dt;
+    paintWave();
+    // Keep the loop alive only while something moves: playing, or still
+    // flattening out after a pause.
+    if (!niMedia.hidden && (media.playing || media.amp > 0)) {
+      waveRaf = requestAnimationFrame(waveFrame);
+    }
+  }
+  function startWave() {
+    if (waveRaf) return;
+    media.last = 0;
+    waveRaf = requestAnimationFrame(waveFrame);
+  }
+
+  function setMedia(item: NotchItem) {
+    nmArt.style.backgroundImage = item.art ? `url("${item.art}")` : "";
+    niMedia.classList.toggle("has-art", !!item.art);
+    nmSource.innerHTML = item.icon ? `<img src="${item.icon}" alt="">` : "";
+    niMedia.title = item.secondary ? `${item.primary} — ${item.secondary}` : item.primary;
+    syncPlayhead(item);
+  }
+
+  // Re-anchor the playhead to a freshly published position. Also owns the
+  // transport glyph, since play/pause now arrives through here rather than
+  // through a re-render.
+  function syncPlayhead(item: NotchItem) {
+    // Mid-drag the cursor owns the position — a poll landing now would yank the
+    // head back to where the player still thinks it is.
+    if (!scrubbing) media.progress = item.progress ?? 0;
+    media.duration = item.duration;
+    media.playing = item.active;
+    media.t0 = performance.now();
+    nmPlay.innerHTML = item.active ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
+    startWave();
+  }
+
+  nmPlay.addEventListener("click", (e) => {
+    e.stopPropagation(); // the row is the panel's toggle; the button isn't
+    // Flip optimistically so the glyph and the wave respond on the click, not
+    // on the round trip. Rust re-publishes the truth a moment later.
+    media.progress = playedFraction();
+    media.playing = !media.playing;
+    media.t0 = performance.now();
+    nmPlay.innerHTML = media.playing ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
+    startWave();
+    invoke("media_toggle").catch(() => {});
+  });
+
+  // Scrubbing. The pointer position maps through the same travel the thumb is
+  // drawn along — inset by the cap padding and the thumb's half-width — so the
+  // playhead lands under the cursor rather than drifting from it at the ends.
+  function fractionAt(clientX: number): number {
+    const r = nmWave.getBoundingClientRect();
+    const lo = WAVE.line + WAVE.thumb.w / 2;
+    const hi = r.width - WAVE.line - WAVE.thumb.w / 2;
+    return Math.max(0, Math.min(1, (clientX - r.left - lo) / (hi - lo)));
+  }
+
+  // Move the playhead now; only tell the player about it on release, so a drag
+  // is one seek rather than a burst of them.
+  function scrubTo(clientX: number, commit: boolean) {
+    media.progress = fractionAt(clientX);
+    media.t0 = performance.now();
+    // A paused player has no animation loop running, so paint by hand — the
+    // head still has to follow the cursor.
+    paintWave();
+    if (commit) invoke("media_seek", { fraction: media.progress }).catch(() => {});
+  }
+
+  nmWave.addEventListener("pointerdown", (e) => {
+    e.stopPropagation();
+    scrubbing = true;
+    // Capture keeps the move/up events coming to the canvas even when the
+    // cursor leaves it — including vertically, out of the bar entirely.
+    nmWave.setPointerCapture(e.pointerId);
+    reportInteractiveRects();
+    scrubTo(e.clientX, false);
+  });
+  nmWave.addEventListener("pointermove", (e) => {
+    if (!scrubbing) return;
+    scrubTo(e.clientX, false);
+  });
+  for (const type of ["pointerup", "pointercancel"] as const) {
+    nmWave.addEventListener(type, (e) => {
+      if (!scrubbing) return;
+      scrubbing = false;
+      nmWave.releasePointerCapture(e.pointerId);
+      scrubTo(e.clientX, true);
+      reportInteractiveRects();
+    });
+  }
+  // The row is the panel's toggle, and a scrub ends in a click on it.
+  nmWave.addEventListener("click", (e) => e.stopPropagation());
+
+  // What makes one item visually a *different* item. Deliberately excludes
+  // `progress`: the media poll re-publishes every 2s with the track position
+  // advanced, and treating that as new content re-ran the crossfade twice a
+  // second — the flashing. Position moves in place instead.
+  function identity(i: NotchItem | null): string {
+    if (!i) return "";
+    const parts: unknown[] = [
+      i.tier,
+      i.primary,
+      i.secondary,
+      i.glyph,
+      i.icon.length,
+      i.art.length,
+      i.controls,
+    ];
+    // Play/pause is deliberately not part of a media pill's identity. The wave
+    // already animates between the two states — flattening on pause, swelling
+    // on resume — and treating the flip as new content crossfaded the whole
+    // pill out and back, throwing that away and flashing the art with it. The
+    // text layout has no such animation, so there it still counts.
+    if (!wantsMediaPill(i)) parts.push(i.active);
+    return parts.join("|");
+  }
+
+  // A driveable player gets the media pill; everything else — including an
+  // audible app we can only name — keeps the icon + text line.
+  const wantsMediaPill = (i: NotchItem | null) => !!i && i.tier === "media" && i.controls;
+
+  function setProgress(item: NotchItem) {
+    niProgress.style.width = `${(item.progress ?? 0) * 100}%`;
+    notchItem.classList.toggle("has-progress", item.progress != null);
+  }
+
+  let notchLive: NotchItem | null = null; // the item Rust last pushed (null = idle)
+  function renderNotch(item: NotchItem | null) {
+    notchLive = item;
+    const shown = item ?? idleItem();
+    const asMedia = wantsMediaPill(shown);
+    notchItem.hidden = !shown || asMedia;
+    niMedia.hidden = !asMedia;
+    notchHandle.hidden = !!shown;
+    notchRow.classList.toggle("media", asMedia);
+    if (asMedia) {
+      setMedia(shown!);
+    } else if (shown) {
+      const hasIcon = !!shown.icon;
+      niIcon.innerHTML = hasIcon
+        ? `<img src="${shown.icon}" alt="">`
+        : (NOTCH_GLYPH[shown.glyph] ?? "");
+      niIcon.hidden = !hasIcon && !NOTCH_GLYPH[shown.glyph];
+      niSecondary.hidden = !shown.secondary;
+      setLine(niPrimary, shown.primary);
+      setLine(niSecondary, shown.secondary);
+      setProgress(shown);
+      notchItem.classList.toggle("dim", !shown.active);
+      notchItem.title = shown.secondary
+        ? `${shown.primary} — ${shown.secondary}`
+        : shown.primary;
+    }
+
+    // One width per state, so the bar only moves when the notch changes what it
+    // is showing — never because a longer song title came on.
+    const width = shown ? NOTCH.itemW : NOTCH.idleW;
+    if (width === notchCollapsedW) return;
+    notchCollapsedW = width;
+    // While a panel is open the view geometry owns the width; collapse picks the
+    // new value up through `collapsedWidth`. The hitTest rects are reported once
+    // the spring settles — reporting mid-flight would just seed a stale rect.
+    if (!notchPanel.isOpen()) {
+      animate(notchEl, { width }, SPRING.panelOpen)
+        .finished.then(reportInteractiveRects)
+        .catch(() => {}); // superseded by a newer item; that one reports instead
+    }
+  }
+
+  function pushNotch(item: NotchItem | null) {
+    // Same content, new position: move the hairline and leave everything else
+    // alone. No crossfade, no relayout, no marquee restart.
+    if (item && identity(item) === identity(notchLive)) {
+      notchLive = item;
+      if (wantsMediaPill(item)) syncPlayhead(item);
+      else setProgress(item);
+      return;
+    }
+    notchLive = item;
+    // Genuinely new content — crossfade it in. The row holds two layouts (text
+    // and media pill) and a swap can change which one is on show, so fade out
+    // whichever is visible now and fade in whichever is visible after the
+    // render. Fading in a fixed element instead strands the other at opacity 0,
+    // where it stays hidden the next time it's the one being shown.
+    const outgoing = niMedia.hidden ? notchItem : niMedia;
+    animate(outgoing, { opacity: 0 }, { duration: FADE.out })
+      .finished.then(() => {
+        renderNotch(item);
+        const incoming = niMedia.hidden ? notchItem : niMedia;
+        if (outgoing !== incoming) outgoing.style.opacity = "1"; // it's hidden now
+        incoming.style.opacity = "0"; // start the fade from a known state
+        animate(incoming, { opacity: 1 }, { duration: FADE.in });
+      })
+      .catch(() => {});
+  }
+
+  listen<NotchItem | null>("notch", (e) => pushNotch(e.payload));
+  invoke<NotchItem | null>("notch_state") // whatever was already winning
+    .then((item) => renderNotch(item))
+    .catch(() => renderNotch(null));
+
   // ---- theme view: switching, appearance, wallpaper picker, scheme -------
   const notchPanelEl = notchEl.querySelector<HTMLElement>(".notch-panel")!;
   const viewDefault = notchPanelEl.querySelector<HTMLElement>(".view-default")!;
@@ -957,7 +1454,9 @@ function initBar(pillHeight: number, windowHeight: number, appearance: string) {
     applyColors(e.payload.colors);
     setActiveMode(e.payload.appearance);
     if (themeLoaded && e.payload.scheme) renderSchemes(e.payload.scheme);
-    drawCpuGraph(); // canvas pixels don't follow CSS vars — repaint them by hand
+    // Canvas pixels don't follow CSS vars — repaint them by hand.
+    drawCpuGraph();
+    paintWave();
   });
 
   // ---- init ---------------------------------------------------------------
