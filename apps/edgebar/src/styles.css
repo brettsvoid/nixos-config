@@ -517,8 +517,14 @@ body {
   gap: var(--space-3);
   flex: 1 1 auto;
   min-width: 0;
-  height: calc(var(--pill-h) - 4px);
-  margin: -2px 2px 0;
+  /* Flush to the notch's top edge, 3px clear at the bottom — not centred. The
+     frame line above the notch is the same colour as the pill, so the eye reads
+     the line's thickness as space above the media pill; centring it here left
+     the top visibly heavier. The negative top margin does the shifting: under
+     align-items:center it only moves the box up by half its value, so -3px on a
+     29px box lands the border-box top at 0. */
+  height: calc(var(--pill-h) - 3px);
+  margin: -3px 2px 0;
   padding: 0 var(--space-2);
   border-radius: calc((var(--pill-h) - 8px) / 2);
   background: var(--track);
@@ -574,8 +580,10 @@ body {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: calc(var(--pill-h) - 12px);
-  height: calc(var(--pill-h) - 12px);
+  /* 21px, not 20: the media pill is an odd 29px tall, so an even control would
+     centre on a half pixel and blur on a 1x screen. Keeps the 4px inset. */
+  width: calc(var(--pill-h) - 11px);
+  height: calc(var(--pill-h) - 11px);
   padding: 0;
   border: none;
   border-radius: var(--radius-sm);
@@ -601,8 +609,8 @@ body {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: calc(var(--pill-h) - 12px);
-  height: calc(var(--pill-h) - 12px);
+  width: calc(var(--pill-h) - 11px); /* odd, to match .nm-play */
+  height: calc(var(--pill-h) - 11px);
 }
 .nm-source img {
   width: 100%;
