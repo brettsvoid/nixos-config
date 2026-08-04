@@ -82,18 +82,6 @@
           defaultMode = "auto";
         };
 
-        hooks.Notification = [
-          {
-            matcher = "";
-            hooks = [
-              {
-                type = "command";
-                command = "${configDir}/hooks/notify.sh";
-              }
-            ];
-          }
-        ];
-
         # worktrunk's own status line — branch, worktree and merge state for
         # the checkout the session is in. Both Macs import apps-worktrunk, so
         # `wt` resolves on either; this would render an error line on a host
@@ -215,31 +203,6 @@
             # `nix flake update simple-english` is the upgrade.
             simple-english = "${inputs.simple-english}/skills/simple-english";
           };
-
-        # Named notify.sh (not notify) so the settings.json entry above keeps
-        # the path it has always had. The option marks it executable.
-        #
-        # terminal-notifier is referenced by absolute Homebrew path, not
-        # through nixpkgs and not by bare name: macOS ties notification
-        # authorisation to the delivering app bundle, and the brew copy is the
-        # one already authorised on both Macs. It is now declared in the
-        # shared brews list — before this it was installed only as a
-        # transitive dependency of `fastlane`, which also made it a silent
-        # dependency of half the skhd bindings in darwin/skhd/skhdrc.
-        hooks."notify.sh" = ''
-          #!${pkgs.bash}/bin/bash
-          set -euo pipefail
-
-          notifier=/opt/homebrew/bin/terminal-notifier
-          [ -x "$notifier" ] || exit 0
-
-          INPUT=$(cat)
-          TITLE=$(${jq} -r '.title // "Claude Code"' <<< "$INPUT")
-          MESSAGE=$(${jq} -r '.message' <<< "$INPUT")
-
-          "$notifier" -message "$MESSAGE" -title "$TITLE" \
-            -activate net.kovidgoyal.kitty
-        '';
       };
 
       home.activation = {
