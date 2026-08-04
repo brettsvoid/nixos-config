@@ -1,4 +1,5 @@
-- Prefer UK english for variable naming and spelling in comments
+- Prefer UK english everywhere: prose, docs, variable naming and comments. This
+  overrides ASD-STE100 Rule 1.14, which asks for American spelling.
 - No conjecture, validate first
 
 ## Response style
