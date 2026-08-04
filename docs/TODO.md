@@ -5,6 +5,63 @@ from wherever the repo was last edited. Delete an entry once it is done.
 
 ---
 
+## Remove the stale Claude Code notify hook (brett-m1-mbp only)
+
+**Do this on the MacBook.** The Mac mini is already done. The MSI laptop does
+not import `apps-claude-code`.
+
+### Why
+
+`a7c5748` dropped the `Notification` hook and the `notify.sh` that shelled out
+to `terminal-notifier`. Removing it from `modules/home/apps/claude-code.nix`
+stops nix re-asserting the key — it does not delete the copy already written to
+`~/.claude/settings.json`. Activation merges (`jq -s '.[0] * .[1]'`, see the
+comment above `mergeSettings`), and a merge has no way to express "no longer
+declared", so the entry survives every rebuild until it is deleted by hand.
+
+Not urgent: after the rebuild the script it points at is gone, so no
+notification is delivered either way. The entry is dead weight — though it may
+show up as a failed hook rather than being ignored outright.
+
+### Steps
+
+1. Rebuild first, so the hook script is unlinked and nix stops re-adding the
+   key underneath you:
+
+   ```sh
+   nix-rebuild
+   ```
+
+2. Check that `Notification` is the only hook — if Claude has written others
+   since, delete just that one (`del(.hooks.Notification)`) instead:
+
+   ```sh
+   jq '.hooks | keys' ~/.claude/settings.json   # expect ["Notification"]
+   ```
+
+3. Delete the key. Via a temp file, not a redirect onto the same path — a
+   redirect truncates the file before jq reads it:
+
+   ```sh
+   cd ~/.claude
+   cp settings.json settings.json.bak
+   jq 'del(.hooks)' settings.json > .settings.tmp
+   mv .settings.tmp settings.json
+   chmod 644 settings.json
+   ```
+
+4. Verify, then clean up:
+
+   ```sh
+   jq 'has("hooks")' ~/.claude/settings.json    # expect false
+   ls ~/.claude/hooks                           # notify.sh symlink gone
+   rm ~/.claude/settings.json.bak
+   ```
+
+5. **Delete this section** from this file.
+
+---
+
 ## Migrate Firefox to the XDG config path (brett-msi-laptop only)
 
 **Do this on the MSI laptop.** It is the only host importing `apps-firefox`;
