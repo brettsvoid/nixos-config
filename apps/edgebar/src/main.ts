@@ -106,11 +106,21 @@ const SPRING = {
 const FADE = { in: 0.25, inDelay: 0.08, out: 0.12 } as const; // seconds
 const STAGGER = { reveal: 0.05, hide: 0.03 } as const; // seconds between pills
 const POLL = {
-  clockSecond: 1000,
   metrics: 2000,
   battery: 60000,
 } as const; // ms (network is now event-driven via the reachability watcher)
 const DEBOUNCE = { volume: 60, mic: 60, brightness: 40 } as const; // ms
+// Thresholds for the alert dot on the performance tab. CPU and memory are
+// deliberately absent: both swing second to second, so a dot driven by them
+// would cry wolf and get ignored. Disk and swap move slowly, so a dot means
+// something is actually wrong.
+const HEALTH = {
+  diskUsedPct: 90, // 10% of the volume left
+  // Bytes rather than a percentage. macOS grows its swap files on demand, so a
+  // healthy machine with one small file reads as near-100%-used swap. What
+  // matters is how much is swapped out, not how full the file is.
+  swapUsedBytes: 2 * 1024 ** 3,
+} as const;
 // CPU histogram. `samples` matches CPU_HISTORY in lib.rs, and is deliberately
 // equal to `w` so every column is exactly 1px with no gap — keep them in step if
 // either changes, or the columns land on fractional pixels and blur. 108 columns
@@ -221,14 +231,20 @@ interface Wallpaper {
   thumb: string; // data:image/png;base64,…
 }
 
-// Per-view popup geometry: the default (clock+metrics) view keeps the current
-// size; the theme view is wider/taller for the wallpaper filmstrip. `win` is the
-// bar-window height that view needs (transparent overshoot included).
+// Per-view popup geometry. Both open views are the same height, so switching
+// between them only moves the width — the window height stays put and the
+// panel doesn't jump. `win` is the bar-window height the view needs
+// (transparent overshoot included), snapped to the 64px bar keyline: 7×64.
+// The default view's width is the sum of its column grid (see .view-default).
 const VIEW = {
-  default: { w: 250, h: 250, win: LAYOUT.windowExpandedH },
-  // snapped to the 64px bar keyline: window = 5×64, pill a touch shorter
-  theme: { w: 704, h: 256, win: 320 },
+  default: { w: 680, h: 400, win: 448 },
+  theme: { w: 704, h: 400, win: 448 },
+  metrics: { w: 460, h: 400, win: 448 }, // 56 of it is the rail
 } as const;
+// What the panel spends on chrome before the tab body gets any: the panel's
+// side padding (2 × --space-6), the rail (48px) and the gap after it
+// (--space-4). Keep in step with .notch-panel / .dash-rail in styles.css.
+const PANEL_CHROME = 12 * 2 + 48 + 8;
 type ViewName = keyof typeof VIEW;
 
 // matugen scheme types (matches `select-scheme`'s list / the CLI order).
@@ -419,11 +435,10 @@ function initBar(
 
   // ---- clock --------------------------------------------------------------
   // The compact clock shows HH:MM, so it only updates once a minute, aligned to
-  // the minute boundary. The notch's HH:MM:SS only ticks while the notch is open.
+  // the minute boundary. It's the bar's only clock — the notch's views don't
+  // carry one.
   const timeEl = document.querySelector<HTMLElement>("#clock .time")!;
   const dateEl = document.querySelector<HTMLElement>("#clock .date")!;
-  const bigTimeEl = document.querySelector<HTMLElement>("#notch .big-time")!;
-  const fullDateEl = document.querySelector<HTMLElement>("#notch .full-date")!;
 
   function updateCompactClock() {
     const now = new Date();
@@ -447,23 +462,7 @@ function initBar(
     window.setTimeout(tickMinute, 60000 - (Date.now() % 60000));
   }
 
-  function updateNotchClock() {
-    const now = new Date();
-    bigTimeEl.textContent = now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
-    fullDateEl.textContent = now.toLocaleDateString([], {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
-  // ---- metrics (lazy: only sampled while the notch is open) ---------------
+  // ---- metrics (lazy: only sampled while the performance view is open) ----
   const metricBars = new Map<string, HTMLElement>();
   const metricVals = new Map<string, HTMLElement>();
   for (const el of document.querySelectorAll<HTMLElement>("#notch .metric")) {
@@ -478,6 +477,16 @@ function initBar(
   }
   const pctOf = (used: number, total: number) =>
     total > 0 ? (used / total) * 100 : 0;
+  // Sampling runs only while the performance view is showing — see showView.
+  function startMetrics() {
+    if (metricsTimer !== undefined) return;
+    sampleMetrics();
+    metricsTimer = window.setInterval(sampleMetrics, POLL.metrics);
+  }
+  function stopMetrics() {
+    clearInterval(metricsTimer);
+    metricsTimer = undefined;
+  }
   async function sampleMetrics() {
     try {
       const m = await invoke<Metrics>("metrics_sample");
@@ -485,13 +494,31 @@ function initBar(
       setMetric("mem", pctOf(m.memUsed, m.memTotal));
       setMetric("disk", pctOf(m.diskUsed, m.diskTotal));
       setMetric("swap", pctOf(m.swapUsed, m.swapTotal));
+      setHealth(m);
     } catch {
       /* sampling can fail mid-teardown; ignore */
     }
   }
 
-  // ---- center notch: clock + metrics hub ---------------------------------
-  let secondTimer: number | undefined;
+  // Alert dot on the performance tab. The rail only exists while the panel is
+  // open, so nothing polls in the background for this — one sample when the
+  // notch opens is enough, and the dot then refreshes for free on the
+  // performance view's own cadence.
+  const perfTab = document.querySelector<HTMLElement>('.rail-tab[data-to="metrics"]')!;
+  const perfDot = document.querySelector<HTMLElement>("#perf-dot")!;
+  function setHealth(m: Metrics) {
+    const reasons: string[] = [];
+    if (pctOf(m.diskUsed, m.diskTotal) >= HEALTH.diskUsedPct) {
+      reasons.push("disk almost full");
+    }
+    if (m.swapUsed >= HEALTH.swapUsedBytes) reasons.push("heavy swap use");
+    perfDot.hidden = reasons.length === 0;
+    perfTab.title = reasons.length
+      ? `Performance — ${reasons.join(", ")}`
+      : "Performance";
+  }
+
+  // ---- center notch: the dashboard / wallpapers / performance hub ---------
   let metricsTimer: number | undefined;
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
   // Collapsed width of the notch, recomputed whenever its content changes (see
@@ -507,16 +534,14 @@ function initBar(
     height: VIEW.default.h,
     collapsedWidth: () => notchCollapsedW,
     onOpen: () => {
-      showView("default"); // always open on the default (clock+metrics) view
-      updateNotchClock();
-      secondTimer = window.setInterval(updateNotchClock, POLL.clockSecond);
-      sampleMetrics();
-      metricsTimer = window.setInterval(sampleMetrics, POLL.metrics);
+      showView("default"); // always open on the dashboard, as ambxst does
+      sampleMetrics(); // one read, so the rail's alert dot is right on arrival
     },
     onClose: () => {
-      clearInterval(secondTimer);
-      clearInterval(metricsTimer);
-      expandedWindowH = VIEW.default.win; // don't leave the taller theme height
+      stopMetrics();
+      // Back to the generic popup height — the notch's views are the tall ones,
+      // and the controls/launcher popups shouldn't inherit their window.
+      expandedWindowH = LAYOUT.windowExpandedH;
     },
   });
 
@@ -1333,10 +1358,19 @@ function initBar(
     .then((item) => renderNotch(item))
     .catch(() => renderNotch(null));
 
-  // ---- theme view: switching, appearance, wallpaper picker, scheme -------
+  // ---- notch views: switching, appearance, wallpaper picker, scheme -------
   const notchPanelEl = notchEl.querySelector<HTMLElement>(".notch-panel")!;
-  const viewDefault = notchPanelEl.querySelector<HTMLElement>(".view-default")!;
-  const viewTheme = notchPanelEl.querySelector<HTMLElement>(".view-theme")!;
+  // One element per VIEW key — showView hides every other one, so adding a
+  // view is an entry here plus a `.view-<name>` div and a VIEW size.
+  const viewEls: Record<ViewName, HTMLElement> = {
+    default: notchPanelEl.querySelector<HTMLElement>(".view-default")!,
+    theme: notchPanelEl.querySelector<HTMLElement>(".view-theme")!,
+    metrics: notchPanelEl.querySelector<HTMLElement>(".view-metrics")!,
+  };
+  const tabBody = notchPanelEl.querySelector<HTMLElement>(".tab-body")!;
+  const railTabs = [
+    ...notchPanelEl.querySelectorAll<HTMLElement>(".rail-tab[data-to]"),
+  ];
   const filmstrip = document.querySelector<HTMLElement>("#filmstrip")!;
   const schemeSelect = document.querySelector<HTMLSelectElement>("#scheme-select")!;
   let currentView: ViewName = "default";
@@ -1344,9 +1378,26 @@ function initBar(
 
   function showView(view: ViewName) {
     currentView = view;
-    viewDefault.hidden = view !== "default";
-    viewTheme.hidden = view !== "theme";
+    // Pin the body to the width this view settles at, before the pill starts
+    // moving. Left to itself the body tracks the pill through the spring —
+    // overshoot included — and any fluid layout inside relays out on every
+    // frame. The wallpaper grid was the visible case: `auto-fill` recomputed
+    // its column count on the way, so the thumbnails jumped from few-and-large
+    // to many-and-small. Pinned, the view is laid out once and .notch-panel-clip
+    // wipes over it as the pill grows.
+    tabBody.style.width = `${VIEW[view].w - PANEL_CHROME}px`;
+    for (const name of Object.keys(viewEls) as ViewName[]) {
+      viewEls[name].hidden = name !== view;
+    }
+    // The rail outlives the view swap, so its highlight has to be moved.
+    for (const tab of railTabs) {
+      tab.classList.toggle("active", tab.dataset.to === view);
+    }
     expandedWindowH = VIEW[view].win;
+    // Sampling follows the view, not the panel: ambxst polls SystemResources
+    // only while its metrics tab is the open one.
+    if (view === "metrics") startMetrics();
+    else stopMetrics();
   }
 
   async function switchView(view: ViewName) {

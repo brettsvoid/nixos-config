@@ -32,6 +32,12 @@
   --track: color-mix(in srgb, var(--base) 18%, transparent);
   --hover: color-mix(in srgb, var(--base) 12%, transparent);
 
+  /* not-implemented marker: placeholder UI is drawn in a muted ink inside a
+     dashed edge, so unwired features still occupy the layout but read as
+     unfinished at a glance. Both tint from --base, like the other marks. */
+  --wip-ink: color-mix(in srgb, var(--base) 42%, transparent);
+  --wip-line: color-mix(in srgb, var(--base) 24%, transparent);
+
   /* shadows (the black is the cast shadow, not a theme color) */
   --shadow-pill: 0 3px 6px rgba(0, 0, 0, 0.4);
   --shadow-popup: 0 6px 16px rgba(0, 0, 0, 0.35);
@@ -55,6 +61,13 @@
   --space-7: 14px;
   --space-8: 16px;
   --space-9: 18px;
+
+  /* One height for every inline control — selects, buttons, chips, inputs — so
+     a toolbar row reads as a set rather than a ragged line. Set the height,
+     not vertical padding: padding leaves each control's height at the mercy of
+     its own font and icon size, which is how the theme bar ended up with four
+     different ones. */
+  --control-h: 30px;
 
   /* ---- radius scale (panel / pill rounding) ---- */
   --radius-sm: 8px;
@@ -319,9 +332,11 @@ body {
   height: var(--pill-h);
   cursor: pointer;
   color: var(--base);
-  max-width: 576px;
-  /* Starting width only: once content arrives, main.ts drives the width from
-     what the winning notch item measures (NOTCH.minW/maxW). */
+  /* wide enough for the open views (VIEW in main.ts — the dashboard is the
+     widest at 680px); the collapsed pill never gets near it */
+  max-width: 720px;
+  /* Starting width only, and it matches NOTCH.idleW: once content arrives,
+     main.ts swaps the width between NOTCH.idleW and NOTCH.itemW. */
   width: 200px;
 }
 .notch-row {
@@ -465,15 +480,27 @@ body {
   min-height: 0;
   overflow: hidden; /* clips the panel when collapsed; #notch stays visible */
 }
+/* The rail sits beside the tab body, so it is a row here. Only .tab-body's
+   contents change when a view switches. */
 .notch-panel {
   opacity: 0;
   padding: var(--space-2) var(--space-6) var(--space-6);
   display: flex;
-  flex-direction: column;
+  gap: var(--space-4);
   min-height: 0;
   height: 100%;
 }
-/* one view visible at a time inside the panel (default clock+metrics / theme) */
+/* Width is set by showView, not by the flex line: the body must hold the size
+   its view settles at while the pill springs around it, or fluid layouts
+   inside reflow on every frame. It overflows the pill mid-animation on
+   purpose — .notch-panel-clip crops it. */
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-height: 0;
+}
+/* one view visible at a time in the tab body (dashboard / wallpapers / perf) */
 .view {
   display: flex;
   flex-direction: column;
@@ -483,27 +510,29 @@ body {
 .view[hidden] {
   display: none;
 }
+/* The dashboard is a four-column row, after ambxst's WidgetsTab: player,
+   widgets, notification history, control rail. The tab rail is not in here —
+   it belongs to the panel. `.view[hidden]` is the more specific selector, so
+   it still wins over this display. */
 .view-default {
-  align-items: center;
-  gap: var(--space-1);
-  white-space: nowrap;
+  display: grid;
+  grid-template-columns: 180px 208px minmax(140px, 1fr) 48px;
+  gap: var(--space-4);
+  align-items: stretch;
+  /* fills the panel rather than sizing to its tallest column, so the columns
+     keep their full height whatever is in them */
+  flex: 1 1 auto;
 }
-.view-theme {
+.view-theme,
+.view-metrics {
+  flex: 1 1 auto;
   align-items: stretch;
   gap: var(--space-4);
 }
-.notch-panel .big-time {
-  font-size: var(--font-3xl);
-  font-weight: 700;
-  letter-spacing: 1px;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+/* the chart placeholder takes whatever the header and the rows leave */
+.view-metrics .ph {
+  flex: 1 1 auto;
 }
-.notch-panel .full-date {
-  font-size: var(--font-sm);
-  opacity: var(--dim);
-}
-
 /* ---- media pill: art backdrop + wavy playhead + transport ----
    An inset pill inside the notch. The album art is the *background*, blurred
    hard and knocked back behind a scrim, rather than a thumbnail — at this size
@@ -664,43 +693,73 @@ body {
 .view-switch:hover {
   opacity: 1;
 }
-/* the "Theme" entry button on the default view */
-.theme-btn {
-  margin-top: var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--track);
-}
-.theme-head {
+/* the view is entered from the rail's wallpapers tab (.rail-tab.view-switch) */
+.view-head {
   display: flex;
   align-items: center;
   gap: var(--space-4);
 }
-.back-btn {
-  font-size: var(--font-xl);
+.view-title {
+  font-size: var(--font-sm);
+  font-weight: 600;
 }
-.theme-head .theme-toggle {
+.view-head .theme-toggle {
   margin-left: auto; /* appearance toggle sits at the right of the header */
 }
 
-.filmstrip {
+/* toolbar above the grid: search, scheme, the two toggles, then Browse… */
+.theme-bar {
   display: flex;
+  align-items: center;
   gap: var(--space-3);
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: var(--space-2);
+  flex: none;
+}
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  border: 1px dashed var(--wip-line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-2xs);
+}
+/* every icon in the row at one size, or the tallest one sets the row's
+   optical weight even when the boxes match */
+.theme-bar .icon {
+  font-size: var(--font-md);
+}
+
+/* A grid, not a strip — ambxst's WallpapersTab browses a wall of covers and
+   the taller view has the room for it. main.ts still fills #filmstrip with
+   .thumb buttons, so the markup is unchanged. */
+.filmstrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  /* Rows size to the thumbs and stack from the top. Without this the grid has
+     a definite height, so `align-content: stretch` divides it evenly between
+     the rows and each 16:9 thumb overflows the row it sits in. */
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--space-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: var(--space-2);
 }
 .filmstrip::-webkit-scrollbar {
-  height: 6px;
+  width: 6px;
 }
 .filmstrip::-webkit-scrollbar-thumb {
   background: var(--track);
   border-radius: 3px;
 }
 .thumb {
-  flex: 0 0 auto;
-  width: 160px;
-  height: 90px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius-sm);
   overflow: hidden;
   cursor: pointer;
@@ -723,7 +782,9 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  padding: var(--space-3);
+  flex: none;
+  height: var(--control-h);
+  padding: 0 var(--space-4);
   border: none;
   border-radius: var(--radius-sm);
   background: var(--track);
@@ -737,8 +798,9 @@ body {
 }
 
 .scheme-select {
-  width: 100%;
-  padding: var(--space-2) var(--space-4);
+  min-width: 140px;
+  height: var(--control-h);
+  padding: 0 var(--space-4);
   border: none;
   border-radius: var(--radius-sm);
   background: var(--track);
@@ -747,6 +809,192 @@ body {
   font-size: var(--font-sm);
   text-transform: capitalize;
   cursor: pointer;
+}
+
+/* ---- not-implemented placeholders ----
+   `.wip` mutes a control that is drawn but does nothing yet. `.ph` is a
+   reserved box named after the component that will fill it. Both are meant to
+   be deleted, not styled around. */
+/* Doubled class on purpose: `.wip` has to beat whatever single-class rule
+   styles the control it marks (.rail-tab sets its own colour, and it is
+   declared later in this file). Doubling wins on specificity instead of
+   ordering, so the marker keeps working wherever it's dropped. */
+.wip.wip {
+  color: var(--wip-ink);
+  opacity: 1;
+}
+/* No hover promise on something that doesn't work — the pointer and the
+   highlight both stay off. */
+.wip.wip:hover {
+  background: transparent;
+  color: var(--wip-ink);
+}
+.wip,
+.ph {
+  cursor: default;
+}
+
+.ph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+  border: 1px dashed var(--wip-line);
+  border-radius: var(--radius-sm);
+  color: var(--wip-ink);
+  text-align: center;
+}
+.ph-icon {
+  font-size: var(--font-2xl);
+}
+.ph-name {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+.ph-note {
+  font-size: var(--font-3xs);
+}
+/* a placeholder that owns a whole dashboard column */
+.ph-col {
+  height: 100%;
+}
+/* a placeholder that reads as one inline control */
+.ph-inline {
+  flex-direction: row;
+  justify-content: flex-start;
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  flex: none;
+}
+.theme-bar .ph-inline {
+  flex: 1 1 auto;
+}
+.ph-inline .ph-icon {
+  font-size: var(--font-md);
+}
+
+/* ---- dashboard view: the notch's default open view ----
+   Ported from ambxst's Dashboard.qml + WidgetsTab.qml. Column widths live in
+   `.view-default`'s grid; this section styles what sits in them. */
+
+/* Tab rail — icon buttons, settings pinned to the bottom. A sibling of the
+   tab body, so it stays put across view switches. */
+.dash-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: none;
+}
+.rail-tab {
+  position: relative; /* anchors .rail-dot */
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--base);
+  font-size: var(--font-xl);
+  cursor: pointer;
+  opacity: var(--dim);
+}
+.rail-tab:hover {
+  background: var(--hover);
+  opacity: 1;
+}
+.rail-tab.active {
+  background: var(--track);
+  opacity: 1;
+}
+.rail-settings {
+  margin-top: auto; /* separated at the foot of the rail, as in ambxst */
+}
+/* Alert dot — a tab wants attention. --warn is the bar's existing "look at
+   this" amber (the Wi-Fi no-internet state), not an error red: a full disk is
+   a warning, not a failure. The ring separates it from the icon underneath. */
+.rail-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 2px var(--pill-bg);
+}
+.rail-dot[hidden] {
+  display: none;
+}
+
+/* 2. widgets column — scrolls, like ambxst's Flickable */
+.dash-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  min-width: 0;
+}
+.dash-widgets {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.dash-widgets::-webkit-scrollbar {
+  width: 6px;
+}
+.dash-widgets::-webkit-scrollbar-thumb {
+  background: var(--track);
+  border-radius: 3px;
+}
+/* five square toggles across the widgets column */
+.quick-controls {
+  display: flex;
+  gap: var(--space-2);
+  flex: none;
+}
+.qc-btn {
+  display: grid;
+  place-items: center;
+  flex: 1 1 0;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--track);
+  font-size: var(--font-lg);
+}
+.ph-cal {
+  flex: none;
+  aspect-ratio: 1; /* the month grid is square, so reserve a square */
+}
+
+/* 4. control rail — a tall brightness slider over two dials */
+.dash-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 0;
+}
+.ph-vslider {
+  flex: 1 1 auto;
+  width: 48px;
+  padding: var(--space-3) 0;
+}
+.ph-vslider .ph-name {
+  writing-mode: vertical-rl; /* the label runs with the slider's travel */
+}
+.ph-dial {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%; /* the dial it stands in for is a ring */
 }
 
 /* ---- status pill: Wi-Fi / network + battery, merged ---- */
@@ -955,7 +1203,6 @@ body {
   flex-direction: column;
   gap: var(--space-3);
   width: 100%;
-  margin-top: var(--space-5);
 }
 .metric {
   display: flex;
@@ -966,6 +1213,10 @@ body {
 .metric .m-icon {
   font-size: var(--font-lg);
   opacity: var(--dim-icon);
+}
+.metric .m-label {
+  width: 52px; /* label column — keeps every bar starting on the same x */
+  font-weight: 600;
 }
 .metric .m-bar {
   flex: 1;

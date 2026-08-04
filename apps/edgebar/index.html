@@ -154,111 +154,36 @@
           </div>
           <div class="notch-panel-clip">
             <div class="notch-panel">
-              <div class="view view-default">
-                <div class="big-time">--:--:--</div>
-                <div class="full-date">—</div>
-                <!-- Metrics: lazy-polled only while the notch is open (ambxst style) -->
-                <div class="metrics">
-                  <div class="metric" data-k="cpu">
-                    <span class="m-icon icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 20v2" />
-                        <path d="M12 2v2" />
-                        <path d="M17 20v2" />
-                        <path d="M17 2v2" />
-                        <path d="M2 12h2" />
-                        <path d="M2 17h2" />
-                        <path d="M2 7h2" />
-                        <path d="M20 12h2" />
-                        <path d="M20 17h2" />
-                        <path d="M20 7h2" />
-                        <path d="M7 20v2" />
-                        <path d="M7 2v2" />
-                        <rect x="4" y="4" width="16" height="16" rx="2" />
-                        <rect x="8" y="8" width="8" height="8" rx="1" /></svg
-                    ></span>
-                    <span class="m-bar"><i></i></span>
-                    <span class="m-val">—</span>
-                  </div>
-                  <div class="metric" data-k="mem">
-                    <span class="m-icon icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 12v-2" />
-                        <path d="M12 18v-2" />
-                        <path d="M16 12v-2" />
-                        <path d="M16 18v-2" />
-                        <path d="M2 11h1.5" />
-                        <path d="M20 18v-2" />
-                        <path d="M20.5 11H22" />
-                        <path d="M4 18v-2" />
-                        <path d="M8 12v-2" />
-                        <path d="M8 18v-2" />
-                        <rect x="2" y="6" width="20" height="10" rx="2" /></svg
-                    ></span>
-                    <span class="m-bar"><i></i></span>
-                    <span class="m-val">—</span>
-                  </div>
-                  <div class="metric" data-k="disk">
-                    <span class="m-icon icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M10 16h.01" />
-                        <path
-                          d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        />
-                        <path d="M21.946 12.013H2.054" />
-                        <path d="M6 16h.01" /></svg
-                    ></span>
-                    <span class="m-bar"><i></i></span>
-                    <span class="m-val">—</span>
-                  </div>
-                  <div class="metric" data-k="swap">
-                    <span class="m-icon icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="m3 16 4 4 4-4" />
-                        <path d="M7 20V4" />
-                        <path d="m21 8-4-4-4 4" />
-                        <path d="M17 4v16" /></svg
-                    ></span>
-                    <span class="m-bar"><i></i></span>
-                    <span class="m-val">—</span>
-                  </div>
-                </div>
+              <!-- Tab rail (ambxst Dashboard.qml tabsContainer): 48px of icon
+                   buttons, settings pinned to the bottom. It sits beside the
+                   tab body rather than inside a view, so it survives every
+                   switch. main.ts moves .active to match the shown view. -->
+              <nav class="dash-rail">
                 <button
-                  class="view-switch theme-btn"
+                  class="rail-tab view-switch active"
+                  data-to="default"
+                  title="Dashboard"
+                >
+                  <span class="icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect width="7" height="9" x="3" y="3" rx="1" />
+                      <rect width="7" height="5" x="14" y="3" rx="1" />
+                      <rect width="7" height="9" x="14" y="12" rx="1" />
+                      <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                  ></span>
+                </button>
+                <button
+                  class="rail-tab view-switch"
                   data-to="theme"
-                  title="Theme settings"
+                  title="Wallpapers"
                 >
                   <span class="icon"
                     ><svg
@@ -283,17 +208,93 @@
                         fill="currentColor"
                       /></svg
                   ></span>
-                  <span>Theme</span>
                 </button>
-              </div>
-              <div class="view view-theme" hidden>
-                <div class="theme-head">
-                  <button
-                    class="view-switch back-btn"
-                    data-to="default"
-                    title="Back"
-                  >
-                    <span class="icon"
+                <!-- heart-pulse, the Lucide answer to the Phosphor
+                     `heartbeat` glyph ambxst puts on this tab -->
+                <button
+                  class="rail-tab view-switch"
+                  data-to="metrics"
+                  title="Performance"
+                >
+                  <span class="icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+                      />
+                      <path
+                        d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"
+                      /></svg
+                  ></span>
+                  <!-- Shown by main.ts when disk or swap crosses HEALTH -->
+                  <span class="rail-dot" id="perf-dot" hidden></span>
+                </button>
+                <button
+                  class="rail-tab wip"
+                  title="Assistant — not implemented"
+                >
+                  <span class="icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z"
+                      />
+                      <path d="M5 3v4" />
+                      <path d="M19 17v4" />
+                      <path d="M3 5h4" />
+                      <path d="M17 19h4" /></svg
+                  ></span>
+                </button>
+                <button
+                  class="rail-tab rail-settings wip"
+                  title="Settings — not implemented"
+                >
+                  <span class="icon"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      />
+                      <circle cx="12" cy="12" r="3" /></svg
+                  ></span>
+                </button>
+              </nav>
+
+              <!-- Tab body: only this swaps between views, so the rail
+                   stays put — ambxst's Dashboard.qml does the same, with
+                   the rail beside a stack rather than inside each tab. -->
+              <div class="tab-body">
+                <!-- Dashboard — ambxst's WidgetsTab, column for column: player,
+                     widgets, notification history, control rail. Elements
+                     carrying .wip are layout only; nothing behind them is wired
+                     to Rust yet. Drop the class as each one lands. -->
+                <div class="view view-default">
+                  <!-- 1. player column (ambxst FullPlayer, 216px): art, title,
+                       transport and a seek bar. The collapsed notch already has a
+                       compact player, so this reuses that data when it lands. -->
+                  <div class="ph ph-col" data-for="FullPlayer">
+                    <span class="ph-icon icon"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
@@ -303,17 +304,173 @@
                         stroke-linejoin="round"
                         aria-hidden="true"
                       >
-                        <path d="m15 18-6-6 6-6" /></svg
+                        <path d="M9 18V5l12-2v13" />
+                        <circle cx="6" cy="18" r="3" />
+                        <circle cx="18" cy="16" r="3" /></svg
                     ></span>
-                  </button>
-                  <!-- Appearance: light / dark / auto (auto follows macOS) -->
-                  <div
-                    class="theme-toggle"
-                    role="group"
-                    aria-label="Appearance"
-                  >
-                    <button class="theme-opt" data-mode="light" title="Light">
-                      <span class="icon"
+                    <span class="ph-name">FullPlayer</span>
+                    <span class="ph-note">art · title · transport · seek</span>
+                  </div>
+
+                  <!-- 2. widgets column: quick toggles, the clock, the metric
+                       rows, then the calendar. Scrolls, like ambxst's Flickable. -->
+                  <div class="dash-col dash-widgets">
+                    <!-- QuickControls: five square toggles across the column -->
+                    <div class="quick-controls">
+                      <button class="qc-btn wip" title="Wi-Fi — not implemented">
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 20h.01" />
+                            <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                            <path d="M5 12.859a10 10 0 0 1 14 0" />
+                            <path d="M2 8.82a15 15 0 0 1 20 0" /></svg
+                        ></span>
+                      </button>
+                      <button
+                        class="qc-btn wip"
+                        title="Bluetooth — not implemented"
+                      >
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="m7 7 10 10-5 5V2l5 5L7 17" /></svg
+                        ></span>
+                      </button>
+                      <button
+                        class="qc-btn wip"
+                        title="Do Not Disturb — not implemented"
+                      >
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"
+                            /></svg
+                        ></span>
+                      </button>
+                      <button
+                        class="qc-btn wip"
+                        title="Night Shift — not implemented"
+                      >
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 10V2" />
+                            <path d="m4.93 10.93 1.41 1.41" />
+                            <path d="M2 18h2" />
+                            <path d="M20 18h2" />
+                            <path d="m19.07 10.93-1.41 1.41" />
+                            <path d="M22 22H2" />
+                            <path d="m16 6-4 4-4-4" />
+                            <path d="M16 18a4 4 0 0 0-8 0" /></svg
+                        ></span>
+                      </button>
+                      <button
+                        class="qc-btn wip"
+                        title="AirDrop — not implemented"
+                      >
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"
+                            />
+                            <path d="m12 15 5 6H7Z" /></svg
+                        ></span>
+                      </button>
+                    </div>
+
+                    <!-- Calendar: month grid, day picker, event dots. Complex
+                         enough to own its component, so it's reserved space. -->
+                    <div class="ph ph-cal" data-for="Calendar">
+                      <span class="ph-icon icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M8 2v4" />
+                          <path d="M16 2v4" />
+                          <rect width="18" height="18" x="3" y="4" rx="2" />
+                          <path d="M3 10h18" />
+                          <path d="M8 14h.01" />
+                          <path d="M12 14h.01" />
+                          <path d="M16 14h.01" />
+                          <path d="M8 18h.01" />
+                          <path d="M12 18h.01" />
+                          <path d="M16 18h.01" /></svg
+                      ></span>
+                      <span class="ph-name">Calendar</span>
+                    </div>
+                  </div>
+
+                  <!-- 3. notification history (ambxst NotificationHistory) -->
+                  <div class="ph ph-col" data-for="NotificationHistory">
+                    <span class="ph-icon icon"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+                        <path
+                          d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                        /></svg
+                    ></span>
+                    <span class="ph-name">NotificationHistory</span>
+                    <span class="ph-note">grouped · dismissable</span>
+                  </div>
+
+                  <!-- 4. control rail (ambxst: a vertical brightness slider over
+                       two CircularControl dials — volume and mic). The sliders
+                       that drive these already exist in the controls popup. -->
+                  <div class="dash-controls">
+                    <div class="ph ph-vslider" data-for="Brightness">
+                      <span class="ph-icon icon"
                         ><svg
                           viewBox="0 0 24 24"
                           fill="none"
@@ -333,9 +490,10 @@
                           <path d="m6.34 17.66-1.41 1.41" />
                           <path d="m19.07 4.93-1.41 1.41" /></svg
                       ></span>
-                    </button>
-                    <button class="theme-opt" data-mode="dark" title="Dark">
-                      <span class="icon"
+                      <span class="ph-name">Brightness</span>
+                    </div>
+                    <div class="ph ph-dial" title="Volume — CircularControl">
+                      <span class="ph-icon icon"
                         ><svg
                           viewBox="0 0 24 24"
                           fill="none"
@@ -345,15 +503,14 @@
                           stroke-linejoin="round"
                           aria-hidden="true"
                         >
-                          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg
+                          <path
+                            d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"
+                          />
+                          <path d="M16 9a5 5 0 0 1 0 6" /></svg
                       ></span>
-                    </button>
-                    <button
-                      class="theme-opt"
-                      data-mode="auto"
-                      title="Auto (system)"
-                    >
-                      <span class="icon"
+                    </div>
+                    <div class="ph ph-dial" title="Mic — CircularControl">
+                      <span class="ph-icon icon"
                         ><svg
                           viewBox="0 0 24 24"
                           fill="none"
@@ -363,36 +520,317 @@
                           stroke-linejoin="round"
                           aria-hidden="true"
                         >
-                          <rect width="20" height="14" x="2" y="3" rx="2" />
-                          <line x1="8" x2="16" y1="21" y2="21" />
-                          <line x1="12" x2="12" y1="17" y2="21" /></svg
+                          <path d="M12 19v3" />
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                          <rect x="9" y="2" width="6" height="13" rx="3" /></svg
                       ></span>
-                    </button>
+                    </div>
                   </div>
                 </div>
-                <div class="filmstrip" id="filmstrip"></div>
-                <button class="browse-btn" id="browse-btn">
-                  <span class="icon"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
+                <div class="view view-theme" hidden>
+                  <div class="view-head">
+                    <span class="view-title">Wallpapers</span>
+                    <!-- Appearance: light / dark / auto (auto follows macOS) -->
+                    <div
+                      class="theme-toggle"
+                      role="group"
+                      aria-label="Appearance"
                     >
-                      <path
-                        d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
-                      /></svg
-                  ></span>
-                  <span>Browse…</span>
-                </button>
-                <select
-                  class="scheme-select"
-                  id="scheme-select"
-                  title="matugen scheme"
-                ></select>
+                      <button class="theme-opt" data-mode="light" title="Light">
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="4" />
+                            <path d="M12 2v2" />
+                            <path d="M12 20v2" />
+                            <path d="m4.93 4.93 1.41 1.41" />
+                            <path d="m17.66 17.66 1.41 1.41" />
+                            <path d="M2 12h2" />
+                            <path d="M20 12h2" />
+                            <path d="m6.34 17.66-1.41 1.41" />
+                            <path d="m19.07 4.93-1.41 1.41" /></svg
+                        ></span>
+                      </button>
+                      <button class="theme-opt" data-mode="dark" title="Dark">
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg
+                        ></span>
+                      </button>
+                      <button
+                        class="theme-opt"
+                        data-mode="auto"
+                        title="Auto (system)"
+                      >
+                        <span class="icon"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <rect width="20" height="14" x="2" y="3" rx="2" />
+                            <line x1="8" x2="16" y1="21" y2="21" />
+                            <line x1="12" x2="12" y1="17" y2="21" /></svg
+                        ></span>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Toolbar — ambxst's WallpapersTab puts search, OLED mode,
+                       tint and the scheme picker in one 48px row above the grid. -->
+                  <div class="theme-bar">
+                    <div class="ph ph-inline" data-for="SearchBar">
+                      <span class="ph-icon icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="m21 21-4.34-4.34" />
+                          <circle cx="11" cy="11" r="8" /></svg
+                      ></span>
+                      <span class="ph-name">Search</span>
+                    </div>
+                    <select
+                      class="scheme-select"
+                      id="scheme-select"
+                      title="matugen scheme"
+                    ></select>
+                    <button class="chip wip" title="OLED mode — not implemented">
+                      <span class="icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 18a6 6 0 0 0 0-12v12z" /></svg
+                      ></span>
+                      <span>OLED</span>
+                    </button>
+                    <button class="chip wip" title="Tint — not implemented">
+                      <span class="icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <!-- droplet, not palette: the rail's wallpapers tab
+                               owns the palette now, and two of them on screen
+                               at once would read as the same control -->
+                          <path
+                            d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"
+                          /></svg
+                      ></span>
+                      <span>Tint</span>
+                    </button>
+                    <button class="browse-btn" id="browse-btn">
+                      <span class="icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                          /></svg
+                      ></span>
+                      <span>Browse…</span>
+                    </button>
+                  </div>
+                  <!-- FilterBar: file-type chips and the subfolder crumbs that
+                       narrow the grid below. -->
+                  <div class="ph ph-inline" data-for="FilterBar">
+                    <span class="ph-icon icon"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M10 5H3" />
+                        <path d="M12 19H3" />
+                        <path d="M14 3v4" />
+                        <path d="M16 17v4" />
+                        <path d="M21 12h-9" />
+                        <path d="M21 19h-5" />
+                        <path d="M21 5h-7" />
+                        <path d="M8 10v4" />
+                        <path d="M8 12H3" /></svg
+                    ></span>
+                    <span class="ph-name">FilterBar</span>
+                    <span class="ph-note">type chips · subfolders</span>
+                  </div>
+                  <!-- Wallpaper grid: real, populated by main.ts from Rust -->
+                  <div class="filmstrip" id="filmstrip"></div>
+                </div>
+
+                <!-- Performance — ambxst's metrics tab (Dashboard.qml tab 2).
+                     The rows sample only while this view is showing, the way
+                     ambxst polls SystemResources only for the open tab. -->
+                <div class="view view-metrics" hidden>
+                  <div class="view-head">
+                    <span class="view-title">Performance</span>
+                  </div>
+                  <!-- ResourceChart: ambxst draws a zoomable history canvas over
+                       the rows (MetricsTab.qml chartCanvas). -->
+                  <div class="ph" data-for="ResourceChart">
+                    <span class="ph-icon icon"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+                        /></svg
+                    ></span>
+                    <span class="ph-name">ResourceChart</span>
+                    <span class="ph-note">history canvas · zoom</span>
+                  </div>
+                  <div class="metrics">
+                    <div class="metric" data-k="cpu">
+                      <span class="m-icon icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 20v2" />
+                          <path d="M12 2v2" />
+                          <path d="M17 20v2" />
+                          <path d="M17 2v2" />
+                          <path d="M2 12h2" />
+                          <path d="M2 17h2" />
+                          <path d="M2 7h2" />
+                          <path d="M20 12h2" />
+                          <path d="M20 17h2" />
+                          <path d="M20 7h2" />
+                          <path d="M7 20v2" />
+                          <path d="M7 2v2" />
+                          <rect x="4" y="4" width="16" height="16" rx="2" />
+                          <rect x="8" y="8" width="8" height="8" rx="1" /></svg
+                      ></span>
+                      <span class="m-label">CPU</span>
+                      <span class="m-bar"><i></i></span>
+                      <span class="m-val">—</span>
+                    </div>
+                    <div class="metric" data-k="mem">
+                      <span class="m-icon icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 12v-2" />
+                          <path d="M12 18v-2" />
+                          <path d="M16 12v-2" />
+                          <path d="M16 18v-2" />
+                          <path d="M2 11h1.5" />
+                          <path d="M20 18v-2" />
+                          <path d="M20.5 11H22" />
+                          <path d="M4 18v-2" />
+                          <path d="M8 12v-2" />
+                          <path d="M8 18v-2" />
+                          <rect x="2" y="6" width="20" height="10" rx="2" /></svg
+                      ></span>
+                      <span class="m-label">Memory</span>
+                      <span class="m-bar"><i></i></span>
+                      <span class="m-val">—</span>
+                    </div>
+                    <div class="metric" data-k="disk">
+                      <span class="m-icon icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M10 16h.01" />
+                          <path
+                            d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                          />
+                          <path d="M21.946 12.013H2.054" />
+                          <path d="M6 16h.01" /></svg
+                      ></span>
+                      <span class="m-label">Disk</span>
+                      <span class="m-bar"><i></i></span>
+                      <span class="m-val">—</span>
+                    </div>
+                    <div class="metric" data-k="swap">
+                      <span class="m-icon icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="m3 16 4 4 4-4" />
+                          <path d="M7 20V4" />
+                          <path d="m21 8-4-4-4 4" />
+                          <path d="M17 4v16" /></svg
+                      ></span>
+                      <span class="m-label">Swap</span>
+                      <span class="m-bar"><i></i></span>
+                      <span class="m-val">—</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
