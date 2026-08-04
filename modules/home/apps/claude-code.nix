@@ -18,7 +18,8 @@
 # What is NOT managed here: everything under ~/.claude that Claude Code writes
 # at runtime — sessions/, projects/, history.jsonl, .credentials.json, plugins/
 # (marketplace clones), statsig/, todos/. Those are state, not config.
-_: {
+{ inputs, ... }:
+{
   flake.modules.homeManager.apps-claude-code =
     {
       config,
@@ -195,12 +196,25 @@ _: {
         # every session on every project.
         context = ./claude/CLAUDE.md;
 
-        # ~/.claude/skills/. A directory rather than a per-skill attrset:
-        # home-manager links it recursively, so ~/.claude/skills stays a real
-        # writable directory with only the SKILL.md files symlinked into the
-        # store. `claude plugin init` can still scaffold a new skill alongside
-        # them, and adding one here is just `cp -R` into claude/skills.
-        skills = ./claude/skills;
+        # ~/.claude/skills/. Either half of this is linked recursively, so
+        # ~/.claude/skills stays a real writable directory with only the skill
+        # folders symlinked into the store — `claude plugin init` can still
+        # scaffold a new skill alongside them.
+        #
+        # The attrset form (rather than plain `skills = ./claude/skills`) is
+        # what lets a third-party skill live next to the local ones: values
+        # may be store paths, so a skill can come from a flake input instead
+        # of from this repo. readDir keeps the local half behaving as before —
+        # dropping a folder into claude/skills is still all it takes.
+        skills =
+          lib.mapAttrs (name: _: ./claude/skills + "/${name}") (
+            lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./claude/skills)
+          )
+          // {
+            # ASD-STE100 Simplified Technical English. Pinned in flake.lock;
+            # `nix flake update simple-english` is the upgrade.
+            simple-english = "${inputs.simple-english}/skills/simple-english";
+          };
 
         # Named notify.sh (not notify) so the settings.json entry above keeps
         # the path it has always had. The option marks it executable.

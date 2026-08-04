@@ -38,6 +38,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # ASD-STE100 Simplified Technical English as an Agent Skill, wired into
+    # ~/.claude/skills by apps/claude-code.nix. `flake = false` because the
+    # repo is a plain source tree — and it holds evals, prompts and examples
+    # alongside the skill, so the module points at the subdirectory rather
+    # than the root.
+    simple-english = {
+      url = "github:AminBlg/SimpleEnglish";
+      flake = false;
+    };
+
     nix-darwin = {
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
