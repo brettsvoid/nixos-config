@@ -173,8 +173,19 @@ body {
   gap: var(--space-2);
   align-items: flex-start;
 }
+/* The side clusters are `flex: 1 1 0` — no content basis — so they always split
+   the space the centre leaves in half, and the notch sits on the screen's exact
+   midpoint whatever width it has animated to.
+   `min-width: 0` is what makes that true. Without it a flex item's automatic
+   minimum size floors it at its content width: the expanding notch squeezed the
+   left cluster down to its pills, the floor held, and every further pixel of
+   notch shoved the centre to the right. Measured at a 704px notch on an 800px
+   bar: 217px of drift before, 0 after.
+   Zeroing the floor means a wide notch overlaps the pills instead of moving
+   them, which is the intent — see the z-index on #notch. */
 .cluster.left {
   flex: 1;
+  min-width: 0;
   justify-content: flex-start;
 }
 .cluster.center {
@@ -183,6 +194,7 @@ body {
 }
 .cluster.right {
   flex: 1;
+  min-width: 0;
   justify-content: flex-end;
 }
 
@@ -193,6 +205,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Never shrink. The cluster around it has min-width: 0, so a wide notch
+     leaves it a box narrower than its content; without this the pill would
+     take the squeeze and squash its own readouts instead of overflowing. */
+  flex: none;
   gap: var(--space-8);
   padding: 0 var(--space-6);
   background: var(--pill-bg);
@@ -332,8 +348,16 @@ body {
   height: var(--pill-h);
   cursor: pointer;
   color: var(--base);
+  /* Above every other pill, including the detached ones at z-index 1. An open
+     view is wider than the space between the clusters, so it runs over the CPU
+     pill on one side and the clock on the other. It has to cover them, and it
+     has to win the click where they overlap. */
+  z-index: 2;
   /* wide enough for the open views (VIEW in main.ts — the dashboard is the
-     widest at 680px); the collapsed pill never gets near it */
+     widest at 680px); the collapsed pill never gets near it.
+     The bar needs max-width + 2 × --bezel-line-thickness to hold a fully open
+     notch and keep it centred. Below that — a screen narrower than ~728px, which
+     no Mac display is — the side clusters bottom out at zero and it drifts. */
   max-width: 720px;
   /* Starting width only, and it matches NOTCH.idleW: once content arrives,
      main.ts swaps the width between NOTCH.idleW and NOTCH.itemW. */
