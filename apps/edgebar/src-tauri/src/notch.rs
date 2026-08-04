@@ -491,6 +491,33 @@ fn read_media(app: &tauri::AppHandle) -> Option<NotchItem> {
             })
         })
         .collect();
+
+    // Pausing a player usually makes it release its output stream, so CoreAudio
+    // stops reporting it a moment later and the slot would empty out mid-track
+    // — the pill vanishing, transport and all, seconds after you pressed pause.
+    // Keep whoever currently holds the slot as a last-resort candidate for as
+    // long as they still have a track loaded. `start: 0` ranks them below
+    // anything genuinely audible, so this only shows a paused player when
+    // nothing else is making sound.
+    let incumbent = {
+        let state = app.state::<NotchState>();
+        let bundle = state.media_bundle.lock().unwrap();
+        bundle.clone()
+    };
+    if let Some(name) = player_app(&incumbent) {
+        if !candidates.iter().any(|c| c.bundle_id == incumbent) {
+            if let Some(track) = track_metadata(&incumbent) {
+                candidates.push(Candidate {
+                    start: 0,
+                    icon: crate::icon_for_bundle(app, &incumbent),
+                    bundle_id: incumbent,
+                    name: name.to_string(),
+                    track: Some(track),
+                });
+            }
+        }
+    }
+
     if candidates.is_empty() {
         return None;
     }
