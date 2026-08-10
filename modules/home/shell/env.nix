@@ -24,14 +24,26 @@ _: {
         CONDA_BASE = "/opt/homebrew/anaconda3";
       };
 
-      # Interim secrets bootstrap (until the agenix "Phase G" migration).
-      # ~/.env_vars is an untracked, plaintext file exporting
-      # BWS_ACCESS_TOKEN + a few API keys. It MUST be sourced from .zshenv
-      # (this option), not .zshrc: .zshenv runs before .zshrc, so the bws
-      # fetch block in local.zsh sees BWS_ACCESS_TOKEN when it runs.
-      # Sourcing it later (or not at all, as the nix migration accidentally
-      # did) makes that block silently no-op. The [ -f ] guard keeps this
-      # harmless on hosts without the file. Keep the file mode 600.
+      # Secrets bootstrap. ~/.env_vars is an untracked, plaintext file
+      # exporting BWS_ACCESS_TOKEN + a few API keys.
+      #
+      # This is NOT staged for an agenix migration. Work secrets stay in
+      # Bitwarden Secrets Manager deliberately: local.zsh holds only
+      # lookup IDs, so rotating a key means editing it in the Bitwarden UI
+      # with no repo change, no re-encrypt and no rebuild. agenix earns
+      # its place for host-level secrets (see docs/SECRETS.md), which is a
+      # separate concern from these per-user shell env vars.
+      #
+      # ~/.env_vars MUST be sourced from .zshenv (this option), not
+      # .zshrc: .zshenv runs before .zshrc, so local.zsh sees
+      # BWS_ACCESS_TOKEN at the moment it is sourced. That timing still
+      # matters even though the secret fetches are now lazy — local.zsh
+      # guards on BWS_ACCESS_TOKEN before installing its preexec hook, so
+      # an unset value there means the hook never registers and no secret
+      # ever loads. Sourcing it later (or not at all, as the nix migration
+      # accidentally did) makes the whole block silently no-op. The [ -f ]
+      # guard keeps this harmless on hosts without the file. Keep the file
+      # mode 600.
       programs.zsh.envExtra = ''
         [ -f "$HOME/.env_vars" ] && source "$HOME/.env_vars"
       '';
@@ -118,8 +130,9 @@ _: {
           # Sensitive, machine-specific values (internal hostnames, secret
           # lookup IDs, work tokens, AWS instance aliases) live OUTSIDE this
           # PUBLIC repo in an untracked file. See
-          # modules/home/shell/local.zsh.example for the expected contents.
-          # (Longer term this migrates to agenix — see modules/flake/agenix.nix.)
+          # modules/home/shell/local.zsh.example for the expected contents,
+          # including the lazy per-group secret loading that keeps this
+          # source out of the startup path entirely.
           [ -f "$HOME/.config/zsh/local.zsh" ] && . "$HOME/.config/zsh/local.zsh"
         ''
       );

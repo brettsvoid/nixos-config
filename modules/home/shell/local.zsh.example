@@ -3,6 +3,7 @@
 # modules/home/shell/env.nix at shell init.
 #
 #   cp modules/home/shell/local.zsh.example ~/.config/zsh/local.zsh
+#   chmod 600 ~/.config/zsh/local.zsh
 #
 # Keep sensitive/machine-specific values (internal hostnames, secret
 # lookup IDs, work tokens, account-specific resource IDs) here, never in
@@ -12,55 +13,121 @@
 # host. Blocks below are marked [mac mini] / [macbook] where they are known
 # to be host-specific; unmarked blocks go everywhere.
 
-# ─── Work secrets (Bitwarden Secrets Manager, runtime-fetched) ──────────
-# Each fetch falls back to empty on failure so a missing BWS_ACCESS_TOKEN
-# doesn't break the shell. BWS_ACCESS_TOKEN itself comes from ~/.env_vars,
-# which .zshenv sources BEFORE this file — see the comment in env.nix.
+# ─── Work secrets (Bitwarden Secrets Manager, lazily fetched) ───────────
+# NOTHING here touches the network at shell start.
+#
+# This block used to fetch every secret eagerly, one `bws secret get` per
+# value, all in series. That cost ~1.38s of a ~2.05s shell startup — about
+# 0.16s per round trip, paid by every terminal, tmux pane and split,
+# whether or not the shell ever used a single one of the values.
+#
+# Instead, secrets load per group on first use. A `preexec` hook inspects
+# the command you are about to run and fetches only the group it needs, so
+# a shell that never runs `nomad` never pays for the Nomad token. Startup
+# measured 0.36-0.40s after the change.
+#
+# Fetches stay live, which is the whole point of keeping these in
+# Bitwarden rather than agenix: rotate a key in the UI and the next shell
+# picks it up, with no cache to invalidate and no rebuild. In a shell that
+# has already loaded a group, `load-secrets -f` re-fetches.
+#
+# BWS_ACCESS_TOKEN itself comes from ~/.env_vars, which .zshenv sources
+# BEFORE this file — see the comment in modules/home/shell/env.nix. That
+# ordering still matters: the guard below runs when this file is sourced,
+# and if BWS_ACCESS_TOKEN is unset at that moment the hook is never
+# installed, so no secret ever loads.
 if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
   _bws() {
     bws secret get "$1" --access-token "$BWS_ACCESS_TOKEN" 2>/dev/null \
       | jq -r '.value' 2>/dev/null
   }
 
-  # Nomad — two separate clusters, each with its own token.
+  # Not a secret and not a network call, so it stays eager: the Nomad CLI
+  # needs NOMAD_ADDR set even for commands that never present a token.
+  export NOMAD_ADDR="http://<nomad-host>:4646"
+
+  # ─── Group loaders ───────────────────────────────────────────────────
+  # One function per group. Keep each group small: a group is the unit of
+  # work, so a command that needs one value of a group pays for all of it.
+  # Values derived from a fetched secret belong in the same loader.
+  _secrets_load_nomad() {
+    export NOMAD_OPERATOR_TOKEN="$(_bws "<nomad-token-secret-id>")"
+    export NOMAD_TOKEN="$NOMAD_OPERATOR_TOKEN"
+  }
+
+  _secrets_load_sentry() {
+    export SENTRY_ACCESS_TOKEN_CLAUDE="$(_bws "<sentry-access-token-secret-id>")"
+    export SENTRY_ACCESS_TOKEN_MCP="$SENTRY_ACCESS_TOKEN_CLAUDE"
+    export SENTRY_AUTH_TOKEN="$(_bws "<sentry-auth-token-secret-id>")"
+  }
+
+  _secrets_load_grafana() {
+    export GRAFANA_TOKEN_TYTO_CLAUDE_MCP="$(_bws "<grafana-token-secret-id>")"
+    export GRAFANA_SERVICE_ACCOUNT_TOKEN_MCP="$GRAFANA_TOKEN_TYTO_CLAUDE_MCP"
+  }
+
+  _secrets_load_cloudflare() {
+    export CLOUDFLARE_BIRDIE_API_TOKEN="$(_bws "<cloudflare-token-secret-id>")"
+  }
+
+  # ─── Machinery ───────────────────────────────────────────────────────
+  # Which groups have been loaded in THIS shell.
+  typeset -gA _secrets_loaded=()
+
+  _secrets_need() {
+    local g
+    for g in "$@"; do
+      [[ -n ${_secrets_loaded[$g]-} ]] && continue
+      _secrets_loaded[$g]=1
+      _secrets_load_$g
+    done
+  }
+
+  # Force every group into the current shell. Use before launching
+  # anything that reads these from the environment rather than running as
+  # a command we can pattern-match — a GUI app, or an MCP server started
+  # by something other than `claude`. `-f` re-fetches groups already
+  # loaded, which is how you pick up a key you just rotated.
+  load-secrets() {
+    [[ $1 == -f ]] && _secrets_loaded=()
+    _secrets_need nomad sentry grafana cloudflare
+  }
+
+  # Match the command line about to run and load only what it needs.
+  # `;|` (zsh) keeps testing later patterns after a match, so a command
+  # line naming two tools loads both groups.
   #
-  # These were previously two blocks that both assigned NOMAD_ADDR /
-  # NOMAD_OPERATOR_TOKEN / NOMAD_TOKEN, so the second silently won and the
-  # first cluster was unreachable. Name them apart, then pick a default
-  # explicitly: the Nomad CLI only ever reads NOMAD_ADDR / NOMAD_TOKEN, so
-  # something has to set those or every `nomad` command breaks.
-  export NOMAD_ADDR_PI="http://<pi-cluster-host>:4646"
-  export NOMAD_TOKEN_PI="$(_bws <pi-nomad-token-secret-id>)"
+  # Choosing patterns: anchor them to the command actually being run.
+  # A pattern only sees the text you typed, so it must match the COMMAND,
+  # not the secret's name — the Cloudflare token below is consumed by a
+  # terraform wrapper called `tf`, which shares no letters with
+  # "cloudflare". Equally, keep patterns narrow enough not to fire on
+  # unrelated text: a bare *tf* would match any path ending .tf and fetch
+  # on every edit of a config file. A false positive costs one round trip
+  # (~0.16s), a missed match means the variable is silently empty.
+  _secrets_preexec() {
+    case $1 in
+      *nomad*)                        _secrets_need nomad ;|
+      *sentry*)                       _secrets_need sentry ;|
+      *grafana*)                      _secrets_need grafana ;|
+      ./tf|./tf\ *|*terraform*|*tofu*) _secrets_need cloudflare ;|
+      # Claude Code starts MCP servers that read SENTRY_* and GRAFANA_*
+      # straight from the environment it inherits, so they must be set
+      # before it launches, not on first use inside it.
+      claude|claude\ *)               _secrets_need sentry grafana ;|
+    esac
+  }
 
-  export NOMAD_ADDR_TYTO="http://<tyto-nomad-host>:4646"
-  export NOMAD_TOKEN_TYTO="$(_bws <tyto-nomad-token-secret-id>)"
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _secrets_preexec
 
-  # Default target. Override per-command for the other cluster:
-  #   NOMAD_ADDR=$NOMAD_ADDR_PI NOMAD_TOKEN=$NOMAD_TOKEN_PI nomad status
-  export NOMAD_ADDR="$NOMAD_ADDR_TYTO"
-  export NOMAD_OPERATOR_TOKEN="$NOMAD_TOKEN_TYTO"
-  export NOMAD_TOKEN="$NOMAD_OPERATOR_TOKEN"
-
-  # Sentry MCP / release auth
-  export SENTRY_ACCESS_TOKEN_CLAUDE="$(_bws <sentry-access-token-secret-id>)"
-  export SENTRY_ACCESS_TOKEN_MCP="$SENTRY_ACCESS_TOKEN_CLAUDE"
-  export SENTRY_AUTH_TOKEN="$(_bws <sentry-auth-token-secret-id>)"
-
-  # Grafana
-  export GRAFANA_TOKEN_TYTO_CLAUDE_MCP="$(_bws <grafana-token-secret-id>)"
-  export GRAFANA_SERVICE_ACCOUNT_TOKEN_MCP="$GRAFANA_TOKEN_TYTO_CLAUDE_MCP"
-
-  # Home Assistant AWS credentials
-  export AWS_ACCESS_KEY_ID_HOME_ASSISTANT="<access-key-id>"
-  export AWS_SECRET_ACCESS_KEY_HOME_ASSISTANT="<secret-access-key>"
-
-  # Cloudflare (Birdie)
-  export CLOUDFLARE_BIRDIE_API_TOKEN="<api-key>"
-
-  # [mac mini] Tyto API key, and the S3-backed Nx build cache.
-  export TY_API_KEY="$(_bws <tyto-api-key-secret-id>)"
-  export NX_KEY="$(_bws <nx-s3-cache-key-secret-id>)"
+  # A secret with no known consumer gets no trigger — `load-secrets`
+  # still exports it. Guessing a pattern for it only adds false positives.
 fi
+
+# preexec is interactive-only. Scripts, cron jobs and GUI-launched apps
+# never fire it, so anything of that shape must call `load-secrets` first
+# (or read the value from `bws` directly).
 
 # ─── AWS-managed EC2 instance shortcuts (account-specific resource IDs) ──
 alias vpn-start='aws ec2 start-instances --profile <profile> --region <region> --instance-ids <instance-id>'
