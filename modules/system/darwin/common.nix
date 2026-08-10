@@ -39,6 +39,22 @@ _: {
 
       programs.zsh.enable = true;
 
+      # Don't run compinit from the generated /etc/zshrc. oh-my-zsh already
+      # runs its own (`compinit -i -d $ZSH_COMPDUMP`), so the system one was
+      # pure duplication: two compinit runs and two compaudit scans over
+      # /opt/homebrew/share/zsh/site-functions on every interactive shell.
+      # Measured at 0.171s of a 2.05s startup. This is exactly the case the
+      # option's own docs describe — a local config with a custom fpath and
+      # its own compinit call.
+      #
+      # enableGlobalCompInit, NOT enableCompletion: the latter also drops
+      # pkgs.nix-zsh-completions from systemPackages, which we still want.
+      # enableBashCompletion defaults to enableCompletion, so /etc/zshrc
+      # keeps calling bashcompinit — safe before compinit, because
+      # bashcompinit only *defines* complete/compgen, and the compdef call
+      # lives inside the complete() wrapper that runs later.
+      programs.zsh.enableGlobalCompInit = false;
+
       # nix-darwin requires this. Pinned at first switch; do NOT change.
       system.stateVersion = 5;
 
