@@ -113,15 +113,27 @@ _: {
           # modifyOtherKeys. `=0;1u` sets every kitty keyboard flag to zero;
           # mode 1 means "set the bits given, reset the rest". Chosen over the
           # pop form (`<1u`) because a pop would discard a stack entry herdr
-          # itself may own. 1049l leaves an alternate screen a dead TUI never
-          # left, and 25h restores a cursor it hid. All are no-ops when the
-          # mode is already off.
+          # itself may own. 25h restores a cursor a dead TUI hid. Every one of
+          # these touches input state only, and is a no-op when already off.
           _restore_terminal_input_modes() {
             [[ -t 1 ]] || return
-            printf '\e[?1000l\e[?1002l\e[?1003l\e[?1004l\e[?1006l\e[?1015l\e[?1016l\e[>4;0m\e[=0;1u\e[?1049l\e[?25h'
+            printf '\e[?1000l\e[?1002l\e[?1003l\e[?1004l\e[?1006l\e[?1015l\e[?1016l\e[>4;0m\e[=0;1u\e[?25h'
           }
           autoload -Uz add-zsh-hook
           add-zsh-hook precmd _restore_terminal_input_modes
+
+          # Leaving the alternate screen (1049l) belongs here, by hand, not in
+          # precmd. At a prompt the shell is already on the primary screen, and
+          # in a herdr pane the reset discards the visible buffer rather than
+          # being ignored — so running it per prompt wipes the output of the
+          # command that just finished. Bisected in a scratch pane: the ten
+          # sequences above leave `cat` output intact, 1049l alone erases it.
+          # A dead TUI that never left the alternate screen is rare and needs a
+          # deliberate fix, so pay the screen clear only when asked.
+          unstick-terminal() {
+            _restore_terminal_input_modes
+            printf '\e[?1049l'
+          }
         '';
       };
     };
