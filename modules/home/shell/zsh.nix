@@ -87,6 +87,41 @@ _: {
           # turn. Wanted here because autosuggestion is enabled: auto-inserting
           # on Tab competes with the inline suggestion already on screen.
           setopt noautomenu
+
+          # Mouse reporting and the kitty keyboard protocol live in the
+          # terminal emulator, not in the tty. `stty` cannot see them and
+          # `stty sane` cannot clear them. A full-screen program turns them on
+          # and is meant to turn them off as it exits.
+          #
+          # An ssh connection that dies breaks that contract twice over: the
+          # remote program takes SIGHUP before it can write the reset, and the
+          # link is already dead so nothing would cross it anyway. The local
+          # terminal keeps both modes on for good. Mouse movement then reaches
+          # the prompt as text (^[[<35;11;31M), keystrokes arrive CSI-u encoded
+          # (^[[99;5u), and ctrl+c never reaches the line discipline as 0x03 —
+          # so the window fills with "command not found" and cannot be typed
+          # in or interrupted. Drag-selection breaks too, because the terminal
+          # hands the drag to the application instead of selecting text.
+          #
+          # Clearing the modes before every prompt repairs the window on the
+          # first prompt drawn after the drop. It has to run here, inside the
+          # shell: herdr keeps this state per pane and replays it, so
+          # resetting kitty (opt+cmd+r) never reaches herdr's copy.
+          #
+          # 1000/1002/1003 are the mouse tracking modes, 1006/1015/1016 the
+          # report encodings, 1004 focus reporting. `>4;0m` clears xterm's
+          # modifyOtherKeys. `=0;1u` sets every kitty keyboard flag to zero;
+          # mode 1 means "set the bits given, reset the rest". Chosen over the
+          # pop form (`<1u`) because a pop would discard a stack entry herdr
+          # itself may own. 1049l leaves an alternate screen a dead TUI never
+          # left, and 25h restores a cursor it hid. All are no-ops when the
+          # mode is already off.
+          _restore_terminal_input_modes() {
+            [[ -t 1 ]] || return
+            printf '\e[?1000l\e[?1002l\e[?1003l\e[?1004l\e[?1006l\e[?1015l\e[?1016l\e[>4;0m\e[=0;1u\e[?1049l\e[?25h'
+          }
+          autoload -Uz add-zsh-hook
+          add-zsh-hook precmd _restore_terminal_input_modes
         '';
       };
     };
