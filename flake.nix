@@ -48,6 +48,25 @@
       flake = false;
     };
 
+    # Matt Pocock's agent skills — the /grill-with-docs, /tdd, /diagnose,
+    # /triage family, wired into ~/.claude/skills by apps/claude-code.nix.
+    #
+    # HARD-PINNED to a rev, not to a branch, and that is the whole point.
+    # Upstream reorganises aggressively: between this rev and main it deleted
+    # the deprecated/ and personal/ buckets outright and renamed four skills
+    # (diagnose→diagnosing-bugs, to-issues→to-tickets, to-prd→to-spec,
+    # review→code-review). Tracking a branch would mean `nix flake update`
+    # silently swapping the slash commands out from under both Macs. This rev
+    # is the one the mac mini already had installed via `npx skills` — it
+    # holds exactly those 29 skills and nothing else.
+    #
+    # `nix flake update` will NOT move this. Bump the rev by hand, and read
+    # the diff first.
+    mattpocock-skills = {
+      url = "github:mattpocock/skills/694fa30311e02c2639942308513555e61ee84a6f";
+      flake = false;
+    };
+
     nix-darwin = {
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";

@@ -151,6 +151,27 @@
         chmod 644 "$live"
       '';
 
+      # ─── third-party skill collections ────────────────────────────────
+      # mattpocock/skills lays its repo out as skills/<bucket>/<name>/SKILL.md,
+      # where the bucket is a maturity tier (engineering, productivity, misc,
+      # in-progress, …). Claude Code wants the leaf directories, flat.
+      #
+      # The bucket is DISCOVERED rather than written out, so a skill that gets
+      # promoted from in-progress/ to engineering/ needs no edit here — only a
+      # rev bump. Discovery also means a rev bump adds and removes skills on
+      # its own, which is why the rev is pinned by hand in flake.nix.
+      subdirs = dir: lib.filterAttrs (_: type: type == "directory") (builtins.readDir dir);
+
+      flattenBuckets =
+        root:
+        lib.concatMapAttrs (
+          bucket: _: lib.mapAttrs (name: _: "${root}/${bucket}/${name}") (subdirs "${root}/${bucket}")
+        ) (subdirs root);
+
+      # Local skills last: `//` lets the right-hand side win, so a skill in
+      # claude/skills always beats a third-party one of the same name.
+      localSkills = lib.mapAttrs (name: _: ./claude/skills + "/${name}") (subdirs ./claude/skills);
+
       # Upstream's installer. Runs ONCE — the guard is the binary itself, and
       # after that Claude Code updates itself and nix never touches it again.
       # This is the one place in the repo that reaches the network during
@@ -194,15 +215,19 @@
         # may be store paths, so a skill can come from a flake input instead
         # of from this repo. readDir keeps the local half behaving as before —
         # dropping a folder into claude/skills is still all it takes.
-        skills =
-          lib.mapAttrs (name: _: ./claude/skills + "/${name}") (
-            lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./claude/skills)
-          )
-          // {
-            # ASD-STE100 Simplified Technical English. Pinned in flake.lock;
-            # `nix flake update simple-english` is the upgrade.
-            simple-english = "${inputs.simple-english}/skills/simple-english";
-          };
+        #
+        # This replaces the `npx skills add` install on the mac mini, which
+        # unpacked into ~/.agents/skills and symlinked from ~/.claude/skills.
+        # That tree is now redundant for Claude Code — delete it once, by
+        # hand, on any machine that has it. Leave it alone if another agent
+        # reads ~/.agents.
+        skills = {
+          # ASD-STE100 Simplified Technical English. Pinned in flake.lock;
+          # `nix flake update simple-english` is the upgrade.
+          simple-english = "${inputs.simple-english}/skills/simple-english";
+        }
+        // flattenBuckets "${inputs.mattpocock-skills}/skills"
+        // localSkills;
       };
 
       home.activation = {
