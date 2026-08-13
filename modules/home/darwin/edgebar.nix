@@ -139,54 +139,94 @@ in
         runtimeInputs = [ generate-edgebar-theme ];
         text = builtins.readFile ./edgebar/select-scheme.sh;
       };
+      # Seeds the persisted scheme choice for this machine. Same
+      # stamp-on-change rule as the wallpaper: writes ~/.config/edgebar/scheme
+      # only when the DECLARED scheme differs from the one last applied, so a
+      # later `select-scheme` pick survives every unchanged rebuild.
+      seed-scheme = pkgs.writeShellScript "seed-edgebar-scheme" ''
+        stamp="$HOME/.local/state/edgebar/scheme-default"
+        want="${config.local.edgebar.scheme}"
+        [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && exit 0
+
+        mkdir -p "$HOME/.config/edgebar" "$(dirname "$stamp")"
+        printf '%s\n' "$want" > "$HOME/.config/edgebar/scheme"
+        printf '%s' "$want" > "$stamp"
+
+        # A scheme change repaints the palette immediately — the file alone
+        # would leave a stale palette.json until the next wallpaper change.
+        ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
+      '';
     in
     {
-      # Inject the binaries the in-app theme view shells out to (absolute store
-      # paths so they resolve regardless of the bar's launch environment).
-      xdg.configFile."edgebar/config.json".text = builtins.toJSON (
-        rendered
-        // {
-          themeCommand = "${generate-edgebar-theme}/bin/generate-edgebar-theme";
-          wallpaperCommand = "${pkgs.desktoppr}/bin/desktoppr";
-        }
-      );
+      options.local.edgebar.scheme = lib.mkOption {
+        type = lib.types.str;
+        default = "scheme-tonal-spot";
+        example = "scheme-expressive";
+        description = ''
+          matugen scheme this machine derives its edgebar palette with — see
+          the list in edgebar/select-scheme.sh. Written to
+          ~/.config/edgebar/scheme on the first activation that declares it,
+          and again whenever this value changes, never on an unchanged
+          rebuild.
+        '';
+      };
 
-      home.packages = [
-        generate-edgebar-theme
-        cycle-wallpaper
-        select-wallpaper
-        select-scheme
-      ];
+      config = {
+        # Inject the binaries the in-app theme view shells out to (absolute
+        # store paths so they resolve regardless of the bar's launch
+        # environment).
+        xdg.configFile."edgebar/config.json".text = builtins.toJSON (
+          rendered
+          // {
+            themeCommand = "${generate-edgebar-theme}/bin/generate-edgebar-theme";
+            wallpaperCommand = "${pkgs.desktoppr}/bin/desktoppr";
+          }
+        );
 
-      # Seed palette.json from the wallpaper on first build (later wallpaper
-      # changes are driven by running generate-edgebar-theme). Absent the file,
-      # edgebar uses the bundled Catppuccin fallback, so a matugen failure here
-      # is non-fatal.
-      home.activation.edgebarTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
-          run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
-        fi
-      '';
+        home.packages = [
+          generate-edgebar-theme
+          cycle-wallpaper
+          select-wallpaper
+          select-scheme
+        ];
 
-      # Catch wallpaper changes made OUTSIDE edgebar (System Settings, other
-      # tools) — edgebar's own commands re-theme directly and instantly. macOS
-      # rewrites this plist whenever the desktop picture changes (verified:
-      # desktoppr and System Settings both touch it); launchd WatchPaths fires
-      # generate-edgebar-theme, which reads the now-current wallpaper and pings
-      # the bar. Event-driven, no polling. ThrottleInterval=1 trims launchd's
-      # default 10s minimum respawn so external changes still follow within ~1s.
-      launchd.agents.edgebar-wallpaper-theme = {
-        enable = true;
-        config = {
-          ProgramArguments = [ "${generate-edgebar-theme}/bin/generate-edgebar-theme" ];
-          WatchPaths = [
-            "${config.home.homeDirectory}/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
-          ];
-          RunAtLoad = false;
-          ThrottleInterval = 1;
-          ProcessType = "Background";
-          StandardOutPath = "/tmp/edgebar-wallpaper-theme.log";
-          StandardErrorPath = "/tmp/edgebar-wallpaper-theme.log";
+        # Scheme first, so the palette below is generated with it. Runs before
+        # the wallpaper seed's own re-theme too — both are idempotent.
+        home.activation.edgebarScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run ${seed-scheme}
+        '';
+
+        # Seed palette.json from the wallpaper on first build (later wallpaper
+        # changes are driven by running generate-edgebar-theme). Absent the
+        # file, edgebar uses the bundled Catppuccin fallback, so a matugen
+        # failure here is non-fatal.
+        home.activation.edgebarTheme = lib.hm.dag.entryAfter [ "edgebarScheme" ] ''
+          if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
+            run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
+          fi
+        '';
+
+        # Catch wallpaper changes made OUTSIDE edgebar (System Settings, other
+        # tools) — edgebar's own commands re-theme directly and instantly.
+        # macOS rewrites this plist whenever the desktop picture changes
+        # (verified: desktoppr and System Settings both touch it); launchd
+        # WatchPaths fires generate-edgebar-theme, which reads the now-current
+        # wallpaper and pings the bar. Event-driven, no polling.
+        # ThrottleInterval=1 trims launchd's default 10s minimum respawn so
+        # external changes still follow within ~1s.
+        launchd.agents.edgebar-wallpaper-theme = {
+          enable = true;
+          config = {
+            ProgramArguments = [ "${generate-edgebar-theme}/bin/generate-edgebar-theme" ];
+            WatchPaths = [
+              "${config.home.homeDirectory}/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
+            ];
+            RunAtLoad = false;
+            ThrottleInterval = 1;
+            ProcessType = "Background";
+            StandardOutPath = "/tmp/edgebar-wallpaper-theme.log";
+            StandardErrorPath = "/tmp/edgebar-wallpaper-theme.log";
+          };
         };
       };
     };

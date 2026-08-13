@@ -243,6 +243,14 @@ in
                 profile-work
               ])
               ++ wm.home;
+
+            # ─── Desktop look (per machine) ────────────────────────────
+            # Seeded on the first switch that declares them and re-applied
+            # only when these values change — `select-wallpaper` and
+            # `select-scheme` picks survive later rebuilds.
+            local.wallpaper.default = "chisato_petals_of_silence_4k.jpg";
+            local.edgebar.scheme = "scheme-tonal-spot";
+
             home = {
               inherit username;
               homeDirectory = "/Users/brett";
