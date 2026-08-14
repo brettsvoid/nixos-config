@@ -162,8 +162,6 @@ in
             "yarn"
           ];
           casks = [
-            "codex"
-            "cursor"
             "discord"
             "git-credential-manager"
             "github"
