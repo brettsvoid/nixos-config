@@ -107,6 +107,17 @@ outer.bottom = @outerGap@
 9 = 'secondary'
 0 = 'secondary'
 
+# ─── Workspace assignment (per machine) ────────────────────────────────────
+# AeroSpace keeps no on-disk record of window placement, so a restart starts
+# from an empty layout. These rules are the only memory.
+#
+# The blocks below are generated from `local.aerospace.windowAssignments`,
+# set per host in modules/hosts/. Each Mac runs a different set of apps, so
+# the list lives with the host rather than in this shared template.
+#
+# They sit above the float rules because only the first matching rule runs
+# (check-further-callbacks defaults to false — see the note below).
+@windowRules@
 # ─── Float rules (mirror yabai's apps_mgoff_* lists) ───────────────────────
 # yabai used `app=^(...)$` regex on app name; AeroSpace matches by either
 # app-id (CFBundleIdentifier) or app-name-regex-substring. We use the regex

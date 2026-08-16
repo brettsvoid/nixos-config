@@ -27,16 +27,61 @@ let
 in
 {
   flake.modules.homeManager.darwin-aerospace =
-    { pkgs, lib, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     let
+      # A list, not an attrset: order decides which rule wins, and attrset keys
+      # would sort 'com.google.Chrome' above 'com.google.Chrome.app.<id>' — so a
+      # Chrome PWA would land wherever plain Chrome goes.
+      windowRules = lib.concatMapStrings (rule: ''
+
+        [[on-window-detected]]
+        if.app-id = '${rule.appId}'
+        run = 'move-node-to-workspace ${rule.workspace}'
+      '') config.local.aerospace.windowAssignments;
+
       aerospaceToml = pkgs.replaceVars ./aerospace/aerospace.toml.in {
         outerTop = toString geom.outerTop;
         innerGap = toString geom.innerGap;
         outerGap = toString geom.outerGap;
+        inherit windowRules;
       };
     in
     {
-      xdg.configFile."aerospace".source = pkgs.linkFarm "aerospace-config" [
+      options.local.aerospace.windowAssignments = lib.mkOption {
+        type = lib.types.listOf (
+          lib.types.submodule {
+            options = {
+              appId = lib.mkOption {
+                type = lib.types.str;
+                example = "net.kovidgoyal.kitty";
+                description = "CFBundleIdentifier, as reported by `aerospace list-windows --all --json --format '%{app-bundle-id}%{app-name}%{workspace}'`.";
+              };
+              workspace = lib.mkOption {
+                type = lib.types.str;
+                example = "1";
+                description = "Workspace this app's windows move to when detected.";
+              };
+            };
+          }
+        );
+        default = [ ];
+        description = ''
+          Apps this machine pins to a workspace, rendered into aerospace.toml as
+          `[[on-window-detected]]` blocks. Order matters: only the first matching
+          rule runs, so put narrower bundle IDs before the ones they extend.
+
+          Rules fire on window detection, so they do not move windows that are
+          already open. Apply them to the current session with
+          `aerospace run-callback --for-every-window on-window-detected`.
+        '';
+      };
+
+      config.xdg.configFile."aerospace".source = pkgs.linkFarm "aerospace-config" [
         {
           name = "aerospace.toml";
           path = aerospaceToml;
@@ -47,7 +92,7 @@ in
       # switch`. Runs after writeBoundary so the rendered toml is already
       # linked. `|| true` keeps the switch from failing when the daemon isn't
       # running yet (first install).
-      home.activation.reloadAerospace = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      config.home.activation.reloadAerospace = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         run ${pkgs.aerospace}/bin/aerospace reload-config || true
       '';
     };
