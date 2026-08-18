@@ -2507,9 +2507,10 @@ fn install_screen_observer(app: tauri::AppHandle) {
 // window visible in the fullscreen space, and dropping CanJoinAllSpaces does
 // hide it there but also pins it to whichever space it was built on. macOS
 // exposes no public "is this space fullscreen" query either, so detect it from
-// the window list: an app that covers a whole display at layer 0 is fullscreen
-// (native, or borderless with no space of its own), and we order that display's
-// chrome out until it goes away.
+// the window list: an OPAQUE app window covering a whole display at layer 0 is
+// fullscreen (native, or borderless with no space of its own), and we order that
+// display's chrome out until it goes away. Transparent windows are skipped —
+// see the alpha check in `covered_screens`.
 
 /// How often the fullscreen check runs. `CGWindowListCopyWindowInfo` measured
 /// ~1ms per call with ~20 windows on screen, so this costs ~0.2% of one core;
@@ -2573,6 +2574,20 @@ fn window_int(
     unsafe { value.value(CFNumberType::SInt32Type, (&mut out as *mut i32).cast()) }.then_some(out)
 }
 
+/// Read one CFNumber field out of a `CGWindowList` entry as a float.
+#[cfg(target_os = "macos")]
+fn window_f64(
+    win: &objc2_core_foundation::CFDictionary,
+    key: &objc2_core_foundation::CFString,
+) -> Option<f64> {
+    use objc2_core_foundation::{CFNumber, CFNumberType, CFString};
+
+    let value = unsafe { win.value((key as *const CFString).cast()) } as *const CFNumber;
+    let value = unsafe { value.as_ref() }?;
+    let mut out: f64 = 0.0;
+    unsafe { value.value(CFNumberType::Float64Type, (&mut out as *mut f64).cast()) }.then_some(out)
+}
+
 /// Which screens are fully covered by an app window right now, in the order of
 /// `bounds` (i.e. `NSScreen::screens` order). Runs off the main thread —
 /// `CGWindowList` is thread-safe, and bounds/layer need no screen-recording
@@ -2581,8 +2596,8 @@ fn window_int(
 fn covered_screens(bounds: &[[f64; 4]]) -> Vec<bool> {
     use objc2_core_foundation::{CFDictionary, CFString, CGRect};
     use objc2_core_graphics::{
-        kCGNullWindowID, kCGWindowBounds, kCGWindowLayer, CGRectMakeWithDictionaryRepresentation,
-        CGWindowListCopyWindowInfo, CGWindowListOption,
+        kCGNullWindowID, kCGWindowAlpha, kCGWindowBounds, kCGWindowLayer,
+        CGRectMakeWithDictionaryRepresentation, CGWindowListCopyWindowInfo, CGWindowListOption,
     };
 
     let mut covered = vec![false; bounds.len()];
@@ -2601,6 +2616,14 @@ fn covered_screens(bounds: &[[f64; 4]]) -> Vec<bool> {
         // Layer 0 is where ordinary app windows live. Our own bar (5) and frame
         // (6) sit above it, so they can never be read as a fullscreen app.
         if window_int(win, unsafe { kCGWindowLayer }) != Some(0) {
+            continue;
+        }
+        // A fully transparent window occludes nothing, so it is not a fullscreen
+        // app however big it is. RocketSim parks three invisible 2560x1440
+        // windows at layer 0 on the main display; without this filter they read
+        // as permanent fullscreen and that display's chrome never comes back.
+        // `kCGWindowIsOnscreen` does not help — those windows report true.
+        if window_f64(win, unsafe { kCGWindowAlpha }).is_some_and(|a| a <= 0.01) {
             continue;
         }
         let rect = unsafe { win.value((kCGWindowBounds as *const CFString).cast()) }
