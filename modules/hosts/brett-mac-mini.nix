@@ -42,9 +42,6 @@ in
             agenix
             common
             defaults
-            # Swaps left ⌘/⌥ for Universal Control, and supersedes the
-            # hand-rolled com.local.KeyRemapping login agent.
-            keyboard
             users
             openssh
             homebrew
