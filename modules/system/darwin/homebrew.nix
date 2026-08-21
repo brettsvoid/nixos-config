@@ -111,8 +111,8 @@ _: {
         # nixpkgs without losing platform-specific behaviour should move
         # over time; the remainder lives here. Items intentionally absent
         # because nix manages them (and the brew copy is redundant):
-        # `direnv` (programs.direnv in profile-code), `yabai`/`skhd`/
-        # `sketchybar` (services in system/darwin/window-manager.nix);
+        # `direnv` (programs.direnv in profile-code), `aerospace` (a launchd
+        # agent in system/darwin/window-manager-aerospace.nix);
         # `gh`/`lazygit`/`git-delta`(→delta)/`git-lfs` (profile-code),
         # `bat`/`fd`/`dust`/`duf`/`procs`/`zoxide` (shell-tools),
         # `awscli`(→awscli2) (profile-work). The brew copies shadowed the
@@ -171,13 +171,13 @@ _: {
           "sevenzip"
           "sshs"
           "taskwarrior-tui"
-          # Desktop notifications for the skhd bindings (darwin/skhd/skhdrc).
-          # Until it was declared here it was present only as a transitive
-          # dependency of `fastlane`, so those bindings depended on an
-          # undeclared package that would vanish the moment fastlane was
-          # dropped. Homebrew rather than nixpkgs because macOS binds
-          # notification authorisation to the delivering bundle, and this is
-          # the copy both Macs have already authorised.
+          # Was declared for the skhd bindings' desktop notifications; skhd
+          # is gone and nothing in the repo calls this any more. Kept anyway,
+          # deliberately: macOS binds notification authorisation to the
+          # delivering bundle, both Macs have already authorised THIS copy,
+          # and undeclaring it would uninstall it and throw that grant away.
+          # Homebrew rather than nixpkgs for the same reason. Drop it if you
+          # are sure you want no ad-hoc notifier on PATH.
           "terminal-notifier"
           "terragrunt"
           "tflint"

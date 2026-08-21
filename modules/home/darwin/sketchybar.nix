@@ -12,11 +12,12 @@
 # binary committed here is Mach-O arm64; if you ever need to rebuild:
 #   cd modules/home/darwin/sketchybar/helper && make
 #
-# The daemon is enabled only under the yabai window-manager stack
-# (services.sketchybar in modules/system/darwin/window-manager.nix). The active
-# aerospace stack disables it — edgebar (apps/edgebar) replaced it — so there
-# this home module just keeps the config tree live-editable for the yabai A/B
-# and any future re-enable.
+# The daemon does NOT run: edgebar (apps/edgebar) replaced it, and the only
+# `services.sketchybar` left in the repo is the commented-out block in
+# modules/system/darwin/window-manager-aerospace.nix. This home module is kept
+# on purpose all the same — the config tree is the reference edgebar is being
+# ported from, and the symlink keeps it live-editable for a side-by-side
+# comparison or a future re-enable.
 { config, ... }:
 let
   geom = config.flake.lib.barGeometry;

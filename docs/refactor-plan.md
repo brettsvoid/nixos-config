@@ -80,6 +80,35 @@ run against synthetic secrets, `cargo check` + `tsc --noEmit` for edgebar, headl
 - **N-7 / N-8** (media-player QML → files, host monitor block move) — structural, no
   functional change; safe anytime.
 
+---
+
+## Since the audit (2026-08-21) — yabai/skhd stack removed
+
+The yabai/skhd half of the WM A/B is **deleted**, not deferred. Both hosts had been on
+`wmStack = "aerospace"` since the AeroSpace move, so the yabai branch never evaluated:
+`modules/system/darwin/window-manager.nix`, `modules/home/darwin/{yabai,skhd}.nix` and
+their config trees (~530 lines) are gone, and the `wmStack` let-block collapsed into a
+flat import list in both host files. Verified: both hosts still eval to a derivation.
+
+Sketchybar is deliberately **kept** — the daemon stays disabled (edgebar replaced it),
+but the config tree is the reference edgebar is being ported from.
+
+Backlog items this voids or changes:
+
+- **D-5 (F18)** — void. It asked whether `skhd/skhdrc:7` or `aerospace.toml.in:84` owns
+  the F18 mode key; skhdrc is gone, so AeroSpace is the only claimant left.
+- **N-9** — the yabai/skhd header half is void (files deleted); the
+  `sketchybar.nix` ↔ `bar-geometry.nix` contradiction is fixed (both now say disabled).
+  The geometry "60" vs 42 and innerGap/outerGap nits still stand.
+- **Phase 2 "sketchybar/yabai"** — the `yabai_env.sh` and `skhdrc` half is void. The
+  sketchybar-side findings (`icons.sh` dead ~60%, duplicate `ICON_DISK`, dead plugins)
+  still stand but are lower priority now that the tree is reference material only.
+- **"A/B pairs are not treated as dead code"** — still the rule, minus this pair.
+- `terminal-notifier` (`homebrew.nix`) lost its only consumer with skhdrc. Kept anyway so
+  the macOS notification authorisation both Macs already granted isn't thrown away.
+
+---
+
 The rest of this document is the original findings, kept as the backlog.
 
 IDs: **S**ecurity, **B** bar/parity, **N**ix, **E**dgebar, **Q**uickshell, **D**otfiles,

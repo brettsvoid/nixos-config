@@ -17,10 +17,6 @@
 #
 # Pair this module with `flake.modules.darwin.window-manager-aerospace`,
 # which installs the package + launchd agent.
-#
-# Swapping with the yabai stack: in modules/hosts/brett-m1-mbp.nix, replace
-# the `darwin-yabai` / `darwin-skhd` imports with `darwin-aerospace` and
-# the system module `window-manager` with `window-manager-aerospace`.
 { config, ... }:
 let
   geom = config.flake.lib.barGeometry;

@@ -1,13 +1,13 @@
-# nix-darwin window-manager stack for AeroSpace. Sibling of
-# `window-manager.nix` (the yabai/skhd/sketchybar stack). Only one of the
-# two should be imported into a host at a time — see the swap notes in
-# modules/hosts/brett-m1-mbp.nix.
+# nix-darwin window-manager stack for AeroSpace — the only WM stack; both
+# Macs import it. (It replaced a yabai/skhd/sketchybar stack, removed once
+# both hosts had settled on AeroSpace; `git log -- modules/home/darwin/yabai`
+# has it if it is ever wanted back.)
 #
-# AeroSpace differences vs. yabai:
-#   - Uses virtual workspaces (not native macOS Spaces), so no SIP work
-#     and no scripting addition are needed.
-#   - Built-in hotkey engine (no skhd). The aerospace.toml under
-#     modules/home/darwin/aerospace/ holds all bindings.
+# Notes:
+#   - Virtual workspaces (not native macOS Spaces), so no SIP work and no
+#     scripting addition are needed.
+#   - Built-in hotkey engine, so no separate hotkey daemon. The
+#     aerospace.toml under modules/home/darwin/aerospace/ holds all bindings.
 #   - The top-of-screen band for the edgebar overlay is reserved via
 #     gaps.outer.top (= barHeight + outerGap = 42 from flake.lib.barGeometry).
 #     The sketchybar daemon is disabled below — edgebar replaced it.

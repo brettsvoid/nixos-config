@@ -7,26 +7,6 @@
 { config, inputs, ... }:
 let
   username = config.flake.lib.username;
-
-  # ─── Window-manager stack swap ──────────────────────────────────────
-  # Same switch as brett-m1-mbp.nix — see that file for the full rationale.
-  # AeroSpace here too, so keybindings stay identical across both Macs.
-  wmStack = "aerospace";
-  wm =
-    {
-      yabai = {
-        system = with config.flake.modules.darwin; [ window-manager ];
-        home = with config.flake.modules.homeManager; [
-          darwin-yabai
-          darwin-skhd
-        ];
-      };
-      aerospace = {
-        system = with config.flake.modules.darwin; [ window-manager-aerospace ];
-        home = with config.flake.modules.homeManager; [ darwin-aerospace ];
-      };
-    }
-    .${wmStack};
 in
 {
   flake.darwinConfigurations.brett-mac-mini = inputs.nix-darwin.lib.darwinSystem {
@@ -37,23 +17,22 @@ in
     modules = [
       inputs.home-manager.darwinModules.home-manager
       (_: {
-        imports =
-          (with config.flake.modules.darwin; [
-            agenix
-            common
-            defaults
-            users
-            openssh
-            homebrew
-            tailscale
-            # Time Machine has no destination configured on this machine
-            # either (`tmutil destinationinfo` → none), so the module's
-            # rationale holds: disabling it stops backupd polling for a
-            # destination that will never exist. Borg is the backup here.
-            timemachine
-            nh-gc
-          ])
-          ++ wm.system;
+        imports = with config.flake.modules.darwin; [
+          agenix
+          common
+          defaults
+          users
+          openssh
+          homebrew
+          tailscale
+          # Time Machine has no destination configured on this machine
+          # either (`tmutil destinationinfo` → none), so the module's
+          # rationale holds: disabling it stops backupd polling for a
+          # destination that will never exist. Borg is the backup here.
+          timemachine
+          nh-gc
+          window-manager-aerospace
+        ];
 
         # ─── Identity ──────────────────────────────────────────────────
         # Renames the machine from its factory `Bretts-Mac-mini-7`. The
@@ -127,9 +106,8 @@ in
             # NOT kept, and uninstalled on the first switch:
             #   terraform (23)  — nixpkgs provides it via profile-work, so
             #                     the brew copy is the redundant one
-            #   sketchybar (6)  — daemon is disabled under the aerospace
-            #   borders (7)       stack (edgebar replaced it); on the yabai
-            #                     stack nixpkgs supplies both
+            #   sketchybar (6)  — neither daemon runs any more: edgebar
+            #   borders (7)       replaced both under AeroSpace
             #   auth0, stripe, atac, dep-tree, applesimutils (0 uses)
             #   localstack-cli  — no longer used
             #   cheatshh (2)    — not worth its dependency tail: it drags in
@@ -204,40 +182,39 @@ in
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
           users.${username} = {
-            imports =
-              (with config.flake.modules.homeManager; [
-                base
-                shell-zsh
-                shell-aliases
-                shell-env
-                shell-functions
-                shell-starship
-                shell-tools
-                terminals-tmux
-                terminals-herdr
-                terminals-ghostty
-                terminals-kitty
-                darwin-sketchybar
-                darwin-edgebar
-                darwin-wallpaper
-                desktop-wallpapers
-                darwin-karabiner
-                nvim
-                apps-git
-                apps-ssh
-                apps-fonts
-                apps-sql-formatter
-                apps-nh
-                apps-comma
-                apps-worktrunk
-                apps-claude-code
-                apps-sesh
-                apps-fnm
-                profile-base
-                profile-code
-                profile-work
-              ])
-              ++ wm.home;
+            imports = with config.flake.modules.homeManager; [
+              base
+              shell-zsh
+              shell-aliases
+              shell-env
+              shell-functions
+              shell-starship
+              shell-tools
+              terminals-tmux
+              terminals-herdr
+              terminals-ghostty
+              terminals-kitty
+              darwin-aerospace
+              darwin-sketchybar
+              darwin-edgebar
+              darwin-wallpaper
+              desktop-wallpapers
+              darwin-karabiner
+              nvim
+              apps-git
+              apps-ssh
+              apps-fonts
+              apps-sql-formatter
+              apps-nh
+              apps-comma
+              apps-worktrunk
+              apps-claude-code
+              apps-sesh
+              apps-fnm
+              profile-base
+              profile-code
+              profile-work
+            ];
 
             # ─── Desktop look (per machine) ────────────────────────────
             # Seeded on the first switch that declares them and re-applied

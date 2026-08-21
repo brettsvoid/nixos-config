@@ -2,28 +2,6 @@
 { config, inputs, ... }:
 let
   username = config.flake.lib.username;
-
-  # ─── Window-manager stack swap ──────────────────────────────────────
-  # One switch drives BOTH halves of the WM stack — the system-side
-  # launchd agents and the home-manager config — so the two can't drift
-  # out of sync. Set to "yabai" or "aerospace"; files for both stacks
-  # live side-by-side, so switching is a one-word edit — no deletes.
-  wmStack = "aerospace";
-  wm =
-    {
-      yabai = {
-        system = with config.flake.modules.darwin; [ window-manager ];
-        home = with config.flake.modules.homeManager; [
-          darwin-yabai
-          darwin-skhd
-        ];
-      };
-      aerospace = {
-        system = with config.flake.modules.darwin; [ window-manager-aerospace ];
-        home = with config.flake.modules.homeManager; [ darwin-aerospace ];
-      };
-    }
-    .${wmStack};
 in
 {
   flake.darwinConfigurations.brett-m1-mbp = inputs.nix-darwin.lib.darwinSystem {
@@ -34,21 +12,18 @@ in
     modules = [
       inputs.home-manager.darwinModules.home-manager
       (_: {
-        # WM stack (system half) is appended below via `wm.system`; the
-        # `wmStack` switch at the top of this file selects it.
-        imports =
-          (with config.flake.modules.darwin; [
-            agenix
-            common
-            defaults
-            users
-            openssh
-            homebrew
-            tailscale
-            timemachine
-            nh-gc
-          ])
-          ++ wm.system;
+        imports = with config.flake.modules.darwin; [
+          agenix
+          common
+          defaults
+          users
+          openssh
+          homebrew
+          tailscale
+          timemachine
+          nh-gc
+          window-manager-aerospace
+        ];
 
         # ─── Identity ──────────────────────────────────────────────────
         networking.hostName = "brett-m1-mbp";
@@ -159,44 +134,43 @@ in
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
           users.${username} = {
-            # WM stack (home half) is appended below via `wm.home`; the
-            # `wmStack` switch at the top of this file selects it.
-            # `darwin-sketchybar` stays enabled for either stack.
-            imports =
-              (with config.flake.modules.homeManager; [
-                base
-                shell-zsh
-                shell-aliases
-                shell-env
-                shell-functions
-                shell-starship
-                shell-tools
-                terminals-tmux
-                terminals-herdr
-                terminals-ghostty
-                terminals-kitty
-                darwin-sketchybar
-                darwin-edgebar
-                darwin-wallpaper
-                desktop-wallpapers
-                darwin-karabiner
-                nvim
-                apps-git
-                apps-ssh
-                apps-fonts
-                apps-sql-formatter
-                apps-nh
-                apps-comma
-                apps-worktrunk
-                apps-claude-code
-                apps-sesh
-                apps-tmuxinator
-                apps-fnm
-                profile-base
-                profile-code
-                profile-work
-              ])
-              ++ wm.home;
+            # `darwin-sketchybar` is imported for its config tree only — the
+            # daemon is disabled (edgebar replaced it); the tree is kept as
+            # the reference edgebar is ported from.
+            imports = with config.flake.modules.homeManager; [
+              base
+              shell-zsh
+              shell-aliases
+              shell-env
+              shell-functions
+              shell-starship
+              shell-tools
+              terminals-tmux
+              terminals-herdr
+              terminals-ghostty
+              terminals-kitty
+              darwin-aerospace
+              darwin-sketchybar
+              darwin-edgebar
+              darwin-wallpaper
+              desktop-wallpapers
+              darwin-karabiner
+              nvim
+              apps-git
+              apps-ssh
+              apps-fonts
+              apps-sql-formatter
+              apps-nh
+              apps-comma
+              apps-worktrunk
+              apps-claude-code
+              apps-sesh
+              apps-tmuxinator
+              apps-fnm
+              profile-base
+              profile-code
+              profile-work
+            ];
 
             # ─── Desktop look (per machine) ────────────────────────────
             # Seeded on the first switch that declares them and re-applied
