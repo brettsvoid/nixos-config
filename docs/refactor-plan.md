@@ -91,7 +91,11 @@ their config trees (~530 lines) are gone, and the `wmStack` let-block collapsed 
 flat import list in both host files. Verified: both hosts still eval to a derivation.
 
 Sketchybar is deliberately **kept** — the daemon stays disabled (edgebar replaced it),
-but the config tree is the reference edgebar is being ported from.
+but the config tree is the reference edgebar is being ported from. Its daemon plumbing is
+not: `home.activation.reloadSketchybar` ran `sketchybar --reload` on every switch against
+a daemon that isn't there, and dropping it takes `pkgs.sketchybar` out of both hosts'
+closures (`sketchybar-app-font`, from `apps-fonts`, is now the only sketchybar-shaped
+thing left in them).
 
 Backlog items this voids or changes:
 
