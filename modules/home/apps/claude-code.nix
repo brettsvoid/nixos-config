@@ -72,8 +72,6 @@
             "Bash(ls:*)"
           ];
           deny = [
-            "EnterPlanMode"
-            "ExitPlanMode"
             "AskUserQuestion"
             "CronCreate"
             "CronDelete"
@@ -108,7 +106,7 @@
 
         # `/config` toggles. Shared because they are preferences, not machine
         # facts — the MacBook should behave identically.
-        effortLevel = "high";
+        effortLevel = "max";
         tui = "fullscreen";
         agentPushNotifEnabled = true;
         skipAutoPermissionPrompt = true;
