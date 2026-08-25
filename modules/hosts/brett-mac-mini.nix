@@ -211,6 +211,7 @@ in
               apps-claude-code
               apps-sesh
               apps-fnm
+              apps-lspmux
               profile-base
               profile-code
               profile-work
