@@ -58,7 +58,30 @@
       # the point — but if a key turns out to be one you flip per-machine or
       # per-mood, delete it here and it becomes machine-local again.
       settings = {
-        env.ENABLE_TOOL_SEARCH = "auto:0";
+        env = {
+          ENABLE_TOOL_SEARCH = "auto:0";
+
+          # Effort. This is the ONLY way to get `max`, which is why it is
+          # here and not just in `effortLevel` below: the two values go
+          # through different validators in 2.1.245.
+          #
+          #   settings.effortLevel -> low | medium | high | xhigh
+          #   CLAUDE_CODE_EFFORT_LEVEL -> low | medium | high | xhigh | max
+          #                               (+ auto/unset to hand control back)
+          #
+          # `max` is session-scoped upstream — `/effort max` says "this
+          # session only" and saves nothing, and a settings.json carrying
+          # "max" is silently DROPPED, not clamped: the resolver returns
+          # undefined and the model falls back to its own default. So the
+          # `effortLevel = "max"` this replaces was doing nothing at all.
+          #
+          # Consequence, and the intent: with this set, `/effort` reports
+          # "Not applied: CLAUDE_CODE_EFFORT_LEVEL=max overrides effort this
+          # session" and changes nothing. Max everywhere, no per-session
+          # drift. Drop this line to get `/effort` back — effortLevel below
+          # then applies, capped at xhigh.
+          CLAUDE_CODE_EFFORT_LEVEL = "max";
+        };
 
         permissions = {
           # Read-only inspection, pre-approved. Anything that mutates state is
@@ -106,7 +129,9 @@
 
         # `/config` toggles. Shared because they are preferences, not machine
         # facts — the MacBook should behave identically.
-        effortLevel = "max";
+        # Fallback for anything that does not see the env var above; xhigh is
+        # the ceiling this key accepts (see CLAUDE_CODE_EFFORT_LEVEL).
+        effortLevel = "xhigh";
         tui = "fullscreen";
         agentPushNotifEnabled = true;
         skipAutoPermissionPrompt = true;
