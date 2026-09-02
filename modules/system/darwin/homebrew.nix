@@ -70,6 +70,32 @@ _: {
             } || true
           fi
         '')
+        # ─── Upgrade the casks marked `greedy` ──────────────────────
+        # `onActivation.upgrade` stays false: a blanket upgrade would also
+        # re-run the .pkg casks (sonobus, blackhole-*), whose installers
+        # macOS App Management blocks from modifying an app bundle that
+        # already exists — and `brew bundle` failing aborts the whole
+        # switch. So upgrades are opt-in per cask via `greedy = true`.
+        #
+        # `--greedy` is what makes it work at all: every cask worth marking
+        # here is an `auto_updates` cask (it ships its own updater, which is
+        # what nags), and brew never considers those outdated without it.
+        #
+        # mkOrder 1400: after the bundle (1000) has installed anything
+        # missing, before `brew cleanup` (mkAfter, 1500) reclaims the
+        # download it just used. `|| true` for the same reason the upgrade
+        # is out of the bundle — a failed upgrade must not fail the switch.
+        (lib.mkOrder 1400 (
+          let
+            greedy = map (c: c.name) (lib.filter (c: c.greedy == true) config.homebrew.casks);
+          in
+          lib.optionalString (greedy != [ ]) ''
+            if [ -x /opt/homebrew/bin/brew ]; then
+              echo >&2 "Homebrew greedy cask upgrade..."
+              sudo --user=${flake.lib.username} --set-home /opt/homebrew/bin/brew upgrade --cask --greedy ${lib.concatStringsSep " " (map lib.escapeShellArg greedy)} || true
+            fi
+          ''
+        ))
         # ─── Prune caches/logs after `brew bundle` ──────────────────
         # --force-cleanup uninstalls undeclared *packages* but doesn't
         # reclaim cache disk space, and the bundle never runs a full
@@ -209,7 +235,13 @@ _: {
           "font-symbols-only-nerd-font"
           "ghostty"
           "hammerspoon"
-          "karabiner-elements"
+          # greedy: karabiner-elements is an `auto_updates` cask, so brew
+          # never reports it outdated and its own updater is what nags. See
+          # the greedy-upgrade activation step above.
+          {
+            name = "karabiner-elements";
+            greedy = true;
+          }
           "loopback"
           "macdown"
           "mos"

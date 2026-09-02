@@ -36,9 +36,14 @@
 # assets/ and automatic_backups/ stay as real files in ~/.config.
 #
 # Karabiner-Elements itself is installed as a Homebrew cask (see
-# modules/system/darwin/homebrew.nix). `onActivation.upgrade = false`, so a
-# switch never bumps its version; the cask is flagged auto_updates and the app
-# updates itself.
+# modules/system/darwin/homebrew.nix), where it is marked `greedy = true` so
+# every switch upgrades it. That flag is required: the cask is flagged
+# auto_updates, which brew reads as "never outdated" unless asked greedily.
+#
+# The switch is therefore the ONLY update path, so karabiner/karabiner.json
+# sets `global.check_for_updates_on_startup` to false — otherwise the app's own
+# updater nags on every launch and can install a version brew doesn't know
+# about. It is read at app startup, so it takes effect on the next restart.
 #
 # ─── What is actually mapped ─────────────────────────────────────────
 # left ⌘ ↔ left ⌥ ON THE MOONLANDER, and right_command → Hyper (⌃⌥⇧⌘) with
