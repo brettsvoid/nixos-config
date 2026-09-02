@@ -113,6 +113,42 @@ Backlog items this voids or changes:
 
 ---
 
+## Since the audit (2026-09-01) — `~/.env_vars` reduced to the bws bootstrap token
+
+`~/.env_vars` held four exports at audit time: `ANTHROPIC_API_KEY`, `BWS_ACCESS_TOKEN`,
+`OPENAI_API_KEY`, `TAVILY_API_KEY`. Three are gone and only `BWS_ACCESS_TOKEN` remains
+(0600, one line). `OPENAI_API_KEY` and `TAVILY_API_KEY` moved into Bitwarden Secrets
+Manager. `ANTHROPIC_API_KEY` was deleted outright rather than migrated: it had already
+been revoked upstream — `GET /v1/models` with it returns `401 authentication_error` and
+the Console lists no keys at all — so nothing on this host had been authenticating with
+it, and its presence could only ever have produced a confusing failure in tools that
+branch on the variable existing rather than on it working.
+
+No `_secrets_load_*` group or `_secrets_preexec` arm was added for the two migrated keys,
+deliberately. Nothing on this machine reads either one: across `~/.claude.json`,
+`~/.claude/settings*.json` and the repo's Nix/JSON/Lua/TOML, the only matches for
+`openai`/`tavily` are the *detection rules* in `.gitleaks.toml`, and there is no
+`~/.aider.conf.yml`. That puts them in the same state as `AWS_*_HOME_ASSISTANT` — held in
+Bitwarden, reachable via `load-secrets`, with no trigger until a consumer exists.
+
+Worth remembering when rotating any of these: `.zshenv` runs once per shell, so a value
+removed from `~/.env_vars` survives in every already-running process until that process
+restarts. Long-lived herdr panes inherit from the herdr server, which makes the stale
+copy outlast the terminal window it appears in.
+
+Backlog items this voids or changes:
+
+- **Suggestion 4 (S/M4)** — narrowed, not void. The plaintext-secret surface is down from
+  four exports to one, but that one is now the bootstrap for all the others: with
+  `OPENAI_API_KEY` and `TAVILY_API_KEY` in Bitwarden, reading `~/.env_vars` yields the
+  token that fetches them. Phase G's scope shrank to a single value while the payoff grew.
+  Any replacement must preserve the current ordering — `.zshenv` sources `~/.env_vars`
+  before `~/.config/zsh/local.zsh`, and the bws block is guarded on `BWS_ACCESS_TOKEN`
+  being set at that moment, so a lazier source installs no `preexec` hook and silently
+  loads no secret at all.
+
+---
+
 The rest of this document is the original findings, kept as the backlog.
 
 IDs: **S**ecurity, **B** bar/parity, **N**ix, **E**dgebar, **Q**uickshell, **D**otfiles,
@@ -365,7 +401,9 @@ General improvements beyond the brief:
    `BWS_ACCESS_TOKEN` sits plaintext (0600) in `~/.env_vars`, readable by any process
    running as you. Either finish the "Phase G" migration (move that one token into agenix
    or the macOS Keychain) or note the gap explicitly — right now the safety story reads as
-   complete but isn't wired.
+   complete but isn't wired. **Narrowed 2026-09-01** (see "Since the audit (2026-09-01)"):
+   `~/.env_vars` is down to this one token, so the migration is smaller and the gap is
+   sharper — it is now the single on-disk credential that unlocks every other secret.
 
 5. **`sysinfo` is heavy for what edgebar uses it for** (cpu/mem/disk in the notch). If
    the metrics stay simple, a couple of `sysctl`/`host_statistics` calls would drop a
