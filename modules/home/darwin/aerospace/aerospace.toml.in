@@ -201,21 +201,6 @@ cmd-alt-ctrl-shift-e = "balance-sizes"
 # does; closest is `reload-config`. Bind r to that; leave q/s unbound.
 cmd-alt-ctrl-shift-r = "reload-config"
 
-# App launchers (mirror skhdrc:98–106).
-# `open -a <name>` uses LaunchServices, which indexes the home-manager
-# .app at ~/Applications/Home Manager Apps/kitty.app. Gives focus-or-
-# launch behaviour: if kitty is running, bring it forward; else spawn.
-ctrl-1 = "exec-and-forget open -a kitty"
-ctrl-2 = "exec-and-forget open -a 'Google Chrome'"
-ctrl-9 = "exec-and-forget open -a Finder"
-ctrl-0 = "exec-and-forget open -a Spotify"
-
-# Quit those apps
-ctrl-shift-1 = "exec-and-forget osascript -e 'tell application \"kitty\" to quit'"
-ctrl-shift-2 = "exec-and-forget osascript -e 'tell application \"Google Chrome\" to quit'"
-ctrl-shift-9 = "exec-and-forget osascript -e 'tell application \"Finder\" to close every window'"
-ctrl-shift-0 = "exec-and-forget osascript -e 'tell application \"Spotify\" to quit'"
-
 [mode.hyper.binding]
 # Exit hyper mode
 esc = "mode main"
