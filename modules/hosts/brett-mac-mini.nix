@@ -200,6 +200,7 @@ in
               darwin-wallpaper
               desktop-wallpapers
               darwin-karabiner
+              darwin-hammerspoon
               nvim
               apps-git
               apps-ssh
