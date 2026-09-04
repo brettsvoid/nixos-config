@@ -167,6 +167,7 @@ in
               apps-sesh
               apps-tmuxinator
               apps-fnm
+              apps-obsidian
               profile-base
               profile-code
               profile-work
