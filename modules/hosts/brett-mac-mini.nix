@@ -201,6 +201,7 @@ in
               desktop-wallpapers
               darwin-karabiner
               darwin-hammerspoon
+              darwin-sonobus
               nvim
               apps-git
               apps-ssh

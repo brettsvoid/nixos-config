@@ -16,6 +16,10 @@ in
           agenix
           common
           defaults
+          # This host only: it is the wireless end of the SonoBus bridge, so
+          # it is the one that pays for AWDL sharing the Wi-Fi radio. The
+          # mini is wired and would lose Continuity for nothing.
+          continuity
           users
           openssh
           homebrew
@@ -155,6 +159,7 @@ in
               darwin-wallpaper
               desktop-wallpapers
               darwin-karabiner
+              darwin-sonobus
               nvim
               apps-git
               apps-ssh
