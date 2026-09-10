@@ -168,6 +168,7 @@ in
               apps-tmuxinator
               apps-fnm
               apps-obsidian
+              apps-blender
               profile-base
               profile-code
               profile-work

@@ -10,6 +10,33 @@
 # mutableTaps stays at its default (true), so the third-party taps below
 # are added imperatively by brew and don't each need to be a flake input.
 #
+# ─── nixpkgs first; Homebrew is the fallback ────────────────────────────
+# A package belongs in this file only when nixpkgs has no working darwin
+# build of it. Before adding a cask or brew, check the repo's own pinned
+# nixpkgs — not `nixpkgs#...`, which resolves through the floating registry:
+#
+#   nix eval .#darwinConfigurations.brett-m1-mbp.pkgs.<pkg>.meta.platforms
+#   nix build --dry-run .#darwinConfigurations.brett-m1-mbp.pkgs.<pkg>
+#
+# The first must list aarch64-darwin. The second must say "will be
+# fetched" rather than "will be built" — a from-source build of a large GUI
+# app is not worth taking. (It prints nothing at all when the closure is
+# already local.) If both pass, add modules/home/apps/<name>.nix exposing
+# `flake.modules.homeManager.apps-<name>` with `home.packages`, import it
+# from the host, and leave this file alone. modules/home/apps/blender.nix
+# is the worked example — home-manager's targets.darwin.linkApps (on by
+# default) symlinks any $out/Applications bundle into
+# ~/Applications/Home Manager Apps, so a GUI app lands somewhere usable
+# without a cask.
+#
+# The reason is not only pinning. A failing `brew bundle` aborts the whole
+# switch, and a cask can gain an artifact type the pinned brew does not
+# implement — which is how the kitty cask broke activation on the mini (see
+# modules/hosts/brett-mac-mini.nix).
+#
+# The lists below predate this rule and have not been audited against it,
+# so a package sitting here is not evidence that nixpkgs lacks it.
+#
 # `onActivation.cleanup = "uninstall"` — the brews/casks lists are
 # authoritative: anything installed but not declared here is uninstalled on
 # activation (cask user-data is preserved; "zap" would also wipe that).

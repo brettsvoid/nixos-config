@@ -40,6 +40,32 @@ nix-rebuild       # nh os/darwin switch for the current host (diff, then activat
 edit              # cd ~/nixos-config && $EDITOR .
 ```
 
+## Adding a package
+
+nixpkgs first; Homebrew is the fallback on the macOS hosts. Check the repo's
+own pinned nixpkgs rather than `nixpkgs#...`, which resolves through the
+floating registry:
+
+```sh
+nix eval .#darwinConfigurations.brett-m1-mbp.pkgs.<pkg>.meta.platforms
+nix build --dry-run .#darwinConfigurations.brett-m1-mbp.pkgs.<pkg>
+```
+
+The platform list must include `aarch64-darwin`, and the dry run must say
+"will be fetched" rather than "will be built" — a from-source build of a
+large GUI app is not worth taking. It prints nothing when the closure is
+already local.
+
+If both pass, add `modules/home/apps/<name>.nix` exposing
+`flake.modules.homeManager.apps-<name>` with `home.packages`, then import
+`apps-<name>` from the host file. `modules/home/apps/blender.nix` is the
+worked example. Home-manager symlinks any `$out/Applications` bundle into
+`~/Applications/Home Manager Apps`, so GUI apps need no cask.
+
+Only when nixpkgs has no working darwin build does the package go in
+`modules/system/darwin/homebrew.nix` (every Mac) or a host file (one Mac).
+That file's header covers the cask-specific traps.
+
 ## First-time setup on a new machine
 
 ```sh
