@@ -80,7 +80,7 @@
           # session" and changes nothing. Max everywhere, no per-session
           # drift. Drop this line to get `/effort` back — effortLevel below
           # then applies, capped at xhigh.
-          CLAUDE_CODE_EFFORT_LEVEL = "max";
+          CLAUDE_CODE_EFFORT_LEVEL = "xhigh";
         };
 
         permissions = {
