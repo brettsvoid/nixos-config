@@ -1,2 +1,3 @@
 - No conjecture, validate first.
+- Solutions should be pragmatic.
 - Prefer UK english everywhere: prose, docs, variable naming and comments.
