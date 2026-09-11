@@ -21,10 +21,47 @@
 # and 91.7ms for the other peer. That buffer IS the delay, and packets
 # arriving past its window ARE the gaps.
 #
-# These settings shrink what the bridge asks of that air hop. The jitter
-# buffer is deliberately left alone: netbufauto is already 2
+# The jitter buffer is deliberately left alone: netbufauto is already 2
 # (AutoNetBufferModeAutoFull), so SonoBus shrinks it unprompted once the link
 # stops needing it — pinning it here would just fight that.
+#
+# ─── What this module ended up being for ─────────────────────────────
+# It started as a Wi-Fi mitigation: mono, and a lower send format to halve
+# the packet rate. THAT DID NOT WORK. With both applied and measured, the
+# gaps were no better, so the trade was quality for nothing and it has been
+# backed out — sendQuality is 3 again, the value it started at, and
+# sendChannels is per host.
+#
+# What remains worth having:
+#
+#   - Dynamic resampling ON. Free, and the two ends genuinely are separate
+#     clock domains, so the drift it corrects is real.
+#   - Mono on the mini ONLY, where the source is a mono microphone and
+#     stereo was duplicating a channel at double the bitrate.
+#   - Both of those pinned declaratively, with the file-ownership and
+#     ordering traps below written down, which is the durable value here.
+#
+# A companion module (continuity.nix) turned off AirDrop and Handoff on the
+# MacBook to stop AWDL sharing the radio. Reverted, and the reason is worth
+# keeping because it applies to ANY `system.defaults` aimed at an Apple
+# daemon: sharingd and useractivityd read those keys ONCE at startup, and
+# both are SIP-protected, so there is no way to make them re-read:
+#
+#   $ launchctl kickstart -k gui/$UID/com.apple.sharingd
+#   Could not kickstart service "com.apple.sharingd": 150: Operation not
+#   permitted while System Integrity Protection is engaged
+#
+# Root does not help — it is SIP, not permissions. Only a logout or reboot
+# applies it, which means `defaults read` returns the new value while the
+# running daemon still serves the old one, with nothing to flag the gap.
+# Check the daemon's start time, not `defaults read`. Third-party agents
+# (aerospace, sketchybar) kickstart fine; `com.apple.*` ones do not.
+#
+# The AWDL theory was therefore never actually tested. If it is revisited,
+# the direct test is `sudo ifconfig awdl0 down` plus a re-run of the ping
+# histogram — it isolates AWDL from every other Continuity feature, needs no
+# logout and reverses itself. The module is in the history:
+# `git log --diff-filter=D -- modules/system/darwin/continuity.nix`.
 #
 # The real fix is a wired MacBook. `networksetup -listnetworkserviceorder`
 # already carries a "USB 10/100/1000 LAN" service on en4, ranked above Wi-Fi,
@@ -100,8 +137,9 @@
 #
 #   sendchannels       AudioParameterChoice over
 #                      { "Match # Inputs", "Send Mono", "Send Stereo" },
-#                      stored as the index, so 1 is Send Mono. Was 2, which
-#                      doubled the Opus payload for what is call audio. The
+#                      stored as the index. Set per host via
+#                      local.sonobus.sendChannels -- see the note on that
+#                      option for why one value cannot serve both ends. The
 #                      handler applies it to every peer at once via
 #                      setRemotePeerNominalSendChannelCount(-1, ...), so
 #                      there is no per-peer override to chase.
@@ -122,6 +160,14 @@
 #                      more about packet RATE than about bandwidth, so the
 #                      index matters twice over. (The mini's buffer is 512,
 #                      above the 480 minimum, so it lands at 10.7ms.)
+#
+#                      Index 1 was tried and reverted: halving the packet
+#                      rate made no perceptible difference to the gaps, so it
+#                      was trading audio quality for nothing. Back to 3,
+#                      which is where it started. Left as an option rather
+#                      than hard-coded because it is the one knob worth
+#                      reaching for if the link ever does become the
+#                      bottleneck again.
 #
 #   sendformat         The SAME index, cached per peer in PeerStateCacheMap —
 #                      and this is the one that actually bites.
@@ -153,16 +199,65 @@ _: {
 
       support = "${config.home.homeDirectory}/Library/Application Support/SonoBus";
 
-      # Opus 24 kbps/ch on a 480-sample minimum block. Both halves of that
-      # are the point; see the format table above.
-      sendQuality = 1;
+      cfg = config.local.sonobus;
 
-      # Stored as floats even where the parameter is a bool or an index.
+      # The stored value is the choice index.
+      channelIndex = {
+        match = 0;
+        mono = 1;
+        stereo = 2;
+      };
+
+      # Stored as a float even though the parameter is a bool.
       dynamicResampling = "1.0"; # on
-      sendChannels = "1.0"; # "Send Mono"
+      sendChannels = "${toString channelIndex.${cfg.sendChannels}}.0";
+      sendQuality = cfg.sendQuality;
     in
     {
-      home.activation.sonobusSendPath = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      # ─── Per host, because "send" means opposite things on the two ────
+      # `sendchannels` is not a global preference -- it describes what THIS
+      # machine puts on the wire, and the two ends send completely different
+      # material:
+      #
+      #   brett-m1-mbp  input = BlackHole 16ch = the call/music audio, i.e.
+      #                 what lands in the headset. Mono here makes the MUSIC
+      #                 mono, which is not what "send mono" sounds like it
+      #                 does and is not wanted.
+      #   brett-mac-mini input = the PRO X headset, i.e. the microphone. That
+      #                 capture is mono, so stereo there is pure waste --
+      #                 double the payload carrying a duplicated channel.
+      #
+      # Setting it once for both hosts was the original mistake: it was
+      # reasoned about as "the mic" and silently applied to the speaker path
+      # too.
+      options.local.sonobus = {
+        sendChannels = lib.mkOption {
+          type = lib.types.enum [
+            "match"
+            "mono"
+            "stereo"
+          ];
+          default = "stereo";
+          description = ''
+            What this machine sends: "mono" for a microphone source,
+            "stereo" for programme audio, "match" to follow the input
+            channel count. Defaults to stereo -- the choice that cannot
+            quietly throw away a channel.
+          '';
+        };
+
+        sendQuality = lib.mkOption {
+          type = lib.types.ints.between 0 14;
+          default = 3;
+          description = ''
+            Index into SonoBus's send format table (see the header). Sets
+            bitrate AND packet size, so it is the Wi-Fi lever as well as the
+            quality one. 3 is Opus 64 kbps/ch on 240-sample blocks.
+          '';
+        };
+      };
+      # `options` is present, so the rest has to sit under `config`.
+      config.home.activation.sonobusSendPath = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         # Patching underneath a running SonoBus is worse than not patching:
         # a clean quit writes its in-memory settings back over the file, so
         # the patch is silently lost and the next launch reads the OLD

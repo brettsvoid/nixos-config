@@ -16,10 +16,6 @@ in
           agenix
           common
           defaults
-          # This host only: it is the wireless end of the SonoBus bridge, so
-          # it is the one that pays for AWDL sharing the Wi-Fi radio. The
-          # mini is wired and would lose Continuity for nothing.
-          continuity
           users
           openssh
           homebrew
@@ -185,6 +181,10 @@ in
             # `select-scheme` picks survive later rebuilds.
             local.wallpaper.default = "chisato_petals_of_silence_4k.jpg";
             local.edgebar.scheme = "scheme-tonal-spot";
+
+            # This end of the SonoBus bridge sends the call/music audio that
+            # ends up in the headset, NOT a microphone, so it stays stereo.
+            local.sonobus.sendChannels = "stereo";
 
             # ─── Workspace assignment (this machine only) ──────────────
             # Captured from a live layout with:

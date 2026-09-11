@@ -226,6 +226,10 @@ in
             local.wallpaper.default = "chisato_petals_of_silence_4k.jpg";
             local.edgebar.scheme = "scheme-tonal-spot";
 
+            # This end sends the PRO X headset's microphone, which captures
+            # mono — stereo just duplicated a channel at double the bitrate.
+            local.sonobus.sendChannels = "mono";
+
             home = {
               inherit username;
               homeDirectory = "/Users/brett";
