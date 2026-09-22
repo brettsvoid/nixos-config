@@ -170,6 +170,7 @@ in
               apps-fnm
               apps-obsidian
               apps-blender
+              apps-netwatch
               profile-base
               profile-code
               profile-work

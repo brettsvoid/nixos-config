@@ -214,6 +214,7 @@ in
               apps-sesh
               apps-fnm
               apps-lspmux
+              apps-netwatch
               profile-base
               profile-code
               profile-work
