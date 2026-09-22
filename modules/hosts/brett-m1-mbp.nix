@@ -119,7 +119,6 @@ in
             # before the devices appear.
             "blackhole-16ch"
             "blackhole-2ch"
-            "godot"
             "mqtt-explorer"
             # This end of the audio bridge above; the mini declares its own.
             "sonobus"
@@ -170,6 +169,7 @@ in
               apps-fnm
               apps-obsidian
               apps-blender
+              apps-godot
               apps-netwatch
               profile-base
               profile-code
