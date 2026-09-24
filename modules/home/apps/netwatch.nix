@@ -114,6 +114,8 @@ _: {
         # No EnvironmentVariables.PATH needed: every external tool the script
         # shells out to (route, ifconfig, ipconfig, networksetup, scutil) lives
         # in /sbin or /usr/sbin, which are already in launchd's default PATH.
+        # The one exception, Homebrew's terminal-notifier for configd alerts,
+        # is called by absolute path.
         launchd.agents.netwatch = {
           enable = true;
           config = {

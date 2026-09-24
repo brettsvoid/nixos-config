@@ -14,6 +14,9 @@ resolver, not the network. Running this on a wired host and a wireless one at
 the same time is what separates "the router/mains died" from "the radio
 stalled" — that comparison is the whole point of the tool.
 
+It also watches for the reports macOS writes when configd, which owns routes,
+DNS and interface state, hangs or crashes, and raises a notification.
+
 No privileges needed: Darwin allows unprivileged ICMP through
 SOCK_DGRAM/IPPROTO_ICMP, provided we compute the checksum ourselves.
 """
@@ -233,6 +236,127 @@ def link_snapshot(iface):
     return "active" if re.search(r"status:\s*active", st) else "inactive"
 
 
+# --------------------------------------------------------------- configd
+
+
+REPORTS_DIR = "/Library/Logs/DiagnosticReports"
+CONFIGD_POLL_S = 15.0
+
+# terminal-notifier rather than osascript: macOS ties notification permission
+# to the delivering app, and both Macs have already granted it to this
+# Homebrew copy (see homebrew.nix). An absolute path, because launchd's default
+# PATH does not include /opt/homebrew/bin.
+NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
+
+
+def notify(title, message):
+    """Post a desktop notification, and never fail the caller over it.
+
+    The log line is the record. This is only the tap on the shoulder.
+    """
+    try:
+        subprocess.run(
+            [NOTIFIER, "-title", title, "-message", message, "-sound", "default"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def report_kind(name):
+    """'crash' for an .ips, else the kind macOS names in the file's suffix.
+
+    configd_2026-09-24-110938_brett-m1-mbp.userspace_watchdog_timeout.spin
+    reads as "userspace watchdog timeout".
+    """
+    if name.endswith(".ips"):
+        return "crash"
+    m = re.search(r"\.([a-z_]+)\.(?:spin|diag)$", name)
+    return m.group(1).replace("_", " ") if m else "report"
+
+
+class ConfigdWatch:
+    """Announce every new report macOS writes about configd.
+
+    configd owns routes, DNS and interface state. On 24 Sep 2026 its
+    IPMonitorQueue blocked in the kernel two minutes into a 3.5-minute outage
+    in which the Mac stopped transmitting while its radio stayed healthy. The
+    only trace was a userspace_watchdog_timeout report and two crash reports,
+    found by hand afterwards, so this goes looking for them.
+
+    It is an after-the-fact signal: that report was written two minutes after
+    traffic stopped. The .ips crash reports also get moved away within minutes
+    of being written, which is why this polls rather than waiting to be asked.
+
+    The newest report seen is kept on disk. A hang bad enough to need a
+    restart writes its reports before the restart, and they should still be
+    announced when the agent comes back.
+    """
+
+    PATTERN = re.compile(r"^configd[-_.]")
+
+    def __init__(self, outdir, reports_dir, say):
+        self.reports_dir, self.say = reports_dir, say
+        self.state = os.path.join(outdir, "configd-seen")
+        try:
+            with open(self.state) as f:
+                self.seen = float(f.read())
+        except (OSError, ValueError):
+            # First run: reports written before netwatch looked are history,
+            # not news.
+            self.seen = time.time()
+            self._save()
+
+    def _save(self):
+        with open(self.state, "w") as f:
+            f.write("%.6f\n" % self.seen)
+
+    def check(self):
+        try:
+            names = os.listdir(self.reports_dir)
+        except OSError:
+            return
+        new = []
+        for name in names:
+            if not self.PATTERN.match(name):
+                continue
+            try:
+                st = os.stat(os.path.join(self.reports_dir, name))
+            except OSError:
+                continue  # moved away between listdir and stat
+            # Birth, not modification: a report touched again later is not a
+            # new hang.
+            born = getattr(st, "st_birthtime", st.st_mtime)
+            if born > self.seen:
+                new.append((born, name))
+        if not new:
+            return
+        new.sort()
+        for born, name in new:
+            self.say(
+                "\033[35m%s  CONFIGD  %s  %s/%s\033[0m"
+                % (
+                    datetime.fromtimestamp(born).strftime("%H:%M:%S"),
+                    report_kind(name),
+                    self.reports_dir,
+                    name,
+                ),
+                always=True,
+            )
+        # One notification per sweep: a single hang writes several reports
+        # within a minute, and one alert says all that needs saying.
+        born, name = new[0]
+        more = " (+%d more)" % (len(new) - 1) if len(new) > 1 else ""
+        notify(
+            "netwatch: configd %s" % report_kind(name),
+            "%s%s. Networking may stall. See /tmp/netwatch.log."
+            % (datetime.fromtimestamp(born).strftime("%H:%M:%S"), more),
+        )
+        self.seen = new[-1][0]
+        self._save()
+
+
 # --------------------------------------------------------------- watcher
 
 
@@ -265,7 +389,9 @@ def classify(target, concurrent, n_targets):
 
 
 class Watcher:
-    def __init__(self, targets, outdir, interval, timeout, trip, iface, quiet, retain):
+    def __init__(
+        self, targets, outdir, interval, timeout, trip, iface, quiet, retain, reports_dir
+    ):
         self.targets = targets
         self.interval, self.timeout, self.trip = interval, timeout, trip
         self.iface, self.quiet, self.retain = iface, quiet, retain
@@ -288,6 +414,7 @@ class Watcher:
             # link behaves, and a SIGKILL loses it entirely.
             self.ef.flush()
         self._roll()
+        self.configd = ConfigdWatch(outdir, reports_dir, self._say)
 
     # ---------------- files
 
@@ -474,13 +601,20 @@ class Watcher:
                 )
                 sys.stdout.flush()
 
+    def _watch_configd(self):
+        # Its own thread: the notifier is a subprocess that can take seconds,
+        # and the aggregator must not miss a second of samples waiting on it.
+        while not self.stop.wait(CONFIGD_POLL_S):
+            self.configd.check()
+
     def run(self):
         probers = [
             threading.Thread(target=self._run_target, args=(n, p), daemon=True)
             for n, p in self.targets.items()
         ]
         agg = threading.Thread(target=self._aggregate, daemon=True)
-        for t in probers + [agg]:
+        cfg = threading.Thread(target=self._watch_configd, daemon=True)
+        for t in probers + [agg, cfg]:
             t.start()
         signal.signal(signal.SIGINT, lambda *_: self.stop.set())
         signal.signal(signal.SIGTERM, lambda *_: self.stop.set())
@@ -768,6 +902,8 @@ def main():
     ap.add_argument("--burst", type=float, metavar="SECONDS", default=None,
                     help="high-rate profile of the air hop, then exit")
     ap.add_argument("--burst-interval", type=float, default=0.02)
+    ap.add_argument("--reports-dir", default=REPORTS_DIR,
+                    help="where macOS writes crash and watchdog reports (for testing)")
     args = ap.parse_args()
 
     if args.report:
@@ -792,7 +928,7 @@ def main():
     print("probing every %.2fs; a drop is %d consecutive failures (~%.2fs); -> %s\n"
           % (args.interval, args.trip, args.trip * args.interval, args.outdir))
     Watcher(targets, args.outdir, args.interval, args.timeout, args.trip,
-            iface, args.quiet, args.retain_days).run()
+            iface, args.quiet, args.retain_days, args.reports_dir).run()
 
 
 if __name__ == "__main__":
