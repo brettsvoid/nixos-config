@@ -137,6 +137,10 @@ in
             "yarn"
           ];
           casks = [
+            # Mini only: removed from brett-m1-mbp on 2026-09-25 to free
+            # 20 GB. Kept here so the authoritative cleanup does not also
+            # uninstall it from this machine; drop it to remove it here too.
+            "anaconda"
             "discord"
             "git-credential-manager"
             "github"

@@ -52,6 +52,7 @@ return {
 
 			ensure_installed = {
 				-- Update this to ensure that you have the debuggers for the langs you want
+				"python", -- debugpy, used by dap-python below
 			},
 		})
 
@@ -111,7 +112,7 @@ return {
 		require("dap-go").setup({})
 
 		-- Install python specific config
-		require("dap-python").setup("/opt/homebrew/anaconda3/bin/python")
+		require("dap-python").setup(vim.fn.stdpath("data") .. "/mason/packages/debugpy/venv/bin/python")
 
 		dap.configurations.python = {
 			{

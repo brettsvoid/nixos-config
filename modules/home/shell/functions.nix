@@ -48,20 +48,6 @@ _: {
               curl "cht.sh/$selected~$query"
             fi
           }
-
-          # Conda lazy-loader: only invoke conda's slow init when first used.
-          conda() {
-            unset -f conda
-            if [ -f "/opt/homebrew/anaconda3/etc/profile.d/conda.sh" ]; then
-              . "/opt/homebrew/anaconda3/etc/profile.d/conda.sh"
-            else
-              __setup="$('/opt/homebrew/anaconda3/bin/conda' 'shell.zsh' 'hook' 2>/dev/null)"
-              [ $? -eq 0 ] && eval "$__setup" || \
-                export PATH="/opt/homebrew/anaconda3/bin:$PATH"
-              unset __setup
-            fi
-            conda "$@"
-          }
         ''
         + lib.optionalString pkgs.stdenv.isDarwin ''
 

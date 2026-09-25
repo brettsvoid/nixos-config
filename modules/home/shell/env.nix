@@ -21,7 +21,6 @@ _: {
       // lib.optionalAttrs pkgs.stdenv.isDarwin {
         ANDROID_HOME = "$HOME/Library/Android/sdk";
         PNPM_HOME = "$HOME/Library/pnpm";
-        CONDA_BASE = "/opt/homebrew/anaconda3";
       };
 
       # Secrets bootstrap. ~/.env_vars is an untracked, plaintext file

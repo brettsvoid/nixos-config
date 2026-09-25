@@ -252,7 +252,6 @@ _: {
         # excluded here so brew bundle doesn't fail on them.
         casks = [
           "amethyst"
-          "anaconda"
           "bitwarden"
           "burp-suite"
           "dbeaver-community"
