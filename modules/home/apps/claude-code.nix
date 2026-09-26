@@ -80,7 +80,7 @@
           # session" and changes nothing. Max everywhere, no per-session
           # drift. Drop this line to get `/effort` back — effortLevel below
           # then applies, capped at xhigh.
-          CLAUDE_CODE_EFFORT_LEVEL = "xhigh";
+          # CLAUDE_CODE_EFFORT_LEVEL = "xhigh";
         };
 
         permissions = {
@@ -158,18 +158,18 @@
         # (or from trying it). It points into the store and is unwritable, so
         # replace it with a real file rather than merging through it.
         if [ -L "$live" ]; then
-          rm -f "$live"
+            rm -f "$live"
         fi
 
-        [ -s "$live" ] || printf '{}\n' > "$live"
+        [ -s "$live" ] || printf '{}\n' >"$live"
 
-        if ! ${jq} -e . "$live" > /dev/null 2>&1; then
-          echo "claude-code: $live is not valid JSON — leaving it untouched." >&2
-          exit 0
+        if ! ${jq} -e . "$live" >/dev/null 2>&1; then
+            echo "claude-code: $live is not valid JSON — leaving it untouched." >&2
+            exit 0
         fi
 
         tmp="$(mktemp "$live.XXXXXX")"
-        ${jq} -s '.[0] * .[1]' "$live" ${settingsJson} > "$tmp"
+        ${jq} -s '.[0] * .[1]' "$live" ${settingsJson} >"$tmp"
         mv -f "$tmp" "$live"
         chmod 644 "$live"
       '';
