@@ -170,6 +170,9 @@ in
         };
       };
 
+      # In the wallpaper picker next to desktop-wallpapers' images.
+      home.file."Pictures/Wallpapers/crimson-ronin-4k.png".source = wallpaper;
+
       # Seed the scheme and wallpaper once and never overwrite them: both can
       # be changed from inside the shell, and a rebuild must not undo that.
       # `caelestia scheme set -n crimsonronin` restores the palette.
