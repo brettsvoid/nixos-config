@@ -148,6 +148,7 @@ in
                 desktop-wallpapers
                 desktop-custom-shell
                 desktop-caelestia
+                desktop-game-launcher
                 nvim
                 apps-firefox
                 apps-git
