@@ -64,8 +64,9 @@ show up as a failed hook rather than being ignored outright.
 
 ## Migrate Firefox to the XDG config path (brett-msi-laptop only)
 
-**Do this on the MSI laptop.** It is the only host importing `apps-firefox`;
-neither Mac is affected (macOS has its own `Library/Application Support/Firefox`
+**Do this on the MSI laptop.** brett-desktop also imports `apps-firefox`, but
+it was installed after the change and sets the XDG path explicitly, so it has
+nothing to migrate. Neither Mac is affected (macOS has its own `Library/Application Support/Firefox`
 path, and home-manager excludes Darwin from the warning entirely).
 
 ### Why
@@ -158,6 +159,56 @@ Restore from the tarball in step 2 and revert step 5:
 rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/mozilla/firefox"
 tar -C ~ -xzf ~/mozilla-firefox-backup-<date>.tar.gz
 ```
+
+---
+
+## USB device that never enumerates (brett-desktop only)
+
+**Do this at the desktop.** It needs hands on the cables.
+
+### Why
+
+Every boot, including the installer's, the kernel logs this 4 times each:
+
+```
+usb 1-9.3: device descriptor read/64, error -110
+usb 1-9.3: device descriptor read/8, error -110
+```
+
+`-110` is a timeout: something on **port 3 of hub `1-9`** answers the first
+electrical handshake but never sends its descriptor, so it is never set up.
+Hub `1-9` is a Genesys Logic USB 2.1 hub (`05e3:0610`), the same one the
+Moonlander (`1-9.1`) and the Logitech receiver (`1-9.2`) are on. It pairs with
+a Genesys USB 3.1 hub (`05e3:0626`, `2-8`), so it is the USB 2 half of one
+physical USB 3 hub. Which hub that is (a monitor's built-in hub or a separate
+one) is not known yet.
+
+**It locks out the keyboard and mouse for about 2 minutes after every boot.**
+The kernel retries the port until it gives up (`unable to enumerate USB
+device`, ~131 s after boot). Meanwhile the udev worker for hub `1-9` is stuck
+("taking a long time"), and udev holds back the hub's child devices until it
+finishes, so the Moonlander and the mouse are not set up yet. If Hyprland
+starts in that window, libinput logs `skip unconfigured input device` for them
+and there is no keyboard or mouse until udev catches up. Seen on the first
+Hyprland login, 2026-09-27. Whether the device works in Windows is not known.
+
+### Steps
+
+1. Find the physical hub: it is the one the Moonlander and the Logitech
+   receiver are plugged into. Note what is in its other ports.
+2. Watch the kernel log live while unplugging those other devices one at a
+   time. The errors stop, or a `USB disconnect` for `1-9.3` shows, when the
+   right one comes out:
+
+   ```sh
+   journalctl -kf | grep --line-buffered 'usb 1-9'
+   ```
+
+3. With the culprit found, try a different cable, then a port directly on the
+   motherboard. If it still fails there, the device itself is faulty or needs a
+   driver. Check `lsusb` for its ID once it enumerates somewhere.
+4. If the port is empty, the fault is the hub (or a device built into it). Try
+   another upstream port or cable for the hub.
 
 ---
 

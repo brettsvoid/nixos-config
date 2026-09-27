@@ -1,13 +1,19 @@
 # MSI MAG Z590 Tomahawk WiFi desktop — i7-11700K, NVIDIA RTX 3080 Ti, btrfs
 # root on its own NVMe (Crucial P1). Dual-boots Windows, which lives on a
-# different NVMe with its own ESP; pick it from the firmware boot menu (F11).
-#
-# CLI-only for now. The desktop stack (greetd, Hyprland, ambxst) and
-# profile-gaming come next, once modules/home/desktop/hyprland.nix stops
-# hard-coding the laptop's monitors and Optimus workarounds.
+# different NVMe with its own ESP and has its own entry in the systemd-boot
+# menu. Hyprland desktop (greetd + ambxst) and the gaming profile.
 { config, inputs, ... }:
 let
   username = config.flake.lib.username;
+
+  # Monitors are matched by description (make, model, serial from the EDID),
+  # not by connector, so swapping DP cables (e.g. to get the BIOS onto the
+  # landscape screen) does not reshuffle the layout. Copied from
+  # `hyprctl monitors`: the Dell's model string repeats "Dell", and its
+  # serial starts with "#", which hyprlang reads as a comment unless it is
+  # doubled. Unescaped, the rule silently matched nothing (60 Hz, unrotated).
+  odyssey = "desc:Samsung Electric Company Odyssey G5 HK7X700060";
+  dell = "desc:Dell Inc. Dell AW2518H ##ASO0Wsxq3xLd";
 in
 {
   flake.nixosConfigurations.brett-desktop = inputs.nixpkgs.lib.nixosSystem {
@@ -17,6 +23,7 @@ in
     };
     modules = [
       inputs.home-manager.nixosModules.home-manager
+      inputs.ambxst.nixosModules.default
       ../../hardware/desktop.nix
       {
         imports = with config.flake.modules.nixos; [
@@ -28,9 +35,12 @@ in
           bluetooth
           audio
           nvidia
+          greetd
           openssh
+          hyprland
           profile-base
           profile-code
+          profile-gaming
         ];
 
         # ─── Identity ──────────────────────────────────────────────────
@@ -70,6 +80,14 @@ in
         # no nvidia-prime.
         hardware.nvidia.open = true;
 
+        # Stable name for the 3080 Ti's DRM node, for AQ_DRM_DEVICES below.
+        # /dev/dri/cardN numbering is not stable (it was card0 in the
+        # installer and card1 after install), and the by-path names contain
+        # colons, which AQ_DRM_DEVICES uses as its list separator.
+        services.udev.extraRules = ''
+          KERNEL=="card*", KERNELS=="0000:01:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
+        '';
+
         # ─── Memory ────────────────────────────────────────────────────
         # Compressed swap in RAM (zstd, up to 50% of the 32 GB). No swap
         # partition: a desktop has no need to hibernate.
@@ -101,18 +119,71 @@ in
               shell-starship
               shell-tools
               apps-nh
+              terminals-kitty
+              terminals-ghostty
               terminals-tmux
               terminals-herdr
+              desktop-hyprland
+              desktop-hyprlock
+              desktop-ambxst
+              desktop-media-player
+              desktop-wallpapers
+              desktop-custom-shell
               nvim
+              apps-firefox
               apps-git
               apps-ssh
+              apps-cursor
+              apps-spotify
+              apps-fonts
               profile-base
               profile-code
+              profile-gaming
             ];
             home = {
               inherit username;
               homeDirectory = "/home/brett";
             };
+
+            # Firefox profile under XDG from the start. This home was new at
+            # install, so there is no ~/.mozilla to migrate (see the laptop's
+            # entry in docs/TODO.md), and home.stateVersion "24.11" would
+            # otherwise keep the legacy path.
+            programs.firefox.configPath = ".config/mozilla/firefox";
+
+            # Render only on the 3080 Ti. It drives both monitors; the iGPU
+            # drives nothing, so it is left out entirely. The symlink comes
+            # from the udev rule above.
+            wayland.windowManager.hyprland.settings.env = [
+              "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
+            ];
+
+            # Odyssey G5 (27", landscape) on the left; Dell AW2518H (24.5")
+            # on the right, turned 90° clockwise so its top edge faces right.
+            # transform 1 rotates the picture 90° counter-clockwise to match.
+            # Rotated, the Dell is 1080x1920; the Odyssey sits 240 px down so
+            # the two are centred on each other. The Dell's EDID prefers
+            # 60 Hz, so its 240 Hz mode has to be asked for.
+            wayland.windowManager.hyprland.settings.monitor = [
+              "${odyssey}, 2560x1440@165, 0x240, 1"
+              "${dell}, 1920x1080@240, 2560x0, 1, transform, 1"
+            ];
+
+            # 1–5 on the Odyssey, 6–10 on the Dell. persistent:true keeps a
+            # workspace alive while its monitor is off, so apps land on the
+            # other screen instead of an invisible orphan.
+            wayland.windowManager.hyprland.settings.workspace = [
+              "1, monitor:${odyssey}, default:true, persistent:true"
+              "2, monitor:${odyssey}, persistent:true"
+              "3, monitor:${odyssey}, persistent:true"
+              "4, monitor:${odyssey}, persistent:true"
+              "5, monitor:${odyssey}, persistent:true"
+              "6, monitor:${dell}, default:true, persistent:true"
+              "7, monitor:${dell}, persistent:true"
+              "8, monitor:${dell}, persistent:true"
+              "9, monitor:${dell}, persistent:true"
+              "10, monitor:${dell}, persistent:true"
+            ];
           };
         };
       }
