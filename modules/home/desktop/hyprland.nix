@@ -6,7 +6,7 @@ let
 in
 {
   flake.modules.homeManager.desktop-hyprland =
-    { pkgs, ... }:
+    { config, pkgs, ... }:
     let
       hypr-cheatsheet = pkgs.writeShellScriptBin "hypr-cheatsheet" ''
         hyprctl binds -j | ${pkgs.jq}/bin/jq -r '
@@ -101,6 +101,27 @@ in
           name = "Papirus-Dark";
           package = pkgs.papirus-icon-theme.override { color = "carmine"; };
         };
+      };
+
+      # The freedesktop user dirs (Desktop, Documents, Downloads, …), declared
+      # in ~/.config/user-dirs.dirs so file pickers, browsers and screenshot
+      # tools agree on them. Without the file, nothing had created the set:
+      # ~/Downloads came from a browser download, ~/Pictures from
+      # desktop-wallpapers. The standard capitalised names match macOS, and
+      # Pictures/Wallpapers is hard-coded elsewhere in this repo.
+      #
+      # Here rather than in a shared module because only the Linux desktop
+      # reads the file; macOS has its own fixed folders.
+      xdg.userDirs = {
+        enable = true;
+        createDirectories = true;
+        # The module defaults to ~/Projects. Projects live in lowercase
+        # ~/projects, the ghq root in apps-git.
+        projects = "${config.home.homeDirectory}/projects";
+        # No desktop icons and no LAN file sharing on a tiling setup. null
+        # leaves them out of user-dirs.dirs, so they are not created either.
+        desktop = null;
+        publicShare = null;
       };
 
       wayland.windowManager.hyprland = {
