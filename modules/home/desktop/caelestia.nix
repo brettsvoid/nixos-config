@@ -55,6 +55,11 @@ in
         }
       );
       wallpaper = "${ronin}/assets/crimson-ronin-4k.png";
+
+      roninGtk = pkgs.runCommand "crimson-ronin-gtk-theme" { } ''
+        mkdir -p $out/share/themes
+        cp -r ${ronin}/themes/gtk/CrimsonRonin $out/share/themes/
+      '';
     in
     {
       imports = [ inputs.caelestia-shell.homeManagerModules.default ];
@@ -179,6 +184,20 @@ in
             || echo "caelestia: could not seed the wallpaper" >&2
         fi
       '';
+
+      # Crimson Ronin's GTK theme for GTK 3 apps — Thunar, and Firefox's
+      # window chrome — which otherwise fall back to light Adwaita here. GTK 4
+      # is left unset on purpose: given a theme package, home-manager takes
+      # over gtk-4.0/gtk.css, and ambxst writes its colours into that file.
+      # GTK 3's gtk.css stays ambxst's too (home-manager only writes it for
+      # gtk3.extraCss).
+      gtk = {
+        enable = true;
+        gtk3.theme = {
+          name = "CrimsonRonin";
+          package = roninGtk;
+        };
+      };
 
       wayland.windowManager.hyprland.settings = {
         # Caelestia's panels are Hyprland global shortcuts; they do nothing

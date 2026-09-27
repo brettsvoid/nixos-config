@@ -211,6 +211,7 @@ in
             "$mod, Q, Open terminal (Kitty), exec, kitty"
             "$mod, C, Close active window, killactive"
             "$mod, R, App launcher (Fuzzel), exec, fuzzel"
+            "$mod, E, File manager (Thunar), exec, thunar"
             "$mod, F, Toggle fullscreen, fullscreen"
             "$mod, V, Toggle floating, togglefloating"
             "$mod, M, Exit Hyprland, exit"

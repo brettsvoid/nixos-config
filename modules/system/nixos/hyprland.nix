@@ -10,6 +10,17 @@ _: {
         hyprland.enable = true;
         hyprlock.enable = true;
         ambxst.enable = true;
+        # File manager; also what Caelestia opens folders with
+        # (general.apps.explorer defaults to thunar). Super+E.
+        thunar.enable = true;
+      };
+
+      # Thunar's companions: gvfs for trash, removable drives and network
+      # locations; tumbler for thumbnails (without it Thunar logs
+      # "ThunarThumbnailer: … not activatable" and shows none).
+      services = {
+        gvfs.enable = true;
+        tumbler.enable = true;
       };
 
       xdg.portal.config.common.default = "*";
