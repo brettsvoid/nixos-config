@@ -31,6 +31,7 @@ in
             greetd
             openssh
             hyprland
+            apps-claude-code
             profile-base
             profile-code
             profile-gaming
@@ -154,6 +155,7 @@ in
                 apps-cursor
                 apps-spotify
                 apps-fonts
+                apps-claude-code
                 profile-base
                 profile-code
                 profile-gaming

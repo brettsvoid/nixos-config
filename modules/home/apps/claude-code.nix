@@ -15,11 +15,26 @@
 #   * The config IS declarative, and this host (brett-mac-mini) is the
 #     reference the MacBook follows.
 #
+# The NixOS hosts use the same native build, which is why this file also has
+# a NixOS half (nix-ld, below). Import both halves there.
+#
 # What is NOT managed here: everything under ~/.claude that Claude Code writes
 # at runtime — sessions/, projects/, history.jsonl, .credentials.json, plugins/
 # (marketplace clones), statsig/, todos/. Those are state, not config.
 { inputs, ... }:
 {
+  # The native Linux build is a generic glibc binary: its interpreter is
+  # /lib64/ld-linux-x86-64.so.2, and it needs only libc, libm, libdl,
+  # libpthread and librt. NixOS has no loader at that path, only a stub
+  # that refuses to start anything, so without nix-ld the installer and
+  # every self-update would download a binary that cannot run. nix-ld sets
+  # NIX_LD for login sessions only, but it falls back to the same default
+  # loader when NIX_LD is unset (nix-ld 2.0.6, src/main.rs), so the install
+  # also works from home-manager's activation service.
+  flake.modules.nixos.apps-claude-code = {
+    programs.nix-ld.enable = true;
+  };
+
   flake.modules.homeManager.apps-claude-code =
     {
       config,
@@ -32,6 +47,54 @@
       nativeBin = "${config.home.homeDirectory}/.local/bin/claude";
 
       jq = lib.getExe pkgs.jq;
+
+      # Both Macs import apps-worktrunk; the NixOS hosts do not. The status
+      # line and the worktrunk plugin below both call `wt`.
+      hasWorktrunk = pkgs.stdenv.isDarwin;
+
+      # ─── status line without worktrunk ─────────────────────────────────
+      # Only the last two cells of worktrunk's status line: the model name
+      # and the context gauge, e.g. `Opus 5.5 (1M context)  🌕 44%`. Same
+      # thresholds and format as format_context_gauge in worktrunk 0.71.0
+      # (src/commands/statusline.rs). The moon wanes 🌕→🌑 as the context
+      # fills and is picked from the percentage clamped to 0–100 and
+      # truncated. The number shown is the unclamped value rounded half to
+      # even, which is what Rust's {:.0} does and what printf does too.
+      # Before the first reply there is no used_percentage, and worktrunk
+      # then leaves the gauge out, so this does too.
+      modelAndGauge = pkgs.writeShellScript "claude-code-statusline" ''
+        export LC_NUMERIC=C
+
+        {
+          IFS= read -r model
+          IFS= read -r moon
+          IFS= read -r pct
+        } < <(${jq} -r '
+          (.model.display_name // ""),
+          (.context_window.used_percentage as $p
+            | if $p == null then "", ""
+              else
+                ($p | if . < 0 then 0 elif . > 100 then 100 else . end | floor) as $c
+                | (if $c <= 51 then "🌕"
+                   elif $c <= 77 then "🌔"
+                   elif $c <= 90 then "🌓"
+                   elif $c <= 97 then "🌒"
+                   else "🌑" end),
+                  $p
+              end)
+        ')
+
+        cells=()
+        [ -n "$model" ] && cells+=("$model")
+        [ -n "$moon" ] && cells+=("$moon $(printf '%.0f' "$pct")%")
+
+        # Two spaces between cells, as worktrunk joins them.
+        out=""
+        for cell in "''${cells[@]}"; do
+          out+="''${out:+  }$cell"
+        done
+        printf '%s\n' "$out"
+      '';
 
       # ─── settings.json ────────────────────────────────────────────────
       # Deliberately NOT `programs.claude-code.settings`. That option writes
@@ -104,12 +167,12 @@
         };
 
         # worktrunk's own status line — branch, worktree and merge state for
-        # the checkout the session is in. Both Macs import apps-worktrunk, so
-        # `wt` resolves on either; this would render an error line on a host
-        # that did not.
+        # the checkout the session is in, then the model and context gauge.
+        # Where there is no `wt` it would render an error line, so those
+        # hosts get the model and gauge alone (modelAndGauge above).
         statusLine = {
           type = "command";
-          command = "wt list statusline --format=claude-code";
+          command = if hasWorktrunk then "wt list statusline --format=claude-code" else "${modelAndGauge}";
         };
 
         # Written by `/plugin` rather than by hand, but shared on purpose:
@@ -117,14 +180,23 @@
         # what makes a fresh machine come up with them already on. The
         # marketplace CLONE is still runtime state under ~/.claude/plugins —
         # Claude fetches it on first use from the source registered here.
+        #
+        # The worktrunk plugin only where `wt` is installed. Every one of its
+        # hooks calls `wt`, and its WorktreeCreate hook replaces Claude's own
+        # worktree creation with `wt switch --create`, so without `wt` the
+        # `--worktree` flag would stop working.
         enabledPlugins = {
           "rust-analyzer-lsp@claude-plugins-official" = true;
           "typescript-lsp@claude-plugins-official" = true;
+        }
+        // lib.optionalAttrs hasWorktrunk {
           "worktrunk@worktrunk" = true;
         };
-        extraKnownMarketplaces.worktrunk.source = {
-          source = "github";
-          repo = "max-sixty/worktrunk";
+        extraKnownMarketplaces = lib.optionalAttrs hasWorktrunk {
+          worktrunk.source = {
+            source = "github";
+            repo = "max-sixty/worktrunk";
+          };
         };
 
         # `/config` toggles. Shared because they are preferences, not machine
@@ -252,6 +324,11 @@
         // flattenBuckets "${inputs.mattpocock-skills}/skills"
         // localSkills;
       };
+
+      # The installer puts the launcher in ~/.local/bin. The Macs have that on
+      # PATH from shell/env.nix, which the NixOS hosts do not import, so
+      # without this the native build would be installed but never found.
+      home.sessionPath = lib.mkIf pkgs.stdenv.isLinux [ "$HOME/.local/bin" ];
 
       home.activation = {
         claudeCodeNative = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
