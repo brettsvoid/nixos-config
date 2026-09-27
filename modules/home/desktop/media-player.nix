@@ -1,3 +1,10 @@
+# Now-playing card: a Quickshell panel at the top centre of every screen that
+# follows the active MPRIS player (track, progress, play/pause/next) and
+# collapses to a small pill. Themed from ambxst's colours.json.
+#
+# Currently no host imports it (disabled 27 Sep 2026). To bring it back, add
+# `desktop-media-player` to a host's home-manager imports; the module starts
+# itself from Hyprland's exec-once.
 _: {
   flake.modules.homeManager.desktop-media-player =
     { config, pkgs, ... }:
@@ -554,5 +561,7 @@ _: {
           exec qs -n -p "$HOME/.config/quickshell/media-player"
         '')
       ];
+
+      wayland.windowManager.hyprland.settings.exec-once = [ "media-player-widget" ];
     };
 }

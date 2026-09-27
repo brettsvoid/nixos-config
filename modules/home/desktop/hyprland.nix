@@ -109,7 +109,6 @@ in
           # ── Autostart ──────────────────────────────────────────────
           exec-once = [
             "ambxst" # bar, wallpaper, launcher, notifications
-            "media-player-widget"
             "sh -c 'sleep 3 && hyprctl reload'" # reload config after ambxst startup to restore keybinds
           ];
 

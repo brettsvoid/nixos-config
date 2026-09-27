@@ -145,7 +145,6 @@ in
                 desktop-hyprland
                 desktop-hyprlock
                 desktop-ambxst
-                desktop-media-player
                 desktop-wallpapers
                 desktop-custom-shell
                 nvim
