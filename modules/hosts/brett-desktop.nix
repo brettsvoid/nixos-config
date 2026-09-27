@@ -154,6 +154,7 @@ in
                 apps-ssh
                 apps-cursor
                 apps-spotify
+                apps-godot
                 apps-fonts
                 apps-claude-code
                 profile-base
