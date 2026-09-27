@@ -4,17 +4,23 @@ _: {
   flake.modules.homeManager.shell-tools =
     { lib, pkgs, ... }:
     {
-      home.packages = with pkgs; [
-        fd
-        ripgrep
-        jq
-        tree
-        tldr
-        dust
-        duf
-        procs
-        htop
-      ];
+      home.packages =
+        with pkgs;
+        [
+          fd
+          ripgrep
+          jq
+          tree
+          tldr
+          dust
+          duf
+          procs
+          htop
+        ]
+        # Terminal file manager, for the `yy` function (shell/functions.nix)
+        # and yazi.nvim. The Macs get it from Homebrew
+        # (system/darwin/homebrew.nix).
+        ++ lib.optionals stdenv.isLinux [ yazi ];
 
       programs = {
         eza = {
