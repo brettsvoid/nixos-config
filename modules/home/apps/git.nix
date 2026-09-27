@@ -135,6 +135,25 @@ _: {
       # Reads ghq.root / ghq.user from the settings above.
       home.packages = [ pkgs.ghq ];
 
+      # gh doubles as git's HTTPS credential helper for github.com and
+      # gist.github.com (gitCredentialHelper, on by default once enabled).
+      # Without it, `ghq get` of any PRIVATE repo failed: ghq clones over
+      # HTTPS and git had no credential to send. A `gh auth login` alone does
+      # not fix that — choosing SSH as the protocol skips the git wiring, and
+      # `gh auth setup-git` cannot write to the store-linked git config.
+      #
+      # Used to be a bare package in profile-code, which installed gh but left
+      # this helper unwritten.
+      #
+      # EACH HOST NEEDS `gh auth login` ONCE; the token is not in nix. Where no
+      # keyring is running (brett-desktop's Hyprland has none), gh saves it in
+      # plain text in ~/.config/gh/hosts.yml.
+      programs.gh = {
+        enable = true;
+        # Matches the SSH remotes already in use; the module default is https.
+        settings.git_protocol = "ssh";
+      };
+
       # Syntax-highlighting pager for diffs. Previously `delta` was installed by
       # profiles/code.nix but nothing ever pointed git at it, so it sat on PATH
       # unused — this is what actually wires it in.

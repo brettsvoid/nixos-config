@@ -10,7 +10,8 @@ _: {
       # nixpkgs package would lag behind it.
       home.packages = with pkgs; [
         # Git helpers
-        gh
+        # gh is installed by programs.gh in apps/git.nix, which also makes it
+        # git's HTTPS credential helper.
         lazygit
         git-lfs
 

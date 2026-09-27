@@ -166,7 +166,8 @@ _: {
         # because nix manages them (and the brew copy is redundant):
         # `direnv` (programs.direnv in profile-code), `aerospace` (a launchd
         # agent in system/darwin/window-manager-aerospace.nix);
-        # `gh`/`lazygit`/`git-delta`(→delta)/`git-lfs` (profile-code),
+        # `gh` (programs.gh in apps-git),
+        # `lazygit`/`git-delta`(→delta)/`git-lfs` (profile-code),
         # `bat`/`fd`/`dust`/`duf`/`procs`/`zoxide` (shell-tools),
         # `awscli`(→awscli2) (profile-work). The brew copies shadowed the
         # nix ones on PATH; removed here + `brew uninstall`d (cleanup=none).
