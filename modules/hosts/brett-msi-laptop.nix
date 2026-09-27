@@ -26,6 +26,7 @@ in
             thermal
             audio
             nvidia
+            nvidia-prime
             fan-control
             greetd
             openssh
@@ -54,6 +55,10 @@ in
               "nvidia_drm"
             ];
           };
+
+          # ─── GPU ───────────────────────────────────────────────────────
+          # Proprietary kernel module, as before the nvidia/nvidia-prime split.
+          hardware.nvidia.open = false;
 
           # ─── State version ─────────────────────────────────────────────
           # Pinned at install time; do NOT change without reading
