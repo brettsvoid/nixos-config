@@ -162,53 +162,114 @@ tar -C ~ -xzf ~/mozilla-firefox-backup-<date>.tar.gz
 
 ---
 
-## USB device that never enumerates (brett-desktop only)
+## Headset dongle that failed to enumerate at boot (brett-desktop only)
 
-**Do this at the desktop.** It needs hands on the cables.
+**Watch for it at the desktop.** It may already be fixed: see Status.
 
-### Why
+### Status
 
-Every boot, including the installer's, the kernel logs this 4 times each:
+Identified, and working since a replug. The device is the **Logitech PRO X
+Wireless headset dongle** (`046d:0aba`), plugged into the **KVM switch**:
+hub `1-9` (Genesys Logic USB 2.1, `05e3:0610`, the USB 2 half of the KVM's
+USB 3 hub, `05e3:0626` on `2-8`), port 3, next to the Moonlander (`1-9.1`) and
+the mouse's receiver (`1-9.2`). Unplugged and replugged on 2026-09-27, it
+enumerated at once, and on the next boot it came up at 5.6 s with no errors.
+The boot after that logged one `device descriptor read/64, error -32` (a
+stall, not the -110 timeout) and then found it at 10.4 s, so it is still not
+entirely clean behind the KVM, but it recovers on the first retry.
+If the -110 timeouts below ever come back, it is a boot-time problem behind the KVM:
+move the dongle to a motherboard port (unless it has to follow the KVM between
+machines).
+
+### Why it mattered
+
+On the boots where it failed, the kernel logged this 4 times each, installer
+included:
 
 ```
 usb 1-9.3: device descriptor read/64, error -110
 usb 1-9.3: device descriptor read/8, error -110
 ```
 
-`-110` is a timeout: something on **port 3 of hub `1-9`** answers the first
-electrical handshake but never sends its descriptor, so it is never set up.
-Hub `1-9` is a Genesys Logic USB 2.1 hub (`05e3:0610`), the same one the
-Moonlander (`1-9.1`) and the Logitech receiver (`1-9.2`) are on. It pairs with
-a Genesys USB 3.1 hub (`05e3:0626`, `2-8`), so it is the USB 2 half of one
-physical USB 3 hub. Which hub that is (a monitor's built-in hub or a separate
-one) is not known yet.
+`-110` is a timeout: the dongle answered the first electrical handshake but
+never sent its descriptor, so it was never set up and the headset had no
+audio device.
 
-**It locks out the keyboard and mouse for about 2 minutes after every boot.**
+**It also locked out the keyboard and mouse for about 2 minutes after boot.**
 The kernel retries the port until it gives up (`unable to enumerate USB
 device`, ~131 s after boot). Meanwhile the udev worker for hub `1-9` is stuck
 ("taking a long time"), and udev holds back the hub's child devices until it
 finishes, so the Moonlander and the mouse are not set up yet. If Hyprland
 starts in that window, libinput logs `skip unconfigured input device` for them
 and there is no keyboard or mouse until udev catches up. Seen on the first
-Hyprland login, 2026-09-27. Whether the device works in Windows is not known.
+Hyprland login, 2026-09-27. The same messages were printed over the tuigreet
+login screen; greetd.nix now sets `boot.consoleLogLevel = 3` so they stay in
+the journal.
 
-### Steps
+### Check
 
-1. Find the physical hub: it is the one the Moonlander and the Logitech
-   receiver are plugged into. Note what is in its other ports.
-2. Watch the kernel log live while unplugging those other devices one at a
-   time. The errors stop, or a `USB disconnect` for `1-9.3` shows, when the
-   right one comes out:
+```sh
+journalctl -k -b | grep 'usb 1-9.3'    # healthy: "New USB device found … 0aba"
+```
 
-   ```sh
-   journalctl -kf | grep --line-buffered 'usb 1-9'
-   ```
+Once it has stayed healthy for a while, delete this entry.
 
-3. With the culprit found, try a different cable, then a port directly on the
-   motherboard. If it still fails there, the device itself is faulty or needs a
-   driver. Check `lsusb` for its ID once it enumerates somewhere.
-4. If the port is empty, the fault is the hub (or a device built into it). Try
-   another upstream port or cable for the hub.
+---
+
+## Migrate the Hyprland config from hyprlang to Lua (Linux hosts)
+
+**Do this on a Linux host**, and test on both brett-desktop and
+brett-msi-laptop before relying on it.
+
+### Why
+
+Hyprland 0.56 shows a warning at login that the `.conf` (hyprlang) format will
+not be supported going forward. It still works and there are no config
+errors, so nothing is broken today. `modules/home/desktop/hyprland.nix` pins
+`configType = "hyprlang"` on purpose: home-manager 26.05 defaults to `"lua"`,
+but the `settings` block is hyprlang, so switching means rewriting the config,
+not flipping the flag. It becomes forced when a Hyprland release drops
+hyprlang.
+
+### The traps
+
+- **Host files too.** Each host adds monitors, workspaces and env in
+  hyprlang syntax: all of it moves with the shared module.
+- **The laptop's `source` line.** brett-msi-laptop sources
+  `/tmp/hypr-drm-devices.conf`, a hyprlang fragment written at boot by its
+  `hyprland-drm-config` service. A Lua config cannot source that. Either have
+  the service write Lua, or replace it with the udev-symlink approach
+  brett-desktop uses for `AQ_DRM_DEVICES` (`/dev/dri/nvidia-dgpu`).
+- **The `##` escape is hyprlang-only.** brett-desktop's Dell description has
+  its `#` doubled because hyprlang treats `#` as a comment. In a Lua string it
+  must be a single `#` again, or the rule stops matching.
+- **Stray `hyprland.lua` files.** Hyprland prefers `hyprland.lua` over
+  `hyprland.conf`, and writes a default one if it ever starts with no config.
+  Check `~/.config/hypr/` for leftovers (brett-desktop has a renamed
+  `hyprland.lua.autogenerated` that can be deleted).
+
+---
+
+## Replace tuigreet with a graphical greeter (Linux hosts)
+
+**Do this on brett-desktop**, where the problem shows. It changes the shared
+`greetd` module, so check the laptop afterwards.
+
+### Why
+
+tuigreet draws on the kernel text console. With two monitors of different
+resolutions the console runs at a mode both can show: on brett-desktop that is
+1920x1080 (the Dell's maximum) on a 2560x1440 framebuffer, so the login screen
+fills only part of the Odyssey. The console is also not rotated for the
+portrait Dell. Hyprland itself is unaffected.
+
+### Options
+
+nixpkgs has `services.displayManager.regreet` (formerly `programs.regreet`),
+which points greetd's `default_session` at ReGreet running inside the `cage`
+compositor. Check how cage handles two monitors and the rotated Dell before
+switching. The session list and remembered user that tuigreet provides
+(`--sessions`, `--remember`) need an equivalent.
 
 ---
 
