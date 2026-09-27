@@ -191,8 +191,16 @@ in
       # over gtk-4.0/gtk.css, and ambxst writes its colours into that file.
       # GTK 3's gtk.css stays ambxst's too (home-manager only writes it for
       # gtk3.extraCss).
+      #
+      # colorScheme writes org.gnome.desktop.interface color-scheme, which
+      # xdg-desktop-portal-gtk passes on as the system's light/dark
+      # preference (Firefox's prefers-color-scheme follows it). Unset, the
+      # portal reports "no preference". Nothing switches it by time of day,
+      # so it is dark to match Crimson Ronin. It does not make home-manager
+      # write gtk-4.0/gtk.css.
       gtk = {
         enable = true;
+        colorScheme = "dark";
         gtk3.theme = {
           name = "CrimsonRonin";
           package = roninGtk;
