@@ -163,6 +163,25 @@ in
                 homeDirectory = "/home/brett";
               };
 
+              # Monitors: external on the right, laptop panel at the origin.
+              wayland.windowManager.hyprland.settings.monitor = [
+                "DP-1, 2560x1440@165, 1920x0, 1" # external monitor (right)
+                "eDP-1, 1920x1080@144, 0x0, 1" # laptop (left, always at origin)
+              ];
+
+              # Force linear blitting for the cross-GPU buffer copy (NVIDIA →
+              # Intel-driven eDP).
+              wayland.windowManager.hyprland.settings.env = [
+                "AQ_FORCE_LINEAR_BLIT, 1"
+              ];
+
+              # Source the DRM device config generated at boot by the
+              # hyprland-drm-config service above (AQ_DRM_DEVICES by PCI
+              # bus ID).
+              wayland.windowManager.hyprland.extraConfig = ''
+                source = /tmp/hypr-drm-devices.conf
+              '';
+
               # Host-specific Hyprland workspace bindings.
               # DP-1 = external monitor (right), eDP-1 = laptop screen (left).
               # persistent:true keeps each workspace alive even when its monitor

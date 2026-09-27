@@ -95,14 +95,16 @@ in
         # means rewriting it, not flipping a flag. Until then this is only
         # implicit via home.stateVersion ("24.11"), which is a fragile place
         # to leave a behaviour switch.
+        #
+        # Hyprland 0.56 loads ~/.config/hypr/hyprland.lua in preference to
+        # hyprland.conf when both exist, and writes a default hyprland.lua
+        # itself if it starts with no config at all (e.g. a first login
+        # where home-manager activation failed). A stray hyprland.lua
+        # therefore shadows this config until it is deleted.
         configType = "hyprlang";
 
-        # Source the dynamically generated DRM device config (created by
-        # systemd service hyprland-drm-config in configuration.nix)
-        extraConfig = ''
-          source = /tmp/hypr-drm-devices.conf
-        '';
-
+        # Monitor layout, GPU selection (AQ_DRM_DEVICES) and multi-GPU
+        # workarounds are per machine: each host file adds its own.
         settings = {
           # ── Autostart ──────────────────────────────────────────────
           exec-once = [
@@ -112,9 +114,9 @@ in
           ];
 
           # ── Monitors ───────────────────────────────────────────────
-          monitor = [
-            "DP-1, 2560x1440@165, 1920x0, 1" # external monitor (right)
-            "eDP-1, 1920x1080@144, 0x0, 1" # laptop (left, always at origin)
+          # Hosts list their own monitors; mkAfter keeps this catch-all
+          # below them.
+          monitor = lib.mkAfter [
             ", preferred, auto, 1" # fallback for hotplug
           ];
 
@@ -124,7 +126,6 @@ in
             "LIBVA_DRIVER_NAME, nvidia"
             "__GLX_VENDOR_LIBRARY_NAME, nvidia"
             "NVD_BACKEND, direct"
-            "AQ_FORCE_LINEAR_BLIT, 1" # force linear blitting for cross-GPU buffer copy (NVIDIA → Intel eDP)
             # Wayland toolkit hints
             "XDG_SESSION_TYPE, wayland"
             "QT_QPA_PLATFORM, wayland"
@@ -195,8 +196,9 @@ in
             new_render_scheduling = true; # dynamic triple buffering for high refresh rates
           };
 
+          # misc:vfr is gone as of Hyprland 0.56 ("config option <misc:vfr>
+          # does not exist"), so it is no longer set here.
           misc = {
-            vfr = true;
             vrr = 2; # adaptive sync in fullscreen apps/games
             disable_hyprland_logo = true;
             disable_splash_rendering = true;
