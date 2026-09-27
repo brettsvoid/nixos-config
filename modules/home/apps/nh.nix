@@ -16,8 +16,34 @@ let
 in
 {
   flake.modules.homeManager.apps-nh =
-    { config, lib, ... }:
     {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
+    {
+      # `nix-update-lagged [days]`: update nixpkgs and the inputs that track
+      # it to what their branch pointed at N days ago (default 3), so a
+      # compromised release has time to be caught first. Here because it
+      # is the other half of `nix-rebuild` and every host imports this
+      # module. See the script's header.
+      home.packages = [
+        (pkgs.writeShellApplication {
+          name = "nix-update-lagged";
+          # GNU date (-d) and sed on the Macs too. nix itself is NOT listed:
+          # the system's own nix on PATH writes the lock.
+          runtimeInputs = with pkgs; [
+            coreutils
+            curl
+            gnugrep
+            gnused
+            jq
+          ];
+          text = builtins.readFile ./nh/nix-update-lagged.sh;
+        })
+      ];
+
       programs.nh = {
         enable = true;
         # Sets NH_FLAKE (nh ≥ 4.0), so `nh darwin switch` needs no path and
