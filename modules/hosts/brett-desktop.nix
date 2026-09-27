@@ -126,81 +126,109 @@ in
           useUserPackages = true;
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
-          users.${username} = {
-            imports = with config.flake.modules.homeManager; [
-              base
-              shell-zsh
-              shell-aliases
-              shell-starship
-              shell-tools
-              apps-nh
-              terminals-kitty
-              terminals-ghostty
-              terminals-tmux
-              terminals-herdr
-              desktop-hyprland
-              desktop-hyprlock
-              desktop-ambxst
-              desktop-media-player
-              desktop-wallpapers
-              desktop-custom-shell
-              nvim
-              apps-firefox
-              apps-git
-              apps-ssh
-              apps-cursor
-              apps-spotify
-              apps-fonts
-              apps-claude-code
-              profile-base
-              profile-code
-              profile-gaming
-            ];
-            home = {
-              inherit username;
-              homeDirectory = "/home/brett";
+          users.${username} =
+            { lib, pkgs, ... }:
+            {
+              imports = with config.flake.modules.homeManager; [
+                base
+                shell-zsh
+                shell-aliases
+                shell-starship
+                shell-tools
+                apps-nh
+                terminals-kitty
+                terminals-ghostty
+                terminals-tmux
+                terminals-herdr
+                desktop-hyprland
+                desktop-hyprlock
+                desktop-ambxst
+                desktop-media-player
+                desktop-wallpapers
+                desktop-custom-shell
+                nvim
+                apps-firefox
+                apps-git
+                apps-ssh
+                apps-cursor
+                apps-spotify
+                apps-fonts
+                apps-claude-code
+                profile-base
+                profile-code
+                profile-gaming
+              ];
+              home = {
+                inherit username;
+                homeDirectory = "/home/brett";
+              };
+
+              # Firefox profile under XDG from the start. This home was new at
+              # install, so there is no ~/.mozilla to migrate (see the laptop's
+              # entry in docs/TODO.md), and home.stateVersion "24.11" would
+              # otherwise keep the legacy path.
+              programs.firefox.configPath = ".config/mozilla/firefox";
+
+              # Render only on the 3080 Ti. It drives both monitors; the iGPU
+              # drives nothing, so it is left out entirely. The symlink comes
+              # from the udev rule above.
+              wayland.windowManager.hyprland.settings.env = [
+                "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
+              ];
+
+              # Odyssey G5 (27", landscape) on the left; Dell AW2518H (24.5")
+              # on the right, turned 90° clockwise so its top edge faces right.
+              # transform 1 rotates the picture 90° counter-clockwise to match.
+              # Rotated, the Dell is 1080x1920; the Odyssey sits 240 px down so
+              # the two are centred on each other. The Dell's EDID prefers
+              # 60 Hz, so its 240 Hz mode has to be asked for.
+              wayland.windowManager.hyprland.settings.monitor = [
+                "${odyssey}, 2560x1440@165, 0x240, 1"
+                "${dell}, 1920x1080@240, 2560x0, 1, transform, 1"
+              ];
+
+              # XWayland games (CS2 among them) size themselves to X's first
+              # monitor. With no primary set, XWayland lists the Dell first, so
+              # they render at the rotated 1080x1920 and fill only the left of
+              # the Odyssey. Make the Odyssey primary; its connector is looked
+              # up by description so a cable swap still does not matter. The
+              # loop waits for XWayland in case it is not up yet.
+              wayland.windowManager.hyprland.settings.exec-once = [
+                (lib.getExe (
+                  pkgs.writeShellApplication {
+                    name = "xwayland-primary-odyssey";
+                    runtimeInputs = [
+                      pkgs.jq
+                      pkgs.xrandr
+                    ];
+                    text = ''
+                      output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name')
+                      for _ in $(seq 30); do
+                        xrandr --output "$output" --primary 2>/dev/null && exit 0
+                        sleep 1
+                      done
+                      exit 1
+                    '';
+                  }
+                ))
+              ];
+
+              # 1–5 on the Odyssey, 6–10 on the Dell. persistent:true keeps a
+              # workspace alive while its monitor is off, so apps land on the
+              # other screen instead of an invisible orphan.
+              wayland.windowManager.hyprland.settings.workspace = [
+                "1, monitor:${odyssey}, default:true, persistent:true"
+                "2, monitor:${odyssey}, persistent:true"
+                "3, monitor:${odyssey}, persistent:true"
+                "4, monitor:${odyssey}, persistent:true"
+                "5, monitor:${odyssey}, persistent:true"
+                "6, monitor:${dell}, default:true, persistent:true"
+                "7, monitor:${dell}, persistent:true"
+                "8, monitor:${dell}, persistent:true"
+                "9, monitor:${dell}, persistent:true"
+                "10, monitor:${dell}, persistent:true"
+              ];
             };
-
-            # Firefox profile under XDG from the start. This home was new at
-            # install, so there is no ~/.mozilla to migrate (see the laptop's
-            # entry in docs/TODO.md), and home.stateVersion "24.11" would
-            # otherwise keep the legacy path.
-            programs.firefox.configPath = ".config/mozilla/firefox";
-
-            # Render only on the 3080 Ti. It drives both monitors; the iGPU
-            # drives nothing, so it is left out entirely. The symlink comes
-            # from the udev rule above.
-            wayland.windowManager.hyprland.settings.env = [
-              "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
-            ];
-
-            # Odyssey G5 (27", landscape) on the left; Dell AW2518H (24.5")
-            # on the right, turned 90° clockwise so its top edge faces right.
-            # transform 1 rotates the picture 90° counter-clockwise to match.
-            # Rotated, the Dell is 1080x1920; the Odyssey sits 240 px down so
-            # the two are centred on each other. The Dell's EDID prefers
-            # 60 Hz, so its 240 Hz mode has to be asked for.
-            wayland.windowManager.hyprland.settings.monitor = [
-              "${odyssey}, 2560x1440@165, 0x240, 1"
-              "${dell}, 1920x1080@240, 2560x0, 1, transform, 1"
-            ];
-
-            # 1–5 on the Odyssey, 6–10 on the Dell. persistent:true keeps a
-            # workspace alive while its monitor is off, so apps land on the
-            # other screen instead of an invisible orphan.
-            wayland.windowManager.hyprland.settings.workspace = [
-              "1, monitor:${odyssey}, default:true, persistent:true"
-              "2, monitor:${odyssey}, persistent:true"
-              "3, monitor:${odyssey}, persistent:true"
-              "4, monitor:${odyssey}, persistent:true"
-              "5, monitor:${odyssey}, persistent:true"
-              "6, monitor:${dell}, default:true, persistent:true"
-              "7, monitor:${dell}, persistent:true"
-              "8, monitor:${dell}, persistent:true"
-              "9, monitor:${dell}, persistent:true"
-              "10, monitor:${dell}, persistent:true"
-            ];
-          };
         };
       }
     ];
