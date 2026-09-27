@@ -1,5 +1,6 @@
 # Custom Quickshell-based bar with matugen-generated theme. Coexists with
-# ambxst (the prior bar); `toggle-shell` switches between them.
+# ambxst (the prior bar) and, where desktop-caelestia is imported, the
+# Caelestia trial; `toggle-shell` switches between them.
 { inputs, config, ... }:
 let
   repoDir = config.flake.lib.repoDir;
@@ -14,6 +15,8 @@ in
         CUSTOM_PID_FILE="/tmp/custom-shell.pid"
 
         AMBXST_PATTERN="quickshell.*ambxst-shell"
+        # The qs process runs with `-p <store>/share/caelestia-shell`.
+        CAELESTIA_PATTERN="share/caelestia-shell"
 
         ambxst_running() {
           pgrep -f "$AMBXST_PATTERN" >/dev/null 2>&1
@@ -23,21 +26,48 @@ in
           [ -f "$CUSTOM_PID_FILE" ] && kill -0 "$(cat "$CUSTOM_PID_FILE")" 2>/dev/null
         }
 
+        caelestia_running() {
+          pgrep -f "$CAELESTIA_PATTERN" >/dev/null 2>&1
+        }
+
+        stop_ambxst() {
+          if ambxst_running; then
+            echo "Stopping ambxst..."
+            pkill -f "$AMBXST_PATTERN" 2>/dev/null
+            sleep 0.5
+          fi
+        }
+
+        stop_custom() {
+          if custom_running; then
+            echo "Stopping custom shell..."
+            kill "$(cat "$CUSTOM_PID_FILE")" 2>/dev/null
+            rm -f "$CUSTOM_PID_FILE"
+            sleep 0.5
+          fi
+        }
+
+        stop_caelestia() {
+          if caelestia_running; then
+            echo "Stopping Caelestia..."
+            caelestia shell -k >/dev/null 2>&1 || pkill -f "$CAELESTIA_PATTERN" 2>/dev/null
+            sleep 0.5
+          fi
+        }
+
         case "''${1:-}" in
           status)
             echo "ambxst:       $(ambxst_running && echo "running (pid $(pgrep -f "$AMBXST_PATTERN" | head -1))" || echo "stopped")"
             echo "custom-shell: $(custom_running && echo "running (pid $(cat "$CUSTOM_PID_FILE"))" || echo "stopped")"
+            echo "caelestia:    $(caelestia_running && echo "running (pid $(pgrep -f "$CAELESTIA_PATTERN" | head -1))" || echo "stopped")"
             ;;
           custom)
             if custom_running; then
               echo "Custom shell already running"
               exit 0
             fi
-            echo "Stopping ambxst..."
-            if ambxst_running; then
-              pkill -f "$AMBXST_PATTERN" 2>/dev/null
-              sleep 0.5
-            fi
+            stop_ambxst
+            stop_caelestia
             echo "Starting custom shell..."
             export QSG_RHI_BACKEND=vulkan
             ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" >/dev/null 2>&1 &
@@ -49,22 +79,37 @@ in
               echo "ambxst already running"
               exit 0
             fi
-            echo "Stopping custom shell..."
-            if custom_running; then
-              kill "$(cat "$CUSTOM_PID_FILE")" 2>/dev/null
-              rm -f "$CUSTOM_PID_FILE"
-              sleep 0.5
-            fi
+            stop_custom
+            stop_caelestia
             echo "Starting ambxst..."
             ambxst >/dev/null 2>&1 &
             echo "ambxst restarted"
             ;;
+          caelestia)
+            if ! command -v caelestia >/dev/null 2>&1; then
+              echo "Caelestia is not installed on this host (desktop-caelestia)" >&2
+              exit 1
+            fi
+            if caelestia_running; then
+              echo "Caelestia already running"
+              exit 0
+            fi
+            stop_ambxst
+            stop_custom
+            # ambxst binds its keys at runtime; a reload drops them so they
+            # cannot fire alongside Caelestia's.
+            hyprctl reload >/dev/null
+            echo "Starting Caelestia..."
+            caelestia shell -d >/dev/null 2>&1
+            echo "Caelestia started"
+            ;;
           *)
-            echo "Usage: toggle-shell {custom|ambxst|status}"
+            echo "Usage: toggle-shell {custom|ambxst|caelestia|status}"
             echo ""
-            echo "  custom  - Kill ambxst, start custom shell"
-            echo "  ambxst  - Kill custom shell, restart ambxst"
-            echo "  status  - Show which shell is running"
+            echo "  custom     - Stop the other shells, start custom shell"
+            echo "  ambxst     - Stop the other shells, restart ambxst"
+            echo "  caelestia  - Stop the other shells, start Caelestia"
+            echo "  status     - Show which shell is running"
             exit 1
             ;;
         esac

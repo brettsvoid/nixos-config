@@ -24,6 +24,24 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Caelestia — a Quickshell desktop shell, on trial as an alternative to
+    # ambxst (modules/home/desktop/caelestia.nix). Its quickshell is left on
+    # upstream's own pin rather than following ours: it rebuilds quickshell
+    # with X11/i3 support switched off, so following would not share a build,
+    # and upstream tests against its own rev.
+    caelestia-shell = {
+      url = "github:caelestia-dots/shell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Crimson Ronin (MIT) — a red/black theme for Caelestia on Hyprland. Only
+    # its palette, wallpaper and mark are used, not its Arch installer.
+    # `flake = false` because the repo is a plain source tree.
+    crimson-ronin = {
+      url = "github:corund207/crimson-ronin";
+      flake = false;
+    };
+
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
