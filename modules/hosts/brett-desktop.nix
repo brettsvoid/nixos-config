@@ -67,7 +67,21 @@ in
             "nvidia_modeset"
             "nvidia_uvm"
             "nvidia_drm"
+            "pci_stub"
           ];
+          # Park the chipset's HD Audio controller (00:1f.3, 8086:43c8) on
+          # pci-stub so snd_hda_intel never drives it. Its only real codec is
+          # the iGPU's HDMI audio (the iGPU drives no monitor; the board's
+          # analogue jacks are a separate USB device). Every boot it reported
+          # a phantom codec at address 0, timed out probing it, fell back from
+          # MSI to the shared legacy IRQ 16, and ~90–160 s later the kernel
+          # disabled IRQ 16 after 100k unclaimed interrupts, printing
+          # "Disabling IRQ #16" (pr_emerg, so over the login prompt at any
+          # loglevel). The other drivers on IRQ 16 are ruled out: i801_smbus
+          # claims every interrupt its own status bit raises, and the NVMe
+          # drives have INTx disabled. pci_stub is in the initrd so it claims
+          # the device before udev loads snd_hda_intel in stage 2.
+          kernelParams = [ "pci-stub.ids=8086:43c8" ];
         };
 
         # Windows keeps the hardware clock in local time. Without this the
