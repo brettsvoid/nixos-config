@@ -3,7 +3,7 @@
 # and language servers consumed by nvim's lsp config.
 _: {
   flake.modules.homeManager.profile-code =
-    { pkgs, ... }:
+    { config, pkgs, ... }:
     {
       # No claude-code here: every host imports apps-claude-code, which owns
       # the tool. It installs upstream's native, self-updating build, where a
@@ -37,6 +37,24 @@ _: {
       programs.direnv = {
         enable = true;
         nix-direnv.enable = true;
+      };
+
+      # GOPATH out of ~ and into XDG data. Unset, Go defaults to ~/go, where
+      # it keeps the module cache and `go install` binaries. On brett-desktop
+      # it was gopher.nvim's old build hook that created it.
+      #
+      # Written to Go's own env file (~/.config/go/env; on darwin,
+      # ~/Library/Application Support/go/env) rather than as a session
+      # variable, so it holds for every go process: nvim's gopls and
+      # launcher-started editors as much as shells. A GOPATH in the
+      # environment would override it.
+      #
+      # package = null: this only writes config. Go itself comes from nvim's
+      # extraPackages on NixOS and from Homebrew on the Macs.
+      programs.go = {
+        enable = true;
+        package = null;
+        env.GOPATH = "${config.xdg.dataHome}/go";
       };
     };
 

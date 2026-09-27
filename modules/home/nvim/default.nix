@@ -158,6 +158,13 @@ in
             ripgrep
             fd
             lazygit
+            # gopher.nvim, which looks each one up on PATH. Its build hook used
+            # to `go install` them into ~/go/bin, which is not on PATH, so they
+            # were never found. json2go (:GoJson2Go) is not in nixpkgs.
+            gomodifytags
+            impl
+            gotests
+            iferr
             # tree-sitter CLI dropped: parsers come prebuilt from Nix
             # (treesitterParsers above), so nothing compiles grammars at
             # runtime. gcc/gnumake/cmake are kept for other plugin builds.

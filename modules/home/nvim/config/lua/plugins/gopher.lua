@@ -3,10 +3,8 @@ return {
 	"olexsmir/gopher.nvim",
 	ft = "go",
 	-- branch = "develop"
-	-- (optional) will update plugin's deps on every update
-	build = function()
-		require("gopher.installer").install_deps({ sync = true })
-	end,
+	-- No `build` hook: its deps come from nvim's extraPackages in
+	-- modules/home/nvim/default.nix instead of `go install`.
 	---@type gopher.Config
 	opts = {},
 }
