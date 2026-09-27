@@ -11,7 +11,11 @@ in
       cacheDir = "${config.home.homeDirectory}/.cache/ambxst";
     in
     {
-      home.activation.ambxstConfig = config.lib.dag.entryAfter [ "writeBoundary" ] ''
+      # After linkGeneration, not just writeBoundary: the wallpaper path below
+      # is resolved through the ~/Pictures/Wallpapers link that desktop-wallpapers
+      # creates. On a fresh home, running first made `readlink -f` fail (no
+      # ~/Pictures yet), which aborted the whole home-manager activation.
+      home.activation.ambxstConfig = config.lib.dag.entryAfter [ "linkGeneration" ] ''
         # ── Bar settings ──────────────────────────────────────────────
         BAR_JSON="${configDir}/bar.json"
         if [ -f "$BAR_JSON" ]; then
