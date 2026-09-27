@@ -85,6 +85,24 @@ in
       # implementation found in lexicographical order.
       xdg.portal.config.common.default = "*";
 
+      # Without a named icon theme GTK asks for Adwaita, which is not
+      # installed, and falls back to its built-in 16px PNGs — Thunar showed
+      # folders stretched to 64px, and no icon at all for images or PDFs.
+      # Carmine folders (#a30002/#7a0002) sit next to Crimson Ronin's
+      # A70E18/720B12. The system also has a Catppuccin Papirus-Dark
+      # (system/nixos/hyprland.nix); this one wins because the per-user
+      # profile comes first in XDG_DATA_DIRS. GTK 3 on Wayland reads the
+      # theme and icon names from dconf (org.gnome.desktop.interface), which
+      # home-manager writes alongside settings.ini: with dconf out of reach,
+      # Thunar ignored the names in settings.ini.
+      gtk = {
+        enable = true;
+        iconTheme = {
+          name = "Papirus-Dark";
+          package = pkgs.papirus-icon-theme.override { color = "carmine"; };
+        };
+      };
+
       wayland.windowManager.hyprland = {
         enable = true;
         package = null; # installed system-wide via programs.hyprland.enable
