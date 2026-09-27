@@ -1,6 +1,11 @@
 _: {
   flake.modules.homeManager.apps-git =
-    { config, lib, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     let
       # The delta binary that core.pager / interactive.diffFilter point at.
       # `finalPackage` (not `package`) because with the built-in git
@@ -50,6 +55,20 @@ _: {
           core.pager = delta;
           # Highlights hunks in `git add -p` / `git add -i`.
           interactive.diffFilter = "${delta} --color-only";
+
+          # ghq clones into <root>/<host>/<owner>/<repo>, the layout the rest
+          # of the config already assumes (~/projects/github.com/brettsvoid/…).
+          # Hand-made scratch projects live in ~/projects/scratch and get moved
+          # under github.com/ once they are pushed.
+          #
+          # ghq.user is what `ghq create <name>` uses as the owner. Without it
+          # ghq falls back to the login name, so on this machine it created
+          # github.com/brett/<name> — confirmed, not assumed.
+          #
+          # Work repos do NOT go through ghq: they must sit under
+          # ~/work/projects for the identity include below to fire.
+          ghq.root = "~/projects";
+          ghq.user = "brettsvoid";
         };
 
         # Work identity, for repos under ~/work/projects only.
@@ -112,6 +131,9 @@ _: {
           }
         ];
       };
+
+      # Reads ghq.root / ghq.user from the settings above.
+      home.packages = [ pkgs.ghq ];
 
       # Syntax-highlighting pager for diffs. Previously `delta` was installed by
       # profiles/code.nix but nothing ever pointed git at it, so it sat on PATH

@@ -16,6 +16,14 @@ return {
 	---@module "auto-session"
 	---@type AutoSession.Config
 	opts = {
-		suppressed_dirs = { "/", "~/", "~/projects", "~/work", "~/work/projects" },
+		suppressed_dirs = {
+			"/",
+			"~/",
+			"~/projects",
+			"~/projects/github.com",
+			"~/projects/scratch",
+			"~/work",
+			"~/work/projects",
+		},
 	},
 }
