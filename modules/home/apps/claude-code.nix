@@ -283,9 +283,21 @@
           exit 0
         fi
 
+        # The installer finds its downloader on PATH ("Either curl or wget
+        # is required"), and home-manager's activation PATH has neither, on
+        # either platform. This step had never actually run until
+        # brett-desktop: both Macs already had a native install, so the
+        # guard above skipped it. zstd is optional; with it the installer
+        # fetches the compressed binary.
+        export PATH="${
+          lib.makeBinPath [
+            pkgs.curl
+            pkgs.zstd
+          ]
+        }:$PATH"
+
         echo "claude-code: no native install at ${nativeBin}, bootstrapping…"
-        ${lib.getExe pkgs.curl} -fsSL https://claude.ai/install.sh \
-          | ${pkgs.bash}/bin/bash -s stable
+        curl -fsSL https://claude.ai/install.sh | ${pkgs.bash}/bin/bash -s stable
       '';
     in
     {
