@@ -207,6 +207,12 @@
         tui = "fullscreen";
         agentPushNotifEnabled = true;
         skipAutoPermissionPrompt = true;
+
+        # The release channel the self-updater follows: latest | stable | rc,
+        # and unset means latest. Declared because the installer writes its
+        # own: bootstrapping with `stable` left brett-desktop pinned at
+        # 2.1.274 while the Macs, with no key, were on 2.1.283 (latest).
+        autoUpdatesChannel = "latest";
       };
 
       settingsJson = (pkgs.formats.json { }).generate "claude-code-settings.json" settings;
@@ -297,7 +303,9 @@
         }:$PATH"
 
         echo "claude-code: no native install at ${nativeBin}, bootstrapping…"
-        curl -fsSL https://claude.ai/install.sh | ${pkgs.bash}/bin/bash -s stable
+        # `latest`, matching autoUpdatesChannel above. The installer writes
+        # the channel it was given into settings.json.
+        curl -fsSL https://claude.ai/install.sh | ${pkgs.bash}/bin/bash -s latest
       '';
     in
     {
