@@ -8,6 +8,20 @@ _: {
       # is not used as a session; Hyprland is Wayland.
       services.xserver.enable = true;
 
+      # tuigreet draws on the kernel console, and at the default loglevel (4)
+      # every KERN_ERR message is printed straight over it. On brett-desktop
+      # a failing USB port logs one every ~16 s for two minutes after boot,
+      # which scrambled the login prompt. 3 keeps only crit/alert/emerg on
+      # the console; everything still reaches the journal (`journalctl -k`).
+      boot.consoleLogLevel = 3;
+
+      # Same console, from systemd: its boot status lines ("Starting Docker
+      # Application Container Engine…") land on top of tuigreet whenever a
+      # unit starts after greetd. nixpkgs runs greetd as Type=idle, but idle
+      # only waits up to 5 s for other jobs; docker came 6 s later.
+      # "error" keeps failures visible and silences the rest (systemd(1)).
+      boot.kernelParams = [ "systemd.show_status=error" ];
+
       services.greetd =
         let
           sessions = pkgs.linkFarm "greeter-sessions" [
