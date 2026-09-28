@@ -11,6 +11,11 @@ in
       cacheDir = "${config.home.homeDirectory}/.cache/ambxst";
     in
     {
+      wayland.windowManager.hyprland.settings.exec-once = [
+        "ambxst" # bar, wallpaper, launcher, notifications
+        "sh -c 'sleep 3 && hyprctl reload'" # reload config after ambxst startup to restore keybinds
+      ];
+
       # After linkGeneration, not just writeBoundary: the wallpaper path below
       # is resolved through the ~/Pictures/Wallpapers link that desktop-wallpapers
       # creates. On a fresh home, running first made `readlink -f` fail (no

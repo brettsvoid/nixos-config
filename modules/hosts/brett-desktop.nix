@@ -1,8 +1,8 @@
 # MSI MAG Z590 Tomahawk WiFi desktop — i7-11700K, NVIDIA RTX 3080 Ti, btrfs
 # root on its own NVMe (Crucial P1). Dual-boots Windows, which lives on a
 # different NVMe with its own ESP and has its own entry in the systemd-boot
-# menu. Hyprland desktop (greetd + ambxst, with Caelestia on trial via
-# `toggle-shell caelestia`) and the gaming profile.
+# menu. Hyprland desktop (greetd + Caelestia, with ambxst a
+# `toggle-shell ambxst` away) and the gaming profile.
 { config, inputs, ... }:
 let
   username = config.flake.lib.username;
@@ -143,7 +143,6 @@ in
                 terminals-herdr
                 desktop-hyprland
                 desktop-hyprlock
-                desktop-ambxst
                 desktop-wallpapers
                 desktop-custom-shell
                 desktop-caelestia

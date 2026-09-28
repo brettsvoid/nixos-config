@@ -146,10 +146,8 @@ in
         # workarounds are per machine: each host file adds its own.
         settings = {
           # ── Autostart ──────────────────────────────────────────────
-          exec-once = [
-            "ambxst" # bar, wallpaper, launcher, notifications
-            "sh -c 'sleep 3 && hyprctl reload'" # reload config after ambxst startup to restore keybinds
-          ];
+          # The desktop shell starts itself from its own module's
+          # exec-once: a host imports desktop-ambxst or desktop-caelestia.
 
           # ── Monitors ───────────────────────────────────────────────
           # Hosts list their own monitors; mkAfter keeps this catch-all

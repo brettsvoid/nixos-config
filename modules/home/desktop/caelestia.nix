@@ -1,8 +1,9 @@
 # Caelestia shell (github:caelestia-dots/shell) in the Crimson Ronin palette
 # (github:corund207/crimson-ronin, MIT): about 80% black/graphite, with
-# crimson kept to edges and status. On trial next to ambxst, so the session
-# does not start it: `toggle-shell caelestia` swaps it in and
-# `toggle-shell ambxst` swaps back.
+# crimson kept to edges and status. A host that imports this module starts
+# Caelestia as its session shell, in place of desktop-ambxst. ambxst stays
+# installed (programs.ambxst in system/nixos/hyprland.nix), so
+# `toggle-shell ambxst` swaps it in and `toggle-shell caelestia` swaps back.
 { inputs, ... }:
 let
   ronin = inputs.crimson-ronin;
@@ -67,8 +68,8 @@ in
       programs.caelestia = {
         enable = true;
         package = shell;
-        # toggle-shell starts it. A session service would run it on top of
-        # ambxst, which the session still starts.
+        # Hyprland's exec-once starts it (below), with the command that
+        # toggle-shell uses, so both start it outside systemd.
         systemd.enable = false;
 
         # Crimson Ronin's config/caelestia/shell.json, with this machine's
@@ -211,6 +212,10 @@ in
       };
 
       wayland.windowManager.hyprland.settings = {
+        # `-d` detaches the shell. Without it the CLI stays in the
+        # foreground for the session, only to filter the shell's log.
+        exec-once = [ "caelestia shell -d" ];
+
         # Caelestia's panels are Hyprland global shortcuts; they do nothing
         # while it is not running. ambxst binds D, N and Escape too, but
         # toggle-shell reloads Hyprland after stopping it, which drops them.
