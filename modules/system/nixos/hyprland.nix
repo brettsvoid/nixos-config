@@ -38,7 +38,18 @@ _: {
         # the bus reads service files from the system profile
         # (/etc/dbus-1/session.conf). Unregistered, it failed with "The
         # name is not activatable".
-        sushi
+        #
+        # The launcher asks for the file with closeIfAlreadyShown = false,
+        # so Space in Thunar only ever showed it. Focus follows the mouse,
+        # so once the pointer moved back over Thunar, Space went there and
+        # the preview stayed open. Nautilus passes true, which closes the
+        # preview when it already shows that file; so does this build.
+        (sushi.overrideAttrs (old: {
+          postPatch = (old.postPatch or "") + ''
+            substituteInPlace src/sushi.in \
+              --replace-fail "const closeIfAlreadyShown = false;" "const closeIfAlreadyShown = true;"
+          '';
+        }))
 
         # Theme (used by GTK apps under Hyprland)
         (catppuccin-gtk.override {
