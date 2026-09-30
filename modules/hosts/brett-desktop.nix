@@ -41,6 +41,7 @@ in
           hyprland
           apps-claude-code
           apps-comfyui
+          apps-keymapp
           profile-base
           profile-code
           profile-gaming
@@ -158,6 +159,7 @@ in
                 apps-fonts
                 apps-claude-code
                 apps-comfyui
+                apps-keymapp
                 profile-base
                 profile-code
                 profile-gaming
