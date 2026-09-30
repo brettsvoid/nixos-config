@@ -40,6 +40,7 @@ in
           openssh
           hyprland
           apps-claude-code
+          apps-comfyui
           profile-base
           profile-code
           profile-gaming
@@ -156,6 +157,7 @@ in
                 apps-godot
                 apps-fonts
                 apps-claude-code
+                apps-comfyui
                 profile-base
                 profile-code
                 profile-gaming
