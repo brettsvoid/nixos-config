@@ -124,6 +124,51 @@ in
         publicShare = null;
       };
 
+      # Loupe (GNOME's image viewer) opens images. With no defaults set,
+      # image/png and image/jpeg went to Gradia, which ambxst installs, so
+      # opening a picture from Thunar started an editor. The types are the
+      # MimeType list from Loupe's desktop file.
+      #
+      # This makes ~/.config/mimeapps.list home-manager's, so an app's own
+      # "set as default" can no longer write to it: defaults go here.
+      xdg.mimeApps = {
+        enable = true;
+        defaultApplications =
+          lib.genAttrs [
+            "image/apng"
+            "image/avif"
+            "image/bmp"
+            "image/gif"
+            "image/heic"
+            "image/jp2"
+            "image/jpeg"
+            "image/jxl"
+            "image/png"
+            "image/qoi"
+            "image/svg+xml"
+            "image/svg+xml-compressed"
+            "image/tiff"
+            "image/vnd.microsoft.icon"
+            "image/webp"
+            "image/x-dds"
+            "image/x-exr"
+            "image/x-portable-anymap"
+            "image/x-portable-bitmap"
+            "image/x-portable-graymap"
+            "image/x-portable-pixmap"
+            "image/x-qoi"
+            "image/x-tga"
+            "image/x-win-bitmap"
+            "image/x-xbitmap"
+            "image/x-xpixmap"
+          ] (_: "org.gnome.Loupe.desktop")
+          // {
+            # Claude Code wrote this into mimeapps.list itself, before
+            # home-manager owned the file.
+            "x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
+          };
+      };
+
       wayland.windowManager.hyprland = {
         enable = true;
         package = null; # installed system-wide via programs.hyprland.enable
@@ -326,6 +371,7 @@ in
       # Packages useful alongside Hyprland
       home.packages = [
         pkgs.brightnessctl
+        pkgs.loupe
         pkgs.playerctl
         pkgs.wl-clipboard
         hypr-cheatsheet
