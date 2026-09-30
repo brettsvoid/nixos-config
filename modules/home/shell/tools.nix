@@ -4,25 +4,52 @@ _: {
   flake.modules.homeManager.shell-tools =
     { lib, pkgs, ... }:
     {
-      home.packages =
-        with pkgs;
-        [
-          fd
-          ripgrep
-          jq
-          tree
-          tldr
-          dust
-          duf
-          procs
-          htop
-        ]
-        # Terminal file manager, for the `yy` function (shell/functions.nix)
-        # and yazi.nvim. The Macs get it from Homebrew
-        # (system/darwin/homebrew.nix).
-        ++ lib.optionals stdenv.isLinux [ yazi ];
+      home.packages = with pkgs; [
+        fd
+        ripgrep
+        jq
+        tree
+        tldr
+        dust
+        duf
+        procs
+        htop
+      ];
 
       programs = {
+        # Terminal file manager, for the `yy` function (shell/functions.nix)
+        # and yazi.nvim.
+        yazi = {
+          enable = true;
+          # The Macs get the binary from Homebrew (system/darwin/homebrew.nix);
+          # they still take the config below.
+          package = if pkgs.stdenv.hostPlatform.isLinux then pkgs.yazi else null;
+          # shell/functions.nix defines `yy`, and this module's zsh integration
+          # would define a second one on the hosts that import both (the
+          # Macs).
+          enableZshIntegration = false;
+
+          # T fills the whole window with the preview pane, and restores it.
+          plugins.toggle-pane = pkgs.yaziPlugins.toggle-pane;
+          keymap.mgr.prepend_keymap = [
+            {
+              on = "T";
+              run = "plugin toggle-pane max-preview";
+              desc = "Maximise or restore the preview pane";
+            }
+          ];
+
+          # Yazi scales images down to this before previewing them (default
+          # 600x900), so a maximised pane still showed a 600 px picture. The
+          # largest screens: the Odyssey is 2560 wide, the portrait Dell 1920
+          # tall. Yazi caches the scaled images in /tmp/yazi-<uid>, keyed by
+          # file, not by these limits: clear it after changing them.
+          settings.preview = {
+            max_width = 2560;
+            max_height = 1920;
+          };
+        };
+
         eza = {
           enable = true;
           icons = "auto";
