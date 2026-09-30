@@ -53,7 +53,7 @@ in
           # Background. Image is shipped from the repo; nix-store path is
           # stable across rebuilds so kitty doesn't lose its wallpaper if
           # ~/.config gets cleaned.
-          background_image = "${./kitty/anime-neko-ninja-wallpaper-rework.png}";
+          background_image = "${../desktop/wallpapers/neko-shinobi.png}";
           background_image_layout = "cscaled";
           background_image_linear = "yes";
           background_tint = "0.95";
