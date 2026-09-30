@@ -32,6 +32,14 @@ _: {
         mako
         kitty
 
+        # GNOME's Quick Look, behind Space in Thunar (the custom action in
+        # home/desktop/hyprland.nix). A system package because `sushi` only
+        # asks the session bus to start org.gnome.NautilusPreviewer, and
+        # the bus reads service files from the system profile
+        # (/etc/dbus-1/session.conf). Unregistered, it failed with "The
+        # name is not activatable".
+        sushi
+
         # Theme (used by GTK apps under Hyprland)
         (catppuccin-gtk.override {
           variant = "mocha";

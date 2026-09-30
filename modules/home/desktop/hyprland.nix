@@ -74,6 +74,33 @@ in
             --width 60 \
             --lines 25
       '';
+
+      # Space in Thunar previews the selection in Sushi (installed in
+      # system/nixos/hyprland.nix), as in Nautilus and macOS's Quick Look.
+      # Thunar has no preview hook, so it is a custom action whose shortcut
+      # is Space. Thunar 4.20 checks custom-action shortcuts in a window
+      # key-press handler that runs after the one that hands keys to a
+      # focused text entry, so Space still types in the location bar.
+      # Sushi's own Left/Right step through the files only in Nautilus.
+      quickLookId = "quick-look-sushi";
+      quickLookAction = pkgs.writeText "thunar-quick-look.xml" ''
+        <action>
+          <icon>view-preview</icon>
+          <name>Quick Look</name>
+          <submenu></submenu>
+          <unique-id>${quickLookId}</unique-id>
+          <command>sushi %f</command>
+          <description>Preview in Sushi: Space, Escape or Q closes it, F toggles fullscreen</description>
+          <range></range>
+          <patterns>*</patterns>
+          <directories/>
+          <audio-files/>
+          <image-files/>
+          <other-files/>
+          <text-files/>
+          <video-files/>
+        </action>
+      '';
     in
 
     {
@@ -168,6 +195,36 @@ in
             "x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
           };
       };
+
+      # Adds the Quick Look action to Thunar's uca.xml and binds it to Space
+      # in accels.scm, leaving the rest of both files alone: Thunar writes
+      # them itself, from Edit → Configure custom actions and its shortcut
+      # editor. A missing uca.xml starts from Thunar's default, as Thunar
+      # itself would. The shortcut is added only while accels.scm has no
+      # line for the action at all, so a shortcut changed or cleared in
+      # Thunar (it comments cleared ones out) stays that way. Thunar reads
+      # both files at startup: `thunar -q` after a change.
+      home.activation.thunarQuickLook = config.lib.dag.entryAfter [ "writeBoundary" ] ''
+        thunar="${config.xdg.configHome}/Thunar"
+        mkdir -p "$thunar"
+
+        uca="$thunar/uca.xml"
+        if [ ! -e "$uca" ]; then
+          install -m600 ${pkgs.thunar}/etc/xdg/Thunar/uca.xml "$uca"
+        fi
+        if ! grep -qF '<unique-id>${quickLookId}</unique-id>' "$uca"; then
+          tmp=$(mktemp)
+          # Thunar writes </actions> on a line of its own.
+          { grep -v '^</actions>$' "$uca"; cat ${quickLookAction}; echo '</actions>'; } > "$tmp"
+          cat "$tmp" > "$uca"
+          rm "$tmp"
+        fi
+
+        accels="$thunar/accels.scm"
+        if ! grep -qF 'uca-action-${quickLookId}"' "$accels" 2>/dev/null; then
+          echo '(gtk_accel_path "<Actions>/ThunarActions/uca-action-${quickLookId}" "space")' >> "$accels"
+        fi
+      '';
 
       wayland.windowManager.hyprland = {
         enable = true;
@@ -284,6 +341,13 @@ in
             disable_hyprland_logo = true;
             disable_splash_rendering = true;
           };
+
+          # ── Window rules ───────────────────────────────────────────
+          # Sushi (Space in Thunar, above) sizes its window to the file.
+          # Tiled, it was stretched to half the screen.
+          windowrule = [
+            "float on, center on, match:class ^(org\\.gnome\\.NautilusPreviewer)$"
+          ];
 
           # ── Keybindings ────────────────────────────────────────────
           "$mod" = "SUPER";
