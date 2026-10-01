@@ -116,12 +116,15 @@ in
       # installed, and falls back to its built-in 16px PNGs — Thunar showed
       # folders stretched to 64px, and no icon at all for images or PDFs.
       # Carmine folders (#a30002/#7a0002) sit next to Crimson Ronin's
-      # A70E18/720B12. The system also has a Catppuccin Papirus-Dark
-      # (system/nixos/hyprland.nix); this one wins because the per-user
-      # profile comes first in XDG_DATA_DIRS. GTK 3 on Wayland reads the
-      # theme and icon names from dconf (org.gnome.desktop.interface), which
-      # home-manager writes alongside settings.ini: with dconf out of reach,
-      # Thunar ignored the names in settings.ini.
+      # A70E18/720B12. GTK 3 on Wayland reads the theme and icon names from
+      # dconf (org.gnome.desktop.interface), which home-manager writes
+      # alongside settings.ini: with dconf out of reach, Thunar ignored the
+      # names in settings.ini.
+      #
+      # Keep this the only Papirus-Dark installed. At startup GTK 4 reads
+      # every copy of the theme in XDG_DATA_DIRS, and a GtkApplication does
+      # it twice. With a second, Catppuccin copy in the system profile,
+      # Loupe took 1.3 s to open; with this one alone it takes 0.8 s.
       gtk = {
         enable = true;
         iconTheme = {

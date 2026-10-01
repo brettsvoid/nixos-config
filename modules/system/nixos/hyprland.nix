@@ -51,13 +51,13 @@ _: {
           '';
         }))
 
-        # Theme (used by GTK apps under Hyprland)
+        # Theme (used by GTK apps under Hyprland). The icon theme comes from
+        # home/desktop/hyprland.nix only: see the note there.
         (catppuccin-gtk.override {
           variant = "mocha";
           accents = [ "mauve" ];
         })
         catppuccin-cursors.mochaDark
-        catppuccin-papirus-folders
       ];
     };
 }
