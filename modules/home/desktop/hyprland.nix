@@ -101,6 +101,21 @@ in
           <video-files/>
         </action>
       '';
+
+      # Loupe ignored images dragged onto it from Thunar. Hyprland 0.56
+      # tells a drop target the action is MOVE as soon as a drag enters, if
+      # the source allows MOVE (Thunar allows COPY, MOVE and LINK), and it
+      # ignores the target's wl_data_offer.set_actions. GTK 4 then reports
+      # MOVE as the only action, and Loupe's drop target takes COPY only.
+      # Accepting MOVE too lets the drop through, and GTK still picks COPY
+      # when both are offered. Thunar deletes nothing after a MOVE drop.
+      loupe = pkgs.loupe.overrideAttrs (old: {
+        postPatch = (old.postPatch or "") + ''
+          substituteInPlace src/widgets/image_window.ui \
+            --replace-fail '<property name="actions">copy</property>' \
+                           '<property name="actions">copy|move</property>'
+        '';
+      });
     in
 
     {
@@ -438,7 +453,7 @@ in
       # Packages useful alongside Hyprland
       home.packages = [
         pkgs.brightnessctl
-        pkgs.loupe
+        loupe
         pkgs.playerctl
         pkgs.wl-clipboard
         hypr-cheatsheet
