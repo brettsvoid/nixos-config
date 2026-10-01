@@ -81,16 +81,18 @@ in
       # is Space. Thunar 4.20 checks custom-action shortcuts in a window
       # key-press handler that runs after the one that hands keys to a
       # focused text entry, so Space still types in the location bar.
-      # Sushi's own Left/Right step through the files only in Nautilus.
+      # The arrow keys in the preview move Thunar's selection and the
+      # preview with it: thunar-quick-look-keys, below.
       quickLookId = "quick-look-sushi";
+      quickLookCommand = "thunar-quick-look %f";
       quickLookAction = pkgs.writeText "thunar-quick-look.xml" ''
         <action>
           <icon>view-preview</icon>
           <name>Quick Look</name>
           <submenu></submenu>
           <unique-id>${quickLookId}</unique-id>
-          <command>sushi %f</command>
-          <description>Preview in Sushi: Space, Escape or Q closes it, F toggles fullscreen</description>
+          <command>${quickLookCommand}</command>
+          <description>Preview in Sushi: arrow keys move through the files, Space, Escape or Q closes it, F toggles fullscreen</description>
           <range></range>
           <patterns>*</patterns>
           <directories/>
@@ -101,6 +103,24 @@ in
           <video-files/>
         </action>
       '';
+      thunarQuickLook = pkgs.writeShellApplication {
+        name = "thunar-quick-look";
+        # hyprctl and sushi come from the system profile.
+        runtimeInputs = with pkgs; [
+          coreutils
+          jq
+        ];
+        text = builtins.readFile ./hyprland/thunar-quick-look.sh;
+      };
+      thunarQuickLookKeys = pkgs.writeShellApplication {
+        name = "thunar-quick-look-keys";
+        # hyprctl comes from the system profile.
+        runtimeInputs = with pkgs; [
+          coreutils
+          glib
+        ];
+        text = builtins.readFile ./hyprland/thunar-quick-look-keys.sh;
+      };
 
       # Loupe ignored images dragged onto it from Thunar. Hyprland 0.56
       # tells a drop target the action is MOVE as soon as a drag enters, if
@@ -218,10 +238,11 @@ in
       # in accels.scm, leaving the rest of both files alone: Thunar writes
       # them itself, from Edit → Configure custom actions and its shortcut
       # editor. A missing uca.xml starts from Thunar's default, as Thunar
-      # itself would. The shortcut is added only while accels.scm has no
-      # line for the action at all, so a shortcut changed or cleared in
-      # Thunar (it comments cleared ones out) stays that way. Thunar reads
-      # both files at startup: `thunar -q` after a change.
+      # itself would. An action whose command is out of date is replaced.
+      # The shortcut is added only while accels.scm has no line for the
+      # action at all, so a shortcut changed or cleared in Thunar (it
+      # comments cleared ones out) stays that way. Thunar reads both files
+      # at startup: `thunar -q` after a change.
       home.activation.thunarQuickLook = config.lib.dag.entryAfter [ "writeBoundary" ] ''
         thunar="${config.xdg.configHome}/Thunar"
         mkdir -p "$thunar"
@@ -230,11 +251,23 @@ in
         if [ ! -e "$uca" ]; then
           install -m600 ${pkgs.thunar}/etc/xdg/Thunar/uca.xml "$uca"
         fi
-        if ! grep -qF '<unique-id>${quickLookId}</unique-id>' "$uca"; then
+        if ! grep -qF '<command>${quickLookCommand}</command>' "$uca"; then
           tmp=$(mktemp)
-          # Thunar writes </actions> on a line of its own.
-          { grep -v '^</actions>$' "$uca"; cat ${quickLookAction}; echo '</actions>'; } > "$tmp"
-          cat "$tmp" > "$uca"
+          # Thunar writes <action>, </action> and </actions> on lines of
+          # their own. Drops the old copy of this action, if there is one.
+          ${pkgs.gawk}/bin/awk -v id='<unique-id>${quickLookId}</unique-id>' '
+            $0 == "<action>" { block = $0; inside = 1; next }
+            inside {
+              block = block "\n" $0
+              if ($0 == "</action>") {
+                inside = 0
+                if (index(block, id) == 0) print block
+              }
+              next
+            }
+            $0 != "</actions>" { print }
+          ' "$uca" > "$tmp"
+          { cat "$tmp" ${quickLookAction}; echo '</actions>'; } > "$uca"
           rm "$tmp"
         fi
 
@@ -362,9 +395,11 @@ in
 
           # ── Window rules ───────────────────────────────────────────
           # Sushi (Space in Thunar, above) sizes its window to the file.
-          # Tiled, it was stretched to half the screen.
+          # Tiled, it was stretched to half the screen. It keeps the
+          # keyboard while it is open, so the arrow keys reach it: when its
+          # window changed size, focus went to the window under the pointer.
           windowrule = [
-            "float on, center on, match:class ^(org\\.gnome\\.NautilusPreviewer)$"
+            "float on, center on, stay_focused on, match:class ^(org\\.gnome\\.NautilusPreviewer)$"
           ];
 
           # ── Keybindings ────────────────────────────────────────────
@@ -450,6 +485,27 @@ in
         };
       };
 
+      # Arrow keys in Sushi's preview for Thunar (thunar-quick-look-keys.sh).
+      # It also starts Sushi, which then stays running (see
+      # system/nixos/hyprland.nix), so the first Space of a session does
+      # not wait for it either. A unit rather than exec-once: it starts
+      # after Hyprland has passed WAYLAND_DISPLAY to the session bus, which
+      # Sushi needs.
+      systemd.user.services.thunar-quick-look-keys = {
+        Unit = {
+          Description = "Arrow keys in Sushi's preview move Thunar's selection";
+          PartOf = [ "graphical-session.target" ];
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          ExecStartPre = "-${pkgs.systemd}/bin/busctl --user call org.freedesktop.DBus / org.freedesktop.DBus StartServiceByName su org.gnome.NautilusPreviewer 0";
+          ExecStart = "${thunarQuickLookKeys}/bin/thunar-quick-look-keys";
+          Restart = "always";
+          RestartSec = 2;
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
+      };
+
       # Packages useful alongside Hyprland
       home.packages = [
         pkgs.brightnessctl
@@ -457,6 +513,7 @@ in
         pkgs.playerctl
         pkgs.wl-clipboard
         hypr-cheatsheet
+        thunarQuickLook
       ];
     };
 }

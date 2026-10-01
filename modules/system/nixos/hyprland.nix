@@ -43,11 +43,26 @@ _: {
         # so Space in Thunar only ever showed it. Focus follows the mouse,
         # so once the pointer moved back over Thunar, Space went there and
         # the preview stayed open. Nautilus passes true, which closes the
-        # preview when it already shows that file; so does this build.
+        # preview when it already shows that file; so does this build,
+        # unless SUSHI_FOLLOW is set. thunar-quick-look sets it when the
+        # arrow keys move the preview on: at the first or last file the
+        # selection stays put, and the preview must stay open.
+        #
+        # Sushi quits 12 s after its last preview, so most Spaces waited
+        # for it to start again: 0.45 s, against 0.15 s once it runs.
+        # SUSHI_PERSIST, Sushi's own switch, keeps it running (about
+        # 160 MB). thunar-quick-look-keys starts it with the session.
+        #
+        # sushi-resize.patch: a preview kept the size of the one before it.
         (sushi.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ./hyprland/sushi-resize.patch ];
           postPatch = (old.postPatch or "") + ''
             substituteInPlace src/sushi.in \
-              --replace-fail "const closeIfAlreadyShown = false;" "const closeIfAlreadyShown = true;"
+              --replace-fail "const closeIfAlreadyShown = false;" \
+                             "const closeIfAlreadyShown = GLib.getenv('SUSHI_FOLLOW') === null;"
+          '';
+          preFixup = (old.preFixup or "") + ''
+            gappsWrapperArgs+=(--set SUSHI_PERSIST 1)
           '';
         }))
 

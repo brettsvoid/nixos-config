@@ -1,0 +1,38 @@
+--- a/src/ui/mainWindow.js
++++ b/src/ui/mainWindow.js
+@@ -300,9 +300,35 @@
+             (windowSize[1] > 0 && windowSize[1] != this._lastWindowSize[1])) {
+             this._lastWindowSize = windowSize;
+             this.resize(windowSize[0], windowSize[1]);
++            if (this.get_mapped())
++                this._pinSize(windowSize[0], windowSize[1]);
+         }
+     }
+
++    // On Hyprland, resize() did nothing once the window was mapped: GTK 3
++    // kept to the size the compositor last configured, so an image shown
++    // after a folder stayed in the folder's small window. The compositor
++    // does honour size hints, so pin the minimum and maximum size to the
++    // new size (resize() leaves out the title bar; the hints include it)
++    // and release them once the compositor has configured the window.
++    _pinSize(width, height) {
++        let [, titlebarHeight] = this._titlebar.get_preferred_height();
++        let geometry = new Gdk.Geometry();
++        geometry.min_width = geometry.max_width = width;
++        geometry.min_height = geometry.max_height = height + titlebarHeight;
++        this.set_geometry_hints(null, geometry,
++                                Gdk.WindowHints.MIN_SIZE | Gdk.WindowHints.MAX_SIZE);
++
++        let id = this.connect('configure-event', () => {
++            this.disconnect(id);
++            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
++                this.set_geometry_hints(null, null, 0);
++                return GLib.SOURCE_REMOVE;
++            });
++            return false;
++        });
++    }
++
+     _createRenderer() {
+         this.file.query_info_async(
+             [Gio.FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE,
