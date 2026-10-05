@@ -32,6 +32,13 @@ in
 
         nixpkgs.hostPlatform = "aarch64-darwin";
 
+        # ─── SSH ───────────────────────────────────────────────────────
+        # Merged with the shared list in system/authorized-keys.nix.
+        users.users.${username}.openssh.authorizedKeys.keys = [
+          # brett-desktop (~/.ssh/id_ed25519)
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBRdwvFu0KB0CGdRob802A+tgZYQm8i8f6UG31sXdFuR brett@brett-desktop"
+        ];
+
         # ─── Homebrew (host-only) ──────────────────────────────────────
         # Appended to the shared lists in modules/system/darwin/homebrew.nix
         # — these options are lists, so the effective Brewfile is shared ++
