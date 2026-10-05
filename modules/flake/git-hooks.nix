@@ -25,7 +25,11 @@
           # ─── General hygiene ──────────────────────────────────────────
           check-added-large-files.enable = true; # default 500 KB; LFS-tracked images excluded
           end-of-file-fixer.enable = true;
-          trim-trailing-whitespace.enable = true;
+          trim-trailing-whitespace = {
+            enable = true;
+            # A diff's blank context lines are a single space.
+            excludes = [ "\\.patch$" ];
+          };
 
           # ─── deadnix / statix: devShell tools, NOT pre-commit hooks ───
           # Run on demand: `nix develop -c deadnix` and `nix develop -c statix check`.
