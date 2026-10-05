@@ -1,0 +1,109 @@
+Compute NVIDIA GPU power from the energy counter
+
+Since the 570 drivers, NVIDIA's 32-bit NVML returns NVML_SUCCESS with
+garbage from nvmlDeviceGetPowerUsage, so 32-bit games show millions of
+watts. nvmlDeviceGetTotalEnergyConsumption (documented, Volta and newer)
+is still correct there, and power is its rate of change. Falls back to
+nvmlDeviceGetPowerUsage without an energy counter, and checks return codes.
+
+Upstream: https://github.com/flightlessmango/MangoHud/issues/1607
+
+diff --git a/src/loaders/loader_nvml.cpp b/src/loaders/loader_nvml.cpp
+index 484e15b..6d18aeb 100644
+--- a/src/loaders/loader_nvml.cpp
++++ b/src/loaders/loader_nvml.cpp
+@@ -226,6 +226,16 @@ bool libnvml_loader::Load(const std::string& library_name) {
+     return false;
+   }
+ 
++  // Optional: callers fall back to nvmlDeviceGetPowerUsage without it.
++#if defined(LIBRARY_LOADER_NVML_H_DLOPEN)
++  nvmlDeviceGetTotalEnergyConsumption =
++      reinterpret_cast<decltype(this->nvmlDeviceGetTotalEnergyConsumption)>(
++          dlsym(library_, "nvmlDeviceGetTotalEnergyConsumption"));
++#endif
++#if defined(LIBRARY_LOADER_NVML_H_DT_NEEDED)
++  nvmlDeviceGetTotalEnergyConsumption = &::nvmlDeviceGetTotalEnergyConsumption;
++#endif
++
+ #if defined(LIBRARY_LOADER_NVML_H_DLOPEN)
+   nvmlUnitGetFanSpeedInfo =
+       reinterpret_cast<decltype(this->nvmlUnitGetFanSpeedInfo)>(
+@@ -300,6 +310,7 @@ void libnvml_loader::CleanUp(bool unload) {
+   nvmlDeviceGetHandleByIndex_v2 = NULL;
+   nvmlDeviceGetHandleByPciBusId_v2 = NULL;
+   nvmlDeviceGetCurrentClocksThrottleReasons = NULL;
++  nvmlDeviceGetTotalEnergyConsumption = NULL;
+   nvmlUnitGetFanSpeedInfo = NULL;
+   nvmlUnitGetHandleByIndex = NULL;
+   nvmlDeviceGetFanSpeed = NULL;
+diff --git a/src/loaders/loader_nvml.h b/src/loaders/loader_nvml.h
+index 6cecc25..9f2a629 100644
+--- a/src/loaders/loader_nvml.h
++++ b/src/loaders/loader_nvml.h
+@@ -40,6 +40,7 @@ class libnvml_loader {
+   decltype(&::nvmlErrorString) nvmlErrorString;
+   decltype(&::nvmlDeviceGetPowerUsage) nvmlDeviceGetPowerUsage;
+   decltype(&::nvmlDeviceGetPowerManagementLimit) nvmlDeviceGetPowerManagementLimit;
++  decltype(&::nvmlDeviceGetTotalEnergyConsumption) nvmlDeviceGetTotalEnergyConsumption;
+   decltype(&::nvmlDeviceGetCurrentClocksThrottleReasons) nvmlDeviceGetCurrentClocksThrottleReasons;
+   decltype(&::nvmlUnitGetFanSpeedInfo) nvmlUnitGetFanSpeedInfo;
+   decltype(&::nvmlUnitGetHandleByIndex) nvmlUnitGetHandleByIndex;
+diff --git a/src/nvidia.cpp b/src/nvidia.cpp
+index 1c472dd..2739a35 100644
+--- a/src/nvidia.cpp
++++ b/src/nvidia.cpp
+@@ -121,11 +121,33 @@ void NVIDIA::get_instant_metrics_nvml(struct gpu_metrics *metrics, struct overla
+         }
+ 
+         if (params->enabled[OVERLAY_PARAM_ENABLED_gpu_power] || (logger && logger->is_active())) {
+-            unsigned int power, limit;
+-            nvml->nvmlDeviceGetPowerUsage(device, &power);
+-            nvml->nvmlDeviceGetPowerManagementLimit(device, &limit);
+-            metrics->powerUsage = power / 1000;
+-            metrics->powerLimit = limit / 1000;
++            // Prefer the energy counter (Volta and newer). The 32-bit NVML
++            // returns NVML_SUCCESS with garbage from nvmlDeviceGetPowerUsage,
++            // and leaves the limit unwritten, but its energy counter is right.
++            // The counter ticks about every 100 ms, so single samples read 0
++            // or a spike; the average over METRICS_SAMPLE_COUNT is correct.
++            unsigned long long energy = 0;
++            if (nvml->nvmlDeviceGetTotalEnergyConsumption &&
++                nvml->nvmlDeviceGetTotalEnergyConsumption(device, &energy) == NVML_SUCCESS) {
++                auto now = std::chrono::steady_clock::now();
++                float power = 0.f;
++                if (last_energy && energy >= last_energy) {
++                    std::chrono::duration<float> elapsed = now - last_energy_time;
++                    if (elapsed.count() > 0.f)
++                        power = (energy - last_energy) / 1000.f / elapsed.count();
++                }
++                last_energy = energy;
++                last_energy_time = now;
++                metrics->powerUsage = power;
++            } else {
++                unsigned int power = 0;
++                if (nvml->nvmlDeviceGetPowerUsage(device, &power) == NVML_SUCCESS)
++                    metrics->powerUsage = power / 1000;
++            }
++
++            unsigned int limit = 0;
++            if (nvml->nvmlDeviceGetPowerManagementLimit(device, &limit) == NVML_SUCCESS)
++                metrics->powerLimit = limit / 1000;
+         }
+ 
+         if (params->enabled[OVERLAY_PARAM_ENABLED_throttling_status]) {
+diff --git a/src/nvidia.h b/src/nvidia.h
+index 5e3340d..713fccf 100644
+--- a/src/nvidia.h
++++ b/src/nvidia.h
+@@ -96,6 +96,10 @@ class NVIDIA {
+ 
+         std::vector<nvmlProcessInfo_v1_t> process_info = {};
+ 
++        // Previous energy counter reading (mJ), for power from its rate.
++        unsigned long long last_energy = 0;
++        std::chrono::steady_clock::time_point last_energy_time;
++
+         void get_instant_metrics_nvml(struct gpu_metrics *metrics, struct overlay_params *params);
+         std::shared_ptr<libnvml_loader> nvml = get_libnvml_loader();
+ #endif

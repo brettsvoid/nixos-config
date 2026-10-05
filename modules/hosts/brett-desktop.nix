@@ -15,6 +15,9 @@ let
   # doubled. Unescaped, the rule silently matched nothing (60 Hz, unrotated).
   odyssey = "desc:Samsung Electric Company Odyssey G5 HK7X700060";
   dell = "desc:Dell Inc. Dell AW2518H ##ASO0Wsxq3xLd";
+
+  # The 3080 Ti's PCI address.
+  dgpu = "0000:01:00.0";
 in
 {
   flake.nixosConfigurations.brett-desktop = inputs.nixpkgs.lib.nixosSystem {
@@ -104,7 +107,7 @@ in
         # installer and card1 after install), and the by-path names contain
         # colons, which AQ_DRM_DEVICES uses as its list separator.
         services.udev.extraRules = ''
-          KERNEL=="card*", KERNELS=="0000:01:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
+          KERNEL=="card*", KERNELS=="${dgpu}", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
         '';
 
         # ─── Memory ────────────────────────────────────────────────────
@@ -182,6 +185,9 @@ in
               wayland.windowManager.hyprland.settings.env = [
                 "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
               ];
+
+              # MangoHud lists the idle iGPU too; show only the 3080 Ti.
+              programs.mangohud.settings.pci_dev = dgpu;
 
               # Odyssey G5 (27", landscape) on the left; Dell AW2518H (24.5")
               # on the right, turned 90° clockwise so its top edge faces right.
