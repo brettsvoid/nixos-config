@@ -14,9 +14,20 @@ let
 in
 {
   flake.modules.homeManager.desktop-game-launcher =
-    { pkgs, ... }:
+    { pkgs, osConfig, ... }:
     let
       rofi = pkgs.rofi.override { plugins = [ pkgs.rofi-games ]; };
+
+      # rofi-games starts a Steam game by running `steam steam://rungameid/…`
+      # as rofi's child, and rofi exits about 0.2 ms later. NixOS's steam
+      # runs bubblewrap with --die-with-parent, which arms just after rofi
+      # starts exiting, so the sandbox was SIGKILLed before it could pass
+      # the URL to the running Steam, and the game never started. This
+      # steam goes first on rofi's PATH and detaches the real one into its
+      # own session, so the sandbox's parent is no longer rofi.
+      detachedSteam = pkgs.writeShellScriptBin "steam" ''
+        exec ${pkgs.util-linux}/bin/setsid -f ${lib.getExe osConfig.programs.steam.package} "$@"
+      '';
 
       # Crimson on the edge of the selected tile only, never as a fill.
       theme = pkgs.writeText "games-ronin.rasi" ''
@@ -112,8 +123,12 @@ in
         }
       '';
 
+      # rofi's default is single click to select and double-click to launch.
+      # Launch on a single click instead, by moving MousePrimary from
+      # selecting to accepting (the pairing rofi(1) gives for this).
       game-launcher = pkgs.writeShellScriptBin "game-launcher" ''
-        exec ${rofi}/bin/rofi -modi games -show games -theme ${theme} -display-games LIBRARY
+        PATH=${detachedSteam}/bin:$PATH exec ${rofi}/bin/rofi -modi games -show games -theme ${theme} -display-games LIBRARY \
+          -me-select-entry "" -me-accept-entry MousePrimary
       '';
     in
     {
