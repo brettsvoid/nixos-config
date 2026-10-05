@@ -75,6 +75,14 @@ Both are Nix-rendered, not committed live files:
   (`modules/home/darwin/edgebar/matugen`) generates it and pings edgebar's
   `theme.sock` to re-theme live.
 
+The ink drawn on the pills (`colors.base`) is contrast-checked against the pill.
+If the role map's ink falls under 4.5:1 (WCAG AA), edgebar uses the palette
+colour that contrasts most instead, or plain black or white if no palette colour
+clears it. Monochrome's light scheme needs this, because its `primary_container`
+is a dark grey. The theme view's **Ink** control overrides the check: it sets an
+explicit ink for the light or dark scheme in effect and saves it to
+`~/.config/edgebar/ink.json`. **Auto** clears the override.
+
 `modules/home/darwin/edgebar.nix` owns deployment; edit config/palette there and
 rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for the shared
 edgebar ⇄ quickshell design spec.

@@ -23,7 +23,17 @@ interface Config {
   };
   appearance: string; // "light" | "dark" | "auto"
   scheme: string; // active matugen scheme (e.g. "scheme-tonal-spot")
+  ink: InkInfo;
   notchIdle: string; // "handle" | "clock" | literal text
+}
+
+// How the on-pill ink (colors.base) was chosen — see pick_ink in lib.rs.
+interface InkInfo {
+  source: "config" | "contrast" | "override";
+  ratio: number; // contrast of the ink in effect against the pill
+  configured: string; // the role map's ink, before any correction
+  configuredRatio: number;
+  mode: "light" | "dark"; // the scheme it belongs to; an override edits this one
 }
 
 // One line of collapsed-notch content. Rust picks the winner across its
@@ -46,6 +56,7 @@ interface ThemePayload {
   colors: Record<string, string>;
   appearance: string;
   scheme: string;
+  ink: InkInfo;
 }
 
 interface Battery {
@@ -184,9 +195,13 @@ invoke<Config>("get_config")
       cfg.geometry.windowHeight,
       cfg.appearance,
       cfg.notchIdle,
+      cfg.ink,
+      cfg.colors.base,
     );
   })
-  .catch(() => initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "auto", "handle"));
+  .catch(() =>
+    initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "auto", "handle", null, ""),
+  );
 
 // Color vars only — re-applied live on day/night or wallpaper changes.
 function applyColors(c: Record<string, string>) {
@@ -265,6 +280,8 @@ function initBar(
   windowHeight: number,
   appearance: string,
   notchIdle: string,
+  ink: InkInfo | null,
+  inkColour: string,
 ) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
@@ -1433,6 +1450,41 @@ function initBar(
     });
   }
 
+  // Ink: the colour drawn on the pills. Auto is Rust's contrast-checked pick;
+  // the swatch opens the system colour picker and pins an explicit ink for the
+  // light/dark scheme in effect. Both report back through the "theme" event.
+  const inkAuto = document.querySelector<HTMLElement>("#ink-auto")!;
+  const inkCustom = document.querySelector<HTMLElement>("#ink-custom")!;
+  const inkSwatch = inkCustom.querySelector<HTMLElement>(".ink-swatch")!;
+  function renderInk(info: InkInfo, colour: string) {
+    inkColour = colour;
+    const pinned = info.source === "override";
+    inkAuto.classList.toggle("active", !pinned);
+    inkCustom.classList.toggle("active", pinned);
+    inkSwatch.style.background = colour;
+    const ratio = (r: number) => `${r.toFixed(1)}:1`;
+    inkAuto.title = pinned
+      ? "Back to auto (contrast-checked)"
+      : info.source === "contrast"
+        ? `Auto: ${colour}, ${ratio(info.ratio)} on the pill ` +
+          `(the scheme's ${info.configured} was only ${ratio(info.configuredRatio)})`
+        : `Auto: ${colour}, ${ratio(info.ratio)} on the pill`;
+    inkCustom.title = pinned
+      ? `Custom ${info.mode} ink: ${colour}, ${ratio(info.ratio)} on the pill`
+      : `Pick a ${info.mode} ink…`;
+  }
+  if (ink) renderInk(ink, inkColour);
+  inkAuto.addEventListener("click", (e) => {
+    e.stopPropagation();
+    invoke("set_ink", { colour: null });
+  });
+  inkCustom.addEventListener("click", (e) => {
+    e.stopPropagation();
+    invoke<string | null>("pick_colour", { initial: inkColour }).then((colour) => {
+      if (colour) invoke("set_ink", { colour });
+    });
+  });
+
   // Wallpaper filmstrip: clicking a thumb sets the desktop + re-themes the bar
   // instantly (Rust shells desktoppr + generate-edgebar-theme).
   function renderFilmstrip(wallpapers: Wallpaper[], current: string) {
@@ -1483,6 +1535,7 @@ function initBar(
     renderFilmstrip(wallpapers, current);
     renderSchemes(cfg.scheme);
     setActiveMode(cfg.appearance);
+    renderInk(cfg.ink, cfg.colors.base);
     themeLoaded = true;
     // warm the per-wallpaper palette caches so thumbnail clicks are instant
     invoke("precompute_palettes").catch(() => {});
@@ -1504,6 +1557,7 @@ function initBar(
   listen<ThemePayload>("theme", (e) => {
     applyColors(e.payload.colors);
     setActiveMode(e.payload.appearance);
+    renderInk(e.payload.ink, e.payload.colors.base);
     if (themeLoaded && e.payload.scheme) renderSchemes(e.payload.scheme);
     // Canvas pixels don't follow CSS vars — repaint them by hand.
     drawCpuGraph();

@@ -704,6 +704,48 @@ body {
   opacity: 1;
 }
 
+/* ---- ink picker (theme bar): auto / custom swatch ----
+   The appearance toggle's segmented look, at the toolbar's control height. */
+.ink-toggle {
+  height: var(--control-h);
+  flex: none;
+}
+.ink-label {
+  padding: 0 var(--space-2) 0 var(--space-3);
+  color: var(--base);
+  font-size: var(--font-2xs);
+  opacity: var(--dim);
+}
+.ink-opt {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--base);
+  font: inherit;
+  font-size: var(--font-2xs);
+  cursor: pointer;
+  opacity: var(--dim-more);
+}
+.ink-opt:hover {
+  opacity: var(--dim);
+}
+.ink-opt.active {
+  background: var(--pill-bg);
+  opacity: 1;
+}
+.ink-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  /* the ink contrasts with the pill by construction, but not always with the
+     track the swatch sits on — the ring keeps its edge either way */
+  box-shadow: 0 0 0 1px var(--separator);
+}
+
 /* ---- theme view: header, wallpaper filmstrip, browse, scheme picker ---- */
 .view-switch {
   display: flex;

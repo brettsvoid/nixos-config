@@ -618,6 +618,19 @@
                       id="scheme-select"
                       title="matugen scheme"
                     ></select>
+                    <!-- Ink: the colour drawn on the pills. Auto is the
+                         contrast-checked pick; the swatch pins your own. -->
+                    <div
+                      class="theme-toggle ink-toggle"
+                      role="group"
+                      aria-label="Pill ink"
+                    >
+                      <span class="ink-label">Ink</span>
+                      <button class="ink-opt" id="ink-auto">Auto</button>
+                      <button class="ink-opt" id="ink-custom">
+                        <span class="ink-swatch"></span>
+                      </button>
+                    </div>
                     <button class="chip wip" title="OLED mode — not implemented">
                       <span class="icon"
                         ><svg

@@ -111,6 +111,8 @@ struct ResolvedConfig {
     geometry: Geometry,
     appearance: Appearance,
     scheme: String,
+    /// How `colors.base` (the on-pill ink) was chosen.
+    ink: InkInfo,
     /// What the notch shows when no provider has anything to say. Rendered
     /// entirely in the WebView (a clock ticks, and that shouldn't cost an event
     /// stream), so it travels with the config rather than the `notch` event.
@@ -146,6 +148,114 @@ fn resolve_colors(
         frame_line: r(&colors.frame_line),
         frame_corner: r(&colors.frame_corner),
     }
+}
+
+/// WCAG AA for body text. The pills' 13px labels are body text, so this is the
+/// floor the on-pill ink has to clear.
+const MIN_INK_CONTRAST: f64 = 4.5;
+
+/// WCAG 2 relative luminance of an sRGB `#hex` colour (alpha ignored).
+fn luminance(hex: &str) -> f64 {
+    let [r, g, b, _] = hex_to_rgba(hex);
+    let lin = |c: f64| {
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/// WCAG 2 contrast ratio between two colours, 1.0 (same) to 21.0 (black/white).
+fn contrast(a: &str, b: &str) -> f64 {
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
+/// Explicit on-pill ink per scheme, set from the theme view. Wins over both the
+/// role map and the contrast check. Per scheme because an ink picked for a dark
+/// pill would vanish on the light one the moment the appearance flips.
+#[derive(Clone, Default, Deserialize, Serialize)]
+struct InkOverride {
+    #[serde(default)]
+    light: Option<String>,
+    #[serde(default)]
+    dark: Option<String>,
+}
+
+impl InkOverride {
+    fn for_scheme(&self, s: Scheme) -> Option<&str> {
+        match s {
+            Scheme::Light => self.light.as_deref(),
+            Scheme::Dark => self.dark.as_deref(),
+        }
+    }
+
+    fn set(&mut self, s: Scheme, ink: Option<String>) {
+        match s {
+            Scheme::Light => self.light = ink,
+            Scheme::Dark => self.dark = ink,
+        }
+    }
+}
+
+/// How the on-pill ink in effect was arrived at, for the theme view's control.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InkInfo {
+    /// "config" (the role map's ink cleared the floor), "contrast" (the check
+    /// replaced it) or "override" (set explicitly from the theme view).
+    source: &'static str,
+    /// Contrast of the ink in effect against the pill.
+    ratio: f64,
+    /// The role map's ink and its contrast, before any correction.
+    configured: String,
+    configured_ratio: f64,
+    /// The scheme this ink belongs to ("light" | "dark"); an override edits it.
+    mode: &'static str,
+}
+
+/// Pick the on-pill ink. The role map's choice stands if it reads; otherwise the
+/// palette colour that contrasts most with the pill, which keeps the wallpaper
+/// tint (matugen's surface is a near-white carrying a hint of the source hue).
+/// A mid-tone pill can leave every palette colour short of the floor, and then
+/// plain black or white is the better of the lot.
+fn pick_ink(
+    configured: &str,
+    pill: &str,
+    palette: &std::collections::HashMap<String, String>,
+) -> (String, &'static str) {
+    if contrast(configured, pill) >= MIN_INK_CONTRAST {
+        return (configured.to_string(), "config");
+    }
+    // Sorted so a tie between two distinct colours resolves the same way every
+    // run (HashMap order doesn't).
+    let mut candidates: Vec<&str> = palette
+        .values()
+        .map(String::as_str)
+        .filter(|v| v.starts_with('#'))
+        .collect();
+    candidates.sort_unstable();
+    let best_of = |c: &[&str]| -> String {
+        c.iter()
+            .copied()
+            .max_by(|a, b| contrast(a, pill).total_cmp(&contrast(b, pill)))
+            .unwrap_or(configured)
+            .to_string()
+    };
+    let best = best_of(&candidates);
+    if contrast(&best, pill) >= MIN_INK_CONTRAST {
+        return (best, "contrast");
+    }
+    (best_of(&[configured, best.as_str(), "#000000", "#ffffff"]), "contrast")
+}
+
+/// `#rrggbb` (any case) → lower-case, or None if it isn't one.
+fn normalise_hex(s: &str) -> Option<String> {
+    let h = s.trim().strip_prefix('#')?;
+    (h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| format!("#{}", h.to_ascii_lowercase()))
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -328,6 +438,28 @@ fn persist_scheme(scheme: &str) {
     }
 }
 
+/// The theme view's ink override, next to the appearance and scheme files.
+fn ink_state_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".config/edgebar/ink.json"))
+}
+
+fn load_ink_override() -> InkOverride {
+    ink_state_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn persist_ink_override(ink: &InkOverride) {
+    if let (Some(path), Ok(json)) = (ink_state_path(), serde_json::to_string(ink)) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, json);
+    }
+}
+
 /// Shared, mutable theme state behind a `Mutex` (managed by Tauri). Holds the
 /// raw per-scheme role maps + both palettes; `get_config`/`apply_theme` resolve
 /// to hex on demand for whichever scheme is active.
@@ -342,6 +474,46 @@ struct ThemeState {
     wallpaper_command: String,
     /// `notch.idle` from config, passed through to the WebView.
     notch_idle: String,
+    /// The theme view's explicit on-pill ink, per scheme.
+    ink: InkOverride,
+}
+
+impl ThemeState {
+    /// Colours for the active scheme, with the on-pill ink settled: the
+    /// override if one is set, else the role map's ink after the contrast check.
+    fn resolve(&self) -> (Colors, InkInfo) {
+        let palette = self.palettes.for_scheme(self.scheme);
+        let mut colors = resolve_colors(self.colors.for_scheme(self.scheme), palette);
+        let configured = std::mem::take(&mut colors.base);
+        let (ink, source) = match self.ink.for_scheme(self.scheme) {
+            Some(hex) => (hex.to_string(), "override"),
+            None => pick_ink(&configured, &colors.pill_bg, palette),
+        };
+        let info = InkInfo {
+            source,
+            ratio: contrast(&ink, &colors.pill_bg),
+            configured_ratio: contrast(&configured, &colors.pill_bg),
+            configured,
+            mode: match self.scheme {
+                Scheme::Light => "light",
+                Scheme::Dark => "dark",
+            },
+        };
+        colors.base = ink;
+        (colors, info)
+    }
+
+    fn resolved_config(&self) -> ResolvedConfig {
+        let (colors, ink) = self.resolve();
+        ResolvedConfig {
+            colors,
+            geometry: self.geometry.clone(),
+            appearance: self.appearance,
+            scheme: persisted_scheme(),
+            ink,
+            notch_idle: self.notch_idle.clone(),
+        }
+    }
 }
 
 /// Resolve `Auto` against the macOS system setting. `AppleInterfaceStyle` is
@@ -384,13 +556,7 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
         let mut ts = state.lock().unwrap();
         ts.appearance = appearance;
         ts.scheme = resolve_scheme(appearance);
-        ResolvedConfig {
-            colors: resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme)),
-            geometry: ts.geometry.clone(),
-            appearance,
-            scheme: persisted_scheme(),
-            notch_idle: ts.notch_idle.clone(),
-        }
+        ts.resolved_config()
     };
     let _ = app.emit("theme", &resolved);
     #[cfg(target_os = "macos")]
@@ -442,14 +608,56 @@ fn hex_to_rgba(hex: &str) -> [f64; 4] {
 
 #[tauri::command]
 fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
-    let ts = state.lock().unwrap();
-    ResolvedConfig {
-        colors: resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme)),
-        geometry: ts.geometry.clone(),
-        appearance: ts.appearance,
-        scheme: persisted_scheme(),
-        notch_idle: ts.notch_idle.clone(),
+    state.lock().unwrap().resolved_config()
+}
+
+/// Set (or, with None, clear) the on-pill ink for the active scheme from the
+/// theme view. Persists it and re-themes live.
+#[tauri::command]
+fn set_ink(app: tauri::AppHandle, colour: Option<String>) {
+    let ink = colour.as_deref().and_then(normalise_hex);
+    if colour.is_some() && ink.is_none() {
+        return; // not a colour; leave the current ink alone
     }
+    let appearance = {
+        let state = app.state::<Mutex<ThemeState>>();
+        let mut ts = state.lock().unwrap();
+        let scheme = ts.scheme;
+        ts.ink.set(scheme, ink);
+        persist_ink_override(&ts.ink);
+        ts.appearance
+    };
+    apply_theme(&app, appearance);
+}
+
+/// Open the system colour picker (owned by osascript, like the wallpaper
+/// picker) starting at `initial`, and return the choice as `#rrggbb`, or None
+/// on cancel. Blocks until the dialog closes, hence `spawn_blocking`.
+#[tauri::command]
+async fn pick_colour(initial: String) -> Option<String> {
+    let [r, g, b, _] = hex_to_rgba(&initial);
+    // `choose color` speaks 16-bit channels: 0..=65535.
+    let wide = |c: f64| (c * 65535.0).round() as u32;
+    let script = format!(
+        "set c to choose color default color {{{}, {}, {}}}\n\
+         return ((item 1 of c) as text) & \" \" & (item 2 of c) & \" \" & (item 3 of c)",
+        wide(r),
+        wide(g),
+        wide(b)
+    );
+    let out = tauri::async_runtime::spawn_blocking(move || run_osa(&script))
+        .await
+        .ok()
+        .flatten()?;
+    let rgb: Vec<u32> = out
+        .split_whitespace()
+        .filter_map(|v| v.parse().ok())
+        .collect();
+    let [r, g, b] = rgb[..] else {
+        return None; // cancelled: osascript printed nothing
+    };
+    // 65535 / 255 = 257, so this maps the 16-bit range back onto 0..=255.
+    Some(format!("#{:02x}{:02x}{:02x}", r / 257, g / 257, b / 257))
 }
 
 /// 3-way appearance toggle from the bar (light / dark / auto). Persists the
@@ -2424,7 +2632,7 @@ fn rebuild_displays(app: &tauri::AppHandle) {
     let (geometry, line, corner) = {
         let state = app.state::<Mutex<ThemeState>>();
         let ts = state.lock().unwrap();
-        let c = resolve_colors(ts.colors.for_scheme(ts.scheme), ts.palettes.for_scheme(ts.scheme));
+        let (c, _) = ts.resolve();
         (ts.geometry.clone(), c.frame_line, c.frame_corner)
     };
     remove_native_frames();
@@ -2736,6 +2944,8 @@ pub fn run() {
             set_bar_size,
             get_config,
             set_appearance,
+            set_ink,
+            pick_colour,
             battery,
             metrics_sample,
             cpu_state,
@@ -2803,6 +3013,7 @@ pub fn run() {
                     .wallpaper_command
                     .unwrap_or_else(|| "desktoppr".to_string()),
                 notch_idle: resolve_notch_idle(config.notch.idle.as_deref()),
+                ink: load_ink_override(),
             }));
             // Notch providers: the store, then the watchers that feed it. Both
             // go in before the workspace socket below, which publishes into it.
