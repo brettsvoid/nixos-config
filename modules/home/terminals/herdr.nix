@@ -5,11 +5,41 @@
 { inputs, ... }:
 {
   flake.modules.homeManager.terminals-herdr =
-    { pkgs, ... }:
+    { lib, pkgs, ... }:
+    let
+      herdr = inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+    in
     {
       home.packages = [
-        inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default
-      ];
+        herdr
+      ]
+      # The Claude hook below is a sh script that does its socket work in
+      # `python3` from PATH, and exits 0 without a word when there is none.
+      # The Macs have /usr/bin/python3; the NixOS hosts have nothing on PATH.
+      ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.python3;
+
+      # Claude Code session restore. After a server restart herdr reruns
+      # `claude --resume <id>` in each pane, but only for panes whose session
+      # id a SessionStart hook reported over the socket — no hook, no id, and
+      # the pane comes back as a plain shell. `herdr integration install
+      # claude` is what adds that hook (~/.claude/hooks/herdr-agent-state.sh
+      # plus a `hooks.SessionStart` entry in settings.json), and the only
+      # thing that ever offers it is the first-run screen `onboarding = false`
+      # skips. So without this a fresh machine never gets it.
+      #
+      # Safe to rerun: the installer strips its own entries before adding
+      # them back, and a herdr bump rewrites the hook at the new integration
+      # version. After claudeCodeSettings, which turns a store symlink at
+      # settings.json into a real file — herdr writes through it in place.
+      # That merge leaves `hooks` alone because nix declares none.
+      home.activation.herdrClaudeIntegration =
+        lib.hm.dag.entryAfter [ "writeBoundary" "claudeCodeSettings" ]
+          ''
+            if [ -d "$HOME/.claude" ]; then
+              $DRY_RUN_CMD ${lib.getExe herdr} integration install claude >/dev/null \
+                || echo "herdr: claude integration install failed, session restore stays off" >&2
+            fi
+          '';
 
       # Only the keys we deviate on — everything else stays on herdr's
       # defaults (see `herdr --default-config`). Herdr reads this at start-up;
