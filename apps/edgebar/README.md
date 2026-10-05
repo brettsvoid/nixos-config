@@ -83,6 +83,11 @@ is a dark grey. The theme view's **Ink** control overrides the check: it sets an
 explicit ink for the light or dark scheme in effect and saves it to
 `~/.config/edgebar/ink.json`. **Auto** clears the override.
 
+The accent (the active workspace ring and the selected wallpaper's border) gets
+the same check, with WCAG's 3:1 floor for graphical indicators. matugen's accent
+often matches the pill's tone: in dark mode it is about 1:1 on the pill in every
+scheme, so there the ring always takes the surface colour, as the ink does.
+
 `modules/home/darwin/edgebar.nix` owns deployment; edit config/palette there and
 rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for the shared
 edgebar ⇄ quickshell design spec.

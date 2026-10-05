@@ -27,7 +27,7 @@ interface Config {
   notchIdle: string; // "handle" | "clock" | literal text
 }
 
-// How the on-pill ink (colors.base) was chosen — see pick_ink in lib.rs.
+// How the on-pill ink (colors.base) was chosen — see ThemeState::resolve in lib.rs.
 interface InkInfo {
   source: "config" | "contrast" | "override";
   ratio: number; // contrast of the ink in effect against the pill

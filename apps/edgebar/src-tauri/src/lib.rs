@@ -154,6 +154,9 @@ fn resolve_colors(
 /// floor the on-pill ink has to clear.
 const MIN_INK_CONTRAST: f64 = 4.5;
 
+/// WCAG's floor for graphical indicators (1.4.11), which the accent rings are.
+const MIN_ACCENT_CONTRAST: f64 = 3.0;
+
 /// WCAG 2 relative luminance of an sRGB `#hex` colour (alpha ignored).
 fn luminance(hex: &str) -> f64 {
     let [r, g, b, _] = hex_to_rgba(hex);
@@ -216,18 +219,20 @@ struct InkInfo {
     mode: &'static str,
 }
 
-/// Pick the on-pill ink. The role map's choice stands if it reads; otherwise the
-/// palette colour that contrasts most with the pill, which keeps the wallpaper
-/// tint (matugen's surface is a near-white carrying a hint of the source hue).
-/// A mid-tone pill can leave every palette colour short of the floor, and then
-/// plain black or white is the better of the lot.
-fn pick_ink(
-    configured: &str,
+/// A replacement for `configured` that reads on `pill`, or None if it already
+/// clears `floor`. The replacement is the palette colour that contrasts most
+/// with the pill, which keeps the wallpaper tint (matugen's surface is a
+/// near-white carrying a hint of the source hue). A mid-tone pill can leave
+/// every palette colour short of the floor, and then plain black or white is
+/// the better of the lot.
+fn readable_on(
     pill: &str,
+    configured: &str,
     palette: &std::collections::HashMap<String, String>,
-) -> (String, &'static str) {
-    if contrast(configured, pill) >= MIN_INK_CONTRAST {
-        return (configured.to_string(), "config");
+    floor: f64,
+) -> Option<String> {
+    if contrast(configured, pill) >= floor {
+        return None;
     }
     // Sorted so a tie between two distinct colours resolves the same way every
     // run (HashMap order doesn't).
@@ -245,10 +250,10 @@ fn pick_ink(
             .to_string()
     };
     let best = best_of(&candidates);
-    if contrast(&best, pill) >= MIN_INK_CONTRAST {
-        return (best, "contrast");
+    if contrast(&best, pill) >= floor {
+        return Some(best);
     }
-    (best_of(&[configured, best.as_str(), "#000000", "#ffffff"]), "contrast")
+    Some(best_of(&[configured, best.as_str(), "#000000", "#ffffff"]))
 }
 
 /// `#rrggbb` (any case) → lower-case, or None if it isn't one.
@@ -487,8 +492,19 @@ impl ThemeState {
         let configured = std::mem::take(&mut colors.base);
         let (ink, source) = match self.ink.for_scheme(self.scheme) {
             Some(hex) => (hex.to_string(), "override"),
-            None => pick_ink(&configured, &colors.pill_bg, palette),
+            None => match readable_on(&colors.pill_bg, &configured, palette, MIN_INK_CONTRAST) {
+                Some(better) => (better, "contrast"),
+                None => (configured.clone(), "config"),
+            },
         };
+        // The active rings. matugen's accent often lands on the pill's own
+        // tone: in dark mode it sits at ~1:1 in every scheme, and in
+        // monochrome light it IS the pill colour, so the rings vanish.
+        if let Some(better) =
+            readable_on(&colors.pill_bg, &colors.accent, palette, MIN_ACCENT_CONTRAST)
+        {
+            colors.accent = better;
+        }
         let info = InkInfo {
             source,
             ratio: contrast(&ink, &colors.pill_bg),
