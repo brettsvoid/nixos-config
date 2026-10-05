@@ -198,23 +198,44 @@ in
               # monitor. With no primary set, XWayland lists the Dell first, so
               # they render at the rotated 1080x1920 and fill only the left of
               # the Odyssey. Make the Odyssey primary; its connector is looked
-              # up by description so a cable swap still does not matter. The
-              # loop waits for XWayland in case it is not up yet.
+              # up by description so a cable swap still does not matter.
+              # Switching the KVM away unplugs both monitors, and XWayland
+              # drops the primary when they come back, so set it again on
+              # every monitoradded event, not just at login. xrandr exits 0
+              # for an output XWayland does not have yet, so success is
+              # checked in its monitor list, retrying until XWayland catches
+              # up (or, at login, until it is up at all).
               wayland.windowManager.hyprland.settings.exec-once = [
                 (lib.getExe (
                   pkgs.writeShellApplication {
                     name = "xwayland-primary-odyssey";
                     runtimeInputs = [
+                      pkgs.gnugrep
                       pkgs.jq
+                      pkgs.socat
                       pkgs.xrandr
                     ];
                     text = ''
-                      output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name')
-                      for _ in $(seq 30); do
-                        xrandr --output "$output" --primary 2>/dev/null && exit 0
-                        sleep 1
-                      done
-                      exit 1
+                      set_primary() {
+                        for _ in $(seq 30); do
+                          output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name') || true
+                          if [ -n "$output" ]; then
+                            xrandr --output "$output" --primary 2>/dev/null || true
+                            monitors=$(xrandr --listmonitors 2>/dev/null) || true
+                            grep -q "^ *[0-9]*: +\*$output " <<<"$monitors" && return 0
+                          fi
+                          sleep 1
+                        done
+                        echo "could not make the Odyssey XWayland's primary output" >&2
+                      }
+
+                      set_primary
+                      socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" |
+                        while read -r event; do
+                          case $event in
+                            'monitoradded>>'*) set_primary ;;
+                          esac
+                        done
                     '';
                   }
                 ))
