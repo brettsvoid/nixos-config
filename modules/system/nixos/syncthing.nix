@@ -1,5 +1,6 @@
 # Syncthing as a system service that runs as brett, so syncing starts at boot
-# and does not wait for a login. It shares the Obsidian vault with the M1 MBP.
+# and does not wait for a login. It shares the Obsidian vault and the default
+# ~/Sync folder with the M1 MBP.
 # The Macs run the Homebrew `syncthing-app` cask (darwin/homebrew.nix) and keep
 # their Syncthing settings outside this repo. The mac mini does not share the
 # vault.
@@ -44,6 +45,13 @@ _: {
                 cleanoutDays = "0";
               };
             };
+          };
+
+          folders."Default Folder" = {
+            # The ID the MBP offers for its default ~/Sync folder.
+            id = "default";
+            path = "${home}/Sync";
+            devices = [ "brett-m1-mbp" ];
           };
         };
       };
