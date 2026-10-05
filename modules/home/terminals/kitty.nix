@@ -23,6 +23,14 @@ in
     {
       programs.kitty = {
         enable = true;
+        # macOS: upstream's notarised Developer ID build, unmodified. TCC keys
+        # a grant (Full Disk Access, Screen Recording, …) on the app's
+        # designated requirement; the source build is ad-hoc signed, so its
+        # requirement is its cdhash and every rebuild silently drops the
+        # grants. kitty-bin's requirement is the bundle ID + team ID, which
+        # survives updates. Its bundle carries shell-integration/ and terminfo/,
+        # and zsh loads the former via $KITTY_INSTALLATION_DIR either way.
+        package = if pkgs.stdenv.isDarwin then pkgs.kitty-bin else pkgs.kitty;
         font = {
           name = terminal.font.family;
           inherit (terminal.font) size;
