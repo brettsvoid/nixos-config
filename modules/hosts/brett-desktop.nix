@@ -38,6 +38,7 @@ in
           nvidia
           greetd
           openssh
+          syncthing
           hyprland
           apps-claude-code
           apps-comfyui
