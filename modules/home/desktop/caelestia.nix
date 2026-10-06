@@ -142,6 +142,25 @@ in
             groupPreviewNum = 2;
             openExpanded = false;
           };
+          # The session menu's and lock screen's power buttons. Caelestia's
+          # defaults call logind directly; session-exit (from
+          # desktop-session-restore) saves the open apps for the next login,
+          # then has hyprshutdown close them before Hyprland exits. Caelestia
+          # runs a command it does not recognise as a plain process.
+          session.commands = {
+            logout = [
+              "session-exit"
+              "logout"
+            ];
+            shutdown = [
+              "session-exit"
+              "poweroff"
+            ];
+            reboot = [
+              "session-exit"
+              "reboot"
+            ];
+          };
         };
 
         cli = {

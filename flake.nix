@@ -42,6 +42,14 @@
       flake = false;
     };
 
+    # Reopens the last session's apps at login
+    # (modules/home/desktop/session-restore.nix). Pinned to a release tag;
+    # bump on `nix flake update`.
+    hyprsession = {
+      url = "github:joshurtree/hyprsession/v0.2.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";

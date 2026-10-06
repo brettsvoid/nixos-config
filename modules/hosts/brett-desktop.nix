@@ -152,6 +152,7 @@ in
                 desktop-wallpapers
                 desktop-custom-shell
                 desktop-caelestia
+                desktop-session-restore
                 desktop-game-launcher
                 nvim
                 apps-firefox
