@@ -75,6 +75,20 @@
     ];
   };
 
+  # "storage" drive: the Samsung 970 EVO Plus that was Windows' F:. One
+  # subvolume per use, all sharing its free space; mount further ones beside
+  # this. nofail, so a missing or dead drive doesn't stop the boot.
+  fileSystems."/games" = {
+    device = "/dev/disk/by-uuid/68226f51-2cc8-47b7-b651-6dddc78698fe";
+    fsType = "btrfs";
+    options = [
+      "subvol=@games"
+      "compress=zstd"
+      "noatime"
+      "nofail"
+    ];
+  };
+
   swapDevices = [ ];
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
