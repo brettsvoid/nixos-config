@@ -165,6 +165,7 @@ in
                 apps-claude-code
                 apps-comfyui
                 apps-keymapp
+                apps-nolvus
                 profile-base
                 profile-code
                 profile-gaming
