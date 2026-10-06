@@ -14,9 +14,15 @@ let
 in
 {
   flake.modules.homeManager.desktop-game-launcher =
-    { pkgs, osConfig, ... }:
+    {
+      config,
+      pkgs,
+      osConfig,
+      ...
+    }:
     let
       rofi = pkgs.rofi.override { plugins = [ pkgs.rofi-games ]; };
+      toml = pkgs.formats.toml { };
 
       # rofi-games starts a Steam game by running `steam steam://rungameid/…`
       # as rofi's child, and rofi exits about 0.2 ms later. NixOS's steam
@@ -132,20 +138,36 @@ in
       '';
     in
     {
-      home.packages = [ game-launcher ];
+      options.local.gameLauncher.entries = lib.mkOption {
+        type = lib.types.listOf toml.type;
+        default = [ ];
+        description = ''
+          Extra tiles for games rofi-games doesn't find, or overrides for ones
+          it does (matched by title). Fields: title, launch_command,
+          path_box_art, launch_env, hide (see the rofi-games README).
+        '';
+      };
 
-      # Both default to on, which prints "Title — Steam" in bold under every
-      # tile. Custom entries and box-art overrides also go in this file (see
-      # the rofi-games README).
-      xdg.configFile."rofi-games/config.toml".text = ''
-        show_entry_source_text = false
-        use_bold_entry_title = false
-      '';
+      config = {
+        home.packages = [ game-launcher ];
 
-      wayland.windowManager.hyprland.settings = {
-        # The window is translucent ink; the blur is what hides the desktop.
-        layerrule = [ "blur on, match:namespace ^rofi$" ];
-        bindd = [ "$mod, G, Game library, exec, game-launcher" ];
+        # Both default to on, which prints "Title — Steam" in bold under every
+        # tile.
+        xdg.configFile."rofi-games/config.toml".source = toml.generate "config.toml" (
+          {
+            show_entry_source_text = false;
+            use_bold_entry_title = false;
+          }
+          // lib.optionalAttrs (config.local.gameLauncher.entries != [ ]) {
+            entries = config.local.gameLauncher.entries;
+          }
+        );
+
+        wayland.windowManager.hyprland.settings = {
+          # The window is translucent ink; the blur is what hides the desktop.
+          layerrule = [ "blur on, match:namespace ^rofi$" ];
+          bindd = [ "$mod, G, Game library, exec, game-launcher" ];
+        };
       };
     };
 }
