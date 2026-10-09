@@ -1,12 +1,13 @@
 #version 320 es
-// Window open: the window burns into view through a noise pattern, with a
-// glowing ember edge on the pixels that have just appeared. It shares its
+// Window open: the window burns into view through a noise pattern. GLOW
+// adds a glowing ember edge to the pixels that have just appeared; it is off,
+// the plain burn being the chosen look (2026-10-09). It shares its
 // noise and settings with dissolve-close.glsl; keep the two in step when
 // tuning. The highest noise values appear first (see dissolve-close.glsl for
 // why the close burns those first too).
 //
 // HyprWindowShade reads the duration from this comment (seconds):
-// @duration 0.4
+// @duration 0.3
 //
 precision highp float;
 
@@ -24,7 +25,7 @@ const float EDGE = 0.10;        // width of the glowing band, in noise units
 const float SOFT = 0.015;       // anti-aliasing at the cut, in noise units
 const vec3 EMBER_HOT = vec3(1.00, 0.85, 0.55);  // nearest the cut
 const vec3 EMBER_COOL = vec3(0.89, 0.10, 0.16); // outer edge (Crimson Ronin red)
-const float GLOW = 1.0;         // ember strength: 1 glowing edge, 0 a plain burn
+const float GLOW = 0.0;         // ember strength: 0 a plain burn, 1 glowing edge
 const float NOISE_MEAN = 0.499; // measured distribution of the fbm (see burnNoise)
 const float NOISE_SD = 0.1335;
 

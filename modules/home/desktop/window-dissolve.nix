@@ -4,9 +4,10 @@
 # snapshot of a closing window for its close animation; the plugin shades that
 # snapshot, so it works however the window closes.
 #
-# Trial stage: kitty windows burn in and out through a noise pattern with a
-# glowing edge (window-dissolve/dissolve-{open,close}.glsl). fade-close.glsl
-# is the simple fallback for a machine where the dissolve misbehaves.
+# Trial stage: kitty windows burn in and out through a noise pattern
+# (window-dissolve/dissolve-{open,close}.glsl), a plain burn with the shaders'
+# ember edge turned off (GLOW). fade-close.glsl is the simple fallback for a
+# machine where the dissolve misbehaves.
 #
 # The plugin is built against Hyprland's internal headers. mkHyprlandPlugin
 # builds it against pkgs.hyprland, which is the Hyprland that
@@ -70,9 +71,15 @@ in
         # shaders measure their noise from the window's centre in units of its
         # height, so the pattern grows with the window. The close needs no
         # Hyprland animation: the plugin holds the window still and
-        # dissolve-close.glsl does its own shrink. windowsIn is set explicitly,
-        # so the `windows` line in desktop-hyprland does not override it.
-        animations.animation = [ "windowsIn, 1, 4, ease, popin 85%" ];
+        # dissolve-close.glsl does its own shrink. windowsIn and fadeIn are
+        # set explicitly, so the `windows` and `fade` lines in
+        # desktop-hyprland do not override them. Speed is in tenths of a
+        # second: 3 matches dissolve-open.glsl's `@duration`, so the popin,
+        # the fade-in and the burn end together.
+        animations.animation = [
+          "windowsIn, 1, 3, ease, popin 85%"
+          "fadeIn, 1, 3, ease"
+        ];
 
         # A `tag` on a window rule picks the shader; `+shader_open:` and
         # `+shader_close:` play it once as the window opens or closes.

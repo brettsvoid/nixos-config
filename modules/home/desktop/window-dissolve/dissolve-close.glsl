@@ -1,6 +1,7 @@
 #version 320 es
-// Window close: the window burns away through a noise pattern, with a glowing
-// ember edge where pixels are about to go. It shares its noise and settings
+// Window close: the window burns away through a noise pattern. GLOW adds a
+// glowing ember edge where pixels are about to go; it is off, the plain burn
+// being the chosen look (2026-10-09). It shares its noise and settings
 // with dissolve-open.glsl; keep the two in step when tuning. Both work from
 // the highest noise values down: the open reveals them first and the close
 // burns them first. So a window closed while it is still opening (its last
@@ -8,7 +9,7 @@
 // first burning pixels the open never showed.
 //
 // HyprWindowShade reads the duration from this comment (seconds):
-// @duration 0.3
+// @duration 0.25
 //
 // The plugin replaces Hyprland's close animation here: it holds the window's
 // last frame still at full size, and its neighbours slide into the freed tile
@@ -34,7 +35,7 @@ const float SOFT = 0.015;       // anti-aliasing at the cut, in noise units
 const float SCALE_END = 0.85;   // size the window shrinks to by the end
 const vec3 EMBER_HOT = vec3(1.00, 0.85, 0.55);  // nearest the cut
 const vec3 EMBER_COOL = vec3(0.89, 0.10, 0.16); // outer edge (Crimson Ronin red)
-const float GLOW = 1.0;         // ember strength: 1 glowing edge, 0 a plain burn
+const float GLOW = 0.0;         // ember strength: 0 a plain burn, 1 glowing edge
 const float NOISE_MEAN = 0.499; // measured distribution of the fbm (see burnNoise)
 const float NOISE_SD = 0.1335;
 
