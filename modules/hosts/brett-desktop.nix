@@ -154,6 +154,7 @@ in
                 desktop-caelestia
                 desktop-session-restore
                 desktop-game-launcher
+                desktop-window-dissolve
                 nvim
                 apps-firefox
                 apps-git

@@ -50,6 +50,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # HyprWindowShade (MIT) — a Hyprland plugin that runs GLSL shaders over
+    # windows, here for the window dissolve
+    # (modules/home/desktop/window-dissolve.nix). It builds against
+    # Hyprland's internal headers, so the pin must suit nixpkgs' Hyprland:
+    # this is the plugin's own release pin for 0.56.2 (its hyprpm.toml
+    # `commit_pins`). Bump it with Hyprland, to the commit that file names.
+    hyprwindowshade = {
+      url = "github:ManofJELLO/HyprWindowShade/a4c6b8af424a189072427c4c90ef2938e1b481d3";
+      flake = false;
+    };
+
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";

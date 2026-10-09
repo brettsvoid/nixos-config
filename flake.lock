@@ -265,6 +265,23 @@
         "type": "github"
       }
     },
+    "hyprwindowshade": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789690756,
+        "narHash": "sha256-hFs3AVnH6j9ZnDzfG19pAL9cO+pVl21pT9q9A1c6DNw=",
+        "owner": "ManofJELLO",
+        "repo": "HyprWindowShade",
+        "rev": "a4c6b8af424a189072427c4c90ef2938e1b481d3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ManofJELLO",
+        "repo": "HyprWindowShade",
+        "rev": "a4c6b8af424a189072427c4c90ef2938e1b481d3",
+        "type": "github"
+      }
+    },
     "import-tree": {
       "locked": {
         "lastModified": 1784254960,
@@ -484,6 +501,7 @@
         "herdr": "herdr",
         "home-manager": "home-manager",
         "hyprsession": "hyprsession",
+        "hyprwindowshade": "hyprwindowshade",
         "import-tree": "import-tree",
         "mattpocock-skills": "mattpocock-skills",
         "nix-darwin": "nix-darwin",
