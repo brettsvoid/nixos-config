@@ -123,3 +123,27 @@ with the window). Open and close compute the same noise for the same spot.
 Settled for now: open 0.4 s with `windowsIn ... popin 80%` (now in the module), close
 0.5 s with the shader's own shrink to 80%, plugin default (non-overlay) mode, `GLOW` 1.0
 for testing. Not yet checked: two windows closing together; rapid open/close stutter.
+
+**2026-10-09:** Popin now 85% and the close 0.3 s. The user reports rapid open/close
+sometimes smears the burn into straight lines; parked at the user's request. Not
+reproduced in a 60 fps recording of three scripted patterns on ws 3 (close 0.05/0.15/
+0.25 s after map; three opened 0.15 s apart then closed 0.1 s apart; four open-then-close
+in a row, each opening while the last still closed): every frame showed the normal blob
+pattern.
+
+A lead for it, found while testing smoke (issue 04): kitty maps with a 1x1
+`wp_single_pixel_buffer` placeholder stretched over the window by a viewport, and
+attaches its first real frame up to ~0.2 s later (WAYLAND_DEBUG). The plugin renders
+every shader offscreen at the *buffer's* size (`runIntermediateStages`, Hooks.cpp) and
+Hyprland stretches the result over the window box, so during the placeholder the shader
+shades one pixel. The burn hides this (that pixel stays transparent until its noise
+value comes up, then the window shows kitty's flat background), but any buffer much
+smaller than the box, or a different shape, would stretch the burn pattern. If the smear
+comes back, record which buffers kitty attaches around it. The shelved smoke open
+(issue 04) draws nothing while `textureSize(tex, 0)` is 1x1; dissolve-open.glsl could
+take the same guard. Also measured: `surface_size` is sane from the first frame (diagnostic shader
+painting it into the window), and `seed` is always 0..1 (splitmix of the window pointer).
+
+**2026-10-09:** Look settled: `GLOW = 0.0` in both shaders, a plain burn, chosen by the
+user over the glowing edge and over a first smoke attempt (shelved, issue 04). The ember
+code stays behind the `GLOW` constant. Still open here: two windows closing together.
