@@ -16,5 +16,16 @@ _: {
     { pkgs, ... }:
     {
       home.packages = [ pkgs.keymapp ];
+
+      # Keymapp gives its window a maximum size of 2560x1440. Before Hyprland's
+      # dwindle layout tiles a window, it compares that maximum with the tile
+      # the window would split, and floats the window if the tile is larger.
+      # On the desktop's portrait monitor every tile is 1898 px tall, so
+      # Keymapp always floated there, wider than the screen. no_max_size makes
+      # Hyprland ignore the maximum. GTK still draws the window at most
+      # 1440 px tall, so alone on that monitor it leaves a gap under it.
+      wayland.windowManager.hyprland.settings.windowrule = [
+        "no_max_size on, match:class ^(keymapp)$"
+      ];
     };
 }
