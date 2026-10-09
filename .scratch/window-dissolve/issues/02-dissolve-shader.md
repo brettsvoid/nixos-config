@@ -147,3 +147,7 @@ painting it into the window), and `seed` is always 0..1 (splitmix of the window 
 **2026-10-09:** Look settled: `GLOW = 0.0` in both shaders, a plain burn, chosen by the
 user over the glowing edge and over a first smoke attempt (shelved, issue 04). The ember
 code stays behind the `GLOW` constant. Still open here: two windows closing together.
+
+**2026-10-09:** Two windows closing together checked: two tiled kitty windows closed in
+one `hyprctl --batch` burn side by side, each through its own pattern, and both are gone
+together. Left open here: the rapid open/close smear (parked, see above).
