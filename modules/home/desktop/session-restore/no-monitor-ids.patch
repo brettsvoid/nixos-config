@@ -1,0 +1,27 @@
+--- a/src/session.rs
++++ b/src/session.rs
+@@ -102,16 +102,6 @@
+         format!("Failed to move client to workspace {}", real_client.title).as_str()
+     );
+     context.check_and_adjust(
+-        |c| c.monitor.unwrap_or(0),
+-        || dispatch!(
+-            MoveWorkspaceToMonitor, 
+-            WorkspaceIdentifier::Id(session_client.workspace.id), 
+-            MonitorIdentifier::Id(session_client.monitor.unwrap_or(0))
+-        ), 
+-        format!("Moving {} to monitor {}", real_client.title, session_client.monitor.unwrap_or(0)).as_str(),
+-        format!("Failed to move client to monitor {}", real_client.title).as_str()
+-    );
+-    context.check_and_adjust(
+         |c| c.floating,
+         || dispatch!(ToggleFloating, Some(client_addr.clone())),
+         format!("Toggling floating for client {}", real_client.title).as_str(),
+@@ -205,7 +195,6 @@
+         std::fs::create_dir_all(&base_dir).expect("Failed to create session directory");
+ 
+         let props = [
+-            |info: &Client| format!("monitor {:?}", info.monitor.unwrap_or(0)),
+             |info: &Client| iif!(info.workspace.id == -99,
+                                 format!("workspace special silent"),
+                                 format!("workspace {} silent", info.workspace.id)),

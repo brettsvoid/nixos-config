@@ -16,7 +16,19 @@
   flake.modules.homeManager.desktop-session-restore =
     { pkgs, ... }:
     let
-      hyprsession = inputs.hyprsession.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      # hyprsession saves each window's monitor by Hyprland's monitor ID, and
+      # for 60 s after it relaunches the apps it moves each window's whole
+      # workspace to that ID. Hyprland gives a monitor the lowest free ID
+      # when it connects, so the IDs change between logins: once the Dell
+      # went from 1 to 0, and the restore moved workspace 9 to the Odyssey,
+      # which was then 1. The patch drops the monitor from what is saved and
+      # restored. Each host's workspace rules put every workspace on its
+      # monitor, so restoring the workspace is enough.
+      hyprsession =
+        inputs.hyprsession.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs
+          (old: {
+            patches = (old.patches or [ ]) ++ [ ./session-restore/no-monitor-ids.patch ];
+          });
 
       # `session-exit poweroff|reboot|logout`. The power buttons used to call
       # logind directly, which ends the session without asking the apps to
