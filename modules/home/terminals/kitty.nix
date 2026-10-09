@@ -56,6 +56,13 @@ in
           active_border_color = "none";
           inactive_text_alpha = "0.4";
           dim_opacity = "0.4";
+          # Hyprland tiles kitty, yet a lone tiled kitty window saves
+          # "window-state": "maximized" to ~/.cache/kitty/main.json when it
+          # closes, and the next kitty window then asks to be maximised and
+          # covers its workspace (seen with kitty 0.49 on Hyprland 0.56).
+          # Not remembering makes new windows tile. "yes" is kitty's default,
+          # so macOS is unchanged.
+          remember_window_size = if pkgs.stdenv.isLinux then "no" else "yes";
           background_opacity = builtins.toString terminal.opacity;
 
           # Background. Image is shipped from the repo; nix-store path is
