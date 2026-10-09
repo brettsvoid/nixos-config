@@ -4,7 +4,7 @@
 # snapshot of a closing window for its close animation; the plugin shades that
 # snapshot, so it works however the window closes.
 #
-# Trial stage: kitty windows burn in and out through a noise pattern
+# Windows burn in and out through a noise pattern
 # (window-dissolve/dissolve-{open,close}.glsl), a plain burn with the shaders'
 # ember edge turned off (GLOW). fade-close.glsl is the simple fallback for a
 # machine where the dissolve misbehaves.
@@ -82,10 +82,17 @@ in
         ];
 
         # A `tag` on a window rule picks the shader; `+shader_open:` and
-        # `+shader_close:` play it once as the window opens or closes.
+        # `+shader_close:` play it once as the window opens or closes. Every
+        # window gets it. The plugin skips fullscreen windows unless a rule
+        # opts them in, so a fullscreen game costs nothing. Menus and tooltips
+        # borrow their window's shader, which for these only matters while
+        # the window itself is still opening. To exclude an app with trouble,
+        # add a rule after these that removes both tags, e.g.
+        # "tag -shader_open:${shaderDir}/dissolve-open.glsl, match:class ^(app)$"
+        # (tested on brett-desktop, 2026-10-09).
         windowrule = [
-          "tag +shader_open:${shaderDir}/dissolve-open.glsl, match:class ^(kitty)$"
-          "tag +shader_close:${shaderDir}/dissolve-close.glsl, match:class ^(kitty)$"
+          "tag +shader_open:${shaderDir}/dissolve-open.glsl, match:class .*"
+          "tag +shader_close:${shaderDir}/dissolve-close.glsl, match:class .*"
         ];
       };
     };
