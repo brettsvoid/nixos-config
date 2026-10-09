@@ -1,0 +1,55 @@
+# Custom shell as brett-desktop's session shell; retire Caelestia
+
+Status: ready-for-human
+Type: HITL (switching the daily desktop)
+
+## Parent
+
+.scratch/custom-shell/PRD.md
+
+## What to build
+
+Make the custom shell start at login on brett-desktop instead of Caelestia, then remove
+Caelestia from the config.
+
+Caelestia's module does more than run the shell. Go through it and keep what is still
+wanted somewhere else:
+
+- Its keybinds (launcher, dashboard, sidebar, session, game mode, screenshots) now point
+  at the custom shell or the standalone tools.
+- The Crimson Ronin window border colours, GTK 3 theme and dark preference for apps.
+- The session commands that go through `session-exit`.
+- The Crimson Ronin wallpaper in the wallpapers folder.
+
+The `crimson-ronin` flake input stays (the game library uses it). The `caelestia-shell`
+input goes. `toggle-shell` drops its Caelestia case. Update comments in other modules
+that mention Caelestia.
+
+Run it as the daily desktop for a few days before removing Caelestia, so it is easy to
+switch back.
+
+## Acceptance criteria
+
+- [ ] Logging in to brett-desktop starts the custom shell; nothing starts Caelestia.
+- [ ] Every keybind that used to call Caelestia does something sensible.
+- [ ] Window borders, GTK apps and the dark preference look as they do today (or as you
+      decide).
+- [ ] Log out, reboot and shut down still restore apps at the next login.
+- [ ] After a few days of daily use, the Caelestia module and flake input are removed and
+      the flake builds.
+- [ ] A fullscreen game runs with the same frame pacing as under Caelestia (MangoHud).
+
+## Blocked by
+
+- .scratch/custom-shell/issues/05-launcher-drawer.md
+- .scratch/custom-shell/issues/06-keymap-cheatsheet.md
+- .scratch/custom-shell/issues/08-notifications.md
+- .scratch/custom-shell/issues/09-osd.md
+- .scratch/custom-shell/issues/10-bar-status.md
+- .scratch/custom-shell/issues/11-dashboard-drawer.md
+- .scratch/custom-shell/issues/12-rust-stats.md
+- .scratch/custom-shell/issues/14-wallpaper-background.md
+- .scratch/custom-shell/issues/15-wallpaper-picker.md
+- .scratch/custom-shell/issues/17-game-mode-toggle.md
+- .scratch/custom-shell/issues/20-screenshots.md
+- .scratch/custom-shell/issues/21-lock-screen.md
