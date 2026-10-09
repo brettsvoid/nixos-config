@@ -26,7 +26,7 @@ modules/
 apps/edgebar/              # Tauri overlay status bar (macOS), replaces sketchybar
 hardware/                  # nixos-generate-config output, per host
 docs/SECRETS.md            # secrets architecture & operational guide
-docs/bar-spec.md           # shared edgebar ⇄ quickshell design spec
+docs/bar-spec.md           # edgebar design spec
 docs/TODO.md               # work that can only be done on a particular machine
 docs/refactor-plan.md      # dendritic-pattern refactor notes and findings
 .gitleaks.toml             # secret-scanner config

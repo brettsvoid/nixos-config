@@ -54,7 +54,8 @@ QtObject {
         return roundness > 0 ? Math.max(roundness + offset, 0) : 0
     }
 
-    // Bar config. barHeight/fontSize track docs/bar-spec.md (parity with edgebar).
+    // Bar config. This shell's own values: docs/bar-spec.md covers edgebar only
+    // since 2026-10-09 (.scratch/custom-shell/PRD.md).
     readonly property int barHeight: 32
     readonly property int barMargin: 4
     readonly property int barRadius: radius(0)

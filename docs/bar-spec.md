@@ -1,21 +1,25 @@
-# Bar spec — edgebar ⇄ quickshell parity
+# Bar spec — edgebar
 
-One normative design language for both status bars:
+The design language of **edgebar**, the macOS Tauri overlay bar (`apps/edgebar`): the
+ambxst look, a screen-edge frame with attached pills.
 
-- **edgebar** — macOS Tauri overlay (`apps/edgebar`)
-- **quickshell** — Wayland/QML bar (`modules/home/desktop/quickshell`)
-
-Both target the ambxst look (screen-edge frame + attached pills). Values below are
-pulled from the current code, chosen from whichever bar is further along — usually
-edgebar, which already encodes the frame language and a full token scale. Where the
-two disagree today, this doc is the tie-breaker.
-
-Status legend in the checklist: edgebar is the reference implementation; quickshell is
-the one that has to catch up (it currently has ~3 segments to edgebar's ~8).
+> **Edgebar only, since 2026-10-09.** This spec used to bind two bars, edgebar and the
+> Wayland/QML bar in `modules/home/desktop/quickshell`, with the QML bar catching up to
+> edgebar. That bar is now being rebuilt as a shell of its own with a Caelestia-style
+> look (a frame whose drawers grow out of it), which the ambxst pill language doesn't
+> fit. So the two bars go their own ways on purpose. This may be undone later; until
+> then nothing here is work for the Quickshell shell, and that shell's design lives in
+> `.scratch/custom-shell/PRD.md`.
+>
+> §1 and §2 still describe both bars, as they stood when they split, as a record for a
+> possible reunion. §3 onwards is edgebar's own spec.
 
 ---
 
-## 1. Current state
+## 1. State when the bars split
+
+Snapshot from before 2026-10-09. The quickshell column is the old QML bar, which the
+custom shell replaces.
 
 | Concept | edgebar (macOS) | quickshell (Wayland) | Match |
 |---|---|---|:---:|
@@ -42,7 +46,10 @@ the one that has to catch up (it currently has ~3 segments to edgebar's ~8).
 
 ---
 
-## 2. Divergences to reconcile
+## 2. Divergences (no longer being reconciled)
+
+These were the gaps to close for parity. They are kept as a record only; since the
+split, none of them is planned work.
 
 1. **Band height** 32 vs 36.
 2. **Edge attachment** — attached-with-frame (edgebar) vs floating (quickshell). Biggest visual gap; the ambxst frame (`ambxst.nix frameThickness=4`) only exists on macOS today.
@@ -60,13 +67,13 @@ the one that has to catch up (it currently has ~3 segments to edgebar's ~8).
 
 ---
 
-## 3. Normative spec
+## 3. Normative spec (edgebar)
 
 ### 3.1 Geometry
 
 | Token | Value | Notes |
 |---|---|---|
-| `bar.height` | **32** | interactive band; WM top reservation = height + gap (AeroSpace `outerTop = 32+10`; Hyprland `exclusiveZone = 32 + gaps_out`) |
+| `bar.height` | **32** | interactive band; WM top reservation = height + gap (AeroSpace `outerTop = 32+10`) |
 | `bar.windowHeight` | 64 | render surface incl. transparent overshoot for shadow/fillet |
 | `frame.lineThickness` | **4** | screen-edge frame line (= ambxst `frameThickness`) |
 | `frame.innerRadius` | **20** | frame inner corner radius |
@@ -82,7 +89,7 @@ cog): radius 14, height `bar.height − 2`, top-offset +2.
 ### 3.2 Colour roles
 
 Single vocabulary, both modes. matugen source is normative — dropping edgebar's
-Catppuccin aliasing and quickshell's raw-token dump.
+Catppuccin aliasing.
 
 | Role | matugen (dark) | matugen (light) | Use |
 |---|---|---|---|
@@ -116,8 +123,6 @@ Catppuccin Latte/Mocha (`palette.default.json`).
   `tabular-nums`; time/percent bold (700).
 - **Dim**: `dim .75, dimMore .5, dimIcon .8`.
 - **Icons**: Lucide geometry (stroke 2, round caps), 1em in a 1.2em cell at `2xl`.
-  QML renders the same Lucide paths via `Shape`/SVG — not Font Awesome codepoints —
-  so glyph shapes match.
 
 ### 3.4 Segments (left → right)
 
@@ -153,10 +158,12 @@ Catppuccin Latte/Mocha (`palette.default.json`).
 | fadeIn / fadeOut | 250ms (delay 80) / 120ms | same |
 | workspace dot | 150ms `cubic-bezier(0.2,0.8,0.2,1)` | 150ms `OutQuad` (already matches) |
 
+The QML fallback column was for the old Quickshell bar and no longer applies; it is
+kept with §1 as a record.
+
 ### 3.6 Interaction / click-through
 
 - Idle: only pill rects are interactive; transparent overshoot passes clicks through.
-  QML `mask: Region` composed of the segment items, not the whole strip.
 - Panel open: whole bar window interactive; outside-click / pointer-leave collapses
   all panels; only a panel header toggles (content clicks don't collapse).
 - Workspace dot click focuses that workspace. Bar never takes keyboard focus.
@@ -165,65 +172,39 @@ Catppuccin Latte/Mocha (`palette.default.json`).
 
 ## 4. Single source of truth
 
-Three files, one owner each; both bars are pure consumers.
+Three files, one owner each; edgebar is a pure consumer. (This section was written for
+both bars to share; since the split it is edgebar's alone.)
 
 1. **`modules/shared/bar/tokens.json`** — static design tokens (§3.1/3.3/3.5:
    geometry, spacing, radii, type, motion, dim). Distributed via Nix like the existing
-   `bar-geometry.nix`: promote to `flake.lib.barTokens = lib.importJSON ./tokens.json`.
-   - edgebar: merge `barTokens` into the rendered `~/.config/edgebar/config.json`
-     (`edgebar.nix` already renders it; `main.ts applyConfig()` already maps config →
-     CSS vars).
-   - quickshell: `custom-shell.nix` writes `tokens.json` into the config dir;
-     `Theme.qml` (already using `FileView` + `JSON.parse` for colours) replaces
-     hardcoded `barHeight/roundness/fontSize` with lookups.
-   - Invariants (`concave = barHeight/2`, WM top reservation) stay computed in Nix at
-     render time, as `edgebar.nix` already does.
+   `bar-geometry.nix`: promote to `flake.lib.barTokens = lib.importJSON ./tokens.json`,
+   and merge it into the rendered `~/.config/edgebar/config.json` (`edgebar.nix`
+   already renders it; `main.ts applyConfig()` already maps config → CSS vars).
+   Invariants (`concave = barHeight/2`, WM top reservation) stay computed in Nix at
+   render time, as `edgebar.nix` already does.
 
-2. **`modules/shared/bar/palette.json.tmpl`** — one matugen template replacing the two
-   divergent ones. Emits **both** `dark` and `light` blocks keyed by the §3.2 role
-   names. Both platform matugen configs point `input_path` here; output paths stay
-   local (`~/.config/edgebar/palette.json`, quickshell's renamed to `palette.json`).
-   Rust's `Colors` struct and `Theme.qml`'s `c(token, fallback)` read the same keys, so
+2. **`modules/shared/bar/palette.json.tmpl`** — the matugen template. Emits **both**
+   `dark` and `light` blocks keyed by the §3.2 role names, written to
+   `~/.config/edgebar/palette.json`. Rust's `Colors` struct reads the same keys, so
    drift becomes a parse failure, not silent skew. Scheme default written from one Nix
-   constant into `generate-edgebar-theme`, `generate-theme`, and `ambxst.nix`.
+   constant into `generate-edgebar-theme`.
 
-3. **Live-reload contract** — keep each platform's transport (edgebar `theme.sock`,
-   quickshell `FileView.watchChanges`). The file *shape* is the contract, not the wire.
+3. **Live-reload contract** — edgebar's `theme.sock`. The file *shape* is the
+   contract, not the wire.
 
 Optional guard: a `nix flake check` that asserts the Rust `Colors` field list ==
 template keys == the role list in §3.2.
 
 ---
 
-## 5. Parity checklist
+## 5. Checklist (edgebar)
 
-**Shared (unblocks both)**
+The quickshell items that used to be here (catching the QML bar up to edgebar) were
+dropped at the split; the Quickshell shell's own work is in `.scratch/custom-shell/`.
 
 1. Create `modules/shared/bar/tokens.json` + `palette.json.tmpl` with §3 values; wire `flake.lib.barTokens`.
 2. Rename edgebar palette keys Catppuccin→roles (`rosewater→pillBg`, `blue→accent`, `peach→occupied`, `surface1/overlay0→empty`) across `palette.json.tmpl`, `config.default.json`, `lib.rs Colors`, `palette.default.json`.
-3. Pin the shared scheme default (`scheme-tonal-spot`) across `generate-edgebar-theme`, `generate-theme`, `ambxst.nix`.
-
-**quickshell (long tail)**
-
-4. Read `tokens.json` in `Theme.qml`; `barHeight 36→32`, `fontSize 14→13`; align Hyprland `exclusiveZone`.
-5. Two-mode palette + mode field; consume role names.
-6. Rebuild chrome to the attached-pill language: 4px frame line, 20 inner radius (QML `Shape`), corner pills, concave fillets, `pillBg` surface with `base` ink (polarity flip), pill/popup shadows.
-7. Workspaces: dynamic list (drop fixed 10), circle dots + accent-ring active, `base`-tint empty/occupied, app icons from toplevels, launcher button. *(Note: the current `hasWindows` logic is broken — see refactor plan N-1.)*
-8. Clock: minute-aligned `SystemClock`; port the expandable notch (big clock + metrics).
-9. Status pill: NetworkManager Wi-Fi (same RSSI bounds/hysteresis, Lucide arc), battery to Lucide icons + ≤20/≤60 thresholds, drop `batteryMid`.
-10. Controls popup: PipeWire volume/mic + brightnessctl sliders (60/60/40ms debounce).
-11. Click-through: per-segment `mask: Region`; full-strip while a panel is open.
-12. Reveal/hide + panel animations (§3.5 fallback column).
-
-**edgebar (small)**
-
-13. Consume `tokens` from shared config (delete duplicated `styles.css :root` defaults or keep as fallback only).
-14. Adopt renamed roles end-to-end; move hardcoded `warn` into the palette template.
-15. Later, per roadmap: systray — spec'd when one bar grows it.
-
-**quickshell (notch content)**
-
-16. Port the notch's priority slot (§1 table): OSD flash > per-workspace rule >
-    media > idle. The media tier is `Quickshell.Services.Mpris` rather than
-    edgebar's CoreAudio + AppleScript pair — Linux still has a real Now Playing
-    bus — so it lands as a straight `activePlayer` binding.
+3. Pin the scheme default (`scheme-tonal-spot`) in `generate-edgebar-theme` from one Nix constant.
+4. Consume `tokens` from shared config (delete duplicated `styles.css :root` defaults or keep as fallback only).
+5. Adopt renamed roles end-to-end; move hardcoded `warn` into the palette template.
+6. Later, per roadmap: systray.

@@ -89,8 +89,8 @@ often matches the pill's tone: in dark mode it is about 1:1 on the pill in every
 scheme, so there the ring always takes the surface colour, as the ink does.
 
 `modules/home/darwin/edgebar.nix` owns deployment; edit config/palette there and
-rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for the shared
-edgebar ⇄ quickshell design spec.
+rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for edgebar's
+design spec.
 
 ## Development
 

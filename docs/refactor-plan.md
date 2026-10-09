@@ -7,7 +7,9 @@ files on disk; several checked empirically (gitleaks run against synthetic secre
 deadnix/statix via the devShell, quickshell source at the locked rev, live crates.io/npm
 versions, live sshd state).
 
-Companion doc: [bar-spec.md](bar-spec.md) — the normative shared spec for the two bars.
+Companion doc: [bar-spec.md](bar-spec.md) — edgebar's spec. It was the shared spec for
+both bars until 2026-10-09, when the Quickshell bar left it to become a shell of its own
+(`.scratch/custom-shell/PRD.md`); quickshell parity is no longer a goal.
 
 ---
 
@@ -64,12 +66,9 @@ run against synthetic secrets, `cargo check` + `tsc --noEmit` for edgebar, headl
 
 **Deferred (with rationale) — do these with a runtime to test against**
 
-- **Full quickshell visual parity** — the chrome rebuild (screen-edge frame, corner
-  pills, fillets, surface-polarity flip) and the net-new segments (network/controls/
-  notch/launcher/app-icons) are large feature work over NetworkManager/PipeWire/brightness
-  APIs that `qmllint` can't resolve and I can't run off-Linux. Building them blind would be
-  guesswork; do them iteratively on the msi (same test-loop that worked for edgebar).
-  Tracked in [bar-spec.md §5](bar-spec.md).
+- ~~**Full quickshell visual parity**~~ — dropped on 2026-10-09. The Quickshell bar is
+  being rebuilt as a shell of its own with a Caelestia-style look instead of edgebar's
+  pills; its work is tracked in `.scratch/custom-shell/`.
 - **quickshell Q-5** (self-sizing BarSegment) — a `childrenRect`/anchors layout change
   I can't runtime-test; the `+ segmentPadding * 2` magic number is deduped instead.
 - **hm-defaults** — spans just two hosts, low drift; skipped.
@@ -226,9 +225,9 @@ Same move repeated: lift a scattered literal into `flake.lib`, following the exi
 - **N-6** `hm-defaults` module (or `flake.lib.mkHome`) — both hosts repeat the
   `useGlobalPkgs/useUserPackages/backupFileExtension/extraSpecialArgs` block and
   `home.username`. [MED]
-- **B (bar tokens)** `flake.lib.barTokens` + shared matugen template — see
-  [bar-spec.md §4](bar-spec.md). This is the parity foundation; do it before any
-  quickshell chrome work. [HIGH]
+- **B (bar tokens)** `flake.lib.barTokens` + matugen template for edgebar — see
+  [bar-spec.md §4](bar-spec.md). (Was the parity foundation for both bars; edgebar only
+  since the split on 2026-10-09.) [HIGH]
 
 Terminal-appearance duplication (**N/D**): `ghostty.nix:16-24` and `kitty.nix:10-19` hold
 near-identical `{ font, size 13, opacity 0.95, padding 8 }` blocks that have already
@@ -330,17 +329,19 @@ Correctness/perf, then quality. Full detail from the edgebar agent; highlights:
 
 ---
 
-## Phase 5 — quickshell (QML) toward parity
+## Phase 5 — quickshell (QML)
 
-Foundation first (Phase 1 `barTokens`), then the [bar-spec §5 checklist](bar-spec.md).
-Beyond Q-1/Q-2 (Phase 0):
+Parity with edgebar is no longer the goal: since 2026-10-09 the Quickshell bar is being
+rebuilt as a shell of its own (`.scratch/custom-shell/PRD.md`), and
+[bar-spec.md](bar-spec.md) covers edgebar only. The items below are findings about the
+old bar's code. Beyond Q-1/Q-2 (Phase 0):
 
 - **Q-3** [MED] `Clock.qml` polls a 1s Timer for a minutes-only display and assigns
   imperatively — replace with `SystemClock { precision: Minutes }` + declarative binding.
 - **Q-4** [MED] Magic numbers bypass `Theme.qml` (which exists precisely as the token
   store): `spacing 4/6/8`, shadow `#000000/0.5/1.0`, icon `pixelSize 16`, separator
   `1×16`, pill sizes `24/8`, `radius 4`, anim `duration 150`, `fontSize-1`. Route through
-  Theme (and the shared `barTokens`).
+  Theme.
 - **Q-5** [MED] `BarSegment` — the `implicitWidth: child.implicitWidth + 24` +
   `anchors.centerIn` boilerplate is repeated at all three call sites; make the segment
   self-sizing so call sites shrink to `BarSegment { Workspaces { ... } }`.
@@ -424,10 +425,11 @@ General improvements beyond the brief:
 ## Suggested order
 
 1. **Phase 0** — security + the verified bugs. Small, independent, high value.
-2. **Phase 1** — SSOT lifts, incl. `barTokens`. Unblocks parity and kills most drift.
+2. **Phase 1** — SSOT lifts, incl. `barTokens`. Kills most drift.
 3. **Phase 2 + 3** — delete dead code, fix comments, docs. Low risk, shrinks surface.
 4. **Phase 4** — edgebar perf/quality (the async conversions are the win).
-5. **Phase 5** — quickshell toward parity, against [bar-spec.md](bar-spec.md).
+5. **Phase 5** — quickshell parity dropped (2026-10-09); the custom shell in
+   `.scratch/custom-shell/` replaces it.
 6. **Phase 6** — remaining Nix polish.
 
 Decisions to confirm before touching: **D-5** (F18 producer), the sketchybar retirement
