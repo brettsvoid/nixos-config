@@ -1,7 +1,8 @@
 :root {
-  /* ---- theme colors ----
-     Defaults / fallbacks only — the live values come from config.json
-     (src-tauri/config.default.json), applied as CSS vars at runtime. */
+  /* ---- theme colours ----
+     Fallbacks: main.ts sets the live values from config.json (defaults in
+     src-tauri/config.default.json). --warn and the --cpu-hot/warm/mild ladder
+     are CSS-only. */
   --base: #1e1e2e;
   --pill-bg: #a6e3a1; /* catppuccin green */
   --text: #cdd6f4;
@@ -14,37 +15,34 @@
   --vpn: #179299; /* catppuccin latte teal */
   --warn: #df8e1d; /* catppuccin latte yellow — wifi connected, no internet */
 
-  /* CPU graph traces (overridden from config.json, like the battery accents).
-     The sketchybar original used the Macchiato red/blue, which were picked for a
-     dark bar; these are the Latte equivalents, which read on the light pill. */
+  /* CPU graph traces: Catppuccin Latte red/blue, which read on the light
+     pill. */
   --cpu-sys: #d20f39;
   --cpu-user: #1e66f5;
-  /* Load thresholds for the percentage readout — CSS-only state colors, same as
-     --warn. Ports the helper's ≥70 / ≥30 / ≥10 / else-default ladder. */
+  /* Load colours for the percentage readout; the thresholds are
+     CPU_GRAPH.thresholds in main.ts. */
   --cpu-hot: #d20f39; /* catppuccin latte red */
   --cpu-warm: #fe640b; /* catppuccin latte peach */
   --cpu-mild: #df8e1d; /* catppuccin latte yellow */
 
-  /* marks layered on the (light) pill — tinted from --base so they track the
-     theme instead of being a hardcoded crust color at varying alpha */
+  /* marks on the (light) pill, tinted from --base so they track the theme */
   --separator: color-mix(in srgb, var(--base) 30%, transparent);
   --handle: color-mix(in srgb, var(--base) 45%, transparent);
   --track: color-mix(in srgb, var(--base) 18%, transparent);
   --hover: color-mix(in srgb, var(--base) 12%, transparent);
 
-  /* not-implemented marker: placeholder UI is drawn in a muted ink inside a
-     dashed edge, so unwired features still occupy the layout but read as
-     unfinished at a glance. Both tint from --base, like the other marks. */
+  /* not-implemented marker (.wip / .ph): muted ink and a dashed edge, so
+     unwired features hold their place but read as unfinished */
   --wip-ink: color-mix(in srgb, var(--base) 42%, transparent);
   --wip-line: color-mix(in srgb, var(--base) 24%, transparent);
 
-  /* shadows (the black is the cast shadow, not a theme color) */
+  /* shadows (the black is the cast shadow, not a theme colour) */
   --shadow-pill: 0 3px 6px rgba(0, 0, 0, 0.4);
   --shadow-popup: 0 6px 16px rgba(0, 0, 0, 0.35);
 
   /* ---- geometry (defaults; overridden from config.json at runtime) ---- */
   --bezel-thickness: 0px;
-  --bezel-line-thickness: 4px; /* matches native frame LINE */
+  --bezel-line-thickness: 4px; /* geometry.lineThickness */
   --pill-h: 32px;
   --pill-radius: 16px; /* rounded bottom of each pill */
   --concave: 16px; /* radius of the concave fillets flanking each pill */
@@ -62,11 +60,9 @@
   --space-8: 16px;
   --space-9: 18px;
 
-  /* One height for every inline control — selects, buttons, chips, inputs — so
-     a toolbar row reads as a set rather than a ragged line. Set the height,
-     not vertical padding: padding leaves each control's height at the mercy of
-     its own font and icon size, which is how the theme bar ended up with four
-     different ones. */
+  /* One height for every inline control (selects, buttons, chips, inputs).
+     Set height, not vertical padding, which leaves each control's height to
+     its own font and icon size. */
   --control-h: 30px;
 
   /* ---- radius scale (panel / pill rounding) ---- */
@@ -96,15 +92,13 @@
   --dim-more: 0.5;
   --dim-icon: 0.8;
 
-  /* ---- workspace dots (repeated sizes) ----
-     Every workspace occupies the same --ws-slot box, whether it draws an app
-     icon or a bare dot, so the row keeps one centre-to-centre rhythm. --ws-dot
-     is only the size of the mark painted inside an iconless slot. */
+  /* ---- workspace dots ----
+     Every workspace takes one --ws-slot box, icon or not, so the row keeps one
+     rhythm. --ws-dot is the mark painted inside an iconless slot. */
   --ws-slot: 22px;
   --ws-dot: 8px;
-  /* dot fills are marks on the light pill, tinted from --base ink so they read
-     in any scheme. (matugen flips primary/secondary/tertiary to LIGHT tones in
-     dark mode — meant for a dark surface — which washed out on the light pill.) */
+  /* Dot fills tint from --base, not a matugen role: matugen's dark-mode
+     primaries are light tones meant for a dark surface. */
   --ws-empty: color-mix(in srgb, var(--base) 28%, transparent);
   --ws-occupied: color-mix(in srgb, var(--base) 55%, transparent);
 }
@@ -132,9 +126,8 @@ body {
   cursor: default;
 }
 
-/* shared icon cell: an inline-SVG icon centered in a box that scales with the
-   element's font-size. The icon (svg) is 1em; the cell is a touch larger so the
-   icon keeps even breathing room. Set font-size per context to size the icon. */
+/* shared icon cell: a 1em inline SVG centred in a slightly larger box. Set
+   font-size per context to size the icon. */
 .icon {
   display: grid;
   place-items: center;
@@ -144,8 +137,7 @@ body {
   line-height: 1;
   flex: none;
 }
-/* Lucide SVGs are stroke-based (fill="none" stroke="currentColor"), so they're
-   centered by viewBox geometry and colored by the inherited text color. */
+/* Lucide SVGs stroke with currentColor, so they take the inherited colour. */
 .icon svg {
   width: 1em;
   height: 1em;
@@ -176,16 +168,11 @@ body {
   gap: var(--space-2);
   align-items: flex-start;
 }
-/* The side clusters are `flex: 1 1 0` — no content basis — so they always split
-   the space the centre leaves in half, and the notch sits on the screen's exact
-   midpoint whatever width it has animated to.
-   `min-width: 0` is what makes that true. Without it a flex item's automatic
-   minimum size floors it at its content width: the expanding notch squeezed the
-   left cluster down to its pills, the floor held, and every further pixel of
-   notch shoved the centre to the right. Measured at a 704px notch on an 800px
-   bar: 217px of drift before, 0 after.
-   Zeroing the floor means a wide notch overlaps the pills instead of moving
-   them, which is the intent — see the z-index on #notch. */
+/* The side clusters are `flex: 1` (zero basis) with `min-width: 0`, so they
+   always halve the space the centre leaves and the notch stays on the screen's
+   midpoint at any width. Without `min-width: 0` a cluster floors at its content
+   width and a wide notch shoves the centre sideways; with it, a wide notch
+   overlaps the pills instead (see #notch's z-index). */
 .cluster.left {
   flex: 1;
   min-width: 0;
@@ -208,9 +195,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Never shrink. The cluster around it has min-width: 0, so a wide notch
-     leaves it a box narrower than its content; without this the pill would
-     take the squeeze and squash its own readouts instead of overflowing. */
+  /* Never shrink: a wide notch can leave the cluster narrower than its pills,
+     which should overflow rather than squash their readouts. */
   flex: none;
   gap: var(--space-8);
   padding: 0 var(--space-6);
@@ -237,8 +223,8 @@ body {
 }
 .pill::before {
   left: calc(-1 * var(--concave));
-  /* +0.5px: anti-alias fudge so the radial-gradient mask meets the fillet
-     cleanly (exception — a sub-pixel rendering correction, not a design value) */
+  /* +0.5px: anti-aliasing fudge so the mask meets the fillet cleanly
+     (exception — sub-pixel correction, not a design value) */
   -webkit-mask-image: radial-gradient(
     circle at 0 100%,
     transparent var(--concave),
@@ -268,8 +254,8 @@ body {
    top edge, with no concave fillets flaring into the frame ---- */
 .pill.detached {
   border-radius: var(--radius-lg);
-  /* -2px: tuck the detached pill in by a hair so it reads as floating below the
-     frame line rather than hanging from it (exception — relational offset) */
+  /* -2px: float just below the frame line rather than hang from it
+     (exception — relational offset) */
   height: calc(var(--pill-h) - 2px);
   top: calc(var(--bezel-thickness) + var(--bezel-line-thickness) + 2px);
   z-index: 1;
@@ -308,7 +294,7 @@ body {
 #clock {
   /* sharp top-right: tucks under the frame corner (no AA seam) */
   border-radius: 0 0 0 var(--pill-radius);
-  color: var(--base); /* dark text reads on the green pill */
+  color: var(--base);
 }
 /* bottom-right fillet (replaces the default top-right ::after) */
 #clock::after {
@@ -351,19 +337,15 @@ body {
   height: var(--pill-h);
   cursor: pointer;
   color: var(--base);
-  /* Above every other pill, including the detached ones at z-index 1. An open
-     view is wider than the space between the clusters, so it runs over the CPU
-     pill on one side and the clock on the other. It has to cover them, and it
-     has to win the click where they overlap. */
+  /* Above every other pill (detached ones are z-index 1): an open view is wider
+     than the gap between the clusters, so it must cover the pills it overlaps
+     and win clicks there. */
   z-index: 2;
-  /* wide enough for the open views (VIEW in main.ts — the dashboard is the
-     widest at 680px); the collapsed pill never gets near it.
-     The bar needs max-width + 2 × --bezel-line-thickness to hold a fully open
-     notch and keep it centred. Below that — a screen narrower than ~728px, which
-     no Mac display is — the side clusters bottom out at zero and it drifts. */
+  /* Room for the widest open view (VIEW.theme in main.ts, 704px). A screen
+     narrower than max-width + 2 × --bezel-line-thickness (~728px) couldn't keep
+     it centred; no Mac display is. */
   max-width: 720px;
-  /* Starting width only, and it matches NOTCH.idleW: once content arrives,
-     main.ts swaps the width between NOTCH.idleW and NOTCH.itemW. */
+  /* Starting width only (NOTCH.idleW); main.ts sets it from then on. */
   width: 200px;
 }
 .notch-row {
@@ -406,16 +388,14 @@ body {
   line-height: 1.15;
 }
 .notch-item.dim {
-  opacity: var(--dim); /* a paused player still says what it's holding */
+  opacity: var(--dim);
 }
-/* Album art when a player gives us one, else the tier's glyph. Square and
-   lightly rounded, the way every player draws it. */
+/* The item's app icon, else its glyph. */
 .ni-icon {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  /* Art fills the row's height less 4px of breathing room top and bottom, so it
-     tracks the pill height instead of pinning to whatever that is today. */
+  /* the pill height less 4px top and bottom */
   width: calc(var(--pill-h) - 8px);
   height: calc(var(--pill-h) - 8px);
 }
@@ -474,9 +454,9 @@ body {
 .ni-secondary.scroll > span {
   animation: ni-marquee var(--ni-dur) ease-in-out infinite;
 }
-/* Track position / level: a hairline along the bottom of the row, inset by the
-   row's own padding so it clears the pill's rounded ends. Hidden unless the
-   item carries a progress value; the text lifts to make room when it does. */
+/* Progress (e.g. a volume level): a hairline along the bottom, inset by the
+   row's padding to clear the pill's rounded ends. Shown only when the item
+   has progress; the text lifts to make room. */
 .ni-progress {
   position: absolute;
   left: 0;
@@ -498,8 +478,7 @@ body {
   height: 100%;
   border-radius: inherit;
   background: currentColor;
-  /* The media poll lands every 2s; ease between samples so the fill creeps
-     rather than jumping. */
+  /* ease between updates so the fill creeps rather than jumps */
   transition: width 0.45s linear;
 }
 .notch-panel-clip {
@@ -517,10 +496,8 @@ body {
   min-height: 0;
   height: 100%;
 }
-/* Width is set by showView, not by the flex line: the body must hold the size
-   its view settles at while the pill springs around it, or fluid layouts
-   inside reflow on every frame. It overflows the pill mid-animation on
-   purpose — .notch-panel-clip crops it. */
+/* Width is set by showView (see there); it overflows the pill mid-animation
+   on purpose and .notch-panel-clip crops it. */
 .tab-body {
   display: flex;
   flex-direction: column;
@@ -537,9 +514,8 @@ body {
 .view[hidden] {
   display: none;
 }
-/* The dashboard is a four-column row, after ambxst's WidgetsTab: player,
-   widgets, notification history, control rail. The tab rail is not in here —
-   it belongs to the panel. `.view[hidden]` is the more specific selector, so
+/* The dashboard: four columns after ambxst's WidgetsTab (player, widgets,
+   notification history, control rail). `.view[hidden]` is more specific, so
    it still wins over this display. */
 .view-default {
   display: grid;
@@ -561,11 +537,9 @@ body {
   flex: 1 1 auto;
 }
 /* ---- media pill: art backdrop + wavy playhead + transport ----
-   An inset pill inside the notch. The album art is the *background*, blurred
-   hard and knocked back behind a scrim, rather than a thumbnail — at this size
-   a 24px cover reads as noise, while a wash of the record's colour reads as
-   identity. Title and artist live in the tooltip; the art and the source icon
-   already say what's playing. */
+   An inset pill inside the notch. The album art is a soft backdrop behind a
+   scrim, not a thumbnail: a cover this small reads as noise, a wash of its
+   colour as identity. Title and artist are in the tooltip. */
 .ni-media {
   position: relative;
   display: flex;
@@ -573,12 +547,10 @@ body {
   gap: var(--space-3);
   flex: 1 1 auto;
   min-width: 0;
-  /* Flush to the notch's top edge, 3px clear at the bottom — not centred. The
-     frame line above the notch is the same colour as the pill, so the eye reads
-     the line's thickness as space above the media pill; centring it here left
-     the top visibly heavier. The negative top margin does the shifting: under
-     align-items:center it only moves the box up by half its value, so -3px on a
-     29px box lands the border-box top at 0. */
+  /* Flush to the notch's top, 3px clear at the bottom: the frame line above is
+     the pill's colour and reads as extra space, so centring looks top-heavy.
+     Under align-items:center a negative top margin moves the box by half its
+     value, so -3px puts this 29px box's top at 0. */
   height: calc(var(--pill-h) - 3px);
   margin: -3px 2px 0;
   padding: 0 var(--space-2);
@@ -586,21 +558,16 @@ body {
   background: var(--track);
   overflow: hidden; /* clips the blurred art to the pill */
 }
-/* No `filter` here, deliberately. A filter promotes the element to its own
-   compositing layer, and WebKit doesn't clip a composited layer to a parent's
-   *rounded* overflow — it clips to the square box, so the art's corners
-   escaped the pill. The softness instead comes from scale: the cover arrives
-   64px wide and is stretched across ~310px, which the browser interpolates
-   into a wash. No filter also means no overscan is needed, since nothing
-   samples past the element's edges any more. */
+/* Don't add a `filter` (e.g. blur): it gives the element its own compositing
+   layer, which WebKit clips to the parent's square box rather than its rounded
+   overflow, so the corners escape the pill. The softness comes from scale: 64px
+   art stretched across ~310px. */
 .nm-art {
   position: absolute;
   inset: 0;
-  /* 400%, not `cover`: at cover the 64px art only scales ~5× and the sleeve's
-     detail — text especially — stays legible enough to read as clutter. Zooming
-     further shows a smaller crop over more pixels, which interpolates into the
-     colour field we're after. Lower it for more of the sleeve, raise it for a
-     flatter wash. */
+  /* 400%, not `cover`: at cover (~5×) the sleeve's text stays legible and
+     reads as clutter. Lower it for more of the sleeve, raise it for a flatter
+     wash. */
   background-size: 400%;
   background-position: center;
   opacity: 0;
@@ -609,9 +576,8 @@ body {
 .ni-media.has-art .nm-art {
   opacity: 1;
 }
-/* Scrim: a dark wash over the art, the way Android's lock-screen player does
-   it. Deep enough that white marks read over any sleeve, shallow enough that
-   the record's colour still tints the pill. */
+/* Scrim, as on Android's lock-screen player: dark enough for white marks over
+   any sleeve, light enough that the art still tints the pill. */
 .ni-media::after {
   content: "";
   position: absolute;
@@ -619,9 +585,7 @@ body {
   background: rgb(0 0 0 / 0.45);
   pointer-events: none;
 }
-/* Playhead colours, read by the canvas in main.ts rather than applied here —
-   they're stroke colours, not styles the element can inherit. Kept as custom
-   properties so they stay next to the rest of the pill's look. */
+/* Playhead stroke colours, read by the canvas in main.ts. */
 .nm-wave {
   --nm-played: #ffffff;
   --nm-remaining: rgb(255 255 255 / 0.38);
@@ -636,8 +600,8 @@ body {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  /* 21px, not 20: the media pill is an odd 29px tall, so an even control would
-     centre on a half pixel and blur on a 1x screen. Keeps the 4px inset. */
+  /* 21px, not 20: the media pill is 29px tall, so an even control would
+     centre on a half pixel and blur at 1x. Keeps the 4px inset. */
   width: calc(var(--pill-h) - 11px);
   height: calc(var(--pill-h) - 11px);
   padding: 0;
@@ -776,7 +740,7 @@ body {
   margin-left: auto; /* appearance toggle sits at the right of the header */
 }
 
-/* toolbar above the grid: search, scheme, the two toggles, then Browse… */
+/* toolbar above the grid: search, scheme, ink, OLED/Tint chips, Browse… */
 .theme-bar {
   display: flex;
   align-items: center;
@@ -801,15 +765,14 @@ body {
   font-size: var(--font-md);
 }
 
-/* A grid, not a strip — ambxst's WallpapersTab browses a wall of covers and
-   the taller view has the room for it. main.ts still fills #filmstrip with
-   .thumb buttons, so the markup is unchanged. */
+/* A grid despite the name, like ambxst's WallpapersTab; main.ts fills it with
+   .thumb buttons. */
 .filmstrip {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  /* Rows size to the thumbs and stack from the top. Without this the grid has
-     a definite height, so `align-content: stretch` divides it evenly between
-     the rows and each 16:9 thumb overflows the row it sits in. */
+  /* Rows size to the thumbs and stack from the top; otherwise the grid's
+     definite height is shared between the rows and each 16:9 thumb overflows
+     its row. */
   grid-auto-rows: max-content;
   align-content: start;
   gap: var(--space-3);
@@ -884,16 +847,13 @@ body {
    `.wip` mutes a control that is drawn but does nothing yet. `.ph` is a
    reserved box named after the component that will fill it. Both are meant to
    be deleted, not styled around. */
-/* Doubled class on purpose: `.wip` has to beat whatever single-class rule
-   styles the control it marks (.rail-tab sets its own colour, and it is
-   declared later in this file). Doubling wins on specificity instead of
-   ordering, so the marker keeps working wherever it's dropped. */
+/* Doubled class so `.wip` beats the single-class rule styling the control it
+   marks (e.g. .rail-tab, declared later) on specificity, not source order. */
 .wip.wip {
   color: var(--wip-ink);
   opacity: 1;
 }
-/* No hover promise on something that doesn't work — the pointer and the
-   highlight both stay off. */
+/* no hover highlight or pointer on something that doesn't work */
 .wip.wip:hover {
   background: transparent;
   color: var(--wip-ink);
@@ -985,9 +945,9 @@ body {
 .rail-settings {
   margin-top: auto; /* separated at the foot of the rail, as in ambxst */
 }
-/* Alert dot — a tab wants attention. --warn is the bar's existing "look at
-   this" amber (the Wi-Fi no-internet state), not an error red: a full disk is
-   a warning, not a failure. The ring separates it from the icon underneath. */
+/* Alert dot: a tab wants attention. Amber --warn (as Wi-Fi's no-internet
+   state), not red: a full disk is a warning, not a failure. The ring separates
+   it from the icon. */
 .rail-dot {
   position: absolute;
   top: 8px;
@@ -1127,10 +1087,9 @@ body {
   opacity: var(--dim-more);
 }
 
-/* ---- CPU pill: top-process + percentage stacked beside the load graph ----
-   The sketchybar original gave its two text items width=0 so they overlaid the
-   graph box. That worked on a dark bar; over a red fill on this light pill it
-   doesn't, so the same pair sits beside the graph instead of on top of it. */
+/* ---- CPU pill: process name over the percentage and load graph ----
+   Unlike sketchybar's, the text doesn't overlay the graph: over the graph's
+   fill it wouldn't read on the light pill. */
 #cpu {
   color: var(--base);
   gap: var(--space-4);
@@ -1160,9 +1119,8 @@ body {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  /* spans the row beneath it, and fixed so a change of top process can't resize
-     the pill — the width feeds the native click-through rects, which would
-     otherwise need re-reporting on every sample */
+  /* spans the row beneath it, and fixed so a new top process can't resize the
+     pill and leave the click-through rects stale */
   width: 144px;
 }
 /* the name takes the slack so the pid sits flush right, and yields first: it
@@ -1196,9 +1154,7 @@ body {
   color: var(--cpu-mild);
 }
 #cpu .cpu-graph {
-  /* the box the canvas paints into; main.ts scales the backing store to DPR and
-     divides the width into CPU_GRAPH.samples columns. Must match CPU_GRAPH.w /
-     .h in main.ts. */
+  /* must match CPU_GRAPH.w / .h in main.ts, which sizes the backing store */
   width: 108px;
   height: 14px;
   display: block;
@@ -1310,8 +1266,7 @@ body {
 }
 
 /* ---- controls panel (volume / mic / brightness sliders) ----
-   A floating dropdown with its own width, anchored below the cog button — so
-   the collapsed pill stays small while the popup keeps its width. */
+   A floating dropdown below the cog button, so the pill itself stays small. */
 .ctl-panel {
   position: absolute;
   top: calc(100% + var(--space-3));
@@ -1362,7 +1317,7 @@ body {
 .ws-dots {
   display: flex;
   align-items: center;
-  gap: var(--space-2); /* tighter — app icons sat too far apart at --space-3 */
+  gap: var(--space-2);
 }
 .ws {
   display: flex;
@@ -1385,7 +1340,7 @@ body {
   content: "";
   width: var(--ws-dot);
   height: var(--ws-dot);
-  border-radius: 50%; /* true circle */
+  border-radius: 50%;
   background: var(--ws-empty);
   transition:
     background-color 150ms ease,
@@ -1394,10 +1349,9 @@ body {
 .ws.occupied:not(.has-icon)::before {
   background: var(--ws-occupied);
 }
-/* selected: keep the dot a circle and draw an accent ring around it, mirroring
-   the square ring on active app icons. The 1px pill-colored gap floats the ring
-   off the dot; the dark ink center keeps the selection legible even when the
-   accent itself is low-contrast on the pill. */
+/* selected: an accent ring around the dot, like the ring on active app icons.
+   A 1px pill-coloured gap floats the ring; the ink centre keeps it legible when
+   the accent is low-contrast on the pill. */
 .ws.active:not(.has-icon)::before {
   background: var(--base);
   box-shadow:
@@ -1425,5 +1379,5 @@ body {
 /* focused workspace: accent ring + faint backplate behind the icon */
 .ws.has-icon.active {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-  box-shadow: 0 0 0 2px var(--accent); /* 2px accent ring */
+  box-shadow: 0 0 0 2px var(--accent);
 }

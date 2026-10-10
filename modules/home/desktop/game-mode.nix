@@ -1,31 +1,26 @@
 # Game mode: hands the compositor's time to the game, under any shell. `game-mode on`
 # turns off animations, shadows and blur, sets gaps, rounding and the border to their
-# minimum, and allows tearing; `game-mode off` puts every one of those back as it was.
-# Super+Shift+G toggles it.
+# minimum, and allows tearing; `game-mode off` puts them back. Super+Shift+G toggles it.
 #
-# It also comes on by itself while a game runs under Feral GameMode: GameMode runs
-# `game-mode auto-on` when the first game starts and `auto-off` when the last one exits
-# (~/.config/gamemode.ini, below). auto-on does nothing if game mode is already on, and
-# auto-off only turns off what auto-on turned on, so a game ending never undoes a
-# manual choice. A game opts in to GameMode: in Steam, set its launch options to
-# `gamemoderun %command%` (Properties > General). The rofi game library starts games
-# through Steam, so they pick that up; anything else needs to run under `gamemoderun`.
+# Feral GameMode also turns it on while a game runs, through `auto-on` and `auto-off`
+# in ~/.config/gamemode.ini (below). auto-off only undoes what auto-on did, so a game
+# ending never overrides a manual choice. A game opts in to GameMode by running under
+# `gamemoderun`: in Steam, set its launch options to `gamemoderun %command%`, which
+# also covers games started from the rofi game library.
 #
-# Off restores the values saved when it went on rather than running `hyprctl reload`:
-# a reload re-reads the whole config, which also drops binds other programs added at
-# runtime (Caelestia adds some) and re-applies the monitor rules.
+# Off restores the values saved when it went on, not `hyprctl reload`: a reload also
+# drops binds other programs added at runtime (Caelestia adds some) and re-applies the
+# monitor rules.
 #
-# The state is the file $XDG_RUNTIME_DIR/game-mode, "on" or "off", for a shell to show
-# and watch (a file directly in the runtime directory, which always exists, so a watcher
-# sees it appear); other programs change it by running `game-mode`. CPU-side tuning is Feral
-# GameMode's job (profile-gaming) and is not touched here.
+# The state is $XDG_RUNTIME_DIR/game-mode, "on" or "off", for a shell to show; it sits
+# directly in the runtime directory, which always exists, so a watcher sees it appear.
+# Other programs change it by running `game-mode`. CPU-side tuning is Feral GameMode's
+# job (profile-gaming).
 #
-# Tearing: game mode turns on `general:allow_tearing`, the master switch. Hyprland only
-# tears for a fullscreen window that is alone on its monitor, with no hardware cursor
-# showing, on a monitor that supports async flips, and only if the window allows it:
-# either the game asks through the tearing-control protocol, or a window rule marks it
-# `immediate`. Game mode adds no such rules; a game that should tear (lower latency,
-# at the cost of tearing and of VRR's smoothness) needs its own rule.
+# Tearing: this only sets general:allow_tearing, the master switch. Hyprland tears only
+# for a fullscreen window alone on its monitor, with no hardware cursor showing, on a
+# monitor that supports async flips, and only if the game asks (tearing-control
+# protocol) or a window rule marks it `immediate`. Game mode adds no such rules.
 _: {
   flake.modules.homeManager.desktop-game-mode =
     { pkgs, lib, ... }:

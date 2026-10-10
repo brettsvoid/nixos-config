@@ -1,6 +1,7 @@
-# matugen → edgebar. Renders ~/.config/edgebar/palette.json (both light + dark
-# blocks) from the current wallpaper, then pings edgebar's theme.sock so the
-# running bar re-themes live. Invoked by `generate-edgebar-theme` (edgebar.nix).
+# Standalone matugen config: renders ~/.config/edgebar/palette.json (light +
+# dark) from palette.json.tmpl, then pings edgebar's theme.sock. Not used by
+# `generate-edgebar-theme` (edgebar.nix), which writes its own config around
+# the same template.
 [config]
 
 [templates.edgebar]

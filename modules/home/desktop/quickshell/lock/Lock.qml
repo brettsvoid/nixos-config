@@ -7,9 +7,9 @@ import Quickshell.Wayland
 import "../services"
 
 // The lock screen: Wayland's session lock covers every screen (LockSurface), and PAM
-// checks the password against /etc/pam.d/custom-shell (system/nixos/hyprland.nix).
-// Super+L, the session menu and hypridle before the machine sleeps all come here
-// (custom-shell.nix).
+// checks the password against /etc/pam.d/custom-shell
+// (modules/system/nixos/hyprland.nix). Super+L, the session menu and hypridle before
+// the machine sleeps all come here (custom-shell.nix).
 //
 // If the shell dies while locked, the session stays locked: that is the protocol's
 // promise, and Hyprland shows its "lockscreen app died" screen. `lock-recover`, run

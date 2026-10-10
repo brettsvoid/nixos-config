@@ -76,13 +76,11 @@ in
       '';
 
       # Space in Thunar previews the selection in Sushi (installed in
-      # system/nixos/hyprland.nix), as in Nautilus and macOS's Quick Look.
-      # Thunar has no preview hook, so it is a custom action whose shortcut
-      # is Space. Thunar 4.20 checks custom-action shortcuts in a window
-      # key-press handler that runs after the one that hands keys to a
-      # focused text entry, so Space still types in the location bar.
-      # The arrow keys in the preview move Thunar's selection and the
-      # preview with it: thunar-quick-look-keys, below.
+      # system/nixos/hyprland.nix), like Nautilus and macOS's Quick Look.
+      # Thunar has no preview hook, so it is a custom action bound to Space;
+      # Thunar 4.20 gives a focused text entry the key first, so Space still
+      # types in the location bar. thunar-quick-look-keys (below) makes the
+      # arrow keys in the preview move Thunar's selection.
       quickLookId = "quick-look-sushi";
       quickLookCommand = "thunar-quick-look %f";
       quickLookAction = pkgs.writeText "thunar-quick-look.xml" ''
@@ -122,13 +120,12 @@ in
         text = builtins.readFile ./hyprland/thunar-quick-look-keys.sh;
       };
 
-      # Loupe ignored images dragged onto it from Thunar. Hyprland 0.56
-      # tells a drop target the action is MOVE as soon as a drag enters, if
-      # the source allows MOVE (Thunar allows COPY, MOVE and LINK), and it
-      # ignores the target's wl_data_offer.set_actions. GTK 4 then reports
-      # MOVE as the only action, and Loupe's drop target takes COPY only.
-      # Accepting MOVE too lets the drop through, and GTK still picks COPY
-      # when both are offered. Thunar deletes nothing after a MOVE drop.
+      # Lets Loupe take images dragged from Thunar. Hyprland 0.56 tells a drop
+      # target the action is MOVE as soon as a drag enters, if the source
+      # allows it (Thunar allows COPY, MOVE and LINK), and ignores the
+      # target's wl_data_offer.set_actions, so GTK 4 offers only MOVE and
+      # Loupe, which takes only COPY, ignored the drop. With MOVE accepted too,
+      # GTK still picks COPY when both are offered; Thunar deletes nothing.
       loupe = pkgs.loupe.overrideAttrs (old: {
         postPatch = (old.postPatch or "") + ''
           substituteInPlace src/widgets/image_window.ui \
@@ -139,27 +136,22 @@ in
     in
 
     {
-      # xdg-desktop-portal 1.17 stopped guessing which portal backend serves
-      # which interface. The system side already declares this in
-      # modules/system/nixos/hyprland.nix, but home-manager ships its own
-      # xdg.portal module with its own config, and warns separately when that
-      # one is left empty. "*" keeps the pre-1.17 behaviour: use the first
-      # implementation found in lexicographical order.
+      # xdg-desktop-portal 1.17 no longer guesses which backend serves which
+      # interface. modules/system/nixos/hyprland.nix sets this too, but
+      # home-manager's xdg.portal has its own config and warns when it is
+      # empty. "*" is the old behaviour: the first backend, alphabetically.
       xdg.portal.config.common.default = "*";
 
       # Without a named icon theme GTK asks for Adwaita, which is not
-      # installed, and falls back to its built-in 16px PNGs — Thunar showed
-      # folders stretched to 64px, and no icon at all for images or PDFs.
-      # Carmine folders (#a30002/#7a0002) sit next to Crimson Ronin's
-      # A70E18/720B12. GTK 3 on Wayland reads the theme and icon names from
-      # dconf (org.gnome.desktop.interface), which home-manager writes
-      # alongside settings.ini: with dconf out of reach, Thunar ignored the
-      # names in settings.ini.
+      # installed, and falls back to its built-in 16px icons: stretched
+      # folders in Thunar, and none for images or PDFs. Carmine folders match
+      # Crimson Ronin's reds. GTK 3 on Wayland reads the names from dconf
+      # (org.gnome.desktop.interface), which home-manager writes alongside
+      # settings.ini; without dconf, Thunar ignored settings.ini.
       #
-      # Keep this the only Papirus-Dark installed. At startup GTK 4 reads
-      # every copy of the theme in XDG_DATA_DIRS, and a GtkApplication does
-      # it twice. With a second, Catppuccin copy in the system profile,
-      # Loupe took 1.3 s to open; with this one alone it takes 0.8 s.
+      # Keep this the only Papirus-Dark installed: GTK 4 reads every copy in
+      # XDG_DATA_DIRS at startup (twice for a GtkApplication), and a second
+      # copy in the system profile added half a second to Loupe's start.
       gtk = {
         enable = true;
         iconTheme = {
@@ -168,20 +160,15 @@ in
         };
       };
 
-      # The freedesktop user dirs (Desktop, Documents, Downloads, …), declared
-      # in ~/.config/user-dirs.dirs so file pickers, browsers and screenshot
-      # tools agree on them. Without the file, nothing had created the set:
-      # ~/Downloads came from a browser download, ~/Pictures from
-      # desktop-wallpapers. The standard capitalised names match macOS, and
-      # Pictures/Wallpapers is hard-coded elsewhere in this repo.
-      #
-      # Here rather than in a shared module because only the Linux desktop
-      # reads the file; macOS has its own fixed folders.
+      # The freedesktop user dirs (Documents, Downloads, …) in
+      # ~/.config/user-dirs.dirs, so file pickers, browsers and screenshot
+      # tools agree on them. The standard capitalised names match macOS, and
+      # Pictures/Wallpapers is hard-coded elsewhere in this repo. Linux only:
+      # macOS has its own fixed folders.
       xdg.userDirs = {
         enable = true;
         createDirectories = true;
-        # The module defaults to ~/Projects. Projects live in lowercase
-        # ~/projects, the ghq root in apps-git.
+        # Lowercase, the ghq root in apps-git; the module default is ~/Projects.
         projects = "${config.home.homeDirectory}/projects";
         # No desktop icons and no LAN file sharing on a tiling setup. null
         # leaves them out of user-dirs.dirs, so they are not created either.
@@ -189,10 +176,9 @@ in
         publicShare = null;
       };
 
-      # Loupe (GNOME's image viewer) opens images. With no defaults set,
-      # image/png and image/jpeg went to Gradia, which ambxst installs, so
-      # opening a picture from Thunar started an editor. The types are the
-      # MimeType list from Loupe's desktop file.
+      # Images open in Loupe (GNOME's image viewer). Unset, PNG and JPEG went
+      # to Gradia, an editor that ambxst installs. The types are the MimeType
+      # list from Loupe's desktop file.
       #
       # This makes ~/.config/mimeapps.list home-manager's, so an app's own
       # "set as default" can no longer write to it: defaults go here.
@@ -228,21 +214,18 @@ in
             "image/x-xpixmap"
           ] (_: "org.gnome.Loupe.desktop")
           // {
-            # Claude Code wrote this into mimeapps.list itself, before
-            # home-manager owned the file.
+            # Claude Code's URL handler, which it can no longer register itself.
             "x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
           };
       };
 
       # Adds the Quick Look action to Thunar's uca.xml and binds it to Space
-      # in accels.scm, leaving the rest of both files alone: Thunar writes
-      # them itself, from Edit → Configure custom actions and its shortcut
-      # editor. A missing uca.xml starts from Thunar's default, as Thunar
-      # itself would. An action whose command is out of date is replaced.
-      # The shortcut is added only while accels.scm has no line for the
-      # action at all, so a shortcut changed or cleared in Thunar (it
-      # comments cleared ones out) stays that way. Thunar reads both files
-      # at startup: `thunar -q` after a change.
+      # in accels.scm, leaving the rest of both files to Thunar, which edits
+      # them too. A missing uca.xml starts from Thunar's default; an action
+      # with an out-of-date command is replaced. The shortcut is added only
+      # while accels.scm has no line for the action, so a shortcut changed or
+      # cleared in Thunar stays that way. Thunar reads both files at startup:
+      # `thunar -q` after a change.
       home.activation.thunarQuickLook = config.lib.dag.entryAfter [ "writeBoundary" ] ''
         thunar="${config.xdg.configHome}/Thunar"
         mkdir -p "$thunar"
@@ -281,18 +264,12 @@ in
         enable = true;
         package = null; # installed system-wide via programs.hyprland.enable
 
-        # Home-manager 26.05 switches this default to "lua". Pinned to the
-        # legacy value because the `settings` block below is hyprlang — the
-        # config is currently generated as hyprland.conf, and adopting "lua"
-        # means rewriting it, not flipping a flag. Until then this is only
-        # implicit via home.stateVersion ("24.11"), which is a fragile place
-        # to leave a behaviour switch.
+        # From home.stateVersion 26.05 this defaults to "lua", but `settings`
+        # below is hyprlang: moving means rewriting it (docs/TODO.md).
         #
-        # Hyprland 0.56 loads ~/.config/hypr/hyprland.lua in preference to
-        # hyprland.conf when both exist, and writes a default hyprland.lua
-        # itself if it starts with no config at all (e.g. a first login
-        # where home-manager activation failed). A stray hyprland.lua
-        # therefore shadows this config until it is deleted.
+        # Hyprland 0.56 prefers ~/.config/hypr/hyprland.lua to hyprland.conf,
+        # and writes a default hyprland.lua if it starts with no config at all
+        # (say, after a failed activation). Delete a stray one: it shadows this.
         configType = "hyprlang";
 
         # Monitor layout, GPU selection (AQ_DRM_DEVICES) and multi-GPU
@@ -385,8 +362,6 @@ in
             new_render_scheduling = true; # dynamic triple buffering for high refresh rates
           };
 
-          # misc:vfr is gone as of Hyprland 0.56 ("config option <misc:vfr>
-          # does not exist"), so it is no longer set here.
           misc = {
             vrr = 2; # adaptive sync in fullscreen apps/games
             disable_hyprland_logo = true;
@@ -394,10 +369,9 @@ in
           };
 
           # ── Window rules ───────────────────────────────────────────
-          # Sushi (Space in Thunar, above) sizes its window to the file.
-          # Tiled, it was stretched to half the screen. It keeps the
-          # keyboard while it is open, so the arrow keys reach it: when its
-          # window changed size, focus went to the window under the pointer.
+          # Sushi (Space in Thunar, above) sizes its window to the file, so it
+          # floats. stay_focused keeps the arrow keys on it: otherwise focus
+          # went to the window under the pointer whenever Sushi resized.
           windowrule = [
             "float on, center on, stay_focused on, match:class ^(org\\.gnome\\.NautilusPreviewer)$"
           ];
@@ -484,11 +458,10 @@ in
       };
 
       # Arrow keys in Sushi's preview for Thunar (thunar-quick-look-keys.sh).
-      # It also starts Sushi, which then stays running (see
-      # system/nixos/hyprland.nix), so the first Space of a session does
-      # not wait for it either. A unit rather than exec-once: it starts
-      # after Hyprland has passed WAYLAND_DISPLAY to the session bus, which
-      # Sushi needs.
+      # It also starts Sushi, which then stays running
+      # (system/nixos/hyprland.nix), so even the first Space need not wait.
+      # A unit rather than exec-once, so it starts after Hyprland has passed
+      # WAYLAND_DISPLAY to the session bus, which Sushi needs.
       systemd.user.services.thunar-quick-look-keys = {
         Unit = {
           Description = "Arrow keys in Sushi's preview move Thunar's selection";

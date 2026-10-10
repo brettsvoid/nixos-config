@@ -5,7 +5,6 @@ return {
 	lazy = false, -- This plugin is already lazy
 	ft = "rust",
 	keys = {
-		-- Override Neovim's built-in hover keymap with rustaceanvim's hover actions
 		{
 			"<leader>gra",
 			function()
@@ -19,7 +18,7 @@ return {
 		{
 			"<leader>K",
 			function()
-				vim.cmd.RustLsp({ "hover", "actions" }) -- supports rust-analyzer's grouping
+				vim.cmd.RustLsp({ "hover", "actions" })
 			end,
 			silent = true,
 			buffer = vim.api.nvim_get_current_buf,
@@ -68,8 +67,9 @@ return {
 			},
 		}
 
-		-- Temporary workaround until the next update in Feb 2025
-		-- https://github.com/neovim/neovim/issues/30985
+		-- Drop ServerCancelled (-32802) diagnostic errors, per
+		-- https://github.com/neovim/neovim/issues/30985. Neovim 0.12 handles these
+		-- itself (runtime lsp/diagnostic.lua), so this is a removal candidate.
 		for _, method in ipairs({ "textDocument/diagnostic", "workspace/diagnostic" }) do
 			local default_diagnostic_handler = vim.lsp.handlers[method]
 			vim.lsp.handlers[method] = function(err, result, context, config)

@@ -1,22 +1,17 @@
 -- Work around a SonoBus bug exposed by KVM switching.
 --
--- When the KVM takes the headset to another machine, SonoBus falls back to
--- "Mac mini Speakers" -- an output-only device. Its input channel group
--- collapses to zero channels and never rebuilds, so when the headset comes
--- back (same CoreAudio UID, full channels, already the system default in and
--- out) SonoBus stays parked on the speakers and sends no microphone audio.
--- Re-picking the device by hand restores the device but not the channel
--- group, which is why it takes two passes through the dropdown to recover.
+-- When the KVM takes the headset away, SonoBus falls back to "Mac mini
+-- Speakers", an output-only device, and its input channel group collapses.
+-- When the headset returns (same CoreAudio UID, already the system default)
+-- SonoBus stays on the speakers and sends no microphone audio. Re-picking the
+-- device by hand restores the device but not the channel group, and SonoBus
+-- has no option to prevent the fallback, so this restarts it when the headset
+-- reappears.
 --
--- SonoBus exposes no option to prevent that fallback -- its entire audio
--- device option set is sample-rate override, drift correction, Bluetooth
--- input and the FX limiter. So the only cure is a restart, which is what
--- this does when the headset reappears.
---
--- The restart uses `--load-setup`, whose setup file carries "any device
--- selection, input mixer setup, and all other options" -- the input mixer
--- being exactly the state that collapses. Create it once, while the mic is
--- actually working, via Save Setup... in SonoBus, saved to SETUP below.
+-- The restart passes `--load-setup` so the setup file restores the input
+-- mixer, the state that collapses. Create it once, while the mic works, with
+-- Save Setup... in SonoBus, saved to SETUP below with auto-reconnect on (see
+-- hammerspoon.nix).
 
 local M = {}
 
@@ -56,8 +51,8 @@ local function headsetReady()
 end
 
 -- Belt and braces alongside --load-setup, and the whole fix when no setup file
--- has been saved yet. SonoBus only writes this file on quit, so it is safe to
--- edit between the kill and the relaunch -- and only then.
+-- has been saved yet. SonoBus writes this file back from memory, so it is only
+-- safe to edit between the SIGKILL and the relaunch.
 local function pinSettings()
   local f = io.open(SETTINGS, "r")
   if not f then return end

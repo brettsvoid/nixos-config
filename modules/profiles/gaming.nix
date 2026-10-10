@@ -1,5 +1,5 @@
-# Gaming profile. Linux-heavy (Steam, gamemode, etc.); the homeManager half
-# applies cross-platform for the chat-and-launcher pieces.
+# Gaming: Steam, gamemode, launchers and MangoHud. Linux only; the
+# home-manager half is a no-op elsewhere.
 _: {
   flake.modules.nixos.profile-gaming =
     { pkgs, ... }:
@@ -12,21 +12,18 @@ _: {
       programs.gamemode.enable = true;
 
       # Recent Proton (GE-Proton10-10, for one) syncs Windows threads
-      # through /dev/ntsync when it exists, and falls back to fsync
-      # otherwise. The kernel builds ntsync as a module but nothing loads
-      # it, so load it at boot. Fluorine (Nolvus) also sets
-      # PROTON_NO_NTSYNC=1 whenever the device is missing.
+      # through /dev/ntsync when it exists, else fsync, and Fluorine (Nolvus)
+      # sets PROTON_NO_NTSYNC=1 without it. The kernel builds ntsync as a
+      # module that nothing loads, so load it at boot.
       boot.kernelModules = [ "ntsync" ];
 
-      # MangoHud's GPU power is garbage in 32-bit games. Since the 570
-      # drivers, NVIDIA's 32-bit NVML returns nonsense from
-      # nvmlDeviceGetPowerUsage, with NVML_SUCCESS. The patch computes power
-      # from nvmlDeviceGetTotalEnergyConsumption, which is still correct
-      # there. Drop it once NVIDIA or MangoHud fixes this (or if it stops
-      # applying, check here first):
+      # Since the 570 drivers, NVIDIA's 32-bit NVML returns nonsense from
+      # nvmlDeviceGetPowerUsage, so MangoHud's GPU power is wrong in 32-bit
+      # games. The patch derives power from
+      # nvmlDeviceGetTotalEnergyConsumption instead. An overlay, so the
+      # 32-bit half nixpkgs bundles into mangohud is patched too. Drop it
+      # once fixed upstream; if it stops applying, check the issue first:
       # https://github.com/flightlessmango/MangoHud/issues/1607
-      # An overlay so pkgsi686Linux.mangohud, the 32-bit half that nixpkgs
-      # bundles into mangohud, is patched too.
       nixpkgs.overlays = [
         (_: prev: {
           mangohud = prev.mangohud.overrideAttrs (old: {
@@ -40,9 +37,9 @@ _: {
         heroic
       ];
 
-      # Let MangoHud read CPU package power. The RAPL energy counter has
-      # been root-only since CVE-2020-8694 (a power side channel); this
-      # opens it to the users group only.
+      # Let MangoHud read CPU package power. The RAPL energy counter is
+      # root-only since CVE-2020-8694 (a power side channel); this opens it
+      # to the users group.
       services.udev.extraRules = ''
         SUBSYSTEM=="powercap", KERNEL=="intel-rapl:0", ACTION=="add", RUN+="${pkgs.coreutils}/bin/chgrp users /sys%p/energy_uj", RUN+="${pkgs.coreutils}/bin/chmod g+r /sys%p/energy_uj"
       '';
@@ -61,28 +58,27 @@ _: {
         prismlauncher
       ];
 
-      # FPS/performance overlay, loaded into every Vulkan game (Proton
-      # included) but hidden until toggled. The default toggle,
-      # Shift_R+F12, also fires Steam's F12 screenshot.
+      # Performance overlay in every Vulkan game (Proton included), hidden
+      # until toggled. Not the default Shift_R+F12, which also fires Steam's
+      # F12 screenshot.
       programs.mangohud = {
         enable = true;
         settings = {
           no_display = true;
           toggle_hud = "Shift_R+F8";
-          # Built-in "horizontal view": one row across the top. Config
-          # options override the preset's, which turns frame_timing on.
+          # Built-in "horizontal view", one row across the top. Options set
+          # here override the preset's (it turns frame_timing on).
           preset = 2;
           frame_timing = false;
           font_size = 20; # default 24
-          # Trim the preset: without a battery, its battery fields leave
-          # empty separators.
+          # Without a battery, the preset's battery fields leave empty
+          # separators.
           battery = false;
           battery_watt = false;
           battery_time = false;
-          # Shift_L+F2 starts and stops a frame-time log (a CSV per run),
-          # even with the HUD hidden. Without this, MangoHud writes them
-          # loose in $HOME. It does not create the folder, hence the
-          # .keep below.
+          # For the frame-time logs Shift_L+F2 starts and stops (a CSV per
+          # run, even with the HUD hidden), which otherwise land in $HOME.
+          # MangoHud doesn't create the folder, hence the .keep below.
           output_folder = "${config.xdg.stateHome}/mangohud";
         };
       };

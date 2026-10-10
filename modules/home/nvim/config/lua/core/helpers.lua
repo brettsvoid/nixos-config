@@ -30,7 +30,7 @@ end
 
 vim.api.nvim_create_user_command('SearchQuickfixFiles', search_quickfix_files, {})
 
--- Highlight yanked text. Try it with `yap`. See :help vim.highlight.on_yank()
+-- Briefly highlight yanked text.
 vim.api.nvim_create_autocmd('TextYankPost', {
   desc = 'Highlight when yanking text',
   group = vim.api.nvim_create_augroup('highlight-yank', { clear = true }),
@@ -39,7 +39,7 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   end,
 })
 
--- Open each unsaved buffer in its own tab.
+-- Open each other unsaved buffer in its own tab.
 local function open_unsaved_buffers()
   local unsaved = {}
   local original_bufnr = vim.api.nvim_get_current_buf()

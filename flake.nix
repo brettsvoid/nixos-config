@@ -24,38 +24,35 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Caelestia — a Quickshell desktop shell, on trial as an alternative to
-    # ambxst (modules/home/desktop/caelestia.nix). Its quickshell is left on
-    # upstream's own pin rather than following ours: it rebuilds quickshell
-    # with X11/i3 support switched off, so following would not share a build,
-    # and upstream tests against its own rev.
+    # Caelestia, a Quickshell desktop shell: brett-desktop's session shell
+    # (modules/home/desktop/caelestia.nix). Its quickshell stays on upstream's
+    # pin, not ours: it rebuilds quickshell with X11 and i3 off, so following
+    # would not share a build, and upstream tests against its own rev.
     caelestia-shell = {
       url = "github:caelestia-dots/shell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Crimson Ronin (MIT) — a red/black theme for Caelestia on Hyprland. Only
-    # its palette, wallpaper and mark are used, not its Arch installer.
-    # `flake = false` because the repo is a plain source tree.
+    # Crimson Ronin (MIT), a red/black Caelestia theme. Its palette,
+    # wallpaper, mark and GTK theme are used; its Arch installer is not.
     crimson-ronin = {
       url = "github:corund207/crimson-ronin";
       flake = false;
     };
 
     # Reopens the last session's apps at login
-    # (modules/home/desktop/session-restore.nix). Pinned to a release tag;
-    # bump on `nix flake update`.
+    # (modules/home/desktop/session-restore.nix). Pinned to a release tag,
+    # which `nix flake update` does not move: bump it by hand.
     hyprsession = {
       url = "github:joshurtree/hyprsession/v0.2.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # HyprWindowShade (MIT) — a Hyprland plugin that runs GLSL shaders over
-    # windows, here for the window dissolve
-    # (modules/home/desktop/window-dissolve.nix). It builds against
-    # Hyprland's internal headers, so the pin must suit nixpkgs' Hyprland:
-    # this is the plugin's own release pin for 0.56.2 (its hyprpm.toml
-    # `commit_pins`). Bump it with Hyprland, to the commit that file names.
+    # HyprWindowShade (MIT), a Hyprland plugin that runs GLSL shaders over
+    # windows, for modules/home/desktop/window-dissolve.nix. It builds against
+    # Hyprland's internal headers, so pin the commit that the `commit_pins` in
+    # upstream main's hyprpm.toml names for nixpkgs' Hyprland (here 0.56.2),
+    # and bump it with Hyprland.
     hyprwindowshade = {
       url = "github:ManofJELLO/HyprWindowShade/a4c6b8af424a189072427c4c90ef2938e1b481d3";
       flake = false;
@@ -66,39 +63,27 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Prebuilt nix-index database → `comma` (run any nixpkgs binary ad-hoc,
-    # no install) and a working command-not-found on a flakes system. The DB
-    # is CI-built and refreshed on `nix flake update`; only input is nixpkgs,
-    # which we follow to keep flake.lock lean.
+    # Prebuilt nix-index database for `comma` (run a nixpkgs binary without
+    # installing it) and command-not-found. Refreshed on `nix flake update`.
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # ASD-STE100 Simplified Technical English as an Agent Skill, wired into
-    # ~/.claude/skills by apps/claude-code.nix. `flake = false` because the
-    # repo is a plain source tree — and it holds evals, prompts and examples
-    # alongside the skill, so the module points at the subdirectory rather
-    # than the root.
+    # ASD-STE100 Simplified Technical English skill, linked into
+    # ~/.claude/skills by apps/claude-code.nix. The repo also holds evals and
+    # examples, so the module uses its skills/ subdirectory.
     simple-english = {
       url = "github:AminBlg/SimpleEnglish";
       flake = false;
     };
 
-    # Matt Pocock's agent skills — the /grill-with-docs, /tdd, /diagnose,
-    # /triage family, wired into ~/.claude/skills by apps/claude-code.nix.
-    #
-    # HARD-PINNED to a rev, not to a branch, and that is the whole point.
-    # Upstream reorganises aggressively: between this rev and main it deleted
-    # the deprecated/ and personal/ buckets outright and renamed four skills
-    # (diagnose→diagnosing-bugs, to-issues→to-tickets, to-prd→to-spec,
-    # review→code-review). Tracking a branch would mean `nix flake update`
-    # silently swapping the slash commands out from under both Macs. This rev
-    # is the one the mac mini already had installed via `npx skills` — it
-    # holds exactly those 29 skills and nothing else.
-    #
-    # `nix flake update` will NOT move this. Bump the rev by hand, and read
-    # the diff first.
+    # Matt Pocock's agent skills (/grill-with-docs, /tdd, /diagnose,
+    # /triage, …), linked into ~/.claude/skills by apps/claude-code.nix.
+    # Pinned to a rev on purpose: upstream renames and deletes skills often,
+    # so tracking a branch would silently swap slash commands on an update.
+    # `nix flake update` won't move it; bump the rev by hand after reading
+    # the diff.
     mattpocock-skills = {
       url = "github:mattpocock/skills/694fa30311e02c2639942308513555e61ee84a6f";
       flake = false;
@@ -109,43 +94,30 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Installs/owns /opt/homebrew so `darwin-rebuild switch` bootstraps
-    # Homebrew on a fresh Mac with no separate install step. We keep
-    # mutableTaps (the default) and manage taps imperatively, so the
-    # homebrew/{core,cask,bundle} tap inputs aren't needed.
+    # Installs and owns /opt/homebrew, so `darwin-rebuild switch` bootstraps
+    # Homebrew on a fresh Mac. Taps stay mutable (the default) and brew adds
+    # them, so no homebrew/{core,cask,bundle} tap inputs are needed.
     nix-homebrew = {
       url = "github:zhaofengli/nix-homebrew";
       inputs.brew-src.follows = "brew-src";
     };
 
-    # Homebrew itself, pinned ahead of what nix-homebrew ships.
+    # Homebrew itself, pinned ahead of nix-homebrew's own pin (6.0.12). Cask
+    # definitions come from Homebrew's live API, so when one uses a feature
+    # the pinned brew lacks, `brew bundle` aborts the switch (the kitty cask's
+    # `command_wrapper`, added in 6.0.13, did). Keep this near the latest
+    # release and bump it when a cask breaks.
     #
-    # This pin is load-bearing, not cosmetic. nix-homebrew fixes the brew CODE
-    # to a tag, but cask DEFINITIONS come from Homebrew's live JSON API and
-    # always move. When the API starts using a DSL feature the pinned code
-    # lacks, `brew bundle` aborts — which is exactly what happened on the mac
-    # mini's first switch:
-    #
-    #   Error: Cask 'kitty' definition is invalid:
-    #          undefined method 'command_wrapper' for Cask 'kitty'
-    #
-    # 6.0.13 adds Library/Homebrew/cask/artifact/command_wrapper.rb; 6.0.12,
-    # which nix-homebrew pins, does not. Keep this at or near Homebrew's
-    # latest release, and expect to bump it when a cask breaks rather than on
-    # a schedule.
-    #
-    # Note nix-homebrew derives its derivation name from ITS OWN lock, so the
-    # store path still reads brew-6.0.12 while containing 6.0.13. That is
-    # metadata only — `name` and `version` in flake.nix:25-26 — and does not
-    # affect the brew code or the version brew reports at runtime.
+    # The store path still reads brew-6.0.12: nix-homebrew takes the name from
+    # its own lock (its flake.nix:25-26). The brew code is 6.0.13.
     brew-src = {
       url = "github:Homebrew/brew/6.0.13";
       flake = false;
     };
 
-    # Terminal agent-multiplexer (run coding agents in one terminal, persists
-    # over ssh). Trialled alongside tmux. Pinned to a release tag; bump on
-    # `nix flake update`.
+    # Terminal multiplexer for coding agents (modules/home/terminals/herdr.nix).
+    # Pinned to a release tag, which `nix flake update` does not move: bump it
+    # by hand.
     herdr = {
       url = "github:ogulcancelik/herdr/v0.7.1";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -154,8 +126,7 @@
     agenix = {
       url = "github:ryantm/agenix";
       inputs.nixpkgs.follows = "nixpkgs";
-      # Drop agenix's own (stale) home-manager and nix-darwin copies — we
-      # use the top-level inputs everywhere. Keeps flake.lock lean.
+      # Share our home-manager and nix-darwin rather than agenix's own copies.
       inputs.home-manager.follows = "home-manager";
       inputs.darwin.follows = "nix-darwin";
     };

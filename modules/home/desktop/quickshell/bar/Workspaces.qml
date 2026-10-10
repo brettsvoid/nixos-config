@@ -29,9 +29,9 @@ Item {
                 readonly property int wsId: index + 1
                 readonly property bool isActive: wsId === root.activeWorkspaceId
                 readonly property bool hasWindows: {
-                    // Hyprland.workspaces is an ObjectModel — iterate .values, not
-                    // a non-existent .count/.get(). Reading .toplevels.values keeps
-                    // this binding reactive to windows opening/closing.
+                    // Hyprland.workspaces is an ObjectModel: search .values (it has no
+                    // count or get()). Reading toplevels.values keeps this binding live
+                    // as windows open and close.
                     const ws = Hyprland.workspaces.values.find(w => w.id === wsId)
                     return ws ? ws.toplevels.values.length > 0 : false
                 }

@@ -25,12 +25,10 @@ in
       toml = pkgs.formats.toml { };
 
       # rofi-games starts a Steam game by running `steam steam://rungameid/…`
-      # as rofi's child, and rofi exits about 0.2 ms later. NixOS's steam
-      # runs bubblewrap with --die-with-parent, which arms just after rofi
-      # starts exiting, so the sandbox was SIGKILLed before it could pass
-      # the URL to the running Steam, and the game never started. This
-      # steam goes first on rofi's PATH and detaches the real one into its
-      # own session, so the sandbox's parent is no longer rofi.
+      # as rofi's child, and rofi exits at once. NixOS's steam runs bubblewrap
+      # with --die-with-parent, so the sandbox was killed before it could pass
+      # the URL to the running Steam. This steam, first on rofi's PATH,
+      # detaches the real one into its own session, away from rofi.
       detachedSteam = pkgs.writeShellScriptBin "steam" ''
         exec ${pkgs.util-linux}/bin/setsid -f ${lib.getExe osConfig.programs.steam.package} "$@"
       '';

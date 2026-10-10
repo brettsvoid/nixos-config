@@ -1,9 +1,7 @@
-# Select a desktop wallpaper from ~/Pictures/Wallpapers. With no argument it
-# prints an interactive numbered menu; with an argument it picks by number or by
-# filename substring (e.g. `select-wallpaper rem`). Re-themes edgebar directly so
-# the bar follows instantly. (The launchd watcher in edgebar.nix still handles
-# wallpaper changes made OUTSIDE edgebar.) `desktoppr` and `generate-edgebar-theme`
-# are on PATH via writeShellApplication's runtimeInputs.
+# Select a desktop wallpaper from ~/Pictures/Wallpapers: an interactive menu
+# with no argument, otherwise by number or filename substring (e.g.
+# `select-wallpaper rem`), then re-theme edgebar directly. `desktoppr` and
+# `generate-edgebar-theme` come from writeShellApplication's runtimeInputs.
 wall_dir="$HOME/Pictures/Wallpapers"
 cd "$wall_dir" || exit 1
 shopt -s nullglob

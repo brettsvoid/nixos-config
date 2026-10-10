@@ -1,6 +1,6 @@
 -- Autoformat
 
--- Helper function to find config file by searching upwards from buffer directory
+-- Whether any of config_files exists upwards from the buffer's directory (to $HOME).
 local function has_config(bufnr, config_files)
 	local found = vim.fs.find(config_files, {
 		upward = true,
@@ -10,13 +10,12 @@ local function has_config(bufnr, config_files)
 	return #found > 0
 end
 
--- Helper function to select Biome or Prettier based on project config
+-- Biome or Prettier, whichever the project configures.
 local function get_web_formatter(bufnr)
-	-- Biome takes precedence if biome.json exists
+	-- Biome wins if both are configured
 	if has_config(bufnr, { "biome.json", "biome.jsonc" }) then
 		return { "biome" }
 	end
-	-- Fall back to prettier if prettier config exists
 	if
 		has_config(bufnr, {
 			".prettierrc",
@@ -33,7 +32,7 @@ local function get_web_formatter(bufnr)
 	then
 		return { "prettier" }
 	end
-	-- No config found - use LSP fallback
+	-- Neither: LSP fallback
 	return {}
 end
 
@@ -63,20 +62,19 @@ return {
 			toml = { "taplo" },
 			zsh = { "shfmt" },
 			rust = { "rustfmt" },
-			-- Conform can also run multiple formatters sequentially
 			python = { "isort", "black" },
 			-- Terraform/terragrunt
 			hcl = { "terragrunt_hclfmt" },
 			terraform = { "terraform_fmt" },
 
-			-- Biome if biome.json is present, else Prettier (see get_web_formatter).
+			-- Biome, Prettier or LSP, per project config (see get_web_formatter).
 			javascript = get_web_formatter,
 			javascriptreact = get_web_formatter,
 			typescript = get_web_formatter,
 			typescriptreact = get_web_formatter,
 			json = get_web_formatter,
 			jsonc = get_web_formatter,
-			-- Static prettier for formats Biome doesn't support
+			-- Always Prettier. Biome can't format these, CSS aside.
 			css = { "prettier" },
 			html = { "prettier" },
 			markdown = { "prettier" },
@@ -85,23 +83,19 @@ return {
 
 			go = { "gofumpt", "goimports_reviser", "golines" },
 
-			-- nixfmt (RFC style) to match formatter.nix + the git-hooks
-			-- pre-commit; nixpkgs_fmt would fight the hook on every save.
+			-- Match formatter.nix and the git-hooks pre-commit.
 			nix = { "nixfmt" },
 
 			["*"] = { "injected" },
 		},
-		-- Set up format-on-save
 		format_on_save = function(bufnr)
-			-- Disable "format_on_save lsp_fallback" for languages that don't
-			-- have a well standardized coding style. You can add additional
-			-- languages here or re-enable it for the disabled ones.
+			-- No format-on-save for languages without one standard style.
 			local ignore_filetypes = { "c", "cpp" }
 			if vim.tbl_contains(ignore_filetypes, vim.bo[bufnr].filetype) then
 				return
 			end
 
-			-- Disable autoformat for files in a certain path
+			-- Nor under node_modules
 			local bufname = vim.api.nvim_buf_get_name(bufnr)
 			if bufname:match("/node_modules/") then
 				return
@@ -120,7 +114,7 @@ return {
 		notify_on_error = true,
 	},
 	init = function()
-		-- If you want the formatexpr, here is the place to set it
+		-- gq formats through conform
 		vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
 	end,
 }

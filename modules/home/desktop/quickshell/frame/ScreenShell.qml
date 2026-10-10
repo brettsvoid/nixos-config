@@ -4,8 +4,8 @@ import Quickshell.Hyprland
 import "../services"
 import "../theme"
 
-// Everything the shell puts on one screen: the frame window, and four windows that
-// keep tiled windows inside the frame and below the bar.
+// Everything the shell puts on one screen: the wallpaper, the frame window, and four
+// windows that keep tiled windows inside the frame and below the bar.
 Scope {
     id: root
 
@@ -16,12 +16,9 @@ Scope {
 
     // A window in true fullscreen on this screen's workspace. Hyprland reports a
     // maximised window as `maximized` rather than `fullscreen` to foreign-toplevel
-    // clients, so maximising keeps the frame.
-    //
-    // For a moment after another screen switches to a new workspace, Quickshell can
-    // hold that workspace as this screen's active one (see shell.qml). The workspace's
-    // own monitor comes from Hyprland, so checking it stops a fullscreen window over
-    // there from shrinking this screen's frame away.
+    // clients, so maximising keeps the frame. Quickshell can briefly hold another
+    // screen's new workspace as this one's (see shell.qml); checking the workspace's
+    // own monitor stops a fullscreen window over there shrinking this frame.
     readonly property bool fullscreen: {
         const ws = root.monitor?.activeWorkspace;
         if (!ws || ws.monitor !== root.monitor)
@@ -30,13 +27,11 @@ Scope {
     }
 
     // While fullscreen, the frame shrinks to nothing, which also leaves it no input
-    // area, and grows back afterwards. The windows stay mapped. Hyprland fades Top-layer
-    // surfaces out under a fullscreen window, and a faded one does not stop that window
-    // being the only thing on the monitor (`solitary` in `hyprctl monitors`), which
-    // direct scanout and tearing need. Mapping the five windows again instead took about
-    // 120 ms each, which held the frame back for most of a second. The edges stay
-    // reserved: a fullscreen window ignores them, and the windows behind it do not
-    // re-tile.
+    // area, and grows back afterwards. The windows stay mapped: Hyprland fades
+    // Top-layer surfaces out under a fullscreen window, and a faded one still lets that
+    // window be `solitary` (`hyprctl monitors`), which direct scanout and tearing need.
+    // Don't unmap them instead: remapping takes about 120 ms a window. The edges stay
+    // reserved, as a fullscreen window ignores them and nothing behind it re-tiles.
     //
     // Game mode (services/GameMode.qml) does the same, and also releases the edges, so
     // a windowed game gets the whole screen.

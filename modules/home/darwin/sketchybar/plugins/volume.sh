@@ -3,8 +3,7 @@
 source "$CONFIG_DIR/colors.sh"
 source "$CONFIG_DIR/icons.sh"
 
-# The volume_change event supplies an $INFO variable in which the current volume
-# percentage is passed to the script.
+# volume_change passes the new volume percentage in $INFO.
 
 
   VOLUME=$INFO

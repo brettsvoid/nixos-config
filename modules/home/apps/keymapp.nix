@@ -1,6 +1,6 @@
-# Keymapp — ZSA's app for flashing firmware and showing the live layout
-# (the active layer and each key's binding) of a ZSA keyboard. The desktop's
-# keyboard is a Moonlander Mark I. The Macs install it as a Homebrew cask.
+# Keymapp: ZSA's app for flashing firmware and showing the live layout of a
+# ZSA keyboard (the desktop has a Moonlander Mark I). The mac mini installs
+# it as a Homebrew cask.
 #
 # Import both halves: the NixOS half gives the logged-in user access to the
 # keyboard, the home-manager half installs the app.
@@ -17,13 +17,11 @@ _: {
     {
       home.packages = [ pkgs.keymapp ];
 
-      # Keymapp gives its window a maximum size of 2560x1440. Before Hyprland's
-      # dwindle layout tiles a window, it compares that maximum with the tile
-      # the window would split, and floats the window if the tile is larger.
-      # On the desktop's portrait monitor every tile is 1898 px tall, so
-      # Keymapp always floated there, wider than the screen. no_max_size makes
-      # Hyprland ignore the maximum. GTK still draws the window at most
-      # 1440 px tall, so alone on that monitor it leaves a gap under it.
+      # Keymapp sets a maximum window size of 2560x1440, and dwindle floats a
+      # window whose tile would exceed its maximum, so on the desktop's
+      # portrait monitor (tiles 1898 px tall) it always floated, wider than
+      # the screen. no_max_size makes Hyprland ignore the maximum; GTK still
+      # caps it at 1440 px tall, leaving a gap beneath it there.
       wayland.windowManager.hyprland.settings.windowrule = [
         "no_max_size on, match:class ^(keymapp)$"
       ];

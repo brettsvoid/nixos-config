@@ -1,5 +1,5 @@
 //! Network throughput from /proc/net/dev, in bytes per second over the real interfaces
-//! (not loopback, containers or bridges).
+//! (not loopback, containers, bridges, VMs or tunnels).
 
 use std::fs;
 use std::time::Instant;

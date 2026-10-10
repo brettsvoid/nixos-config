@@ -1,25 +1,21 @@
-# tuigreet on top of greetd, providing a Hyprland Wayland session.
-# Replaces GDM/GNOME with a minimal terminal-based login.
+# tuigreet on greetd: a terminal login that starts Hyprland.
 _: {
   flake.modules.nixos.greetd =
     { pkgs, ... }:
     {
-      # Needed for services.xserver.videoDrivers (NVIDIA module). xserver itself
-      # is not used as a session; Hyprland is Wayland.
+      # Not what enables the NVIDIA driver: hardware.nvidia keys off
+      # videoDrivers alone, and in that module xserver.enable only adds the
+      # nvidia modules to boot.kernelModules. No X session runs here.
       services.xserver.enable = true;
 
-      # tuigreet draws on the kernel console, and at the default loglevel (4)
-      # every KERN_ERR message is printed straight over it. On brett-desktop
-      # a failing USB port logs one every ~16 s for two minutes after boot,
-      # which scrambled the login prompt. 3 keeps only crit/alert/emerg on
-      # the console; everything still reaches the journal (`journalctl -k`).
+      # tuigreet draws on the kernel console, where the default loglevel (4)
+      # prints every KERN_ERR message over the login prompt. 3 keeps only
+      # crit/alert/emerg; the journal still gets everything (`journalctl -k`).
       boot.consoleLogLevel = 3;
 
-      # Same console, from systemd: its boot status lines ("Starting Docker
-      # Application Container Engine…") land on top of tuigreet whenever a
-      # unit starts after greetd. nixpkgs runs greetd as Type=idle, but idle
-      # only waits up to 5 s for other jobs; docker came 6 s later.
-      # "error" keeps failures visible and silences the rest (systemd(1)).
+      # Likewise systemd's boot status lines, which land on tuigreet when a
+      # unit starts after greetd (Type=idle waits only 5 s). "error" shows
+      # failures only.
       boot.kernelParams = [ "systemd.show_status=error" ];
 
       services.greetd =
@@ -34,10 +30,8 @@ _: {
         {
           enable = true;
           settings.default_session = {
-            # pkgs.tuigreet, not pkgs.greetd.tuigreet: nixpkgs moved tuigreet to
-            # the top level between the 2026-05-07 and 2026-07-27 revs, and
-            # `pkgs.greetd` is now the greetd derivation itself rather than an
-            # attrset of the greeters.
+            # pkgs.tuigreet: `pkgs.greetd` is now greetd itself, not a set
+            # of greeters.
             command = "${pkgs.tuigreet}/bin/tuigreet --time --asterisks --remember --sessions ${sessions}";
             user = "greeter";
           };

@@ -1,6 +1,5 @@
-# MSI fan control via isw (ice-sealed wyvern)
-# Reads/writes EC registers to set fan curves for MSI laptops.
-# Profile 17E2EMS1 covers GE75 Raider 8SF (MS-17E2).
+# MSI laptop fan curves via isw (ice-sealed wyvern), which writes the
+# embedded controller's registers. Profile 17E2EMS1 is the GE75 Raider 8SF.
 _: {
   flake.modules.nixos.fan-control =
     { pkgs, ... }:
@@ -23,7 +22,7 @@ _: {
 
         postPatch = ''
           patchShebangs isw
-          # Adjust fan curve for 17E2EMS1 profile
+          # Raise the 17E2EMS1 curves; both fans top out at 100%
           sed -i '/^\[17E2EMS1\]/,/^\[/ {
             s/^cpu_fan_speed_6 = 90/cpu_fan_speed_6 = 100/
             s/^gpu_fan_speed_2 = 52/gpu_fan_speed_2 = 55/

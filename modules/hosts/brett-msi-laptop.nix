@@ -44,11 +44,10 @@ in
           boot = {
             loader.systemd-boot.enable = true;
             loader.efi.canTouchEfiVariables = true;
-            # Stable by-uuid path (matches swapDevices in hardware/msi-laptop.nix);
-            # /dev/sdaN names are not guaranteed stable across kernels.
+            # The swap partition (swapDevices in hardware/msi-laptop.nix).
             resumeDevice = "/dev/disk/by-uuid/25600515-f258-4484-9f54-883db5a8d31d";
-            # Early KMS: load NVIDIA modules in initrd for proper DRM handoff
-            # to the compositor (avoids tearing/blackout on first session).
+            # Early KMS: NVIDIA modules in the initrd for a clean DRM handoff
+            # to the compositor.
             initrd.kernelModules = [
               "nvidia"
               "nvidia_modeset"
@@ -58,21 +57,18 @@ in
           };
 
           # ─── GPU ───────────────────────────────────────────────────────
-          # Proprietary kernel module, as before the nvidia/nvidia-prime split.
+          # Proprietary kernel module (each host chooses; see nvidia.nix).
           hardware.nvidia.open = false;
 
           # ─── State version ─────────────────────────────────────────────
-          # Pinned at install time; do NOT change without reading
+          # Pinned at install time; don't change it without reading
           # https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion
           system.stateVersion = "25.11";
 
           # ─── Host-specific systemd services ────────────────────────────
-          # Dynamically resolve AQ_DRM_DEVICES by PCI bus ID at boot. Card
-          # numbers (/dev/dri/cardN) can change across kernel updates, but PCI
-          # addresses (0000:01:00.0 = NVIDIA, 0000:00:02.0 = Intel) are stable.
-          # This service generates a Hyprland config fragment that
-          # desktop/hyprland.nix sources via `source = ...`. Specific to this
-          # MSI GE75 Raider's hybrid GPU setup.
+          # Writes AQ_DRM_DEVICES (NVIDIA first, then Intel) to a Hyprland
+          # config fragment at boot, resolving cardN from the stable PCI
+          # addresses. Sourced by the Home Manager block below.
           systemd.services.hyprland-drm-config = {
             description = "Generate Hyprland DRM device config from PCI bus IDs";
             wantedBy = [ "multi-user.target" ];
@@ -95,8 +91,7 @@ in
             };
           };
 
-          # Re-enable monitors after suspend/hibernate (force modeset via
-          # disable + reload).
+          # Re-enable monitors after suspend/hibernate by forcing a modeset.
           systemd.services.hyprland-resume-monitors = {
             description = "Re-enable Hyprland monitors after resume";
             after = [
@@ -166,7 +161,6 @@ in
                 homeDirectory = "/home/brett";
               };
 
-              # Monitors: external on the right, laptop panel at the origin.
               wayland.windowManager.hyprland.settings.monitor = [
                 "DP-1, 2560x1440@165, 1920x0, 1" # external monitor (right)
                 "eDP-1, 1920x1080@144, 0x0, 1" # laptop (left, always at origin)
@@ -178,18 +172,14 @@ in
                 "AQ_FORCE_LINEAR_BLIT, 1"
               ];
 
-              # Source the DRM device config generated at boot by the
-              # hyprland-drm-config service above (AQ_DRM_DEVICES by PCI
-              # bus ID).
+              # Written at boot by hyprland-drm-config above.
               wayland.windowManager.hyprland.extraConfig = ''
                 source = /tmp/hypr-drm-devices.conf
               '';
 
-              # Host-specific Hyprland workspace bindings.
-              # DP-1 = external monitor (right), eDP-1 = laptop screen (left).
-              # persistent:true keeps each workspace alive even when its monitor
-              # is absent — apps land on the available monitor instead of into
-              # an invisible orphan, and snap back when DP-1 reconnects.
+              # 1–5 on the external monitor, 6–10 on the panel. persistent:true
+              # keeps a workspace alive while its monitor is absent, so apps
+              # land on the other screen rather than an invisible orphan.
               wayland.windowManager.hyprland.settings.workspace = [
                 "1, monitor:DP-1, default:true, persistent:true"
                 "2, monitor:DP-1, persistent:true"

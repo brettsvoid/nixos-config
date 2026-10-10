@@ -1,18 +1,13 @@
-# Obsidian's attachment policy for the Syncthing-synced vault at
+# Obsidian's attachment setting for the Syncthing-synced vault at
 # ~/Documents/Obsidian Vault. The app itself is not installed from here.
 #
-# Deliberately an activation script rather than home.file/xdg.configFile.
-# Obsidian rewrites .obsidian/app.json on EVERY settings change, so pointing a
-# read-only store symlink at it would stop the settings pane persisting
-# anything at all — the same trap terminals-herdr documents for its own config,
-# but worse here, because Obsidian writes this file continuously rather than
-# once at first run. Syncthing would also be handed a store symlink to sync.
-# Merging the single key we care about with jq leaves the rest of the file, and
-# Obsidian's ownership of it, alone.
+# An activation script, not home.file: Obsidian rewrites .obsidian/app.json on
+# every settings change, so a read-only store symlink would stop its settings
+# persisting at all (and hand Syncthing a symlink to sync). Merging the one
+# key with jq leaves the rest of the file to Obsidian.
 #
-# Operational note: quit Obsidian before `darwin-rebuild switch`. A running
-# Obsidian holds its settings in memory and writes them back on the next
-# change, silently reverting whatever activation wrote underneath it.
+# Quit Obsidian before switching: a running Obsidian writes its in-memory
+# settings back on the next change, reverting this.
 _: {
   flake.modules.homeManager.apps-obsidian =
     {
@@ -25,14 +20,10 @@ _: {
       jq = "${pkgs.jq}/bin/jq";
       appJson = "${config.home.homeDirectory}/Documents/Obsidian Vault/.obsidian/app.json";
 
-      # "In subfolder under current folder": images paste into an _assets/
-      # beside the folder the note lives in, so Recipes/ notes fill
-      # Recipes/_assets/ and nothing lands at the vault root (which is the
-      # stock default, and how the root accumulated loose "Pasted image" files).
-      #
-      # The "./" prefix is load-bearing — it is what selects that mode. A bare
-      # "_assets" is a different setting entirely: one shared folder at the
-      # vault root. Confirmed against real vault configs, not inferred.
+      # "In subfolder under current folder": pasted images go to _assets/
+      # inside the note's folder (Recipes/ notes fill Recipes/_assets/), not
+      # to the vault root, the stock default. The "./" prefix selects that
+      # mode; a bare "_assets" means one shared folder at the vault root.
       attachmentPath = "./_assets";
     in
     {
@@ -43,9 +34,8 @@ _: {
         if [ -f "$APP_JSON" ]; then
           CURRENT=$(${jq} -r '.attachmentFolderPath // empty' "$APP_JSON")
 
-          # Only write when the value actually differs. Syncthing watches this
-          # vault, so an unconditional rewrite would emit a sync event and a
-          # .stversions entry on every single rebuild.
+          # Write only on a change, or Syncthing would sync (and version)
+          # the file on every rebuild.
           if [ "$CURRENT" != "${attachmentPath}" ]; then
             ${jq} --arg p "${attachmentPath}" '.attachmentFolderPath = $p' "$APP_JSON" > "$APP_JSON.tmp" \
               && mv "$APP_JSON.tmp" "$APP_JSON"

@@ -1,11 +1,8 @@
-# Neovim with full LSP/formatter/linter toolchain. Lazy.nvim manages plugins
-# at runtime; the lua tree under ./config is the static source of truth.
+# Neovim with its LSP/formatter/linter toolchain; lazy.nvim manages plugins at
+# runtime from the Lua tree under ./config.
 #
-# IMPORTANT: ~/.config/nvim itself stays a real directory so its *children*
-# can be managed individually (each as an mkOutOfStoreSymlink → live repo
-# path). Editing a .lua file in the repo updates nvim immediately; no rebuild
-# needed. lazy-lock.json is one such managed child, so `:Lazy update` writes
-# the pinned commits straight back into the repo.
+# ~/.config/nvim stays a real directory so each child can be linked on its own,
+# mostly as mkOutOfStoreSymlinks to the live repo: edits apply without a rebuild.
 { config, ... }:
 let
   repoDir = config.flake.lib.repoDir;
@@ -21,15 +18,11 @@ in
     let
       configRoot = "${config.home.homeDirectory}/${repoDir}/modules/home/nvim/config";
 
-      # Treesitter parsers, version-locked to this flake's nixpkgs instead of
-      # compiled at runtime by `:TSUpdate`. Each nvim-treesitter-parsers.<lang>
-      # ships parser/<lang>.so; symlinkJoin collapses them into one parser/
-      # dir we drop onto nvim's runtimepath (see xdg.configFile below). The
-      # nvim-treesitter plugin (managed by lazy, branch=main) still supplies
-      # the queries and ft→lang aliases — only the compiled grammars move to
-      # Nix. Parsers build against this nixpkgs' tree-sitter, so their ABI
-      # stays in lockstep with the neovim it also builds. This is the single
-      # source of truth for which languages get a parser.
+      # Treesitter parsers from this flake's nixpkgs (ABI matches its neovim),
+      # not `:TSUpdate`. This is the one list of languages that get a parser.
+      # The nvim-treesitter plugin (lazy, branch=main) adds ft→lang aliases and
+      # indentexpr only: main puts its queries on the rtp via :TSInstall, which
+      # this setup never runs.
       treesitterParsers = pkgs.symlinkJoin {
         name = "nvim-treesitter-parsers";
         paths = map (l: pkgs.vimPlugins.nvim-treesitter-parsers.${l}) [
@@ -66,10 +59,8 @@ in
           "sql"
           "ssh_config"
           "terraform"
-          # "tmux" — dropped: nvim-treesitter-parsers.tmux no longer exists in
-          # nixpkgs (removed upstream between the 2026-05-07 and 2026-07-27
-          # nixpkgs revs). Costs syntax highlighting for tmux.conf only. Restore
-          # this line if the parser reappears.
+          # No "tmux": nixpkgs dropped nvim-treesitter-parsers.tmux. Re-add if it
+          # returns.
           "toml"
           "tsx"
           "typescript"
@@ -88,18 +79,17 @@ in
         vimAlias = true;
         vimdiffAlias = true;
 
-        # Drop the Ruby and Python providers — config is Lua-only and the
-        # only Python touchpoint (nvim-dap-python) shells out to an
-        # external interpreter rather than using the in-process provider.
-        # Adopts the home-manager 26.05 default early; without these our
-        # `home.stateVersion = "24.11"` triggers a deprecation warning.
+        # No Ruby/Python providers: the config is Lua-only and nvim-dap-python
+        # runs an external interpreter. This is home-manager's 26.05 default;
+        # setting it silences the warning from home.stateVersion "24.11".
         withRuby = false;
         withPython3 = false;
 
         extraPackages =
           with pkgs;
           [
-            # Build deps (treesitter parser compilation, plugin builds)
+            # Build deps for plugin build hooks. No tree-sitter CLI: parsers
+            # come prebuilt (treesitterParsers above).
             gcc
             gnumake
             cmake
@@ -146,7 +136,7 @@ in
             shfmt
             taplo
             rustfmt
-            nixfmt # nix formatter (RFC style); binary is `nixfmt`
+            nixfmt # RFC style
 
             # Linters
             eslint_d
@@ -158,16 +148,12 @@ in
             ripgrep
             fd
             lazygit
-            # gopher.nvim, which looks each one up on PATH. Its build hook used
-            # to `go install` them into ~/go/bin, which is not on PATH, so they
-            # were never found. json2go (:GoJson2Go) is not in nixpkgs.
+            # Go tools gopher.nvim runs from PATH, in place of its `go install`
+            # build hook. json2go (:GoJson2Go) isn't in nixpkgs.
             gomodifytags
             impl
             gotests
             iferr
-            # tree-sitter CLI dropped: parsers come prebuilt from Nix
-            # (treesitterParsers above), so nothing compiles grammars at
-            # runtime. gcc/gnumake/cmake are kept for other plugin builds.
           ]
           # Wayland clipboard helper — Linux-only (Darwin uses pbcopy/pbpaste)
           ++ lib.optionals pkgs.stdenv.isLinux [ wl-clipboard ];
@@ -175,18 +161,15 @@ in
 
       xdg.configFile = {
         "nvim/init.lua".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/init.lua";
-        # Pinned plugin versions, tracked in-repo. lazy.nvim writes *through*
-        # this symlink on `:Lazy update`, so plugin bumps show up as a repo diff
-        # and new machines clone the exact same commits.
+        # Pinned plugin commits. `:Lazy update` writes through this symlink, so
+        # bumps land as a repo diff and every machine gets the same commits.
         "nvim/lazy-lock.json".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/lazy-lock.json";
         "nvim/lua".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/lua";
         "nvim/lsp".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/lsp";
         "nvim/queries".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/queries";
         "nvim/README.md".source = config.lib.file.mkOutOfStoreSymlink "${configRoot}/README.md";
-        # Prebuilt, version-locked parsers on the runtimepath. A plain store
-        # symlink (not mkOutOfStoreSymlink) since these are immutable Nix
-        # artifacts, never edited in-repo. ~/.config/nvim is on rtp, so
-        # vim.treesitter.start finds parser/<lang>.so here.
+        # Plain store symlink (Nix-built, never edited in-repo). ~/.config/nvim
+        # is on the rtp, so vim.treesitter.start finds parser/<lang>.so here.
         "nvim/parser".source = "${treesitterParsers}/parser";
       };
     };

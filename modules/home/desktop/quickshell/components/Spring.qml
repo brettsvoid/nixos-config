@@ -28,8 +28,8 @@ FrameAnimation {
     // Each frame steps the exact solution of the spring from where it is now, so the
     // motion does not depend on the frame rate.
     onTriggered: {
-        // A long gap (the window was hidden) lands on the result instead of jumping
-        // through it.
+        // At most 0.1 s a step, so after a long gap (the window was hidden) the motion
+        // carries on from where it was rather than skipping ahead.
         const t = Math.min(frameTime, 0.1);
         const w = Math.sqrt(spec.stiffness);
         const z = Math.min(spec.damping, 1);

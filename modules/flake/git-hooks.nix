@@ -1,5 +1,5 @@
-# Pre-commit + flake-check hooks. Defense-in-depth for secret leaks and
-# basic file hygiene. Hooks run on `git commit` AND via `nix flake check`.
+# Pre-commit hooks for secret leaks and file hygiene. They run on `git commit`
+# and in `nix flake check`.
 { inputs, ... }:
 {
   imports = [ inputs.git-hooks.flakeModule ];
@@ -31,15 +31,14 @@
             excludes = [ "\\.patch$" ];
           };
 
-          # ─── deadnix / statix: devShell tools, NOT pre-commit hooks ───
-          # Run on demand: `nix develop -c deadnix` and `nix develop -c statix check`.
-          # They are noisy on auto-generated hardware-configuration.nix and on
-          # imports-only host files, so they're advisory rather than blocking.
+          # ─── deadnix / statix: devShell tools, not pre-commit hooks ───
+          # Run on demand (`nix develop -c deadnix`, `nix develop -c statix
+          # check`). Too noisy on the generated hardware/*.nix and the host
+          # files to block commits.
         };
       };
 
-      # Make hook tools available inside the devShell so `pre-commit run`
-      # works manually too.
+      # Hook tools in the devShell, so `pre-commit run` works by hand too.
       devShells.default = pkgs.mkShell {
         inputsFrom = [ config.pre-commit.devShell ];
         packages = with pkgs; [

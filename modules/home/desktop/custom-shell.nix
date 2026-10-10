@@ -106,15 +106,14 @@ in
       '';
 
       # MangoHud is on for the whole session (profile-gaming), and its Vulkan layer
-      # loads into the shell too, where its NVIDIA thread took about 28% of a core all
-      # the time (measured on brett-desktop, 2026-10-10). Keep it out of the shell.
+      # loads into the shell too, where its NVIDIA thread kept about 28% of a core busy.
       noMangoHud = "export DISABLE_MANGOHUD=1";
 
-      # `custom-shell-or <shortcut> <fallback...>` runs one of the custom shell's global
-      # shortcuts (a drawer, or the lock) while that shell runs (the shortcut is
-      # registered), and runs the fallback under the other shells. It keeps Super+R,
-      # Super+/ and Super+L working everywhere until the custom shell is the session's
-      # shell (custom-shell issue 22), which binds the globals directly and drops Fuzzel.
+      # `custom-shell-or <shortcut> <fallback...>` fires one of the custom shell's global
+      # shortcuts (a drawer, or the lock) while that shell has it registered, and runs
+      # the fallback under the other shells. It keeps Super+R, Super+/ and Super+L
+      # working everywhere until the custom shell is the session's shell (custom-shell
+      # issue 22).
       custom-shell-or = pkgs.writeShellScriptBin "custom-shell-or" ''
         drawer=$1
         shift
@@ -211,8 +210,7 @@ in
       '';
 
       # Statistics for the dashboard's performance tab: a JSON line a second while the
-      # tab shows (shell-stats/src/main.rs). Its only crate, libc, comes from
-      # Cargo.lock, so the build itself needs no network.
+      # tab shows (shell-stats/src/main.rs).
       shell-stats = pkgs.rustPlatform.buildRustPackage {
         pname = "shell-stats";
         version = "0.1.0";
@@ -483,10 +481,9 @@ in
       xdg.configFile."quickshell/custom-shell".source = shellConfig;
 
       # Clipboard history for the launcher's "cc" mode. wl-paste --watch hands every
-      # copy to cliphist, which keeps the newest 500 in ~/.cache/cliphist and skips
-      # copies a password manager marks secret (wl-paste reports the
-      # x-kde-passwordManagerHint type as CLIPBOARD_STATE=sensitive). A user service, so
-      # copies are kept under any shell.
+      # copy to cliphist, which keeps the newest 500 and skips copies a password manager
+      # marks secret (CLIPBOARD_STATE=sensitive). A user service, so it runs under any
+      # shell.
       services.cliphist = {
         enable = true;
         allowImages = true;
@@ -498,7 +495,7 @@ in
 
       # The shell's drawers are Hyprland global shortcuts, like Caelestia's panels: each
       # does nothing while this shell is not running. Hyprland runs every bind that
-      # matches a key, so this shares Super+Escape with Caelestia's and ambxst's menus.
+      # matches a key, so Super+D, N and Escape are shared with Caelestia and ambxst.
       wayland.windowManager.hyprland.settings = {
         bindd = [
           "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
@@ -517,16 +514,14 @@ in
         ];
       };
 
-      # Lock before the machine sleeps, and never sleep showing the desktop. On suspend,
-      # logind asks the session to lock; the custom shell locks through hypridle's
-      # lock_cmd, and Caelestia and ambxst on the signal itself. With inhibit_sleep = 3,
-      # hypridle holds the sleep back (logind allows 5 s) until Hyprland reports the
-      # session locked, which it does once every screen has drawn a lock frame. No idle
-      # timeouts: this desktop does not lock or sleep by itself. (hypridle logs "Config
-      # has errors: No rules configured" for that, and carries on.)
+      # Lock before the machine sleeps. On suspend logind asks the session to lock: the
+      # custom shell locks through hypridle's lock_cmd, Caelestia and ambxst on the signal
+      # itself. inhibit_sleep = 3 holds the sleep back (logind allows 5 s) until Hyprland
+      # reports every screen locked. No idle timeouts: this desktop never locks or sleeps
+      # by itself (hypridle logs "No rules configured" for that, and carries on).
       #
-      # The unit is NixOS's (programs.hyprlock turns hypridle on), and failed at every
-      # login for want of this file; it does not restart by itself when the file changes.
+      # The unit is NixOS's (programs.hyprlock turns hypridle on), and it does not
+      # restart by itself when this file changes.
       xdg.configFile."hypr/hypridle.conf" = {
         text = ''
           general {

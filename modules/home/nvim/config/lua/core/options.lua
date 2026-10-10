@@ -1,12 +1,11 @@
--- set to true if you have a Nerd Font installed and selected in the terminal
+-- The terminal uses a Nerd Font (read by which-key.lua)
 vim.g.have_nerd_font = true
 
--- enable the bytecode/module-path cache to speed up startup times
+-- Lua module cache. Redundant: lazy.setup() (config/lazy.lua) already enables it.
 vim.loader.enable()
 
 -- [[ Setting options ]]
--- line numbers
--- shows absolute line number on cursor line (when relative number is on)
+-- relative line numbers, absolute on the cursor line
 vim.opt.number = true
 vim.opt.relativenumber = true
 
@@ -22,17 +21,17 @@ vim.opt.expandtab = true
 vim.opt.smartindent = true
 
 -- line wrapping
-vim.opt.wrap = false -- disable line wrapping
+vim.opt.wrap = false
 
 -- backup and undo handling
 vim.opt.swapfile = false
-vim.opt.backup = false -- set to false to let undo tree handle undos
+vim.opt.backup = false
 vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir"
 vim.opt.undofile = true
 
 -- search settings
-vim.opt.ignorecase = true -- ignore case when searching
-vim.opt.smartcase = true -- if you include mixed case in your search, assumes you want case-sensitive
+vim.opt.ignorecase = true
+vim.opt.smartcase = true -- case-sensitive if the pattern has capitals
 
 -- scroll settings
 vim.opt.scrolloff = 8
@@ -40,12 +39,10 @@ vim.opt.isfname:append("@-@")
 
 vim.opt.cursorline = true
 
--- updatetime
--- the length of time that vim waits before updating the swapfile
+-- ms idle before CursorHold fires (LSP document highlight)
 vim.opt.updatetime = 250
 
--- decrease mapped sequence wait time
--- displays which-key popup sooner
+-- shorter wait for a mapped sequence to complete
 vim.opt.timeoutlen = 300
 
 -- preview substitutions live, as you type
@@ -59,25 +56,23 @@ vim.opt.termguicolors = true
 vim.opt.signcolumn = "yes" -- show sign column so that text doesn't shift
 
 -- folding
--- vim.treesitter.foldexpr() is self-guarding: it returns "0" for any buffer
--- without an active parser, so these are safe to set globally (non-treesitter
--- buffers simply get no folds). nvim-treesitter.lua starts the parser per-buffer.
+-- Safe globally: vim.treesitter.foldexpr() returns "0" (no folds) for buffers
+-- without a parser. nvim-treesitter.lua starts the parser per buffer.
 vim.opt.foldmethod = "expr"
 vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 vim.opt.foldlevelstart = 99 -- start with all folds open
 vim.opt.foldtext = "" -- keep syntax highlighting on the folded line
 
 -- backspace
-vim.opt.backspace = "indent,eol,start" -- allow backspace on indent, end of line or insert mode start position
+vim.opt.backspace = "indent,eol,start" -- backspace over indent, line breaks and insert start
 
 -- split windows
-vim.opt.splitright = true -- split vertical window to the right
+vim.opt.splitright = true
 
--- avoid showing extra completion messages (blink.cmp manages completeopt itself)
+-- no ins-completion messages (completeopt is unset: blink.cmp draws its own menu)
 vim.opt.shortmess = vim.opt.shortmess + { c = true }
 
--- Make sure sessionoptions contains localoptions so that filetype and highlighting work correctly after a session is restores
--- Suggested by rmagatti/auto-session
+-- localoptions keeps filetype and highlighting after a session restore (per auto-session)
 vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
 
 vim.opt.winborder = "rounded"

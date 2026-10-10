@@ -1,38 +1,19 @@
-# netwatch — a always-on record of WHERE the network dropped, by layer.
-#
-# ─── Why this exists ───────────────────────────────────────────────────
-# "The Wi-Fi drops for a second or two" is unfalsifiable on its own: a brief
-# outage on brett-m1-mbp could be the radio, the router, the mains feeding the
-# router, the LAN resolvers on .50/.51, or the ISP — and by the time you look,
-# it is over and nothing has recorded it. macOS keeps no usable history either:
-# `log show` holds a few days, and airportd's `WiFiNetworkDisconnectReason` /
-# `LastDriverUnavailableReason` are LAST-VALUE fields repeated in a periodic
-# state dump, so counting their occurrences invents hundreds of events that
-# never happened.
-#
-# So this probes three points continuously and writes down every outage:
+# netwatch: an always-on record of where the network dropped, by layer. A
+# brief drop could be the radio, the router, its power, the LAN resolvers or
+# the ISP, it is over before anyone looks, and macOS keeps no usable history
+# of it. So this probes three points continuously and records every outage:
 #
 #   air   ICMP to the default gateway    -> the local hop + the router
 #   dns   DNS query to the LAN resolver  -> the LAN path + your own resolver
 #   wan   ICMP to a public address       -> everything beyond the router
 #
-# Running it on BOTH Macs is the point. brett-mac-mini is wired and
-# brett-m1-mbp is not, so a drop the mini also sees is the router or the power
-# feeding it, and a drop only the MacBook sees is the air hop. That comparison
-# is what separates "the dehumidifier browned out the router" from "the radio
-# stalled", and no amount of measuring from one machine can do it.
+# Run it on both Macs: brett-mac-mini is wired and brett-m1-mbp is not, so a
+# drop both see is the router or its power, and one only the MacBook sees is
+# the air hop.
 #
-# ─── Two sampling rates, on purpose ────────────────────────────────────
-# The agent samples at 4 Hz, which is right for catching multi-second outages
-# and cheap enough to leave running forever. It is the WRONG rate for
-# measuring latency: sample slower than ~100 ms and a periodic stall aliases
-# into a fictitious slow cycle — the ~0.46 s AWDL stall period on this machine
-# reads as a ~10 s one at 0.25 s spacing, which is a very convincing wrong
-# answer. `netwatch --burst 30` exists for that: 50 Hz, decoupled send and
-# receive, and it names AWDL when it finds a tightly periodic stall.
-#
-# Cross-checked against /sbin/ping run concurrently at both rates; the two
-# agree, which is the only reason to trust either.
+# The agent's 4 Hz suits multi-second outages, not latency: below ~10 Hz a
+# periodic stall aliases into a false slow cycle. `netwatch --burst 30`
+# (50 Hz) is for that; see burst() in netwatch/netwatch.py.
 _: {
   flake.modules.homeManager.apps-netwatch =
     {
@@ -53,8 +34,7 @@ _: {
         dontConfigure = true;
         dontBuild = true;
 
-        # Stdlib only — no third-party deps, so a plain interpreter and
-        # patchShebangs is the whole packaging story.
+        # Stdlib only, so patchShebangs is all the packaging it needs.
         installPhase = ''
           install -Dm755 netwatch.py $out/bin/netwatch
           patchShebangs $out/bin/netwatch
@@ -102,20 +82,14 @@ _: {
         home.packages = [ netwatch ];
 
         # `--quiet` drops the live status line, which is redrawn with \r and
-        # would otherwise grow the log without bound. Outage lines are still
-        # printed, so the log stays a readable chronology of drops.
+        # would grow the log without bound; outage lines are still logged.
         #
-        # ProcessType is "Interactive" rather than the usual "Background"
-        # deliberately: Background asks launchd to throttle a job, and this job
-        # spends nearly all its time asleep between probes, which is exactly
-        # the profile that gets throttled hardest. Since the whole purpose is
-        # to time round trips, the scheduler should not be adding to them.
+        # ProcessType Interactive, not Background: launchd throttles
+        # Background jobs, and this one times round trips.
         #
-        # No EnvironmentVariables.PATH needed: every external tool the script
-        # shells out to (route, ifconfig, ipconfig, networksetup, scutil) lives
-        # in /sbin or /usr/sbin, which are already in launchd's default PATH.
-        # The one exception, Homebrew's terminal-notifier for configd alerts,
-        # is called by absolute path.
+        # No PATH needed: route, ifconfig, ipconfig and scutil live in /sbin
+        # or /usr/sbin, on launchd's default PATH, and terminal-notifier is
+        # called by absolute path.
         launchd.agents.netwatch = {
           enable = true;
           config = {

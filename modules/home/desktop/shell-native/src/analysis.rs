@@ -5,8 +5,9 @@
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::sync::Arc;
 
-/// Samples per FFT, and how many new ones start the next (about 21 ms at 48 kHz).
+/// Samples per FFT.
 pub const WINDOW: usize = 2048;
+/// New samples between FFTs (about 21 ms at 48 kHz).
 pub const HOP: usize = 1024;
 
 const LOWEST_HZ: f64 = 40.0;

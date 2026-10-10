@@ -1,5 +1,5 @@
-# Enables `flake.modules.<class>.<name>` registry. Every leaf module under
-# modules/ writes into this registry; hosts compose by referencing names.
+# Enables the `flake.modules.<class>.<name>` registry. Leaf modules under
+# modules/ write into it; hosts compose by referencing names.
 { inputs, ... }:
 {
   imports = [ inputs.flake-parts.flakeModules.modules ];

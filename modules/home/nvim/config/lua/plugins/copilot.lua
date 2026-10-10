@@ -11,10 +11,4 @@ return {
       panel = { enabled = false },
     },
   },
-  -- https://github.com/zbirenbaum/copilot-cmp
-  -- This adds copilot suggestions to the autocompletion menu
-  -- {
-  --   'zbirenbaum/copilot-cmp',
-  --   config = true,
-  -- },
 }

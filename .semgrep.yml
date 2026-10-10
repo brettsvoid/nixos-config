@@ -1,9 +1,8 @@
 # Semgrep custom rules for this repo. Runs in CI and on demand via
 # `semgrep --config .semgrep.yml --error .` from the devShell.
 #
-# Most secret-shaped strings are caught by gitleaks. Use semgrep for
-# patterns gitleaks misses: configuration anti-patterns, unsafe nix idioms,
-# leak-via-shape rather than leak-via-content.
+# gitleaks catches secret-shaped strings; semgrep is for what it misses:
+# config anti-patterns, unsafe nix idioms, leaks by shape not content.
 
 rules:
   - id: nix-builtins-getEnv-secret-name

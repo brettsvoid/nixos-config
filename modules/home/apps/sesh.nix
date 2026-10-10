@@ -1,16 +1,12 @@
-# sesh — smart tmux session picker. https://github.com/joshmedeski/sesh
+# sesh: tmux session picker. https://github.com/joshmedeski/sesh
 #
-# Fuzzy-finds across running tmux sessions, zoxide directories and named
-# startups in ~/.config/sesh/sesh.toml, then attaches to the choice (creating
-# it if it does not exist yet). Answers "which workspace do I want", where
-# tmuxinator ([[apps-tmuxinator]]) answers "how should this one be arranged".
+# Lists running tmux sessions, sessions configured in
+# ~/.config/sesh/sesh.toml and zoxide directories, then attaches to the
+# choice, creating it if need be. sesh picks which workspace; tmuxinator
+# ([[apps-tmuxinator]]) defines how one is arranged.
 #
-# This module owns BOTH the package and the tmux keybinding. Before it, the
-# binding lived in terminals-tmux — a module imported by every host — while
-# `sesh` itself was a Homebrew entry on brett-m1-mbp only, so the mac mini got
-# a `prefix + T` that popped open a window and immediately died with
-# "sesh: command not found". Same failure the repo's refactor-plan records as
-# finding N-1. Keeping the two together makes that combination unexpressible.
+# The package and the tmux binding live together so `prefix + T` only exists
+# where sesh is installed.
 _: {
   flake.modules.homeManager.apps-sesh =
     {
@@ -22,23 +18,17 @@ _: {
     let
       sesh = lib.getExe pkgs.sesh;
 
-      # Absolute store paths rather than bare names, because this runs in a
-      # tmux popup, not an interactive shell: display-popup spawns the command
-      # through default-command, so it inherits the environment the tmux
-      # SERVER was started with. That server may long predate the current
-      # generation — it survives logout and is not restarted by a rebuild — so
-      # its PATH can point at a previous profile, or at no profile at all when
-      # tmux was started by launchd rather than from a shell. Store paths make
-      # the binding independent of all of it.
+      # Store paths, not bare names: the popup gets the tmux server's
+      # environment, and a server that outlived a rebuild (it survives
+      # logout) can carry a stale PATH.
       fzf = lib.getExe config.programs.fzf.package;
     in
     {
       home.packages = [ pkgs.sesh ];
 
-      # `-t` running tmux sessions, `-c` configured ones, `-d` dedupes so a
-      # session that is both configured and running shows once. Deliberately
-      # no `-z`: zoxide would flood the list with every directory ever visited,
-      # which is the noise this picker exists to avoid.
+      # `-t` running tmux sessions, `-c` configured ones, `-d` shows a session
+      # that is both only once. No `-z`: zoxide would flood the list with
+      # every directory ever visited.
       programs.tmux.extraConfig = lib.mkIf config.programs.tmux.enable ''
 
         # Sesh: curated project session picker (prefix + T).

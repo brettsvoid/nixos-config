@@ -23,13 +23,11 @@ in
     {
       programs.kitty = {
         enable = true;
-        # macOS: upstream's notarised Developer ID build, unmodified. TCC keys
-        # a grant (Full Disk Access, Screen Recording, …) on the app's
-        # designated requirement; the source build is ad-hoc signed, so its
-        # requirement is its cdhash and every rebuild silently drops the
-        # grants. kitty-bin's requirement is the bundle ID + team ID, which
-        # survives updates. Its bundle carries shell-integration/ and terminfo/,
-        # and zsh loads the former via $KITTY_INSTALLATION_DIR either way.
+        # macOS: kitty-bin, upstream's notarised build. TCC ties grants (Full
+        # Disk Access, Screen Recording, …) to the app's signature: the
+        # ad-hoc-signed source build loses them on every rebuild, while
+        # kitty-bin's bundle ID + team ID survive updates. It also ships
+        # shell-integration/ and terminfo/.
         package = if pkgs.stdenv.isDarwin then pkgs.kitty-bin else pkgs.kitty;
         font = {
           name = terminal.font.family;
@@ -56,18 +54,13 @@ in
           active_border_color = "none";
           inactive_text_alpha = "0.4";
           dim_opacity = "0.4";
-          # Hyprland tiles kitty, yet a lone tiled kitty window saves
-          # "window-state": "maximized" to ~/.cache/kitty/main.json when it
-          # closes, and the next kitty window then asks to be maximised and
-          # covers its workspace (seen with kitty 0.49 on Hyprland 0.56).
-          # Not remembering makes new windows tile. "yes" is kitty's default,
-          # so macOS is unchanged.
+          # On Hyprland a lone tiled kitty window saves "maximized" on close,
+          # and the next one then opens maximised over its workspace. "yes" is
+          # kitty's default, kept on macOS.
           remember_window_size = if pkgs.stdenv.isLinux then "no" else "yes";
           background_opacity = builtins.toString terminal.opacity;
 
-          # Background. Image is shipped from the repo; nix-store path is
-          # stable across rebuilds so kitty doesn't lose its wallpaper if
-          # ~/.config gets cleaned.
+          # Background
           background_image = "${../desktop/wallpapers/neko-kunoichi-v2.png}";
           background_image_layout = "cscaled";
           background_image_linear = "yes";
@@ -95,12 +88,10 @@ in
           background_blur = 20;
           hide_window_decorations = "titlebar-only";
           macos_titlebar_color = "background";
-          # Was "yes" — let kitty consume opt+key combos for Emacs-style
-          # word jumps in the shell. Conflicted with aerospace's alt+N
-          # workspace bindings, which never reached aerospace when kitty
-          # had focus. Trade-off: alt+h / alt+l / alt+left / alt+right
-          # word-motion bindings below now produce a terminal-bell or
-          # noop unless the shell binds Option directly.
+          # "no" is kitty's default. "yes" kept aerospace's alt+N workspace
+          # bindings from working while kitty had focus. Cost: Option+key
+          # types a character, so Alt shortcuts in terminal programs break;
+          # kitty's own alt+ mappings below still fire.
           macos_option_as_alt = "no";
           macos_thicken_font = "0.2";
         };
@@ -136,11 +127,9 @@ in
           "alt+l" = "send_text all \\x1b[C";
         }
         // lib.optionalAttrs pkgs.stdenv.isDarwin (
-          # Hand cmd+1..9 to the program instead of kitty. Kitty's default
-          # binds them to first_window..ninth_window, which is dead weight
-          # under herdr — it owns the splits, so kitty only ever has one.
-          # Freeing them gives herdr the last indexed namespace on this
-          # machine: aerospace has taken every alt+N and ctrl+N variant.
+          # Pass cmd+1..9 through to the program, for herdr's focus_agent
+          # (see terminals-herdr). kitty binds them to
+          # first_window..ninth_window, unused as herdr owns the splits.
           # no_op means "stop intercepting", not "swallow".
           lib.genAttrs (map (n: "cmd+${toString n}") (lib.range 1 9)) (_: "no_op")
         );

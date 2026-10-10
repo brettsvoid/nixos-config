@@ -4,9 +4,9 @@
 # clipboard, with Open and Save in its notification. macOS's own keys are taken here:
 # Super+Shift+3/4 move windows between workspaces.
 #
-# The region picker (grimblast's `area`, through slurp) freezes the screen first, so it
-# captures what was there when the key went down, and clicking a window selects the
-# whole window. grimblast's freeze is hyprpicker's.
+# The region picker (grimblast's `area`, through slurp) freezes the screen first, with
+# hyprpicker, so it captures what was there when the key went down; clicking a window
+# selects the whole window.
 _: {
   flake.modules.homeManager.desktop-screenshots =
     {
@@ -69,8 +69,8 @@ _: {
       home.packages = [ screenshot ];
 
       # swappy saves to ~/Desktop, else $HOME, and there is no ~/Desktop
-      # (desktop-hyprland); save to Pictures/Screenshots, beside the monitor shots.
-      # The screenshot script carries swappy on its own PATH, so only the config here.
+      # (desktop-hyprland), so save beside the monitor shots. No package: the
+      # screenshot script carries swappy on its own PATH.
       programs.swappy = {
         enable = true;
         package = null;

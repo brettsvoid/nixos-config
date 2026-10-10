@@ -1,12 +1,7 @@
 # Universal nix-darwin settings: any Darwin host imports this.
 #
-# Modern nix-darwin (post-2025-ish) unconditionally manages the nix-daemon
-# launchd plist whenever `nix.enable = true` (the default). On the M1 MBP
-# (which already has the upstream non-Determinate daemon at
-# /Library/LaunchDaemons/org.nixos.nix-daemon.plist), the first
-# `darwin-rebuild switch` will replace that plist with its own. Reversible
-# if needed; the worst case is a one-line config rollback + manual plist
-# restore.
+# nix.enable stays at its default (true), so nix-darwin manages the
+# nix-daemon. That needs upstream Nix, not Determinate: see bootstrap.sh.
 _: {
   flake.modules.darwin.common =
     { flake, ... }:
@@ -22,12 +17,10 @@ _: {
         ];
       };
 
-      # Garbage collection is handled by `nh clean all` (a strict superset of
-      # nix-collect-garbage — it also prunes stale gcroots / nix-direnv roots)
-      # in modules/system/darwin/nh-gc.nix. Kept out of here so there is a
-      # single GC retention policy on the system profile.
+      # No nix.gc: nh-gc.nix runs `nh clean all` instead, and two GC
+      # policies would fight over which generations to keep.
 
-      # Hard-link identical store files to reclaim disk. Weekly, alongside GC.
+      # Hard-link identical store files. Weekly, half an hour after GC.
       nix.optimise = {
         automatic = true;
         interval = {
@@ -39,23 +32,15 @@ _: {
 
       programs.zsh.enable = true;
 
-      # Don't run compinit from the generated /etc/zshrc. oh-my-zsh already
-      # runs its own (`compinit -i -d $ZSH_COMPDUMP`), so the system one was
-      # pure duplication: two compinit runs and two compaudit scans over
-      # /opt/homebrew/share/zsh/site-functions on every interactive shell.
-      # Measured at 0.171s of a 2.05s startup. This is exactly the case the
-      # option's own docs describe — a local config with a custom fpath and
-      # its own compinit call.
-      #
-      # enableGlobalCompInit, NOT enableCompletion: the latter also drops
-      # pkgs.nix-zsh-completions from systemPackages, which we still want.
-      # enableBashCompletion defaults to enableCompletion, so /etc/zshrc
-      # keeps calling bashcompinit — safe before compinit, because
-      # bashcompinit only *defines* complete/compgen, and the compdef call
-      # lives inside the complete() wrapper that runs later.
+      # No compinit in /etc/zshrc: oh-my-zsh runs its own, and a second run
+      # (with its compaudit scan) slowed every shell's startup.
+      # enableGlobalCompInit rather than enableCompletion, which would also
+      # drop pkgs.nix-zsh-completions. /etc/zshrc still calls bashcompinit
+      # (enableBashCompletion), which is safe before compinit: it only
+      # defines complete/compgen.
       programs.zsh.enableGlobalCompInit = false;
 
-      # nix-darwin requires this. Pinned at first switch; do NOT change.
+      # Pinned at the first switch; don't change it.
       system.stateVersion = 5;
 
       # Touch ID for sudo.
@@ -63,8 +48,7 @@ _: {
 
       nixpkgs.config.allowUnfree = true;
 
-      # Required by nix-darwin's user-defaults migration. Identifies which
-      # user owns user-scoped defaults (NSGlobalDomain, finder, dock, etc.).
+      # The user that user-scoped options (system.defaults.dock, …) apply to.
       system.primaryUser = flake.lib.username;
     };
 }

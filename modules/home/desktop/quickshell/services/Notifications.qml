@@ -5,10 +5,10 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Notifications
 
-// The shell's notification server. Every notification goes into the history; a pop-up
-// shows unless do-not-disturb or game mode is on, but critical ones always show.
-// Pop-ups hide after the app's timeout (5 s if it gives none), except critical ones,
-// which wait to be closed; the history keeps everything until it is dismissed.
+// The shell's notification server. Every notification goes into the history until it
+// is dismissed; a pop-up shows unless do-not-disturb or game mode is on, but critical
+// ones always show. Pop-ups hide after the app's timeout (5 s if it gives none), except
+// critical and resident ones, which wait to be closed.
 //
 // Only one program can own org.freedesktop.Notifications. If another has it (mako starts
 // on demand when nothing owns it), the server takes over as soon as that one leaves.

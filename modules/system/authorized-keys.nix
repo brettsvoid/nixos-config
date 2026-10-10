@@ -1,11 +1,8 @@
-# SSH public keys allowed to log into ANY of Brett's machines.
+# SSH public keys accepted by every host that imports its platform's
+# `openssh` module. The option is the same on NixOS and nix-darwin, so this
+# one list merges into both modules. Host-only keys go in the host file.
 #
-# `users.users.brett.openssh.authorizedKeys.keys` is the same option on both
-# NixOS and nix-darwin, so this single list is grafted onto both platforms'
-# `openssh` server modules (flake-parts deferredModule merge). Add a key here
-# once and every host that imports its `openssh` module accepts it.
-#
-# - "SSH ID @brettsvoid" is the mobile key from https://sshid.io/brettsvoid.
+# "SSH ID @brettsvoid" is the mobile key from https://sshid.io/brettsvoid.
 _:
 let
   shared =

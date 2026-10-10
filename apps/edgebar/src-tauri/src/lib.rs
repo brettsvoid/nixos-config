@@ -1,16 +1,12 @@
-// edgebar spike — ambxst-style top bar on macOS.
+// edgebar: an ambxst-style top bar for macOS.
 //
-// Click-through is solved with window *geometry*, not by toggling
-// ignore_cursor_events from a hot loop (that deadlocks on macOS: the runtime's
+// Each display gets two windows: a native frame (the bezel, permanently
+// click-through; see `create_native_frame`) and a transparent WebView bar (the
+// pills). The bar is click-through except over the rects its WebView reports,
+// switched by NSEvent cursor monitors (see "click-through bar window" below).
+// Don't toggle `ignore_cursor_events` from a polling loop instead: Tauri's
 // getters block on the main event loop, which stops servicing them while the
-// cursor is being tracked over a window). Two windows instead:
-//
-//   * "frame" — full-screen, transparent, permanently click-through. The bezel.
-//   * "bar"   — a thin interactive strip pinned to the top. The pills.
-//
-// Anything outside the top strip lands on the click-through frame and passes to
-// the app underneath. The bar webview gets native mouse events, so hover/click
-// and reveal/hide need no polling.
+// cursor is tracked over a window, so the loop deadlocks.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -34,18 +30,18 @@ fn default_appearance() -> Appearance {
     Appearance::Auto
 }
 
-/// The concrete scheme in effect once `Auto` is resolved against the system.
-/// Selects which palette (light/dark) the color roles resolve against.
+/// The scheme in effect once `Auto` is resolved against the system; picks the
+/// palette and role map.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Scheme {
     Light,
     Dark,
 }
 
-/// Per-scheme color-role maps. Catppuccin inverts its neutral ramp between
-/// flavors, so day and night need distinct role→palette-key mappings (e.g. the
-/// on-pill ink is `base` at night but `text` by day). Each value is a palette
-/// key (resolved against the active scheme's palette) or a literal `#hex`.
+/// Per-scheme colour-role maps. Catppuccin inverts its neutral ramp between
+/// flavours, so day and night need distinct mappings (e.g. the on-pill ink is
+/// `base` at night but `text` by day). Each value is a palette key or a
+/// literal `#hex`.
 #[derive(Clone, Deserialize, Serialize)]
 struct Themes {
     dark: Colors,
@@ -79,8 +75,8 @@ impl Palettes {
     }
 }
 
-/// Single source of truth for colors + geometry, read by both the native frame
-/// (Rust) and the bar WebView (applied as CSS custom properties). Loaded from
+/// Single source of truth for colours and geometry, read by both the native
+/// frame and the bar WebView (as CSS custom properties). Loaded from
 /// `~/.config/edgebar/config.json` if present, else the bundled default.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,9 +85,9 @@ struct Config {
     appearance: Appearance,
     colors: Themes,
     geometry: Geometry,
-    /// Binaries the bar shells out to for the in-app wallpaper/scheme picker.
-    /// Nix injects absolute store paths; absent (bundled default / dev), they
-    /// fall back to a bare name resolved on PATH.
+    /// Binaries the theme picker shells out to (this and `wallpaper_command`).
+    /// Nix injects store paths; when absent (bundled default, dev) a bare name
+    /// is resolved on PATH.
     #[serde(default)]
     theme_command: Option<String>,
     #[serde(default)]
@@ -101,9 +97,9 @@ struct Config {
     notch: notch::NotchConfig,
 }
 
-/// What `get_config` and the `theme` event hand the WebView: colors already
-/// resolved to hex for the active scheme, plus geometry, appearance, and the
-/// active matugen scheme (so the theme view can mark current selections).
+/// What `get_config` and the `theme` event hand the WebView: colours resolved
+/// to hex for the active scheme, plus geometry, appearance and the matugen
+/// scheme (so the theme view can mark the current selections).
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ResolvedConfig {
@@ -220,11 +216,9 @@ struct InkInfo {
 }
 
 /// A replacement for `configured` that reads on `pill`, or None if it already
-/// clears `floor`. The replacement is the palette colour that contrasts most
-/// with the pill, which keeps the wallpaper tint (matugen's surface is a
-/// near-white carrying a hint of the source hue). A mid-tone pill can leave
-/// every palette colour short of the floor, and then plain black or white is
-/// the better of the lot.
+/// clears `floor`. Prefers the palette colour with the most contrast, which
+/// keeps the wallpaper's tint; if even that falls short (a mid-tone pill),
+/// the best of it, `configured`, black and white.
 fn readable_on(
     pill: &str,
     configured: &str,
@@ -281,7 +275,7 @@ struct Colors {
     battery_low: String,
     #[serde(default = "default_vpn")]
     vpn: String,
-    /// The CPU graph's two traces (filled system load, stroked user load).
+    /// The CPU graph's two stacked segments (system load, user load).
     #[serde(default = "default_cpu_sys")]
     cpu_sys: String,
     #[serde(default = "default_cpu_user")]
@@ -314,25 +308,22 @@ struct Geometry {
     pill_height: f64,
     pill_radius: f64,
     concave: f64,
-    /// Height (logical px) of the bar window itself. Taller than the bar band
-    /// AeroSpace reserves (config's `barHeight`, consumed only on the Nix side)
-    /// so the pills' shadows and the corner fillets that hang below the band
-    /// aren't clipped by the window bounds. The extra height is transparent and
-    /// passes clicks through, so it doesn't cover the windows below.
+    /// Height (logical px) of the bar window. Taller than the band AeroSpace
+    /// reserves (`barHeight`, used only on the Nix side) so the pills' shadows
+    /// and the corner fillets below the band aren't clipped; the extra height
+    /// is transparent and click-through.
     #[serde(default = "default_window_height")]
     window_height: f64,
-    /// Top offset in DEVICE pixels. This display does not show its topmost
-    /// physical row (see the inset in `create_native_frame`), so both the native
-    /// frame and the bar window are pushed down by this many device pixels to
-    /// keep their top edge on the first visible row. Device px, not points, so it
-    /// is one dead row regardless of the backing scale.
+    /// How far the native frame's top edge is pushed down, in device pixels
+    /// (not points, so it is one row at any backing scale), to clear the top
+    /// row this display doesn't show. See `create_native_frame`; the bar
+    /// window isn't offset (see `sync_bars_to_monitors`).
     #[serde(default = "default_top_offset_px")]
     top_offset_px: f64,
 }
 
-/// Fallback when an older config.json (rendered before `windowHeight` existed)
-/// omits the field — keeps such a config parsing instead of dropping to the
-/// fully-bundled default.
+/// Fallback for configs rendered before `windowHeight` existed, so they still
+/// parse instead of dropping to the bundled default.
 fn default_window_height() -> f64 {
     64.0
 }
@@ -382,9 +373,8 @@ fn load_palettes() -> Palettes {
         })
 }
 
-/// Runtime appearance override (a 3-way light/dark/auto toggle from the bar),
-/// persisted next to the nix-rendered config.json (which is a read-only symlink
-/// into the Nix store, so it can't hold this mutable preference).
+/// Where the bar's light/dark/auto toggle is persisted. Not config.json: that
+/// is a read-only symlink into the Nix store.
 fn appearance_state_path() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .map(|home| std::path::Path::new(&home).join(".config/edgebar/appearance"))
@@ -497,9 +487,8 @@ impl ThemeState {
                 None => (configured.clone(), "config"),
             },
         };
-        // The active rings. matugen's accent often lands on the pill's own
-        // tone: in dark mode it sits at ~1:1 in every scheme, and in
-        // monochrome light it IS the pill colour, so the rings vanish.
+        // The accent rings get the same check: matugen's accent often lands on
+        // the pill's own tone (in monochrome light it is the pill colour).
         if let Some(better) =
             readable_on(&colors.pill_bg, &colors.accent, palette, MIN_ACCENT_CONTRAST)
         {
@@ -564,8 +553,8 @@ fn resolve_scheme(appearance: Appearance) -> Scheme {
     }
 }
 
-/// Switch the active appearance: re-resolve colors for the new scheme, push them
-/// to the WebView (one repaint) and recolor the native frame's layers in place.
+/// Switch the active appearance: re-resolve colours for the new scheme, push
+/// them to the WebView and recolour the native frame's layers in place.
 fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     let resolved: ResolvedConfig = {
         let state = app.state::<Mutex<ThemeState>>();
@@ -583,9 +572,9 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     }
 }
 
-/// Reload palettes + role maps from disk (after matugen rewrites palette.json,
-/// or a config.json edit) and re-apply the current appearance. Triggered by a
-/// ping on `theme.sock`. Geometry changes still need a relaunch.
+/// Reload palettes and role maps from disk and re-apply the current appearance.
+/// Run on a `theme.sock` ping, or directly when an in-app pick finds its
+/// palette precomputed. Geometry changes still need a relaunch.
 fn reload_theme(app: &tauri::AppHandle) {
     let palettes = load_palettes();
     let config = load_config();
@@ -602,8 +591,8 @@ fn reload_theme(app: &tauri::AppHandle) {
 
 /// "#rrggbb" or "#rrggbbaa" -> [r, g, b, a] in 0..1 (defaults to opaque black).
 fn hex_to_rgba(hex: &str) -> [f64; 4] {
-    // Operate on bytes: a multi-byte char in a hand-edited config.json color
-    // would panic a str byte-slice on a non-char-boundary.
+    // Bytes, not str: slicing a str inside a multi-byte character (a stray
+    // non-ASCII char in a hand-edited colour) would panic.
     let h = hex.trim().trim_start_matches('#').as_bytes();
     let byte = |i: usize| -> Option<f64> {
         let pair = std::str::from_utf8(h.get(i..i + 2)?).ok()?;
@@ -718,11 +707,9 @@ fn parse_win(line: &str) -> Option<(String, WinRef)> {
     Some((ws, WinRef { app, bundle_id }))
 }
 
-/// Run the AeroSpace CLI and return non-empty, trimmed stdout lines. Capped at
-/// 5s: a wedged server otherwise blocks the caller forever (observed in the
-/// wild — a hung `list-workspaces` froze the ws.sock loop for days and piled
-/// its pending pings into the listen backlog). On timeout the child is killed
-/// and the query degrades to "no output".
+/// Run the AeroSpace CLI and return its non-empty, trimmed stdout lines. Capped
+/// at 5s, after which the child is killed and whatever it printed is used: a
+/// wedged server would otherwise block the caller forever.
 pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
     use std::io::Read;
     use std::process::{Command, Stdio};
@@ -761,14 +748,10 @@ pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// The dots we always draw, in order: 1-9 then 0, with `alt-0` last to match the
-/// keyboard row. This list — not AeroSpace — decides which dots exist.
-///
-/// AeroSpace garbage-collects workspaces that are empty and not visible, so
-/// `list-workspaces --all` reports only the occupied ones (plus whatever is on
-/// screen); it also surfaces stray on-demand workspaces (e.g. `11`, where
-/// Spotify lives). Driving the dots off that list made empty workspaces vanish
-/// from the bar entirely. AeroSpace now only supplies per-workspace state.
+/// The dots we always draw: 1–9 then 0, matching the keyboard row. This list,
+/// not AeroSpace, decides which dots exist: `list-workspaces --all` omits empty,
+/// non-visible workspaces and includes stray on-demand ones (e.g. `11`), so
+/// AeroSpace only supplies per-workspace state.
 const WS_ORDER: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 
 /// Query AeroSpace for the state of each dot in `WS_ORDER`: which one is
@@ -820,10 +803,9 @@ fn query_workspaces() -> Vec<Workspace> {
         .collect()
 }
 
-/// Mark a window as a stationary, all-spaces overlay so Mission Control /
-/// Exposé leave it in place instead of sweeping it into the overview. tao only
-/// sets CanJoinAllSpaces via set_visible_on_all_workspaces; Stationary is the
-/// bit that keeps HUD windows put during Exposé.
+/// Mark a window as a stationary, all-spaces overlay so Mission Control leaves
+/// it in place. tao's set_visible_on_all_workspaces sets only CanJoinAllSpaces;
+/// Stationary is the bit that keeps it put during Exposé.
 #[cfg(target_os = "macos")]
 fn make_overlay(window: &tauri::WebviewWindow) {
     use objc2::msg_send;
@@ -839,8 +821,8 @@ fn make_overlay(window: &tauri::WebviewWindow) {
         let ns_window = ptr as *mut AnyObject;
         let behavior =
             CAN_JOIN_ALL_SPACES | STATIONARY | IGNORES_CYCLE | FULLSCREEN_AUXILIARY;
-        // setCollectionBehavior: is a main-thread AppKit call; setup runs on the
-        // main thread.
+        // setCollectionBehavior: is main-thread only; our caller,
+        // `sync_bars_to_monitors`, runs there.
         unsafe {
             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
         }
@@ -853,17 +835,11 @@ fn make_overlay(window: &tauri::WebviewWindow) {
 type RectMap = std::sync::Arc<Mutex<std::collections::HashMap<String, Vec<[f64; 4]>>>>;
 
 // ───────────────────────── click-through bar window ─────────────────
-// The bar window has to be tall enough to render the pills' drop-shadows and the
-// corner fillets that hang below the bar band — but it sits over the top edge of
-// the tiled windows, and a transparent window swallows clicks across its whole
-// rect (returning nil from a view's hitTest does NOT pass the click to the app
-// below — only the window-level `ignoresMouseEvents` flag does that). So we keep
-// the window click-through by default and flip `ignoresMouseEvents` off only
-// while the cursor is over a pill. Two NSEvent monitors drive it: a local one
-// (events to us, i.e. cursor over the bar while it's interactive) and a global
-// one (events to other apps, i.e. cursor over the bar while it's click-through —
-// this is what re-arms interactivity). Event-driven, so no cursor-polling loop
-// and none of the main-thread deadlock that polling Tauri getters would cause.
+// The bar window is taller than the bar band (for shadows and fillets) and
+// overlaps the tiled windows' top edge. A transparent window still swallows
+// clicks across its whole rect, and returning nil from a view's hitTest doesn't
+// pass them through; only the window's `ignoresMouseEvents` does. So bars stay
+// click-through except while the cursor is over a rect the WebView reported.
 
 // The bar NSWindows the shared cursor monitors hit-test, keyed by window
 // label. Main-thread only (NSWindow isn't Send); bars register here when
@@ -910,13 +886,11 @@ fn sync_all_bars(rects: &RectMap) {
     });
 }
 
-/// Install the two NSEvent cursor monitors ONCE for the app; they serve every
-/// tracked bar window (monitors are per-app, not per-window). Local monitor:
-/// events delivered to us (cursor over an interactive bar) — must return the
-/// event so the bar's own handling continues. Global monitor: events delivered
-/// to other apps (cursor over a click-through bar, or anywhere else) — re-arms
-/// interactivity on re-entry. Event-driven, so no cursor-polling loop and none
-/// of the main-thread deadlock that polling Tauri getters would cause.
+/// Install the app's two NSEvent cursor monitors, once; they serve every tracked
+/// bar (monitors are per-app). The local one sees events sent to us (cursor over
+/// an interactive bar) and must return the event so the bar still handles it.
+/// The global one sees events sent to other apps (cursor over a click-through
+/// bar, or anywhere else), which is what re-arms interactivity.
 #[cfg(target_os = "macos")]
 fn install_cursor_monitors(rects: RectMap) {
     use objc2_app_kit::{NSEvent, NSEventMask};
@@ -971,9 +945,8 @@ fn untrack_bar_window(label: &str, rects: &RectMap) {
     rects.lock().unwrap().remove(label);
 }
 
-/// Update the interactive rects the cursor tracker checks (WebView CSS px,
-/// top-left origin). Called by each bar's WebView whenever its layout changes;
-/// stored per window label.
+/// Store the calling bar's interactive rects (see `RectMap`). Its WebView calls
+/// this whenever the layout changes.
 #[tauri::command]
 fn set_interactive_rects(
     window: tauri::WebviewWindow,
@@ -987,16 +960,12 @@ fn set_interactive_rects(
         .insert(window.label().to_string(), rects);
 }
 
-// Commands are `async` so the IPC layer runs them off the main thread, and the
-// blocking subprocess work goes through `spawn_blocking` — a sync command would
-// run the `aerospace` calls on the main thread and beach-ball the UI.
-/// Create one screen's frame as a native borderless NSWindow drawn with CALayer —
-/// no WebView, so it costs no web-content process. Replicates the old CSS frame:
-/// a green rounded-rect line hugging the screen edge (root layer cornerRadius +
-/// border) plus black fills in the four corner notches outside that rounded rect
-/// (an even-odd CAShapeLayer). Click-through, all-spaces, stationary. Called once
-/// per NSScreen; the window is retained in FRAME_WINDOWS so a display-config
-/// change can close and rebuild it.
+/// Create one screen's frame as a borderless NSWindow drawn with CAShapeLayers
+/// (no WebView, so no web-content process): a rounded-rect ring hugging the
+/// screen edge in `frameLine`, and the four corners outside it filled with
+/// `frameCorner`. Click-through, all-spaces, stationary. Called once per
+/// NSScreen; the window is kept in FRAME_WINDOWS so a display change can close
+/// and rebuild it.
 #[cfg(target_os = "macos")]
 fn create_native_frame(
     mtm: objc2::MainThreadMarker,
@@ -1013,7 +982,6 @@ fn create_native_frame(
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
     use objc2_quartz_core::{kCAFillRuleEvenOdd, CAShapeLayer};
 
-    // Look comes from the shared config (config.json) + active palette.
     let radius = geometry.inner_radius;
     let line = geometry.line_thickness;
     let line_rgba = hex_to_rgba(frame_line);
@@ -1033,13 +1001,12 @@ fn create_native_frame(
     window.setOpaque(false);
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
-    // tao sets always-on-top windows (the bar) to kCGFloatingWindowLevelKey (the
-    // key value 5), not the real NSFloatingWindowLevel (3) — so the bar sits at
-    // level 5. Put the frame just above it so the edge line renders over the pills.
+    // tao puts always-on-top windows (the bar) at kCGFloatingWindowLevelKey (5),
+    // not NSFloatingWindowLevel (3). One above keeps the edge line over the pills.
     const FRAME_WINDOW_LEVEL: isize = 6;
     window.setLevel(FRAME_WINDOW_LEVEL);
     window.setIgnoresMouseEvents(true);
-    // Same collection behavior as the bar (see make_overlay).
+    // Same collection behaviour as the bar (see make_overlay).
     const CAN_JOIN_ALL_SPACES: usize = 1 << 0;
     const STATIONARY: usize = 1 << 4;
     const IGNORES_CYCLE: usize = 1 << 6;
@@ -1060,15 +1027,10 @@ fn create_native_frame(
     let w = frame.size.width;
     let h = frame.size.height;
 
-    // Work in whole FRAMEBUFFER PIXELS, not points. This display runs a scaled
-    // mode: CoreAnimation renders to a HiDPI framebuffer (points * backingScale)
-    // which the window-server then DOWNSCALES to the panel's native resolution.
-    // That non-integer downscale is what eats the topmost framebuffer row (the
-    // "dead row") — it's the scaler, not the panel. Geometry in points leaves
-    // fractional values that round unpredictably across the two grids, so we snap
-    // every dimension to an integer framebuffer pixel and convert to points
-    // (÷scale) only at the CALayer/NSBezierPath boundary. Tweak the *_px values to
-    // test in real pixels.
+    // Work in whole framebuffer pixels, converting to points (÷ scale) only at
+    // the CALayer/NSBezierPath boundary. In this display's scaled mode the
+    // HiDPI framebuffer is downscaled to the panel, which loses the top row (the
+    // "dead row") and rounds fractional point geometry unpredictably.
     let scale = screen.backingScaleFactor();
     let d = |px: f64| px / scale; // framebuffer device px -> points
     let line_px = (line * scale).round(); // frame line thickness (e.g. 8)
@@ -1088,20 +1050,17 @@ fn create_native_frame(
     root.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
     root.setMasksToBounds(false);
 
-    // Outer contour: hugs the screen on the left/right/bottom, but its TOP edge is
-    // pushed down `top_inset_px` so the rounded corners' tangent clears the dead
-    // row. (Layer is non-flipped / bottom-left, so reducing the height lowers only
-    // the top edge.)
+    // Outer contour: the screen rect with its top edge lowered `top_inset_px` to
+    // clear the dead row (the layer's origin is bottom-left, so shrinking the
+    // height moves only the top).
     let outer = CGRect::new(
         CGPoint::new(0.0, 0.0),
         CGSize::new(w, h - d(top_inset_px)),
     );
-    // Inner contour (the hole): a symmetric `line_px` inset from the SCREEN edges,
-    // so the line is the full `line_px` on the sides and bottom while the top ends
-    // up `line_px - top_inset_px` thick. That holds the line's BOTTOM edge where it
-    // was, so the bar's pills (a separate webview window, aligned in logical px and
-    // thus un-nudgeable by a single device px) still flare their concave fillets
-    // into it cleanly. The inset is applied to the TOP only — sides keep full width.
+    // Inner contour (the hole): inset `line_px` from the screen edges, not from
+    // `outer`, so the top line ends up `top_inset_px` thinner but its bottom edge
+    // stays put. The bar's pills flare their fillets into that edge, and as a
+    // separate window placed in logical px they can't follow a one-pixel shift.
     let inner = CGRect::new(
         CGPoint::new(d(line_px), d(line_px)),
         CGSize::new(w - 2.0 * d(line_px), h - 2.0 * d(line_px)),
@@ -1123,7 +1082,7 @@ fn create_native_frame(
     line_layer.setFillColor(Some(&line_color.CGColor()));
     root.addSublayer(&line_layer);
 
-    // black corner fills = full screen rect minus the outer rounded rect (even-odd)
+    // corner fills = full screen rect minus the outer rounded rect (even-odd)
     let notch = NSBezierPath::bezierPath();
     notch.appendBezierPathWithRect(full);
     notch.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
@@ -1137,9 +1096,8 @@ fn create_native_frame(
 
     window.orderFrontRegardless();
 
-    // Retain the window + both shape layers: day/night + wallpaper changes
-    // recolor the layers in place (cheap setFillColor), and a display-config
-    // change closes the window and rebuilds for the new screen set.
+    // Keep the window and both layers: theme changes recolour the layers in
+    // place, and a display change closes the window and rebuilds.
     FRAME_WINDOWS.with(|cell| {
         cell.borrow_mut().push(FrameWindow {
             window,
@@ -1149,10 +1107,9 @@ fn create_native_frame(
     });
 }
 
-/// One screen's native frame: the NSWindow plus its two fill layers, retained
-/// on the main thread so a theme change can recolor in place and a display
-/// change can close it. CALayer/NSWindow aren't `Send`, so this lives in a
-/// main-thread `thread_local!`, not Tauri's managed state.
+/// One screen's native frame: the NSWindow plus its two fill layers. CALayer
+/// and NSWindow aren't `Send`, so these live in a main-thread `thread_local!`,
+/// not Tauri's managed state.
 #[cfg(target_os = "macos")]
 struct FrameWindow {
     window: objc2::rc::Retained<objc2_app_kit::NSWindow>,
@@ -1177,8 +1134,8 @@ fn remove_native_frames() {
     });
 }
 
-/// Recolor every native frame's line + corner layers. Must run on the main
-/// thread (AppKit); callers hop via `run_on_main_thread`.
+/// Recolour every native frame's line and corner layers. Main thread only;
+/// callers hop via `run_on_main_thread`.
 #[cfg(target_os = "macos")]
 fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
     use objc2::MainThreadMarker;
@@ -1198,9 +1155,8 @@ fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
     });
 }
 
-/// Query workspaces and fill in each occupied dot's app icon. The AeroSpace
-/// query runs on the caller's (off-main) thread; icon resolution hops to the
-/// main thread (AppKit) and is cached by bundle id.
+/// Query workspaces and fill in each occupied dot's app icon. Call off the main
+/// thread: the AeroSpace query shells out.
 fn workspaces_with_icons(app: &tauri::AppHandle) -> Vec<Workspace> {
     let mut ws = query_workspaces();
     attach_icons(app, &mut ws);
@@ -1278,11 +1234,9 @@ fn resolve_icons(
 #[cfg(target_os = "macos")]
 const PID_WALK_LIMIT: usize = 4;
 
-/// One bundle id → its cached PNG data URL ("" when the app isn't running or
-/// has no icon). Same main-thread hop and cache as the workspace dots, for
-/// callers that need a single icon rather than a workspace sweep.
-///
-/// Off-main-thread callers only: it blocks on the main thread doing the work.
+/// One bundle id's icon as a PNG data URL ("" if the app isn't running or has
+/// none), via the same cache and main-thread hop as the workspace dots. Call
+/// off the main thread only: it blocks waiting for the main thread.
 #[cfg(target_os = "macos")]
 pub(crate) fn icon_for_bundle(app: &tauri::AppHandle, bundle_id: &str) -> String {
     if bundle_id.is_empty() {
@@ -1316,11 +1270,10 @@ pub(crate) fn icon_for_bundle(app: &tauri::AppHandle, bundle_id: &str) -> String
 
 /// Identify the app a pid belongs to: `(bundle id, display name, icon)`.
 ///
-/// Audio is emitted by helper processes — Chrome's audio service, a WebKit GPU
-/// process — which AppKit does know about but which are the wrong answer to
-/// "what's playing". So walk up the parent chain and prefer the first *regular*
-/// (Dock-showing) app; a menu-bar-only app that never has one is accepted as
-/// the fallback rather than losing the readout entirely.
+/// Audio usually comes from a helper process (Chrome's audio service, a WebKit
+/// GPU process), so walk up the parent chain to the first regular (Dock-showing)
+/// app, falling back to the first bundled process found (e.g. a menu-bar-only
+/// app) rather than losing the readout.
 #[cfg(target_os = "macos")]
 pub(crate) fn app_info_for_pid(
     app: &tauri::AppHandle,
@@ -1386,13 +1339,16 @@ fn parent_pid(pid: i32) -> Option<i32> {
     (ppid > 1).then_some(ppid) // launchd (1) is nobody's app
 }
 
-/// Unix seconds `pid` started, or 0 if it can't be read. Used to rank several
-/// simultaneously-audible apps by which stream began most recently.
+/// Unix seconds `pid` started, or 0 if it can't be read. Ranks simultaneously
+/// audible apps by which audio process started most recently.
 #[cfg(target_os = "macos")]
 pub(crate) fn proc_start_secs(pid: i32) -> u64 {
     proc_info(pid).map(|i| i.pbi_start_tvsec).unwrap_or(0)
 }
 
+// Commands that block (subprocesses, dialogs) are `async` with the work in
+// `spawn_blocking`: a sync command runs on the main thread and would
+// beach-ball the UI.
 #[tauri::command]
 async fn aerospace_workspaces(app: tauri::AppHandle) -> Vec<Workspace> {
     tauri::async_runtime::spawn_blocking(move || workspaces_with_icons(&app))
@@ -1410,9 +1366,8 @@ async fn aerospace_focus(name: String) {
     .await;
 }
 
-/// Resize the calling bar window (logical px). Used to make room for the
-/// clock's expanded panel; the window is transparent so the resize itself is
-/// invisible. Per-window: each monitor's bar expands independently.
+/// Resize the calling bar window (logical px) to make room for an open notch or
+/// popup panel. The window is transparent, so the resize itself is invisible.
 #[tauri::command]
 fn set_bar_size(window: tauri::WebviewWindow, width: f64, height: f64) {
     let _ = window.set_size(LogicalSize::new(width, height));
@@ -1445,10 +1400,9 @@ impl Default for Network {
     }
 }
 
-// True if the internet is actually reachable. Uses the same endpoint macOS's own
-// captive-portal detection hits: it returns the literal body "Success" only on a
-// working connection — a dead uplink yields nothing and a captive portal returns
-// its own page, so both read as offline. 2s cap; runs inside `spawn_blocking`.
+// True if the internet is actually reachable. Hits the endpoint macOS's own
+// captive-portal check uses, which returns "Success" only on a working
+// connection (a dead uplink returns nothing, a portal its own page). 2s cap.
 fn has_internet() -> bool {
     std::process::Command::new("curl")
         .args(["-s", "-m", "2", "http://captive.apple.com/hotspot-detect.html"])
@@ -1457,11 +1411,10 @@ fn has_internet() -> bool {
         .unwrap_or(false)
 }
 
-// Current Wi-Fi RSSI in dBm, parsed from `system_profiler SPAirPortDataType`.
-// (`airport` was removed in recent macOS; system_profiler still reports
-// signal without Location Services.) Only the "Current Network Information"
-// block is the live link — everything after "Other Local Wi-Fi Networks" is a
-// scan of nearby APs. Costs ~1s, so callers should only run it when connected.
+// Current Wi-Fi RSSI in dBm from `system_profiler SPAirPortDataType`, which
+// still reports signal without Location Services (`airport` is gone). Only the
+// text before "Other Local Wi-Fi Networks" is the live link; the rest is a scan
+// of nearby APs. Takes ~1s, so only call it when connected.
 fn read_wifi_rssi() -> Option<i32> {
     let out = std::process::Command::new("system_profiler")
         .arg("SPAirPortDataType")
@@ -1549,10 +1502,10 @@ fn launcher_action(action: String) {
 }
 
 // ───────────────────────── theme / wallpaper picker ─────────────────
-// Backs the notch popup's theme view. Wallpaper-setting and matugen run through
-// the same desktoppr / generate-edgebar-theme binaries the CLI uses (paths
-// injected via config.json), so the in-app path and the watcher path are
-// identical — the picker just makes it instant (no launchd round-trip).
+// Backs the notch's theme view. Uses the same desktoppr and
+// generate-edgebar-theme binaries as the CLI and the launchd watcher (paths
+// from config.json), so results match; the picker just skips the launchd
+// round-trip.
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1576,8 +1529,8 @@ fn is_image(path: &std::path::Path) -> bool {
     )
 }
 
-/// Standard base64 (with padding). Dependency-free + thread-safe, so thumbnail
-/// encoding can run off the main thread.
+/// Standard base64 with padding. Pure Rust, so thumbnails can be encoded off
+/// the main thread.
 fn base64_encode(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -1592,9 +1545,8 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
-/// Downscale an image to a thumbnail PNG via `sips` (a subprocess, so off the
-/// main thread — no NSImage threading), returned as a base64 data URL. Cached by
-/// path + mtime.
+/// Downscale an image to a thumbnail PNG data URL via `sips`, which avoids
+/// NSImage and so can run off the main thread. Cached by path and mtime.
 fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
     let mtime = std::fs::metadata(path)
         .and_then(|m| m.modified())
@@ -1631,8 +1583,6 @@ fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
     Some(url)
 }
 
-// Runs `sips` per uncached thumbnail, so it goes through `spawn_blocking` off the
-// main thread; the AppState is re-fetched inside the closure from the AppHandle.
 #[tauri::command]
 async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1709,8 +1659,8 @@ fn palette_json_path() -> Option<std::path::PathBuf> {
         .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
 }
 
-/// Per-(wallpaper, scheme) precomputed palette cache. Keyed by scheme + sanitized
-/// path + mtime, so it auto-invalidates when the image or scheme changes.
+/// Per-(wallpaper, scheme) precomputed palette cache, keyed by scheme,
+/// sanitised path and mtime so an edited image or new scheme misses it.
 fn palette_cache_path(path: &str, scheme: &str) -> Option<std::path::PathBuf> {
     let mtime = std::fs::metadata(path)
         .and_then(|m| m.modified())
@@ -1804,10 +1754,9 @@ fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, 
     let _ = std::process::Command::new(theme_cmd).arg(&path).spawn();
 }
 
-/// Open a Finder file picker (owned by osascript, so the accessory app's no-focus
-/// policy doesn't block it) and return the chosen image path, or None on cancel.
-// Blocks until the user dismisses the Finder dialog, so it runs off the main
-// thread via `spawn_blocking` — otherwise the bar freezes while the dialog is up.
+/// Open a Finder file picker and return the chosen image path, or None on
+/// cancel. osascript owns the dialog, so the accessory app's no-focus policy
+/// doesn't block it.
 #[tauri::command]
 async fn pick_wallpaper_file() -> Option<String> {
     let path = tauri::async_runtime::spawn_blocking(|| {
@@ -1858,19 +1807,18 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
 }
 
 // ───────────────────────── shared app state ─────────────────────────
-// Holds a persistent `sysinfo::System` (kept alive so the delta-based readings
-// have a baseline — a fresh System always reports 0%; on macOS the CPU figure
-// now comes from CpuState instead, leaving this to memory and swap) and a cache
-// of app icons keyed by bundle id (PNG data URLs, resolved once on the main
-// thread and reused for the workspace dots).
 struct AppState {
+    /// Kept alive because sysinfo's CPU reading is a delta since the last
+    /// refresh (a fresh System reports 0%). On macOS CPU comes from CpuState,
+    /// so this serves memory and swap.
     sys: Mutex<sysinfo::System>,
+    /// App icons as PNG data URLs, by bundle id.
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
-    /// Wallpaper thumbnail data URLs for the theme view, keyed by path → (mtime
-    /// secs, data URL). Avoids re-running sips on every theme-view open.
+    /// Wallpaper thumbnails, path → (mtime secs, data URL), so `sips` doesn't
+    /// rerun on every theme-view open.
     thumb_cache: Mutex<std::collections::HashMap<String, (u64, String)>>,
-    /// Interactive rects for each bar's click-through hitTest (WebView CSS px,
-    /// top-left origin), keyed by window label. Shared with the cursor monitors.
+    /// The bars' click-through rects (see `RectMap`), shared with the cursor
+    /// monitors.
     interactive_rects: RectMap,
 }
 
@@ -1939,10 +1887,9 @@ async fn battery() -> Battery {
 }
 
 // ───────────────────────── system metrics (sysinfo) ─────────────────
-// Memory, swap and disk are sampled on demand (lazy poll) only while the notch's
-// Metrics view is open — mirrors ambxst, which polls SystemResources only when
-// the dashboard is open. CPU is the exception: it's read from the bar's
-// always-on sampler (see `cpu_percent`), which is running anyway.
+// Memory, swap and disk are sampled only while the notch's metrics view is open
+// (as ambxst does). CPU comes from the bar's always-on sampler (see
+// `cpu_percent`).
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Metrics {
@@ -1955,12 +1902,10 @@ struct Metrics {
     disk_total: u64,
 }
 
-/// The notch's CPU figure comes from the bar's always-on sampler rather than a
-/// second `refresh_cpu_usage()` here. Two independent samplers disagreed at the
-/// same instant (mach tick delta over exactly CPU_POLL vs sysinfo's per-core
-/// average), and sysinfo derives its percentage from the delta since *its* last
-/// refresh — so the first reading after opening a notch that had been shut for
-/// an hour was the average over that hour, self-correcting a tick later.
+/// Read from the bar's always-on sampler rather than refreshing sysinfo here:
+/// sysinfo's figure is the delta since its last refresh, so the first reading
+/// after the notch had been shut for an hour would be that hour's average, and
+/// a second sampler wouldn't agree with the bar's pill anyway.
 #[cfg(target_os = "macos")]
 fn cpu_percent(app: &tauri::AppHandle, _sys: &mut sysinfo::System) -> f32 {
     app.state::<CpuState>().latest.lock().unwrap().total * 100.0
@@ -1998,8 +1943,8 @@ fn sample_metrics(sys: &mut sysinfo::System, cpu: f32) -> Metrics {
     }
 }
 
-// Disks::new_with_refreshed_list() rescans all mounts, so sample off the main
-// thread — this ticks every 2s while the notch is open.
+// Off the main thread: `Disks::new_with_refreshed_list()` rescans every mount,
+// every 2s while the metrics view is open.
 #[tauri::command]
 async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
     tauri::async_runtime::spawn_blocking(move || {
@@ -2015,31 +1960,24 @@ async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
 }
 
 // ───────────────────────── cpu load graph ───────────────────────────
-// Always-on, unlike the notch's lazy Metrics view: the bar's CPU pill draws a
-// rolling history, so it has to keep sampling whether or not anything is open.
-// Ported from the old sketchybar mach helper — same system/user tick split from
-// `host_statistics(HOST_CPU_LOAD_INFO)`, same top-process readout, same
-// percentage thresholds (the colors now live in styles.css).
+// Always on, unlike the metrics view: the bar's CPU pill draws a rolling
+// history. Ported from the sketchybar mach helper: the same system/user split
+// from `host_statistics(HOST_CPU_LOAD_INFO)` and the same top-process readout.
 
-/// Sampling period. sketchybar's helper ran at `update_freq=4`; 2s matches the
-/// cadence the notch's metrics already use and keeps the graph from looking
-/// stepped. CPU_HISTORY samples at this rate is the window the graph covers.
+/// Sampling period, matching the notch metrics' cadence. The graph spans
+/// CPU_HISTORY × CPU_POLL.
 const CPU_POLL: std::time::Duration = std::time::Duration::from_secs(2);
 /// Ring-buffer depth — one entry per histogram column, each 1px wide. Must match
 /// CPU_GRAPH.samples in main.ts, which is in turn pinned to the graph's pixel
 /// width so columns land on whole pixels.
 const CPU_HISTORY: usize = 108;
-/// How many ticks between top-process lookups. The graph itself is nearly free
-/// (one `host_statistics` call, ~11µs measured), but naming the hungriest
-/// process means walking every PID — ~13ms with 600 processes, which every tick
-/// would make a sustained 0.65% of a core. The name moves far more slowly than
-/// the graph, so it lags a little instead; at CPU_POLL=2s this lands near the
-/// 4s cadence the sketchybar helper ran at.
+/// Ticks between top-process lookups. A tick's `host_statistics` read is ~11µs,
+/// but naming the hungriest process walks every PID (~13ms with 600
+/// processes), and the name changes far more slowly than the graph.
 const CPU_TOP_PROC_EVERY: u32 = 3;
 
-/// One point on the graph: fractions of total CPU capacity in 0..1, kept split
-/// so the graph can draw the same filled-system / stroked-user pair sketchybar
-/// layered into one box.
+/// One graph column: system and user load as fractions (0..1) of total CPU
+/// capacity, kept apart so the graph can stack user on top of system.
 #[derive(Clone, Copy, Default, Serialize)]
 struct CpuSample {
     sys: f32,
@@ -2061,9 +1999,8 @@ struct CpuStat {
 }
 
 /// Seed for a bar that just loaded: the full history plus the latest readout.
-/// Bars are rebuilt on every display change, so a newly-created one would
-/// otherwise draw an empty graph and fill in over the next two and a half
-/// minutes; this hands it the buffer the sampler has been keeping all along.
+/// Bars are rebuilt on every display change, and without this a new one would
+/// start with an empty graph.
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CpuSnapshot {
@@ -2104,9 +2041,9 @@ fn read_cpu_ticks(host: libc::host_t) -> Option<[u32; libc::CPU_STATE_MAX as usi
     (err == libc::KERN_SUCCESS).then_some(info.cpu_ticks)
 }
 
-/// Daemons commonly carry reverse-DNS executable names (`com.apple.WebKit
-/// .WebContent`); the leading domain is noise in a bar this narrow, so drop it
-/// exactly as the sketchybar helper's FILTER_PATTERN did.
+/// Drop the `com.apple.` prefix from reverse-DNS process names
+/// (`com.apple.WebKit.WebContent`): noise in a pill this narrow. Same filter as
+/// the sketchybar helper's FILTER_PATTERN.
 fn trim_proc_name(name: &str) -> &str {
     name.strip_prefix("com.apple.").unwrap_or(name)
 }
@@ -2124,10 +2061,9 @@ fn install_cpu_sampler(app: tauri::AppHandle) {
         #[allow(deprecated)]
         let host = unsafe { libc::mach_host_self() };
 
-        // Its own `System`, not the AppState one the notch samples: sysinfo
-        // derives CPU from the delta since that instance's last refresh, so two
-        // refreshers sharing one instance would measure each other's
-        // milliseconds-apart deltas and report nonsense.
+        // Its own `System`, not AppState's: sysinfo's CPU figures are deltas
+        // since that instance's last refresh, so a second refresher would
+        // shrink the window to milliseconds and skew the readings.
         let mut sys = sysinfo::System::new();
         let proc_cpu = ProcessRefreshKind::nothing().with_cpu();
         // Prime both baselines — the first delta of either is meaningless.
@@ -2158,10 +2094,9 @@ fn install_cpu_sampler(app: tauri::AppHandle) {
             let user = delta(libc::CPU_STATE_USER);
             let system = delta(libc::CPU_STATE_SYSTEM);
             let idle = delta(libc::CPU_STATE_IDLE);
-            // The helper this is ported from left NICE out of the denominator;
-            // it's counted here so the fractions still total 1 if anything ever
-            // runs re-niced (it's ~always 0 on macOS, so the two agree in
-            // practice).
+            // NICE is counted (the sketchybar helper left it out) so the
+            // fractions still total 1 under re-niced load; it's nearly always 0
+            // on macOS.
             let nice = delta(libc::CPU_STATE_NICE);
             let busy_total = user + system + idle + nice;
             if busy_total <= 0.0 {
@@ -2169,15 +2104,13 @@ fn install_cpu_sampler(app: tauri::AppHandle) {
             }
             let sample = CpuSample {
                 sys: (system / busy_total) as f32,
-                // NICE is user-space work, so it belongs on the user trace.
+                // NICE is user-space work, so it counts as user load.
                 user: ((user + nice) / busy_total) as f32,
             };
 
-            // `tick` starts at 0, so the first pass through names a process
-            // immediately rather than leaving the pill blank for CPU_POLL ×
-            // CPU_TOP_PROC_EVERY. Per-process usage is a delta since that
-            // process's own last refresh, so skipping ticks widens the window
-            // it averages over — which only steadies the reading.
+            // `tick` starts at 0, so the first pass names a process straight
+            // away. Skipped ticks just widen the window each process's usage
+            // averages over.
             if tick % CPU_TOP_PROC_EVERY == 0 {
                 sys.refresh_processes_specifics(ProcessesToUpdate::All, true, proc_cpu);
                 top = sys
@@ -2336,26 +2269,24 @@ fn set_brightness(app: tauri::AppHandle, value: f32) {
 }
 
 // ───────────────────────── app icons (NSWorkspace) ──────────────────
-// Event-driven, no polling: an NSWorkspace observer fires on every app
-// activation and re-pushes the workspaces so the focused workspace's dot tracks
-// whatever app you just switched to (AeroSpace's workspace-change hook only
-// fires on workspace switches, not on focus moves within a workspace).
+// An NSWorkspace observer re-pushes the workspaces on every app activation, so
+// the focused dot tracks the app you switched to. AeroSpace's workspace-change
+// hook doesn't fire for focus moves within a workspace.
 
-/// Encode an NSImage as a PNG data URL (TIFF rep → bitmap rep → PNG → base64).
-/// Edge of the rasterised app icon, in points. App bundles ship 1024² icons and
-/// `TIFFRepresentation` hands back the largest representation, so encoding one
-/// straight produced a ~1MB data URL — per workspace dot, and again on every
-/// notch change. Nothing displays them above 24pt; 64 covers that at 2x.
+/// Edge of the rasterised app icon, in points. Bundles ship 1024² icons and
+/// `TIFFRepresentation` returns the largest rep, so encoding one directly made a
+/// ~1MB data URL per dot and per notch change. Nothing shows them above 24pt;
+/// 64 covers that at 2x.
 #[cfg(target_os = "macos")]
 const ICON_PX: f64 = 64.0;
 
+/// Encode an NSImage as a PNG data URL, redrawn at ICON_PX first (then TIFF rep
+/// → bitmap rep → PNG → base64).
 #[cfg(target_os = "macos")]
 fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
     use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSCompositingOperation, NSImage};
     use objc2_foundation::{NSDataBase64EncodingOptions, NSDictionary, NSPoint, NSRect, NSSize};
 
-    // Redraw at display size first, so what gets encoded is a 64² icon and not
-    // the bundle's 1024² master.
     let size = NSSize::new(ICON_PX, ICON_PX);
     let src: objc2::rc::Retained<NSImage> = objc2::rc::Retained::from(img);
     let handler = block2::RcBlock::new(move |rect: NSRect| {
@@ -2399,9 +2330,9 @@ objc2::define_class!(
     impl FrontAppObserver {
         #[unsafe(method(appActivated:))]
         fn app_activated(&self, _notification: *mut objc2::runtime::AnyObject) {
-            // Runs on the main thread. Just ping the worker: it collapses a burst
-            // (rapid cmd-tab) into one AeroSpace query, so activations can't spawn
-            // racing threads whose out-of-order emits leave stale dot state.
+            // Main thread. Just ping the worker, so a burst (rapid cmd-tab)
+            // can't spawn racing queries whose out-of-order emits leave stale
+            // dots.
             let _ = self.ivars().tx.send(());
         }
     }
@@ -2415,9 +2346,8 @@ fn install_front_app_observer(app: tauri::AppHandle) {
     use objc2::{msg_send, sel, AllocAnyThread};
     use objc2_app_kit::{NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
 
-    // Single worker: collapse a burst of activations into one AeroSpace query +
-    // emit. query_workspaces shells out, so it never runs on the main thread.
-    // Mirrors install_network_observer's debounce.
+    // One worker collapses a burst of activations into a single query and
+    // emit, off the main thread (query_workspaces shells out).
     let (tx, rx) = std::sync::mpsc::channel::<()>();
     let worker_app = app;
     std::thread::spawn(move || {
@@ -2477,8 +2407,7 @@ objc2::define_class!(
 );
 
 /// Observe macOS light/dark changes (`AppleInterfaceThemeChangedNotification` on
-/// the distributed center) so Auto mode follows the system. Event-driven — no
-/// polling.
+/// the distributed centre) so Auto mode follows the system.
 #[cfg(target_os = "macos")]
 fn install_appearance_observer(app: tauri::AppHandle) {
     use objc2::rc::Retained;
@@ -2501,14 +2430,10 @@ fn install_appearance_observer(app: tauri::AppHandle) {
     std::mem::forget(observer);
 }
 
-/// Watch network reachability and push a fresh `Network` to the bar whenever
-/// connectivity changes — interface up/down, IP change, VPN toggling. Replaces
-/// polling the `network` command on a timer; idle cost is zero.
-///
-/// Reachability only reports *route* changes — it can't see a dead uplink or a
-/// captive portal (the route still exists), so the real online check still runs
-/// inside `read_network()` on each change. That's the same split macOS itself
-/// uses: a passive path monitor plus an active probe.
+/// Push a fresh `Network` to the bar whenever reachability changes (interface
+/// up/down, IP change, VPN toggle), instead of polling. Reachability only sees
+/// route changes, not a dead uplink or captive portal, so `read_network()`
+/// still probes for real connectivity on each change.
 #[cfg(target_os = "macos")]
 fn install_network_observer(app: tauri::AppHandle) {
     use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
@@ -2537,7 +2462,8 @@ fn install_network_observer(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let addr = "0.0.0.0:0".parse::<std::net::SocketAddr>().unwrap();
         let mut reach = SCNetworkReachability::from(addr);
-        // Mutex makes the Sender `Sync`, which the callback bound requires.
+        // The callback must be `Sync`. std's `Sender` is itself `Sync` since
+        // Rust 1.72, so this Mutex is no longer strictly needed.
         let tx = std::sync::Mutex::new(tx);
         if reach
             .set_callback(move |_flags| {
@@ -2547,7 +2473,8 @@ fn install_network_observer(app: tauri::AppHandle) {
         {
             return;
         }
-        // SAFETY: kCFRunLoopCommonModes is Apple's documented run-loop mode.
+        // SAFETY: the mode must be a valid, non-null run-loop mode, which
+        // kCFRunLoopCommonModes is.
         if unsafe { reach.schedule_with_runloop(&CFRunLoop::get_current(), kCFRunLoopCommonModes) }
             .is_err()
         {
@@ -2558,9 +2485,9 @@ fn install_network_observer(app: tauri::AppHandle) {
 }
 
 // ───────────────────────── multi-monitor windows ────────────────────
-// One bar + one frame per display. Geometry is never computed once and left
-// stale: NSApplicationDidChangeScreenParametersNotification triggers a full
-// re-sync, so dock/undock/rearrange/resolution changes reposition everything.
+// One bar and one frame per display, all rebuilt on
+// NSApplicationDidChangeScreenParametersNotification (plug, unplug, rearrange,
+// resolution change).
 
 /// Label for the i-th monitor's bar window: the config-defined "bar" for the
 /// first, "bar-1"/"bar-2"/… clones for the rest.
@@ -2580,14 +2507,13 @@ fn bar_index(label: &str) -> Option<usize> {
     label.strip_prefix("bar-")?.parse().ok()
 }
 
-/// Create/position one bar window per monitor. The i-th monitor (left-to-right)
-/// gets `bar_label(i)`, created from the tauri.conf.json "bar" template if
-/// missing. Position/size are set in LOGICAL coordinates: converting each
-/// monitor's physical origin with its own scale factor yields global points,
-/// which tao hands straight to NSWindow — mixed-DPI safe (a 2x built-in next to
-/// 1x externals breaks if you position with physical coords, because tao would
-/// convert them with whichever screen the window currently sits on). Bars for
-/// unplugged monitors are destroyed. Main thread only.
+/// Create or reposition one bar per monitor (`bar_label(i)`, left to right),
+/// cloning the tauri.conf.json "bar" window when missing, and destroy bars for
+/// unplugged monitors. Main thread only. Position in logical coordinates: each
+/// monitor's physical origin converted with its own scale gives global points,
+/// which tao passes straight to NSWindow. Physical coordinates break mixed-DPI
+/// setups, as tao converts them with the scale of whichever screen the window
+/// is currently on.
 #[cfg(target_os = "macos")]
 fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &RectMap) {
     let Ok(mut monitors) = app.available_monitors() else {
@@ -2613,11 +2539,9 @@ fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &Rec
         let scale = m.scale_factor();
         let pos: LogicalPosition<f64> = m.position().to_logical(scale);
         let size: LogicalSize<f64> = m.size().to_logical(scale);
-        // The bar is NOT offset for the dead top row: its pills sit a full
-        // line-thickness below the top edge (nowhere near row 0) and overlap the
-        // native frame's top line, so moving the window down would only open a
-        // 1px seam between the two windows. Only the native frame (drawn at the
-        // very edge) needs top_offset_px.
+        // No `top_offset_px` here: the pills sit a line-thickness below the top
+        // edge, clear of the dead row, and overlap the frame's top line, so
+        // lowering the bar would only open a 1px seam between the windows.
         let _ = bar.set_position(pos);
         let _ = bar.set_size(LogicalSize::new(size.width, window_height));
         let _ = bar.set_always_on_top(true);
@@ -2724,21 +2648,16 @@ fn install_screen_observer(app: tauri::AppHandle) {
 }
 
 // ───────────────────────── hide under fullscreen apps ───────────────
-// A native-fullscreen window gets its own space, and our chrome joins every
-// space (CanJoinAllSpaces), so the frame's edge line and the bar draw on top of
-// fullscreen video and games. The collection-behavior knobs don't fix this —
-// measured on this machine: dropping FullScreenAuxiliary still leaves the
-// window visible in the fullscreen space, and dropping CanJoinAllSpaces does
-// hide it there but also pins it to whichever space it was built on. macOS
-// exposes no public "is this space fullscreen" query either, so detect it from
-// the window list: an OPAQUE app window covering a whole display at layer 0 is
-// fullscreen (native, or borderless with no space of its own), and we order that
-// display's chrome out until it goes away. Transparent windows are skipped —
-// see the alpha check in `covered_screens`.
+// Our chrome joins every space, so it draws over native-fullscreen apps.
+// Collection-behaviour flags can't fix that: dropping FullScreenAuxiliary still
+// shows it there, and dropping CanJoinAllSpaces hides it but pins it to one
+// space. With no public "is this space fullscreen" query, poll the window list
+// instead: an opaque layer-0 window covering a whole display is fullscreen
+// (native, or borderless), and that display's chrome is ordered out until it
+// goes.
 
-/// How often the fullscreen check runs. `CGWindowListCopyWindowInfo` measured
-/// ~1ms per call with ~20 windows on screen, so this costs ~0.2% of one core;
-/// it's also the worst-case lag before the bar comes back on exiting fullscreen.
+/// How often the fullscreen check runs, and so the worst-case lag before the
+/// bar returns. Each `CGWindowListCopyWindowInfo` call is ~1ms (~20 windows).
 #[cfg(target_os = "macos")]
 const FULLSCREEN_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 
@@ -2842,11 +2761,9 @@ fn covered_screens(bounds: &[[f64; 4]]) -> Vec<bool> {
         if window_int(win, unsafe { kCGWindowLayer }) != Some(0) {
             continue;
         }
-        // A fully transparent window occludes nothing, so it is not a fullscreen
-        // app however big it is. RocketSim parks three invisible 2560x1440
-        // windows at layer 0 on the main display; without this filter they read
-        // as permanent fullscreen and that display's chrome never comes back.
-        // `kCGWindowIsOnscreen` does not help — those windows report true.
+        // A fully transparent window occludes nothing, however big. Some apps
+        // (RocketSim) park invisible display-sized windows here, and
+        // `kCGWindowIsOnscreen` reports true for them.
         if window_f64(win, unsafe { kCGWindowAlpha }).is_some_and(|a| a <= 0.01) {
             continue;
         }
@@ -2984,8 +2901,6 @@ pub fn run() {
             notch::media_seek
         ])
         .setup(|app| {
-            // Shared config (colors + geometry) — drives both the native frame
-            // and the WebView (which fetches it via get_config and applies CSS vars).
             let config = load_config();
             let palettes = load_palettes();
             // Runtime override (the bar's light/dark/auto toggle) wins over the
@@ -2993,29 +2908,24 @@ pub fn run() {
             let appearance = load_persisted_appearance().unwrap_or(config.appearance);
             let scheme = resolve_scheme(appearance);
 
-            // Accessory app: no Dock icon, never becomes the active app, so it
-            // never steals focus or bounces you back to the previously-active
-            // app (e.g. Arc) when its windows are shown or touched.
+            // Accessory app: no Dock icon and never the active app, so showing
+            // or clicking the bar doesn't steal focus from the frontmost app.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            // Interactive rects per bar window; shared between the cursor
-            // monitors and the set_interactive_rects command.
             let interactive_rects: RectMap = Default::default();
 
-            // Both states go in before rebuild_displays, which reads them.
+            // AppState and ThemeState go in before rebuild_displays, which
+            // reads both.
             app.manage(AppState {
                 sys: Mutex::new(sysinfo::System::new()),
                 icon_cache: Mutex::new(std::collections::HashMap::new()),
                 thumb_cache: Mutex::new(std::collections::HashMap::new()),
                 interactive_rects: interactive_rects.clone(),
             });
-            // CPU history + latest readout. Managed before the sampler starts
-            // (which happens below, after the bars exist) so `cpu_state` can
-            // answer a bar that asks before the first tick lands.
+            // Managed now, before the sampler starts below, so `cpu_state` can
+            // answer a bar that asks before the first tick.
             app.manage(CpuState::default());
-            // Shared theme state (raw role maps + both palettes), resolved on
-            // demand by get_config / apply_theme.
             app.manage(Mutex::new(ThemeState {
                 colors: config.colors,
                 geometry: config.geometry,
@@ -3031,13 +2941,11 @@ pub fn run() {
                 notch_idle: resolve_notch_idle(config.notch.idle.as_deref()),
                 ink: load_ink_override(),
             }));
-            // Notch providers: the store, then the watchers that feed it. Both
-            // go in before the workspace socket below, which publishes into it.
+            // The notch store, managed before the workspace socket below, which
+            // publishes into it.
             app.manage(notch::NotchState::new(config.notch));
 
-            // Per-display chrome: one native frame per screen, one bar per
-            // monitor — built now and rebuilt on every display-config change,
-            // so geometry never goes stale when screens come, go, or move.
+            // Per-display chrome, rebuilt on every display-config change.
             #[cfg(target_os = "macos")]
             {
                 install_cursor_monitors(interactive_rects.clone());
@@ -3051,12 +2959,11 @@ pub fn run() {
                 let _ = bar.show();
             }
 
-            // Event-driven workspace updates: AeroSpace's exec-on-workspace-change
-            // callback pings this unix socket. The accept loop only ACKS (accept +
-            // drop, so the nc client exits immediately) and pings a debounced
-            // worker that runs the actual query — if a query wedges (a hung
-            // `aerospace` CLI has frozen this loop before), pings keep draining
-            // instead of piling stuck clients into the listen backlog.
+            // Workspace updates: AeroSpace's exec-on-workspace-change pings this
+            // unix socket. The accept loop only accepts and drops (so the nc
+            // client exits at once) and pings a debounced worker that runs the
+            // query, so a wedged query can't back clients up in the listen
+            // backlog.
             let ws_handle = app.handle().clone();
             std::thread::spawn(move || {
                 use std::os::unix::net::UnixListener;
@@ -3088,9 +2995,9 @@ pub fn run() {
                 }
             });
 
-            // Theme reload: `generate-edgebar-theme` / matugen writes a new
-            // palette.json then pings this socket; each ping reloads from disk and
-            // re-themes the running bar live (no relaunch). Same pattern as ws.sock.
+            // Theme reload: `generate-edgebar-theme` writes a new palette.json
+            // and pings this socket; each ping reloads and re-themes live. Same
+            // socket setup as ws.sock, but the reload runs inline (no debounce).
             let theme_handle = app.handle().clone();
             std::thread::spawn(move || {
                 use std::os::unix::net::UnixListener;
@@ -3112,8 +3019,7 @@ pub fn run() {
                 }
             });
 
-            // The NSWorkspace observer re-pushes workspaces on every app
-            // activation so the focused dot stays current.
+            // Re-push workspaces on every app activation.
             #[cfg(target_os = "macos")]
             install_front_app_observer(app.handle().clone());
 
@@ -3121,12 +3027,11 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             install_appearance_observer(app.handle().clone());
 
-            // Event-driven Wi-Fi/network updates (replaces the old 15s poll).
+            // Event-driven network updates.
             #[cfg(target_os = "macos")]
             install_network_observer(app.handle().clone());
 
-            // Always-on CPU sampling for the bar's graph pill (the notch's other
-            // metrics stay lazy — only this one is visible at rest).
+            // Always-on CPU sampling for the bar's graph pill.
             #[cfg(target_os = "macos")]
             install_cpu_sampler(app.handle().clone());
 

@@ -23,7 +23,7 @@ QtObject {
         return colors[token] || fallback
     }
 
-    // Dynamic colors from matugen (wallpaper-derived), with Catppuccin Mocha fallbacks
+    // Dynamic colours from matugen (wallpaper-derived), with Catppuccin Mocha fallbacks
     readonly property color base: c("background", "#1e1e2e")
     readonly property color _overBg: c("overBackground", "#cdd6f4")
     readonly property color surface: Qt.tint(base, Qt.rgba(_overBg.r, _overBg.g, _overBg.b, 0.1))
@@ -48,8 +48,8 @@ QtObject {
     readonly property color batteryMid: c("yellow", "#f9e2af")
     readonly property color batteryLow: error
 
-    // Shared design values (custom-shell issue 04): drawers and later panels take their
-    // motion, corners, spacing and type from here.
+    // Shared design values: drawers and panels take their motion, corners, spacing and
+    // type from here.
 
     // Motion: the Material 3 Expressive springs (damping ratio, stiffness; mass 1), from
     // androidx's ExpressiveMotionTokens. The spec defines springs, not easing curves.
@@ -92,15 +92,14 @@ QtObject {
     readonly property int typeTitleLarge: 22
     readonly property int typeHeadlineSmall: 24
 
-    // Frame and bar. This shell's own values: docs/bar-spec.md covers edgebar only
-    // since 2026-10-09 (.scratch/custom-shell/PRD.md). The bar is the frame's top
-    // band, so barHeight is also the top edge's thickness.
+    // Frame and bar: this shell's own values (docs/bar-spec.md is edgebar's only). The
+    // bar is the frame's top band, so barHeight is also the top edge's thickness.
     readonly property int barHeight: 32
     readonly property int frameThickness: 8
     readonly property color frameColor: base
     // Corner radius of the area inside the frame, seen at the bottom corners.
     readonly property int frameRounding: cornerLarge
-    // Radius of the curve where the bar (and later each drawer) meets the frame.
+    // Radius of the curve where the bar and each drawer meet the frame.
     readonly property int frameFillet: cornerLarge
     // How far the frame's shadow reaches over the windows, and how dark it starts.
     readonly property int frameShadowSize: 12

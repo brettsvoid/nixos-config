@@ -1,5 +1,5 @@
-# IIO sensor stack + Intel thermal daemon. Pair with fan-control for full
-# thermal management on supported laptops.
+# IIO sensors and the Intel thermal daemon. Pair with fan-control on MSI
+# laptops.
 _: {
   flake.modules.nixos.thermal =
     { pkgs, ... }:

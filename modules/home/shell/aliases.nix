@@ -7,22 +7,22 @@ in
     { lib, pkgs, ... }:
     {
       programs.zsh.shellAliases = {
-        # Flake management. `nix-rebuild` runs nh, which builds + activates
-        # the host config matching `hostname` (autodiscovered, so no `#name`)
-        # and shows a dix diff first. Flake path comes from NH_FLAKE
-        # (programs.nh.flake) and nh self-elevates — hence no `--flake`/`sudo`.
+        # Flake management. `nix-rebuild`: nh builds the host matching
+        # `hostname`, shows a dix diff, then activates. The flake path comes
+        # from NH_FLAKE (programs.nh.flake) and nh elevates itself, so no
+        # `--flake` or sudo.
         edit = "cd ~/${repoDir} && $EDITOR .";
         nix-rebuild = if pkgs.stdenv.isDarwin then "nh darwin switch" else "nh os switch";
 
-        # Editor shortcut (vim/vi handled by programs.neovim's
-        # viAlias/vimAlias options)
+        # Editor shortcuts. programs.neovim's viAlias/vimAlias also install
+        # vi and vim as commands, for scripts.
         vim = "nvim";
         v = "nvim";
         vimdiff = "nvim -d";
 
-        # Modern replacements (interactive shells only — zsh aliases don't
-        # expand in scripts). grep/find/ps/cat are left un-aliased so their
-        # coreutils flags keep working in muscle memory and pasted commands.
+        # Modern replacements (interactive only: zsh aliases don't expand in
+        # scripts). grep/find/ps/cat stay unaliased so their usual flags keep
+        # working in muscle memory and pasted commands.
         ls = "eza";
         ll = "eza -la";
         la = "eza -a";
@@ -30,7 +30,8 @@ in
         df = "duf";
         du = "dust";
 
-        # Git shortcuts (on top of oh-my-zsh git plugin)
+        # Git shortcuts. These load after oh-my-zsh's git plugin, so `gl`
+        # replaces its `git pull`.
         gs = "git status";
         gd = "git diff";
         gds = "git diff --staged";

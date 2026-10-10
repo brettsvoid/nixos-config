@@ -1,6 +1,4 @@
-# Bar geometry is single-sourced in Nix (flake.lib.barGeometry, see
-# modules/home/darwin/bar-geometry.nix) and rendered to this file by
-# sketchybar.nix. AeroSpace reads the same constant for its window gaps, so
-# set the height there, not here. This dir stays a live-edit symlink; only the
-# generated vars file below requires a rebuild to change.
+# EXTERNAL_BAR_HEIGHT comes from flake.lib.barGeometry, which sketchybar.nix
+# renders into the vars file below. Set it in bar-geometry.nix (it also drives
+# the AeroSpace gaps) and rebuild; the rest of this dir is read live.
 source "$HOME/.config/sketchybar-vars.sh"

@@ -2,11 +2,10 @@ return {
 	"nvim-treesitter/nvim-treesitter",
 	branch = "main",
 	lazy = false,
-	-- No build step / no require("nvim-treesitter").install(...): parsers are
-	-- provided prebuilt by Nix (modules/home/nvim/default.nix → treesitterParsers,
-	-- symlinked onto rtp at ~/.config/nvim/parser). This plugin is kept only for
-	-- its queries, ft→lang aliases, and indentexpr. The authoritative parser list
-	-- now lives in default.nix.
+	-- No build step or install(): parsers come prebuilt from Nix (treesitterParsers
+	-- in modules/home/nvim/default.nix, linked to ~/.config/nvim/parser). Kept for
+	-- ft→lang aliases and indentexpr; its queries reach the rtp only via
+	-- :TSInstall, which isn't run.
 	config = function()
 		vim.api.nvim_create_autocmd("FileType", {
 			callback = function(args)
@@ -18,9 +17,8 @@ return {
 				end
 				pcall(vim.treesitter.start, buf)
 
-				-- treesitter-powered indentation
-				-- (the main branch doesn't set this up automatically; folding is
-				-- configured globally in core/options.lua via vim.treesitter.foldexpr)
+				-- The main branch doesn't set indentexpr itself. Folding is set in
+				-- core/options.lua.
 				vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
 			end,
 		})

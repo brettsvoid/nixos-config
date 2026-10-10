@@ -8,9 +8,11 @@ hyper.released = function()
 	hyper:exit()
 end
 
--- Bind the Hyper key (in this case, F18) to the hammerspoon modal
+-- F18 is the Hyper key here: the modal is active while it is held.
 hs.hotkey.bind({}, "F18", hyper.pressed, hyper.released)
 
+-- Disabled, but hyper.launch still calls it: restore it before configuring
+-- any applications.
 -- hyper.allowed = function(app)
 -- 	if app.tags then
 -- 		if hs.settings.get("only") then
@@ -51,18 +53,16 @@ hyper.start = function(config_table)
 		return
 	end
 
-	-- Use the hyper key with the application config to use the `hyper_key`
 	for _, app in pairs(config_table.applications) do
-		-- Apps that I want to jump to
+		-- F18+hyper_key launches or focuses the app.
 		if app.hyper_key then
 			hyper:bind({}, app.hyper_key, function()
 				hyper.launch(app)
 			end)
 		end
 
-		-- I use hyper to power some shortcuts in different apps If the app is closed
-		-- and I press the shortcut, open the app and send the shortcut, otherwise
-		-- just send the shortcut.
+		-- F18+key for each local binding is sent on to the app as ⌃⌥⇧⌘+key,
+		-- launching the app first if it is closed.
 		if app.local_bindings then
 			for _, key in pairs(app.local_bindings) do
 				hyper:bind({}, key, nil, function()

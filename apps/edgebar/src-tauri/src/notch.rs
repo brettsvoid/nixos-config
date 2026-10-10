@@ -1,26 +1,21 @@
-//! Dynamic notch content — one slot, several providers, a fixed priority ladder.
+//! Dynamic notch content: one slot, several providers, a fixed priority ladder.
 //!
-//! The collapsed notch shows whatever the highest-priority provider with
-//! something to say has published: a transient OSD flash outranks per-workspace
-//! context, which outranks whatever is currently making noise. When every
-//! provider is silent the store emits `null` and the WebView falls back to the
-//! idle look (the plain handle bar, a clock, or a fixed string — its choice,
-//! since idle content ticks and shouldn't cost an event stream).
+//! The collapsed notch shows the highest-priority provider with something to
+//! say: an OSD flash beats per-workspace context, which beats whatever is making
+//! noise. When all are silent the store emits `null` and the WebView draws its
+//! own idle look (handle, clock or fixed text), so a ticking clock costs no
+//! events.
 //!
-//! Why the media provider is shaped the way it is: MediaRemote — the private
-//! framework behind macOS's own Now Playing — has been gated to entitled
-//! processes since macOS 15.4, so there is no system-wide "what is playing"
-//! read left. Two public sources replace it:
+//! MediaRemote (behind macOS's own Now Playing) has been gated to entitled
+//! processes since macOS 15.4, so the media provider uses two public sources:
 //!
 //!   * CoreAudio process objects (`kAudioHardwarePropertyProcessObjectList`,
-//!     public since 14.4) answer *who is emitting sound* — including a YouTube
-//!     tab, which no metadata API would have covered anyway.
-//!   * AppleScript answers *what* they're playing, for the two local players
-//!     that publish a dictionary (Spotify, Music).
+//!     public since 14.4) say *who* is emitting sound, browser tabs included.
+//!   * AppleScript says *what* is playing, for the two players that publish a
+//!     dictionary (Spotify, Music).
 //!
-//! So a Spotify track reads "Artist — Title" with a progress hairline, and
-//! anything else reads "<app> · playing" with the app's icon. Both are honest;
-//! only the detail differs.
+//! So Spotify and Music get the full media pill (art, playhead, transport);
+//! any other audible app shows its name and icon over "playing".
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -28,25 +23,23 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
-/// How often the audible-app scan runs. CoreAudio process objects have no
-/// usable change notification per process (objects come and go as apps open
-/// audio units, so listeners would have to be added and removed constantly);
-/// the scan is a handful of in-process property reads, so a slow poll is both
-/// simpler and cheap. Matches the CPU sampler's cadence.
+/// How often the audible-app scan runs. Process objects come and go as apps
+/// open audio units, so per-process listeners would need constant re-adding; a
+/// slow poll of a few property reads is simpler. Matches `CPU_POLL` in lib.rs.
 const MEDIA_POLL: Duration = Duration::from_secs(2);
-/// Ticker for `everyMs` command rules. Rules are due-checked against this, so
-/// an interval finer than this is rounded up to it.
+/// Ticker for `everyMs` command rules. Rules are due-checked once per tick, so
+/// `everyMs` effectively rounds up to a whole number of ticks.
 const RULE_TICK: Duration = Duration::from_secs(1);
-/// Longest a `command` rule may run before its output is dropped. Mirrors the
-/// deadline on the AeroSpace helper — a wedged rule must not wedge the bar.
+/// Longest a `command` rule may run before it is killed (whatever it printed by
+/// then is used), so a wedged rule can't wedge the bar.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long an OSD flash holds the slot when the config doesn't say.
 const DEFAULT_TRANSIENT_MS: u64 = 1600;
 
 // ───────────────────────── config ───────────────────────────────────
 
-/// The `notch` block of config.json. Absent = every default, which is the
-/// current behaviour plus the media readout.
+/// The `notch` block of config.json. Absent means all defaults: the idle
+/// handle, the media readout and no workspace rules.
 // Serialize rides along because the whole `Config` is serializable.
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -54,10 +47,10 @@ pub struct NotchConfig {
     /// Per-workspace rules keyed by AeroSpace workspace name. `"*"` is the
     /// fallback for any workspace without its own entry.
     pub workspaces: HashMap<String, Rule>,
-    /// What the WebView draws when no provider has anything: `"handle"` (the
-    /// bar at rest, as before), `"clock"`, `"userHost"`, or a literal string.
+    /// What the WebView draws when no provider has anything: `"handle"`,
+    /// `"clock"`, `"userHost"`, or a literal string.
     pub idle: Option<String>,
-    /// How long an OSD flash (volume, brightness) holds the slot, in ms.
+    /// How long an OSD flash (volume, mic, brightness) holds the slot, in ms.
     pub transient_ms: Option<u64>,
 }
 
@@ -68,14 +61,15 @@ pub enum Rule {
     /// The title of that workspace's focused window, app name beneath it.
     FocusedWindow,
     /// stdout of a shell command: first line is the headline, second (optional)
-    /// the dim line under it. Re-run on every workspace change, and on
+    /// the dim line under it. Re-run on every workspace or focus change, and on
     /// `everyMs` while that workspace is focused.
     #[serde(rename_all = "camelCase")]
     Command {
         run: String,
         #[serde(default)]
         every_ms: Option<u64>,
-        /// Icon hint for the WebView ("terminal", "git", "mail", …).
+        /// A key of `NOTCH_GLYPH` in main.ts; defaults to "terminal". Unknown
+        /// names draw no icon.
         #[serde(default)]
         glyph: Option<String>,
     },
@@ -85,8 +79,8 @@ pub enum Rule {
 
 // ───────────────────────── the item ─────────────────────────────────
 
-/// Which provider owns the slot. Declaration order *is* the priority ladder
-/// (`Ord` is derived from it), highest last.
+/// Which provider owns the slot, lowest priority first. `winner()` is what
+/// actually applies the ladder.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Tier {
@@ -104,22 +98,23 @@ pub struct NotchItem {
     pub glyph: String,
     /// App icon as a PNG data URL, or "" — wins over `glyph` when set.
     pub icon: String,
-    /// Album art as a data URL, or "". Drawn as the media pill's backdrop, not
-    /// as a thumbnail, so it stays distinct from `icon` (which identifies the
-    /// app, and still shows alongside it).
+    /// Album art as a data URL, or "". The media pill's backdrop; `icon` still
+    /// shows alongside it.
     pub art: String,
     pub primary: String,
     pub secondary: String,
-    /// 0..1 hairline fill under the text (track position, volume level).
+    /// 0..1: the media pill's playhead, or the text layout's hairline (e.g. a
+    /// volume flash).
     pub progress: Option<f64>,
     /// Track length in seconds, 0 when unknown. Lets the WebView advance the
     /// playhead between polls instead of stepping every 2s.
     pub duration: f64,
-    /// Whether transport commands will reach this source. Only true for the
-    /// scriptable players — an audible Chrome tab can be reported but not
-    /// driven, so it keeps the plain text readout.
+    /// Whether transport commands reach this source: only the scriptable
+    /// players. An audible browser tab can be named but not driven, so it keeps
+    /// the text layout.
     pub controls: bool,
-    /// False dims the item — a paused player, a muted output.
+    /// False for a paused player: the media pill flattens its wave, the text
+    /// layout dims.
     pub active: bool,
 }
 
@@ -185,8 +180,8 @@ fn winner(s: &Slots) -> Option<NotchItem> {
         .or_else(|| s.media.clone())
 }
 
-/// Recompute the winner and push it — but only when it actually changed, so a
-/// 2s media scan that finds the same track stays silent.
+/// Recompute the winner and push it, only if it changed, so a media scan that
+/// finds the same track stays silent.
 fn publish(app: &tauri::AppHandle) {
     let state = app.state::<NotchState>();
     let next = {
@@ -214,9 +209,8 @@ fn set_slot(app: &tauri::AppHandle, tier: Tier, item: Option<NotchItem>) {
     publish(app);
 }
 
-/// Take the slot for a moment, then hand it back to whoever had it. Used by the
-/// volume/brightness commands so hardware-ish changes surface where you're
-/// already looking.
+/// Take the slot for a moment, then hand it back. Used by the volume, mic and
+/// brightness commands.
 pub fn flash(app: &tauri::AppHandle, glyph: &str, primary: String, progress: Option<f64>) {
     let mut item = NotchItem::new(Tier::Transient, glyph, primary);
     item.progress = progress;
@@ -397,9 +391,8 @@ fn run_rule(run: &str, workspace: &str) -> Option<(String, String)> {
     Some((primary, lines.next().unwrap_or_default().to_string()))
 }
 
-/// Re-run the focused workspace's rule when its `everyMs` comes due. One ticker
-/// for all rules; only the focused workspace's rule can be due, so this is a
-/// single timer regardless of how many rules exist.
+/// Re-run the focused workspace's rule when its `everyMs` comes due. Only the
+/// focused rule can be due, so one ticker serves them all.
 pub fn install_rule_ticker(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
         std::thread::sleep(RULE_TICK);
@@ -440,7 +433,7 @@ struct Track {
     progress: Option<f64>,
     /// Track length in seconds.
     duration: f64,
-    /// Album art as a `data:` URL, when the player publishes one.
+    /// Spotify's artwork URL, or "". `artwork()` turns it into a data URL.
     art: String,
 }
 
@@ -448,8 +441,7 @@ struct Track {
 /// only this exact prefix is ever fetched — an AppleScript reply is not a
 /// trusted string.
 const ART_HOST: &str = "https://i.scdn.co/image/";
-/// Cover art cache cap. Each entry is a base64 JPEG (tens of KB); a listening
-/// session shouldn't accumulate them without bound.
+/// Cover art cache cap, so a long listening session can't grow it unbounded.
 const ART_CACHE_MAX: usize = 32;
 
 /// Poll for the app currently writing to an output device and describe it.
@@ -473,14 +465,12 @@ struct Candidate {
 
 #[cfg(target_os = "macos")]
 fn read_media(app: &tauri::AppHandle) -> Option<NotchItem> {
-    // Several apps are routinely audible at once — a long-running bridge
-    // (SonoBus, a conferencing app) alongside whatever you just hit play on —
-    // and CoreAudio's list order means nothing. So rank them.
+    // Several apps are often audible at once (an audio bridge such as SonoBus
+    // beside a player), and CoreAudio's list order means nothing, so rank them.
     let mut candidates: Vec<Candidate> = audio::output_pids()
         .into_iter()
         .filter_map(|pid| {
-            // Audio usually comes out of a helper process (Chrome's audio
-            // service, a WebKit GPU process); walk up to the app you'd name.
+            // Audio usually comes from a helper process; this walks up to the app.
             let (bundle_id, name, icon) = crate::app_info_for_pid(app, pid)?;
             Some(Candidate {
                 start: crate::proc_start_secs(pid),
@@ -492,13 +482,10 @@ fn read_media(app: &tauri::AppHandle) -> Option<NotchItem> {
         })
         .collect();
 
-    // Pausing a player usually makes it release its output stream, so CoreAudio
-    // stops reporting it a moment later and the slot would empty out mid-track
-    // — the pill vanishing, transport and all, seconds after you pressed pause.
-    // Keep whoever currently holds the slot as a last-resort candidate for as
-    // long as they still have a track loaded. `start: 0` ranks them below
-    // anything genuinely audible, so this only shows a paused player when
-    // nothing else is making sound.
+    // A paused player soon releases its output stream and drops out of
+    // CoreAudio's list, which would empty the slot seconds after pause. Keep the
+    // current holder as a last-resort candidate while it has a track loaded;
+    // `start: 0` ranks it below anything actually audible.
     let incumbent = {
         let state = app.state::<NotchState>();
         let bundle = state.media_bundle.lock().unwrap();
@@ -521,26 +508,19 @@ fn read_media(app: &tauri::AppHandle) -> Option<NotchItem> {
     if candidates.is_empty() {
         return None;
     }
-    // Most recently started first: the stream you began last is the one you
-    // mean. A four-hour-old audio bridge shouldn't outrank the track you just
-    // played.
+    // Most recently started stream first: that's the one you mean.
     candidates.sort_by_key(|c| std::cmp::Reverse(c.start));
 
-    // A player that says it's playing is the definitive answer; otherwise the
-    // newest stream, which is already the head of the list.
-    //
-    // Deliberately NOT "skip anything that says it's paused": a permanently
-    // open audio bridge holds a running output stream whether or not sound is
-    // coming out of it, so demoting a paused player handed the notch to
-    // SonoBus the moment you hit pause — taking the transport controls with it.
-    // Recency settles it instead: the bridge started hours ago, so it only wins
-    // once the player it's competing with has actually gone away.
+    // A player that says it's playing wins; otherwise the newest stream. Don't
+    // skip paused players: an always-open audio bridge holds a running stream
+    // even when silent, and would take the notch (and the transport) the moment
+    // you paused. Its old start time keeps it behind the player until the
+    // player's own stream goes away.
     let i = candidates.iter().position(is_playing).unwrap_or(0);
     let chosen = candidates.swap_remove(i);
 
-    // Remember who to send transport commands to, whether or not it turns out
-    // to be scriptable — a stale bundle here would aim play/pause at the wrong
-    // app entirely.
+    // Record the transport target even if it isn't scriptable; a stale bundle
+    // would aim play/pause at the wrong app.
     {
         let state = app.state::<NotchState>();
         let mut bundle = state.media_bundle.lock().unwrap();
@@ -575,11 +555,9 @@ fn read_media(_app: &tauri::AppHandle) -> Option<NotchItem> {
     None
 }
 
-/// Ask a player for the current track. Guarded by `is running` so the query can
-/// never launch the app it's asking about, and only ever sent to a player we
-/// know publishes a dictionary — an unscripted app just keeps the CoreAudio
-/// readout. Requires Automation permission for that app the first time; denied,
-/// this returns None and the readout degrades rather than breaking.
+/// Ask a scriptable player for the current track. Guarded by `is running` so
+/// the query never launches the app. Needs Automation permission for that app;
+/// if denied this returns None and the readout falls back to the CoreAudio one.
 fn track_metadata(bundle_id: &str) -> Option<Track> {
     let app_name = match bundle_id {
         SPOTIFY => "Spotify",
@@ -589,9 +567,9 @@ fn track_metadata(bundle_id: &str) -> Option<Track> {
     // Spotify reports track duration in ms, Music in seconds; both report
     // position in seconds.
     let duration_scale = if bundle_id == SPOTIFY { 1000.0 } else { 1.0 };
-    // Only Spotify exposes cover art as a URL — Music's `artwork` is raw image
-    // data, which osascript can't hand back as text. Wrapped in `try` because
-    // ads and local files have no artwork.
+    // Only Spotify exposes cover art as a URL; Music's `artwork` is raw image
+    // data osascript can't return as text. `try` because ads and local files
+    // have no artwork.
     let art_clause = if bundle_id == SPOTIFY {
         "try
                  set u to artwork url of current track
@@ -648,9 +626,9 @@ fn player_app(bundle_id: &str) -> Option<&'static str> {
     }
 }
 
-/// Send one transport command to whichever player currently owns the media
-/// slot, then re-read it so the bar reflects the change now rather than at the
-/// next poll. No-ops when the audible app isn't scriptable.
+/// Send one transport command to the player that owns the media slot, then
+/// re-read it so the bar updates now rather than at the next poll. No-op for a
+/// non-scriptable app.
 fn transport(app: &tauri::AppHandle, body: &str) {
     let bundle = {
         let state = app.state::<NotchState>();
@@ -672,15 +650,14 @@ pub async fn media_toggle(app: tauri::AppHandle) {
     let _ = tauri::async_runtime::spawn_blocking(move || transport(&app, "playpause")).await;
 }
 
-/// Seek to a fraction (0..1) of the current track — the notch's wave is
-/// clickable, and this is where that lands.
+/// Seek to a fraction (0..1) of the current track, from a scrub on the notch's
+/// playhead.
 #[tauri::command]
 pub async fn media_seek(app: tauri::AppHandle, fraction: f64) {
     let f = fraction.clamp(0.0, 1.0);
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        // The player knows the track length; asking it to compute the target
-        // avoids trusting a duration the WebView may have held since the last
-        // track.
+        // Let the player compute the target from its own track length, rather
+        // than trusting a duration the WebView may hold from the last track.
         transport(
             &app,
             &format!("set player position to (duration of current track) * {f} / {}",
@@ -698,9 +675,8 @@ fn is_ms_duration(app: &tauri::AppHandle) -> bool {
     *bundle == SPOTIFY
 }
 
-/// Fetch cover art and hand it to the WebView as a `data:` URL — keeping the
-/// bar's page entirely offline, and letting the same art survive a repaint
-/// without a second round trip. Cached by URL.
+/// Fetch cover art and hand it to the WebView as a `data:` URL, so the page
+/// stays offline. Cached by URL.
 fn artwork(app: &tauri::AppHandle, url: &str) -> String {
     if !url.starts_with(ART_HOST) {
         return String::new();
@@ -712,10 +688,9 @@ fn artwork(app: &tauri::AppHandle, url: &str) -> String {
             return hit.clone();
         }
     }
-    // Spotify encodes the size in the image id: `…0000b273…` is the 300px art
-    // it hands out, `…00004851…` the 64px one. At a 22px cell that's 2KB over
-    // IPC instead of 86KB — but the naming is convention, not contract, so the
-    // original URL stays as the fallback.
+    // Spotify encodes the size in the image id: `…0000b273…` is 640px,
+    // `…00004851…` 64px, which is plenty for the backdrop and far smaller over
+    // IPC. Convention, not contract, so the original URL is the fallback.
     let small = url.replace("ab67616d0000b273", "ab67616d00004851");
     let out = [small.as_str(), url]
         .into_iter()
@@ -734,8 +709,8 @@ fn artwork(app: &tauri::AppHandle, url: &str) -> String {
     if !out.is_empty() {
         let state = app.state::<NotchState>();
         let mut cache = state.art.lock().unwrap();
-        // Cheap bound: a full cache is dropped rather than evicted one by one —
-        // the cost of a miss is one curl, so LRU bookkeeping isn't worth it.
+        // A full cache is dropped wholesale: a miss costs one curl, so LRU
+        // bookkeeping isn't worth it.
         if cache.len() >= ART_CACHE_MAX {
             cache.clear();
         }
@@ -744,9 +719,8 @@ fn artwork(app: &tauri::AppHandle, url: &str) -> String {
     out
 }
 
-/// CoreAudio's per-process audio objects: who is currently writing to an output
-/// device. Public API since macOS 14.4, and — unlike MediaRemote — it needs no
-/// entitlement and prompts for no permission.
+/// CoreAudio's per-process audio objects: who is writing to an output device.
+/// Public since macOS 14.4; unlike MediaRemote, no entitlement or permission.
 #[cfg(target_os = "macos")]
 mod audio {
     use std::ffi::c_void;

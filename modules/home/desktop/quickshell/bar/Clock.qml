@@ -9,8 +9,8 @@ Item {
     implicitWidth: clockLayout.implicitWidth
     implicitHeight: clockLayout.implicitHeight
 
-    // Minute precision: wakes once a minute instead of the old 1s Timer, and not at all
-    // while the bar is hidden (game mode, fullscreen), so it asks for no redraws then.
+    // Wakes once a minute, and not at all while the bar is hidden (game mode,
+    // fullscreen), so it asks for no redraws then.
     SystemClock {
         id: clock
         precision: SystemClock.Minutes

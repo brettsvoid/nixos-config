@@ -1,10 +1,9 @@
 #version 320 es
 // Window open: the window burns into view through a noise pattern. GLOW
 // adds a glowing ember edge to the pixels that have just appeared; it is off,
-// the plain burn being the chosen look (2026-10-09). It shares its
-// noise and settings with dissolve-close.glsl; keep the two in step when
-// tuning. The highest noise values appear first (see dissolve-close.glsl for
-// why the close burns those first too).
+// the plain burn being the chosen look. Noise and settings are shared with
+// dissolve-close.glsl: keep the two in step. The highest noise values appear
+// first (dissolve-close.glsl says why).
 //
 // HyprWindowShade reads the duration from this comment (seconds):
 // @duration 0.3
@@ -47,8 +46,8 @@ float valueNoise(vec2 p) {
 // normal around 0.5, so a threshold sweeping linearly would burn little at the
 // start and end and most in the middle. Mapping through its own normal CDF
 // (tanh approximation) makes every value equally likely, so the burn advances
-// at a steady rate with no plateaus. NOISE_MEAN and NOISE_SD were measured
-// from this exact noise over a window-sized grid (2026-10-09).
+// at a steady rate. NOISE_MEAN and NOISE_SD were measured from this exact
+// noise over a window-sized grid.
 float burnNoise(vec2 q) {
     vec2 p = q * CELLS + seed * 173.0;
     float v = 0.0;
@@ -71,10 +70,9 @@ void main() {
     vec2 size = surface_size * window_rect.zw;
     vec2 aspect = vec2(size.x / size.y, 1.0);
     // Noise coordinates from the window's centre, in units of its height, so
-    // the pattern grows with the window. Pixel coordinates from the corner
-    // made the pattern slide left as popin grew the box (measured on
-    // brett-desktop, 2026-10-09). dissolve-close.glsl computes the same value
-    // for the same spot, which a close during an open relies on.
+    // the pattern grows with the window (from the corner, it slid as popin
+    // grew the box). dissolve-close.glsl computes the same value for the same
+    // spot, which a close during an open relies on.
     float n = burnNoise((local - 0.5) * aspect);
 
     // The threshold sweeps 1 → 0 (just past both ends), and pixels with noise

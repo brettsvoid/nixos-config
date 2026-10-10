@@ -1,6 +1,6 @@
-# Brett's Darwin user account. Using known UID/GID from `id -u brett` /
-# `id -g brett` so nix-darwin doesn't try to recreate the user it didn't
-# originally own (would fail on existing systems).
+# Brett's Darwin user account. knownUsers lets nix-darwin manage it (it sets
+# the login shell only on known users). uid/gid must match the existing
+# account (`id -u`, `id -g`), or activation skips it with a warning.
 _: {
   flake.modules.darwin.users =
     { pkgs, flake, ... }:

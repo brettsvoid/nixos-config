@@ -11,19 +11,16 @@
 # `nh os switch --update`, which jump straight back to the tip.
 #
 # The revision comes from GitHub's push history for the branch (the
-# repository activity API), not from commit dates. For nixpkgs-unstable
-# every push is a revision Hydra has built, so it is already cached.
-# Commit dates run hours behind the push that published them, so
-# filtering on them would lag less than asked.
+# repository activity API), not commit dates, which run hours behind the
+# push that published them and so would lag less than asked. Every push to
+# nixpkgs-unstable is a revision Hydra has built, so it is already cached.
 #
-# The default inputs are nixpkgs and the two that track nixpkgs-unstable
-# and should move with it. An input already locked to something newer
-# than the cutoff (say after a plain `nix flake update`) is left alone
-# rather than moved backwards.
+# The default inputs are nixpkgs and the two that follow it. An input
+# already locked to something newer than the cutoff is left alone rather
+# than moved backwards.
 
-# writeShellApplication sets errexit, but bash does not carry it into
-# $(...) without this, so a failed API call inside one was ignored and
-# its empty result misread as "no push history".
+# writeShellApplication sets errexit, but bash does not apply it inside
+# $(...) without this, so a failed API call would read as "no push history".
 shopt -s inherit_errexit
 
 days="${1:-3}"
@@ -46,10 +43,9 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 # Without a token GitHub allows 60 API requests an hour per IP address,
-# shared by every machine behind the router. A run makes about five, so
-# this is only a fallback, but a token (from $GITHUB_TOKEN, or gh when it
-# is logged in) raises it to 5000. The header goes through a file in the
-# private temp dir so the token never shows in the process list.
+# shared by every machine behind the router; a token (from $GITHUB_TOKEN,
+# or gh when logged in) raises that to 5000. The header goes through a file
+# in the private temp dir so the token never shows in the process list.
 token="${GITHUB_TOKEN:-}"
 if [[ -z $token ]] && command -v gh >/dev/null 2>&1; then
   token="$(gh auth token 2>/dev/null || true)"

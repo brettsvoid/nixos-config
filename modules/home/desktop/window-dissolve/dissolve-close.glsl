@@ -1,23 +1,20 @@
 #version 320 es
 // Window close: the window burns away through a noise pattern. GLOW adds a
 // glowing ember edge where pixels are about to go; it is off, the plain burn
-// being the chosen look (2026-10-09). It shares its noise and settings
-// with dissolve-open.glsl; keep the two in step when tuning. Both work from
-// the highest noise values down: the open reveals them first and the close
-// burns them first. So a window closed while it is still opening (its last
-// frame only shows the high values) starts burning at once, rather than
-// first burning pixels the open never showed.
+// being the chosen look. Noise and settings are shared with dissolve-open.glsl:
+// keep the two in step. Both work from the highest noise values down, so a
+// window closed while still opening (showing only the high values) starts
+// burning at once, rather than first burning pixels the open never showed.
 //
 // HyprWindowShade reads the duration from this comment (seconds):
 // @duration 0.25
 //
 // The plugin replaces Hyprland's close animation here: it holds the window's
-// last frame still at full size, and its neighbours slide into the freed tile
-// over the same duration. So the shader does its own shrink (to SCALE_END,
-// like windowsIn's popin), with the burn pattern shrinking with the window.
-// The plugin's overlay mode, which keeps Hyprland's popin instead, drew the
-// burn at the window's full size while the window shrank under it (recorded on
-// brett-desktop, 2026-10-09).
+// last frame still at full size while its neighbours slide into the freed tile
+// over the same duration, so the shader does its own shrink (to SCALE_END,
+// like windowsIn's popin), the burn pattern shrinking with it. Don't use the
+// plugin's overlay mode to keep Hyprland's shrink instead: it draws the burn
+// at the window's full size while the window shrinks under it.
 precision highp float;
 
 in vec2 v_texcoord;
@@ -57,8 +54,8 @@ float valueNoise(vec2 p) {
 // normal around 0.5, so a threshold sweeping linearly would burn little at the
 // start and end and most in the middle. Mapping through its own normal CDF
 // (tanh approximation) makes every value equally likely, so the burn advances
-// at a steady rate with no plateaus. NOISE_MEAN and NOISE_SD were measured
-// from this exact noise over a window-sized grid (2026-10-09).
+// at a steady rate. NOISE_MEAN and NOISE_SD were measured from this exact
+// noise over a window-sized grid.
 float burnNoise(vec2 q) {
     vec2 p = q * CELLS + seed * 173.0;
     float v = 0.0;
@@ -76,8 +73,7 @@ void main() {
     // 0..1 across the window. The close snapshot is monitor-sized, so this goes
     // through window_rect; for an open window window_rect is (0,0,1,1).
     vec2 local = (v_texcoord - window_rect.xy) / window_rect.zw;
-    // The window's shape. surface_size is the box being drawn, which grows
-    // during Hyprland's popin, but popin scales evenly, so the ratio holds.
+    // The window's shape: its share (window_rect) of the snapshot (surface_size).
     vec2 size = surface_size * window_rect.zw;
     vec2 aspect = vec2(size.x / size.y, 1.0);
 

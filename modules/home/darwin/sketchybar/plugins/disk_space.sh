@@ -3,12 +3,11 @@
 #DISK_INFO=$(df -h | grep 'disk1s1' | awk '{print $4}')
 DISK_INFO=$(df -h | grep "/Data$" | awk '{print $4}' | sed 's/i//g')
 
-# Remove the 'i' suffix (e.g., '500Gi' → '500G')
+# Drop the 'i' suffix ('500Gi' → '500G'). Redundant: the sed above already
+# removes it.
 DISK_SPACE=${DISK_INFO%i}
 
-# Output for SketchyBar
 echo "$DISK_SPACE"
 
-# The item invoking this script (name $NAME) will get its icon and label
-# updated with the current battery status
+# Set the invoking item's label to the free space.
 sketchybar --set "$NAME" label="$DISK_SPACE"

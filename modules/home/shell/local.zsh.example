@@ -1,55 +1,37 @@
-# Template for ~/.config/zsh/local.zsh — copy it there and fill in real
-# values. That path is OUTSIDE this (public) repo and is sourced from
-# modules/home/shell/env.nix at shell init.
+# Template for ~/.config/zsh/local.zsh, which modules/home/shell/env.nix
+# sources at shell start on the Macs. That file lives outside this public
+# repo: copy this there and fill in real values.
 #
 #   cp modules/home/shell/local.zsh.example ~/.config/zsh/local.zsh
 #   chmod 600 ~/.config/zsh/local.zsh
 #
-# Keep sensitive/machine-specific values (internal hostnames, secret
-# lookup IDs, work tokens, account-specific resource IDs) here, never in
-# the tracked Nix files.
-#
-# This file is per-machine by design, so not every block belongs on every
-# host. Blocks below are marked [mac mini] / [macbook] where they are known
-# to be host-specific; unmarked blocks go everywhere.
+# Keep sensitive or machine-specific values (internal hostnames, secret
+# lookup IDs, work tokens, account-specific resource IDs) here, never in the
+# tracked Nix files. Blocks marked [mac mini] / [macbook] belong on that host
+# only; unmarked blocks go everywhere.
 
 # ─── Work secrets (Bitwarden Secrets Manager, lazily fetched) ───────────
-# NOTHING here touches the network at shell start.
+# Nothing here touches the network at shell start. Each `bws` fetch is a
+# ~0.16s round trip, so instead of fetching everything up front, a `preexec`
+# hook loads a group of secrets the first time a command needs it. Fetches
+# stay live: rotate a key in Bitwarden and the next shell picks it up.
+# `load-secrets -f` re-fetches in a shell that has already loaded a group.
 #
-# This block used to fetch every secret eagerly, one `bws secret get` per
-# value, all in series. That cost ~1.38s of a ~2.05s shell startup — about
-# 0.16s per round trip, paid by every terminal, tmux pane and split,
-# whether or not the shell ever used a single one of the values.
-#
-# Instead, secrets load per group on first use. A `preexec` hook inspects
-# the command you are about to run and fetches only the group it needs, so
-# a shell that never runs `nomad` never pays for the Nomad token. Startup
-# measured 0.36-0.40s after the change.
-#
-# Fetches stay live, which is the whole point of keeping these in
-# Bitwarden rather than agenix: rotate a key in the UI and the next shell
-# picks it up, with no cache to invalidate and no rebuild. In a shell that
-# has already loaded a group, `load-secrets -f` re-fetches.
-#
-# BWS_ACCESS_TOKEN itself comes from ~/.env_vars, which .zshenv sources
-# BEFORE this file — see the comment in modules/home/shell/env.nix. That
-# ordering still matters: the guard below runs when this file is sourced,
-# and if BWS_ACCESS_TOKEN is unset at that moment the hook is never
-# installed, so no secret ever loads.
+# BWS_ACCESS_TOKEN must already be set when this file is sourced (it comes
+# from ~/.env_vars via .zshenv; see env.nix), or the hook is never installed.
 if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
   _bws() {
     bws secret get "$1" --access-token "$BWS_ACCESS_TOKEN" 2>/dev/null \
       | jq -r '.value' 2>/dev/null
   }
 
-  # Not a secret and not a network call, so it stays eager: the Nomad CLI
-  # needs NOMAD_ADDR set even for commands that never present a token.
+  # Not a secret, so set eagerly: the Nomad CLI needs NOMAD_ADDR even for
+  # commands that present no token.
   export NOMAD_ADDR="http://<nomad-host>:4646"
 
   # ─── Group loaders ───────────────────────────────────────────────────
-  # One function per group. Keep each group small: a group is the unit of
-  # work, so a command that needs one value of a group pays for all of it.
-  # Values derived from a fetched secret belong in the same loader.
+  # One function per group. Keep groups small: a command that needs one value
+  # fetches its whole group. Values derived from a secret go in its loader.
   _secrets_load_nomad() {
     export NOMAD_OPERATOR_TOKEN="$(_bws "<nomad-token-secret-id>")"
     export NOMAD_TOKEN="$NOMAD_OPERATOR_TOKEN"
@@ -83,37 +65,29 @@ if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
     done
   }
 
-  # Force every group into the current shell. Use before launching
-  # anything that reads these from the environment rather than running as
-  # a command we can pattern-match — a GUI app, or an MCP server started
-  # by something other than `claude`. `-f` re-fetches groups already
-  # loaded, which is how you pick up a key you just rotated.
+  # Load every group into the current shell, for anything the preexec
+  # patterns can't see (a GUI app, an MCP server started by something other
+  # than `claude`). `-f` re-fetches loaded groups, e.g. after a rotation.
   load-secrets() {
     [[ $1 == -f ]] && _secrets_loaded=()
     _secrets_need nomad sentry grafana cloudflare
   }
 
-  # Match the command line about to run and load only what it needs.
-  # `;|` (zsh) keeps testing later patterns after a match, so a command
-  # line naming two tools loads both groups.
+  # Load only the groups the command line needs. `;|` keeps testing later
+  # patterns, so a line naming two tools loads both.
   #
-  # Choosing patterns: anchor them to the command actually being run.
-  # A pattern only sees the text you typed, so it must match the COMMAND,
-  # not the secret's name — the Cloudflare token below is consumed by a
-  # terraform wrapper called `tf`, which shares no letters with
-  # "cloudflare". Equally, keep patterns narrow enough not to fire on
-  # unrelated text: a bare *tf* would match any path ending .tf and fetch
-  # on every edit of a config file. A false positive costs one round trip
-  # (~0.16s), a missed match means the variable is silently empty.
+  # Patterns see only the typed text, so match the command, not the secret's
+  # name: the Cloudflare token is used by a terraform wrapper, `./tf`. Keep
+  # them narrow: a bare *tf* would fire on every .tf file you edit. A false
+  # positive costs one round trip; a miss leaves the variable silently empty.
   _secrets_preexec() {
     case $1 in
       *nomad*)                        _secrets_need nomad ;|
       *sentry*)                       _secrets_need sentry ;|
       *grafana*)                      _secrets_need grafana ;|
       ./tf|./tf\ *|*terraform*|*tofu*) _secrets_need cloudflare ;|
-      # Claude Code starts MCP servers that read SENTRY_* and GRAFANA_*
-      # straight from the environment it inherits, so they must be set
-      # before it launches, not on first use inside it.
+      # Claude Code's MCP servers read SENTRY_* and GRAFANA_* from the
+      # environment it inherits, so load them before it launches.
       claude|claude\ *)               _secrets_need sentry grafana ;|
     esac
   }
@@ -121,13 +95,12 @@ if command -v bws >/dev/null 2>&1 && [ -n "${BWS_ACCESS_TOKEN:-}" ]; then
   autoload -Uz add-zsh-hook
   add-zsh-hook preexec _secrets_preexec
 
-  # A secret with no known consumer gets no trigger — `load-secrets`
-  # still exports it. Guessing a pattern for it only adds false positives.
+  # A secret with no known consumer gets no pattern; `load-secrets` still
+  # exports it.
 fi
 
-# preexec is interactive-only. Scripts, cron jobs and GUI-launched apps
-# never fire it, so anything of that shape must call `load-secrets` first
-# (or read the value from `bws` directly).
+# preexec only fires in interactive shells: scripts, cron jobs and GUI apps
+# must call `load-secrets` first (or read the value from `bws` directly).
 
 # ─── AWS-managed EC2 instance shortcuts (account-specific resource IDs) ──
 alias vpn-start='aws ec2 start-instances --profile <profile> --region <region> --instance-ids <instance-id>'
@@ -140,6 +113,6 @@ alias factorio-stop='aws ec2 stop-instances --profile <profile> --region <region
 alias factorio-status="aws ec2 describe-instances --profile <profile> --region <region> | jq '.Reservations[0].Instances[0].State'"
 
 # ─── Misc machine-local aliases ─────────────────────────────────────────
-# `factorio` launches the game; the factorio-* aliases above start and stop
-# the EC2 box the server runs on. Similar names, unrelated jobs.
+# `factorio` launches the game; the factorio-* aliases above drive the
+# server's EC2 box. Similar names, unrelated jobs.
 alias factorio='<launch-command>'

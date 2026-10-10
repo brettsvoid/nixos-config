@@ -12,10 +12,9 @@ return { -- lspconfig
 			local capabilities = require("blink.cmp").get_lsp_capabilities()
 			vim.lsp.config("*", { capabilities = capabilities })
 
-			-- Enable the servers configured under nvim/lsp/*.lua. Every binary
-			-- is provided declaratively by Nix (modules/home/nvim/default.nix),
-			-- so there is no Mason install step — this is the single source of
-			-- truth for which language servers run.
+			-- Servers configured in lsp/*.lua; binaries come from Nix
+			-- (modules/home/nvim/default.nix), not Mason. hls is the exception:
+			-- haskell-language-server isn't installed there.
 			vim.lsp.enable({
 				"lua_ls",
 				"nixd", -- evaluation-driven completion (options, packages)
@@ -128,8 +127,8 @@ return { -- lspconfig
 		end,
 	},
 
-	-- Mason is retained solely for nvim-dap's debug adapters (see debug.lua);
-	-- it no longer manages language servers, formatters, or linters — Nix does.
+	-- Mason only supplies nvim-dap's debug adapters (debug.lua); LSPs,
+	-- formatters and linters come from Nix.
 	{
 		"williamboman/mason.nvim",
 		cmd = "Mason",

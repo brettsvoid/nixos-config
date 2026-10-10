@@ -1,5 +1,5 @@
-# Modern CLI tools: the everyday "make the shell nice" set. Profile-level dev
-# tooling (gh, lazygit, claude-code, language toolchains) lives in profiles/code.
+# Modern CLI tools: the everyday "make the shell nice" set. Dev tooling
+# (lazygit, language toolchains, …) lives in modules/profiles/code.nix.
 _: {
   flake.modules.homeManager.shell-tools =
     { lib, pkgs, ... }:
@@ -24,9 +24,8 @@ _: {
           # The Macs get the binary from Homebrew (system/darwin/homebrew.nix);
           # they still take the config below.
           package = if pkgs.stdenv.hostPlatform.isLinux then pkgs.yazi else null;
-          # shell/functions.nix defines `yy`, and this module's zsh integration
-          # would define a second one on the hosts that import both (the
-          # Macs).
+          # Off: shell/functions.nix already defines `yy`, and this would
+          # redefine it on the Macs (the hosts that import both).
           enableZshIntegration = false;
 
           # T fills the whole window with the preview pane, and restores it.
@@ -39,11 +38,10 @@ _: {
             }
           ];
 
-          # Yazi scales images down to this before previewing them (default
-          # 600x900), so a maximised pane still showed a 600 px picture. The
-          # largest screens: the Odyssey is 2560 wide, the portrait Dell 1920
-          # tall. Yazi caches the scaled images in /tmp/yazi-<uid>, keyed by
-          # file, not by these limits: clear it after changing them.
+          # Yazi scales previews down to this (default 600x900). Sized for
+          # the largest screens: the Odyssey is 2560 wide, the portrait Dell
+          # 1920 tall. The cached previews in /tmp/yazi-<uid> ignore these
+          # limits: clear it after changing them.
           settings.preview = {
             max_width = 2560;
             max_height = 1920;
@@ -77,17 +75,14 @@ _: {
           ];
         };
 
-        # direnv is enabled in profile-code for the binary + nix-direnv.
-        # The zsh hook is added there too — no manual `eval $(direnv hook
-        # zsh)` needed here.
+        # direnv, nix-direnv and the zsh hook come from profile-code.
       };
 
       # Tool hooks that don't have a home-manager `programs.*` module.
       programs.zsh.initContent = lib.mkOrder 800 ''
-        # fnm (Fast Node Manager). Currently provided by homebrew; the
-        # `--use-on-cd` switch picks up .nvmrc when entering a project.
-        # The version a shell starts on when nothing is pinned comes from
-        # fnm's `default` alias, which modules/home/apps/fnm.nix pins.
+        # fnm (Fast Node Manager), from Homebrew. `--use-on-cd` picks up a
+        # project's .nvmrc; elsewhere the `default` alias applies, which
+        # modules/home/apps/fnm.nix pins.
         if command -v fnm &>/dev/null; then
           eval "$(fnm env --use-on-cd)"
         fi

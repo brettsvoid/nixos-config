@@ -67,7 +67,6 @@ def calculate_progress(start_time, task):
 def get_data():
     result = {"label": "", "start_time": None, "task": None}
 
-    # get current state of current task
     user = get_user()
     result["start_time"] = user["currentTaskStartDate"]
     task_id = user["currentTaskId"]
@@ -76,7 +75,6 @@ def get_data():
         result["label"] = task["title"]
         result["task"] = task
 
-    # display current task title
     return result
 
 

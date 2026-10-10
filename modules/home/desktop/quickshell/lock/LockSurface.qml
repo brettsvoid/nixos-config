@@ -8,10 +8,8 @@ import "../theme"
 
 // One screen of the lock: the wallpaper blurred and dimmed, the time and date, the
 // password field, and media controls while something plays. Every screen shows the same
-// field, and whichever has the keyboard takes the typing: Enter checks it, Backspace
-// takes a character off, Escape or Ctrl+U clears it. Nothing moves at rest: the
-// content rises in once, the clock changes once a minute, and the field shakes only
-// after a wrong password.
+// field, and whichever has the keyboard takes the typing. Nothing moves at rest: the
+// content rises in once, and the field shakes only after a wrong password.
 WlSessionLockSurface {
     id: root
 

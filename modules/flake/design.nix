@@ -1,31 +1,30 @@
-# Shared design constants (flake.lib), so values used by more than one module
-# live in one place instead of being hand-synced.
+# Design constants used by more than one module:
 #
-#   flake.lib.theme     — font + the Catppuccin palette
+#   flake.lib.theme     — fonts, terminal look, the Catppuccin palette
 #   flake.lib.wallpaper — default desktop picture
 #
-# Consumers close over the flake-parts `config` (e.g. `{ config, ... }: let
-# theme = config.flake.lib.theme; in …`), the same way bar-geometry.nix is read
-# by edgebar.nix. See modules/home/darwin/bar-geometry.nix for the pattern.
+# Consumers close over the flake-parts `config`
+# (`theme = config.flake.lib.theme;`), as edgebar.nix does for bar-geometry.nix.
 _: {
   flake.lib.theme = {
     font = {
-      # FiraCode Nerd Font: the "Mono" variant for terminals/editors, the
-      # proportional variant for bars. Same family, so a font swap is one edit.
+      # FiraCode Nerd Font: "Mono" for the terminals, the proportional variant
+      # for UI text (the game launcher). sketchybarrc and the quickshell
+      # Theme.qml hardcode the family, so a font swap must edit those too.
       mono = "FiraCode Nerd Font Mono";
       ui = "FiraCode Nerd Font";
       size = 13;
     };
 
-    # Appearance shared by the ghostty/kitty A/B so the experiment compares
-    # the terminals, not divergent settings. (scrollback stays per-terminal.)
+    # Shared by ghostty and kitty so the two compare like for like.
+    # Scrollback stays per terminal.
     terminal = {
       opacity = 0.95;
       padding = 8;
     };
 
-    # Catppuccin Mocha, single-sourced. starship consumes the whole palette;
-    # hyprland consumes a few roles. Hex includes the leading '#'.
+    # Catppuccin Mocha. starship takes the whole palette, hyprland a few
+    # roles. Hex includes the leading '#'.
     catppuccin.mocha = {
       rosewater = "#f5e0dc";
       flamingo = "#f2cdcd";

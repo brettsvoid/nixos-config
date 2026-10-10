@@ -86,8 +86,7 @@ _: {
               protontricks
               winetricks
             ];
-          # NixOS keeps the GPU driver outside /usr/lib; Steam's FHS env adds
-          # these paths too.
+          # NixOS keeps the GPU driver in /run/opengl-driver, outside /usr/lib.
           profile = ''
             export DOTNET_ROOT=${pkgs.dotnet-runtime_9}/share/dotnet
             export LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
@@ -100,22 +99,22 @@ _: {
       nolvus-env = mkEnv "nolvus-env" [ ];
 
       # For playing. Fluorine merges the mods over the game's Data folder with a
-      # FUSE mount. The sandbox sets no_new_privs, so the setuid fusermount3
-      # can't mount; libfuse first tries mount() itself, which the kernel allows
-      # in the sandbox's user namespace with CAP_SYS_ADMIN there (not on the
-      # host). bwrap makes it ambient, so children inherit it, and the Steam
-      # Runtime's own bwrap then refuses to start ("Unexpected capabilities but
-      # not setuid"). Game launches survive that, as Fluorine wraps them in
-      # `unshare --user --mount -r` for the saves bind mount, and bwrap only
-      # objects to capabilities when it isn't uid 0; prefix setup doesn't.
+      # FUSE mount. The sandbox's no_new_privs stops the setuid fusermount3, so
+      # libfuse must mount() itself, which needs CAP_SYS_ADMIN in the sandbox's
+      # user namespace (not on the host). bwrap makes it ambient, so children
+      # inherit it and the Steam Runtime's own bwrap refuses to start
+      # ("Unexpected capabilities but not setuid"). Game launches survive, as
+      # Fluorine wraps them in `unshare --user --mount -r` and bwrap only
+      # objects when it isn't uid 0; Wine prefix setup does not, hence the
+      # plain env above.
       nolvus-env-fuse = mkEnv "nolvus-env-fuse" [
         "--cap-add"
         "CAP_SYS_ADMIN"
       ];
 
       # buildFHSEnv's sandbox dies with its parent, and Fuzzel and rofi exit
-      # as soon as they have started it, so detach it into its own session
-      # (as game-launcher does for Steam).
+      # once they have started it, so detach it into its own session (as
+      # game-launcher does for Steam).
       nolvus-awakening = pkgs.writeShellApplication {
         name = "nolvus-awakening";
         runtimeInputs = [

@@ -11,8 +11,7 @@ start, end and duration:
 A drop that hits all three at once is the link or the router. A drop that
 spares "air" but kills "wan" is upstream. A drop that only hits "dns" is the
 resolver, not the network. Running this on a wired host and a wireless one at
-the same time is what separates "the router/mains died" from "the radio
-stalled" — that comparison is the whole point of the tool.
+the same time separates "the router/mains died" from "the radio stalled".
 
 It also watches for the reports macOS writes when configd, which owns routes,
 DNS and interface state, hangs or crashes, and raises a notification.
@@ -68,26 +67,18 @@ def icmp_reply(data):
 class IcmpProbe:
     """Echo request to a host.
 
-    Four Darwin quirks, all found the hard way.
+    Four Darwin quirks:
 
-    1. The kernel does NOT fill in the checksum for SOCK_DGRAM sockets. An
-       unchecksummed packet is dropped silently and looks exactly like 100%
-       loss.
-    2. Replies arrive with the full IP header still attached, so the ICMP
-       header starts at IHL*4.
-    3. The socket must be kept OPEN across probes. Opening a fresh one per
-       probe costs hundreds of milliseconds under load, and that shows up as
-       network latency that is not there.
-    4. These sockets are PROMISCUOUS. Every SOCK_DGRAM ICMP socket sees every
-       echo reply, and setting a distinct identifier per socket does not
-       change that — measured, not assumed. So a reply must be matched on its
-       SOURCE ADDRESS as well as on identifier and sequence.
-
-    Quirk 4 is not academic. With two probes matching on sequence alone, and
-    both counters starting at 1, each happily accepted the other's replies and
-    reported the other's latency; when the counters drifted apart one probe
-    starved and reported a 98-second outage that never happened, while its
-    own traffic was flowing perfectly the whole time.
+    1. The kernel does not fill in the checksum for SOCK_DGRAM sockets. An
+       unchecksummed packet is dropped silently and looks like 100% loss.
+    2. Replies arrive with the IP header still attached, so the ICMP header
+       starts at IHL*4.
+    3. The socket stays open across probes. Opening one per probe costs
+       hundreds of milliseconds under load, which reads as network latency.
+    4. Every SOCK_DGRAM ICMP socket sees every echo reply, whatever its
+       identifier, so a reply must be matched on its source address as well
+       as identifier and sequence. Without that, two probes take each
+       other's replies, and one can report an outage that never happened.
     """
 
     kind = "icmp"
@@ -145,9 +136,8 @@ class IcmpProbe:
 class DnsProbe:
     """A real DNS query.
 
-    Deliberately asks for a FIXED name so the answer is served from cache:
-    this measures whether the resolver is answering at all, not how fast the
-    internet is. Pick a random name here and you would be timing recursion.
+    Asks for a fixed name so the answer comes from cache: this measures
+    whether the resolver answers at all, not how fast recursion is.
     """
 
     kind = "dns"
@@ -217,20 +207,12 @@ def lan_resolvers(iface):
 
 
 def link_snapshot(iface):
-    """Interface state at the moment of a drop.
+    """Interface state at the moment of a drop: "active" or "inactive".
 
-    Returns only up/down, and deliberately so. SSID and BSSID would be far
-    more useful — a BSSID change is a roam, which is what most of these drops
-    turn out to be — but macOS gates both behind Location Services and hands
-    an unauthorised caller "<redacted>" from `ipconfig getsummary`, while
-    `networksetup -getairportnetwork` answers "You are not associated with an
-    AirPort network" on a link that is plainly up. A launchd agent has no such
-    authorisation, so recording either one would mean writing down a value
-    that is always empty and sometimes actively misleading.
-
-    Interface status alone has already earned its place: the false outage this
-    tool recorded on its first run read "active", the real one read
-    "inactive".
+    Not SSID or BSSID (a BSSID change would show a roam): macOS gates both
+    behind Location Services, which a launchd agent lacks. `ipconfig
+    getsummary` then says "<redacted>", and `networksetup
+    -getairportnetwork` claims no network on a link that is plainly up.
     """
     st = subprocess.run(["ifconfig", iface], capture_output=True, text=True).stdout
     return "active" if re.search(r"status:\s*active", st) else "inactive"
@@ -279,19 +261,14 @@ def report_kind(name):
 class ConfigdWatch:
     """Announce every new report macOS writes about configd.
 
-    configd owns routes, DNS and interface state. On 24 Sep 2026 its
-    IPMonitorQueue blocked in the kernel two minutes into a 3.5-minute outage
-    in which the Mac stopped transmitting while its radio stayed healthy. The
-    only trace was a userspace_watchdog_timeout report and two crash reports,
-    found by hand afterwards, so this goes looking for them.
+    configd owns routes, DNS and interface state, and a configd hang can
+    stall networking while the radio stays healthy; its watchdog and crash
+    reports may be the only trace. They arrive minutes after traffic stops,
+    so this is an after-the-fact signal. It polls because the .ips crash
+    reports get moved away within minutes of being written.
 
-    It is an after-the-fact signal: that report was written two minutes after
-    traffic stopped. The .ips crash reports also get moved away within minutes
-    of being written, which is why this polls rather than waiting to be asked.
-
-    The newest report seen is kept on disk. A hang bad enough to need a
-    restart writes its reports before the restart, and they should still be
-    announced when the agent comes back.
+    The newest report seen is kept on disk, so reports written before a
+    restart are still announced when the agent comes back.
     """
 
     PATTERN = re.compile(r"^configd[-_.]")
@@ -373,13 +350,12 @@ EVENT_COLUMNS = [
 
 
 def classify(target, concurrent, n_targets):
-    """What a single target going quiet actually means.
+    """What a single target going quiet means.
 
-    This is the judgement the tool exists to make, and getting it wrong is
-    worse than not making it. A layer that goes silent while the layers BEHIND
-    it keep answering has not lost connectivity — traffic to the WAN and to
-    the LAN resolver both traverse the gateway, so if those are flowing, the
-    gateway is up and forwarding whatever the ICMP probe thinks.
+    A layer that goes silent while the layers behind it keep answering has
+    not lost connectivity: traffic to the WAN and the LAN resolver both pass
+    the gateway, so if those flow, the gateway is up whatever its own ICMP
+    probe says.
     """
     if len(concurrent) >= n_targets - 1:
         return "outage"  # every layer went quiet: the link or the router
@@ -409,9 +385,8 @@ class Watcher:
         self.ew = csv.writer(self.ef)
         if self.ef.tell() == 0:
             self.ew.writerow(EVENT_COLUMNS)
-            # Flush now. Otherwise the header sits in the buffer until the
-            # first outage, the file reads as zero bytes for however long the
-            # link behaves, and a SIGKILL loses it entirely.
+            # Flush now, or the header sits in the buffer until the first
+            # outage and a SIGKILL loses it.
             self.ef.flush()
         self._roll()
         self.configd = ConfigdWatch(outdir, reports_dir, self._say)
@@ -436,12 +411,7 @@ class Watcher:
         return open(path, "a", newline="")
 
     def _roll(self):
-        """One samples file per day, and prune beyond the retention window.
-
-        At 4 Hz this writes roughly 15 MB a day. Left unbounded on a machine
-        that runs it for months that is the kind of thing you discover when a
-        disk fills, so retention is part of the design, not an afterthought.
-        """
+        """One samples file per day (about 15 MB), pruned beyond retention."""
         today = date.today()
         if today == self.day:
             return
@@ -545,9 +515,8 @@ class Watcher:
     def _flush_open_events(self):
         """Record outages still in progress when we stop.
 
-        An agent restart, or a laptop going to sleep, lands squarely in the
-        middle of the longest and most interesting drops. Discarding those
-        would bias the record towards short ones.
+        A restart or sleep is likeliest to land in the longest drops, so
+        discarding these would bias the record towards short ones.
         """
         with self.lock:
             for name in list(self.down_since):
@@ -623,9 +592,9 @@ class Watcher:
         # Teardown has to survive a second Ctrl-C, or the CSVs are left
         # unflushed and the last minutes of a capture are lost.
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-        # Join the aggregator BEFORE closing its files. Closing underneath a
-        # thread that is mid-writerow raises on a file it no longer owns, and
-        # launchd would log that traceback on every single stop.
+        # Join the aggregator before closing its files: closing them under a
+        # thread mid-writerow raises, and launchd would log the traceback on
+        # every stop.
         agg.join(timeout=3.0)
         self._flush_open_events()
         for f in (self.sf, self.ef):
@@ -643,15 +612,12 @@ class Watcher:
 def burst(host, seconds, interval):
     """Short, high-rate profile of one hop.
 
-    Sample slower than ~100 ms and a periodic stall aliases into a completely
-    fictitious slow cycle — a 0.46 s stall period reads as a ~10 s one at
-    0.25 s spacing. That is why this mode exists separately from the daemon,
-    which samples coarsely on purpose.
+    Separate from the agent's coarse sampling because, sampled slower than
+    ~100 ms, a periodic stall aliases into a false slow cycle: a 0.46 s stall
+    period reads as a ~10 s one at 0.25 s spacing.
 
-    Sending and receiving are decoupled, as ping does it. A blocking
-    send-then-wait loop cannot hold its cadence once replies start arriving
-    late: it stretches the send interval by exactly the delay it is trying to
-    measure, and reports the sum as latency.
+    Sending and receiving are decoupled, as in ping. A send-then-wait loop
+    stretches its send interval by the very delay it is measuring.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_ICMP)
     ident = random.randint(1, 0xFFFF)
@@ -722,10 +688,8 @@ def burst(host, seconds, interval):
         print("  %-10s %7.1f ms" % (label, q(p)))
     print("  max        %7.1f ms" % vals[-1])
 
-    # Threshold off the FLOOR, never the median. Keying it to the median
-    # breaks in precisely the case that matters: when the link is stalled more
-    # often than not, the median is itself a stall, the threshold floats up
-    # above the damage, and the tool cheerfully reports a clean hop.
+    # Threshold off the floor, not the median: on a link stalled more often
+    # than not, the median is itself a stall and the hop would read as clean.
     thr = max(q(0.10) * 3, q(0.10) + 5)
     bursts, cur = [], None
     t0 = good[0][0]
@@ -785,10 +749,8 @@ def _load(outdir, pattern):
 def coverage(outdir):
     """How much of the elapsed time was actually observed.
 
-    A laptop suspends this agent whenever it sleeps, so a night of Power Nap
-    leaves the record full of 15-minute holes. Reporting "no outages" without
-    saying that would be the tool lying by omission: it cannot see a drop that
-    happened while it was frozen.
+    A sleeping laptop suspends the agent, and it cannot see a drop while
+    frozen, so "no outages" means little without this.
     """
     rows = [r for r in _load(outdir, "samples-*.csv") if r["target"] == "air"]
     if not rows:

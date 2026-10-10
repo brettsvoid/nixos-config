@@ -4,11 +4,9 @@ return {
 		"saghen/blink.cmp",
 		--enabled = false,
 		version = "*",
-		-- No build step: pinned to a release tag, so blink downloads the
-		-- prebuilt libblink_cmp_fuzzy for that tag on first launch instead of
-		-- compiling from source. (cargo build is only needed on branch=main.)
-		-- allows extending the providers array elsewhere in your config
-		-- without having to redefine it
+		-- No build step: on a release tag blink downloads its prebuilt fuzzy
+		-- matcher; only branch=main needs `cargo build`.
+		-- Lets other specs (e.g. lazydev.lua) extend these lists.
 		opts_extend = {
 			"sources.completion.enabled_providers",
 			"sources.compat",
@@ -24,12 +22,10 @@ return {
 		---@type blink.cmp.Config
 		opts = {
 			appearance = {
-				-- Sets the fallback highlight groups to nvim-cmp's highlight groups
-				-- Useful for when your theme doesn't support blink.cmp
-				-- will be removed in a future release
+				-- Fall back to nvim-cmp's highlight groups for themes without
+				-- blink.cmp support (slated for removal upstream)
 				use_nvim_cmp_as_default = true,
-				-- Set to 'mono' for 'Nerd Font Mono' or 'normal' for 'Nerd Font'
-				-- Adjusts spacing to ensure icons are aligned
+				-- 'mono' for Nerd Font Mono, 'normal' for Nerd Font (icon spacing)
 				nerd_font_variant = "mono",
 			},
 

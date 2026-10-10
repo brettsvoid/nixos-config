@@ -7,9 +7,8 @@ _: {
       ...
     }:
     let
-      # The delta binary that core.pager / interactive.diffFilter point at.
-      # `finalPackage` (not `package`) because with the built-in git
-      # integration disabled below, home-manager hands back a delta wrapped
+      # The delta that core.pager / interactive.diffFilter use. `finalPackage`,
+      # not `package`: with git integration off (below) it is delta wrapped
       # with `--config <generated>`, which is what carries `options`.
       delta = lib.getExe config.programs.delta.finalPackage;
     in
@@ -23,15 +22,9 @@ _: {
           "*.swp"
           "*.tmp"
           ".DS_Store"
-          # `**/` is load-bearing. A pattern with a slash anywhere but the end
-          # is anchored to the directory holding the ignore file, so a bare
-          # `.claude/settings.local.json` matches only at a repository's root
-          # and misses every nested one — subprojects, and the worktrees
-          # apps-worktrunk creates. Verified with `git check-ignore`: without
-          # the prefix, `sub/.claude/settings.local.json` is NOT ignored.
-          #
-          # The pre-nix ~/.gitignore_global had the prefix; it was dropped in
-          # translation and only surfaced when diffing the migration backups.
+          # `**/` matters: a pattern with a slash before the end is anchored
+          # to the repository root, so without it a nested
+          # `sub/.claude/settings.local.json` is not ignored.
           "**/.claude/settings.local.json"
         ];
         settings = {
@@ -41,89 +34,52 @@ _: {
           pull.rebase = true;
           core.editor = "nvim";
 
-          # Conflict markers keep the merge base between `|||||||` and `=======`,
-          # so you can see what each side changed FROM rather than just the two
-          # results. zdiff3 over plain diff3 because it hoists lines common to
-          # both sides out of the conflict region — with diff3 those get printed
-          # inside both halves, and you have to read past them to find the real
-          # disagreement. Requires git >= 2.35.
+          # Conflict markers also show the merge base (between `|||||||` and
+          # `=======`), so you see what each side changed from. zdiff3 rather
+          # than diff3 moves lines common to both sides out of the conflict
+          # region. Needs git >= 2.35.
           merge.conflictStyle = "zdiff3";
 
-          # delta pages EVERY git command, matching the pre-nix chezmoi config.
-          # Written by hand rather than via programs.delta.enableGitIntegration
-          # — see the note in that block below.
+          # delta pages every git command. Set by hand rather than via
+          # programs.delta.enableGitIntegration; see the note in that block.
           core.pager = delta;
           # Highlights hunks in `git add -p` / `git add -i`.
           interactive.diffFilter = "${delta} --color-only";
 
           # ghq clones into <root>/<host>/<owner>/<repo>, the layout the rest
-          # of the config already assumes (~/projects/github.com/brettsvoid/…).
-          # Hand-made scratch projects live in ~/projects/scratch and get moved
-          # under github.com/ once they are pushed.
+          # of the config assumes (~/projects/github.com/brettsvoid/…); scratch
+          # projects live in ~/projects/scratch. ghq.user is the owner for
+          # `ghq create`, which otherwise uses the login name (brett).
           #
-          # ghq.user is what `ghq create <name>` uses as the owner. Without it
-          # ghq falls back to the login name, so on this machine it created
-          # github.com/brett/<name> — confirmed, not assumed.
-          #
-          # Work repos do NOT go through ghq: they must sit under
-          # ~/work/projects for the identity include below to fire.
+          # Work repos don't go through ghq: they must sit under
+          # ~/work/projects for the identity include below to apply.
           ghq.root = "~/projects";
           ghq.user = "brettsvoid";
         };
 
         # Work identity, for repos under ~/work/projects only.
         #
-        # `path` is a plain string, NOT a nix path, and there is deliberately
-        # no `contents`: setting contents would make home-manager generate the
-        # file into the nix store from this tracked, PUBLIC repo, which is
-        # exactly where a work email address should not end up. The include
-        # file is untracked and lives outside the repo, the same split as
-        # ~/.config/zsh/local.zsh — see local.zsh.example.
+        # `path` is a plain string and there is no `contents`, so the work
+        # email never reaches the store or this public repo. The file is
+        # untracked, like ~/.config/zsh/local.zsh (see local.zsh.example).
         #
-        # Git silently ignores an include whose path does not exist, so hosts
-        # without the file just keep the personal identity above.
-        #
-        # SET THIS UP ON EVERY NEW HOST. That silence is the whole hazard, and
-        # it is the same trap as `Include config.local` in apps-ssh: nix emits
-        # the include, nothing creates the target, and there is no warning —
-        # work commits just carry the personal address until someone notices.
-        # It bit brett-m1-mbp: the file was simply never created there, and it
-        # took a `--show-origin` check during the chezmoi retirement to spot
-        # it. The work identity was recovered from the pre-nix
-        # `~/.work.gitconfig`, which that host still had. Two lines:
+        # Create it on every new host. Git silently ignores a missing include
+        # (the same trap as `Include config.local` in apps-ssh), so work
+        # commits would quietly carry the personal address:
         #
         #   printf '[user]\n\tname = ...\n\temail = ...\n' > ~/.config/git/work.inc
         #   chmod 600 ~/.config/git/work.inc
         #
-        # Verify against an actual repo under the tree, not the parent:
+        # `gitdir:` is matched per repository, so check from a repo inside the
+        # tree; ~/work/projects itself has no .git and shows the personal
+        # identity:
         #
         #   git -C ~/work/projects/<repo> config --show-origin user.email
         #
-        # Directory-based rather than matching on the remote URL: `tyto` is a
-        # personal-identity repo that lives in the SAME GitHub org (irj-io) as
-        # work's `irj-www`, so no `hasconfig:remote.*.url` pattern can separate
-        # them. The path is where the rule actually lives.
-        #
-        # The trailing slash matters — `gitdir:` with one matches everything
-        # BELOW the directory; without it, only the directory itself.
-        #
-        # Evaluated PER REPOSITORY, against the repo's own .git path. So this
-        # reads as a failure but is not:
-        #
-        #   git -C ~/work/projects config user.email     -> brettsvoid@gmail.com
-        #   git -C ~/work/projects/m2north-www ...       -> BrettH@m2north.com
-        #
-        # ~/work/projects is a plain directory with no .git, so there is
-        # nothing for the condition to match and git falls back to the global
-        # identity. Verify against an actual repo, never the parent. A fresh
-        # `git init` or `git clone` under that tree picks up the work identity
-        # immediately — confirmed, not assumed.
-        #
-        # The inverse is the real hazard and has no config fix: a work repo
-        # cloned OUTSIDE ~/work/projects silently commits as the personal
-        # identity. Inherent to matching on path. `user.useConfigOnly` would
-        # turn it into a hard error, at the cost of every personal repo needing
-        # an explicit identity first — not worth it here.
+        # Matched on path, not remote URL, because the personal `tyto` and
+        # work's `irj-www` share the irj-io GitHub org. The trailing slash
+        # makes it match everything below the directory. The flip side: a work
+        # repo cloned outside ~/work/projects commits as the personal identity.
         includes = [
           {
             condition = "gitdir:~/work/projects/";
@@ -135,47 +91,34 @@ _: {
       # Reads ghq.root / ghq.user from the settings above.
       home.packages = [ pkgs.ghq ];
 
-      # gh doubles as git's HTTPS credential helper for github.com and
-      # gist.github.com (gitCredentialHelper, on by default once enabled).
-      # Without it, `ghq get` of any PRIVATE repo failed: ghq clones over
-      # HTTPS and git had no credential to send. A `gh auth login` alone does
-      # not fix that — choosing SSH as the protocol skips the git wiring, and
-      # `gh auth setup-git` cannot write to the store-linked git config.
+      # gh is also git's HTTPS credential helper for github.com and
+      # gist.github.com (gitCredentialHelper, on by default), which `ghq get`
+      # needs for private repos since ghq clones over HTTPS. `gh auth login`
+      # with SSH chosen skips that wiring, and `gh auth setup-git` cannot
+      # write to the store-linked git config.
       #
-      # Used to be a bare package in profile-code, which installed gh but left
-      # this helper unwritten.
-      #
-      # EACH HOST NEEDS `gh auth login` ONCE; the token is not in nix. Where no
-      # keyring is running (brett-desktop's Hyprland has none), gh saves it in
-      # plain text in ~/.config/gh/hosts.yml.
+      # Each host needs `gh auth login` once; the token is not in nix. With no
+      # keyring running (as on brett-desktop), gh stores it in plain text in
+      # ~/.config/gh/hosts.yml.
       programs.gh = {
         enable = true;
         # Matches the SSH remotes already in use; the module default is https.
         settings.git_protocol = "ssh";
       };
 
-      # Syntax-highlighting pager for diffs. Previously `delta` was installed by
-      # profiles/code.nix but nothing ever pointed git at it, so it sat on PATH
-      # unused — this is what actually wires it in.
-      #
-      # Lives under `programs.delta`, not `programs.git.delta`: home-manager
-      # split it into its own module and left the old path as a renamed alias.
-      # The module owns the package, which is why profiles/code.nix no longer
-      # lists delta separately.
+      # Syntax-highlighting pager for diffs. `programs.git.delta` is the old,
+      # renamed path. The module owns the package, so profiles/code.nix does
+      # not list delta.
       programs.delta = {
         enable = true;
 
-        # Deliberately OFF. The built-in integration writes
-        # pager.{blame,diff,log,show}, and git resolves `pager.<cmd>` ahead of
-        # `core.pager` — so delta would only ever handle those four commands
-        # and a blanket core.pager would be dead config. Turning the
-        # integration off leaves the git wiring to `settings` above, where
-        # core.pager applies to everything.
+        # Off on purpose: the integration sets pager.{blame,diff,log,show},
+        # and git prefers `pager.<cmd>` over `core.pager`, so delta would page
+        # only those four. The git wiring is in `settings` above instead.
         enableGitIntegration = false;
 
-        # Delta settings go HERE, not in a `[delta]` section of the git config
-        # — the wrapper's `--config` makes delta read this generated file
-        # instead of gitconfig, so a `[delta]` block there would be ignored.
+        # Delta settings go here, not in a gitconfig `[delta]` section: the
+        # wrapper's `--config` makes delta read this file instead.
         options = {
           # n / N jump between files in the pager — the payoff on large diffs.
           navigate = true;
@@ -183,22 +126,12 @@ _: {
         };
       };
 
-      # Retire a hand-written ~/.gitconfig on first activation.
-      #
-      # Everything above lands in ~/.config/git/config. git reads BOTH that and
-      # ~/.gitconfig, in that order, so a leftover ~/.gitconfig silently wins
-      # every conflict. On the mac mini that file set user.email to the work
-      # address globally and installed credential helpers — it would have undone
-      # the identity split, the delta pager and zdiff3 with no error and no
-      # symptom beyond commits carrying the wrong address.
-      #
-      # home-manager cannot catch this itself: backupFileExtension only fires
-      # where home-manager writes a file, and it never writes ~/.gitconfig. No
-      # collision, no backup, no warning.
-      #
-      # Renamed rather than deleted, and never overwriting an existing rescue
-      # copy, so this is reversible and safe to re-run. Once no machine has one
-      # left, this block can go.
+      # Retire a hand-written ~/.gitconfig. git reads it after
+      # ~/.config/git/config, so a leftover one silently overrides everything
+      # above (identity, pager, zdiff3). backupFileExtension can't catch it:
+      # home-manager never writes ~/.gitconfig. Renamed, never over an
+      # earlier rescue copy, so it is reversible. Remove this block once no
+      # machine has one left.
       home.activation.retireLegacyGitconfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         if [ -f "$HOME/.gitconfig" ] && [ ! -L "$HOME/.gitconfig" ]; then
           _dest="$HOME/.gitconfig.pre-nix"

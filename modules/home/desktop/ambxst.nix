@@ -16,10 +16,9 @@ in
         "sh -c 'sleep 3 && hyprctl reload'" # reload config after ambxst startup to restore keybinds
       ];
 
-      # After linkGeneration, not just writeBoundary: the wallpaper path below
-      # is resolved through the ~/Pictures/Wallpapers link that desktop-wallpapers
-      # creates. On a fresh home, running first made `readlink -f` fail (no
-      # ~/Pictures yet), which aborted the whole home-manager activation.
+      # After linkGeneration, which creates desktop-wallpapers'
+      # ~/Pictures/Wallpapers: on a fresh home `readlink -f` below fails without
+      # it, and that aborts the whole activation.
       home.activation.ambxstConfig = config.lib.dag.entryAfter [ "linkGeneration" ] ''
         # ── Bar settings ──────────────────────────────────────────────
         BAR_JSON="${configDir}/bar.json"

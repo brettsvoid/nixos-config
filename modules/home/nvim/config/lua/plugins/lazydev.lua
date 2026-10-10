@@ -9,18 +9,14 @@ return {
 				-- Load luvit types when the `vim.uv` word is found
 				{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
 				--'$HOME/.config/wezterm',
-				--{ path = 'luvit-meta/library', words = { 'vim%.uv' } },
-				--{ path = 'LazyVim', words = { 'LazyVim' } },
 				--{ path = 'wezterm-types', mods = { 'wezterm' } },
 			},
 		},
 	},
-	--{ 'Bilal2453/luvit-meta', lazy = true },
 	{ -- optional blink completion source for require statements and module annotations
 		"saghen/blink.cmp",
 		opts = {
 			sources = {
-				-- add lazydev to your completion providers
 				default = { "lazydev", "lsp", "path", "snippets", "buffer" },
 				providers = {
 					lazydev = {

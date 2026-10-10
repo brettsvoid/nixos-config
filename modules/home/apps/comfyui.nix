@@ -7,14 +7,12 @@
 # needs from the system, plus a launcher; the rest is state:
 #
 #   ~/comfyui     git checkout, with .venv on a uv-managed CPython 3.13 (the
-#                 README calls 3.13 "very well supported"; 3.14 "works but
-#                 some custom nodes may have issues")
+#                 README calls it very well supported; 3.14 may break nodes)
 #   ~/ai-models   its own btrfs subvolume, so that a snapshot of @home leaves
 #                 the weights out. Passed to ComfyUI as --models-directory.
 #
-# ComfyUI-Manager is no longer a clone in custom_nodes/: it is the
-# comfyui_manager package from the checkout's manager_requirements.txt,
-# switched on by --enable-manager.
+# ComfyUI-Manager is the comfyui_manager package from the checkout's
+# manager_requirements.txt, switched on by --enable-manager.
 #
 # uv's CPython and the PyTorch wheels are generic glibc binaries, so they run
 # through nix-ld, as the native Claude Code build does.
@@ -24,11 +22,9 @@ _: {
     {
       programs.nix-ld.enable = true;
 
-      # Added to nix-ld's base set, not in place of it: nixpkgs defines that
-      # set in the module's config, not as the option's default, so the two
-      # lists merge. These are what opencv-python, which many custom nodes
-      # pull in, links against beyond the libraries its wheel bundles: found
-      # from the NEEDED entries of cv2*.so and opencv_python.libs/*.
+      # Merged with nix-ld's base set, which nixpkgs sets in config rather
+      # than as the option default. These are what opencv-python, which many
+      # custom nodes pull in, links against beyond what its wheel bundles.
       programs.nix-ld.libraries = with pkgs; [
         libGL
         glib
@@ -53,30 +49,26 @@ _: {
           export LD_LIBRARY_PATH=/run/opengl-driver/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
           # PyTorch runs some ops as Triton kernels (Anima sampling hits one).
           # Triton finds libcuda by running /sbin/ldconfig -p, which NixOS
-          # does not have, then builds each kernel's launcher with a C compiler
-          # from PATH, which is empty outside a dev shell. Without these,
-          # sampling fails on /sbin/ldconfig, then on "Failed to find C
-          # compiler".
+          # lacks, and builds each kernel's launcher with a C compiler from
+          # PATH, where there is none outside a dev shell.
           export TRITON_LIBCUDA_PATH=/run/opengl-driver/lib
           export CC=${pkgs.stdenv.cc}/bin/cc
-          # uv's CPython looks for CAs in /etc/ssl/cert.pem, which NixOS does
-          # not have, and in /etc/ssl/certs, which lacks the hashed links
-          # OpenSSL reads a directory through. Without this, ComfyUI-Manager
-          # fails every HTTPS fetch with CERTIFICATE_VERIFY_FAILED.
+          # uv's CPython looks for CAs in /etc/ssl/cert.pem, which NixOS lacks,
+          # and in /etc/ssl/certs, which lacks the hashed links OpenSSL needs.
+          # Without this every ComfyUI-Manager fetch fails certificate checks.
           export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-          # The venv is the whole environment. A dev shell's PYTHONPATH (this
-          # repo's puts semgrep's python3.14 packages on it) would otherwise
-          # load 3.14-built modules into the venv's 3.13 and crash on import.
+          # A dev shell's PYTHONPATH (this repo's carries semgrep's python3.14
+          # packages) would load 3.14 modules into the venv's 3.13 and crash.
           unset PYTHONPATH PYTHONHOME
           cd ${home}/comfyui
-          # Measured with Anima on the 3080 Ti, these two cut sampling time by
-          # about a quarter, and the images differ only in fine detail.
-          # fp16_accumulation also makes ComfyUI load models that list fp16 as
-          # supported in fp16. SageAttention is a Triton attention kernel from
-          # the venv (uv pip install sageattention); ComfyUI exits at start-up
-          # if asked for it without the package, so the flag waits for it.
+          # fp16_accumulation and SageAttention together cut Anima sampling
+          # time on the 3080 Ti by about a quarter, with images differing only
+          # in fine detail. fp16_accumulation also loads models that support
+          # fp16 in fp16. SageAttention comes from the venv (uv pip install
+          # sageattention); ComfyUI exits if asked for it without the
+          # package, so check first.
           fast=(--fast fp16_accumulation)
-          # A plain glob: the script's non-interactive bash has no compgen.
+          # A plain glob: writeShellApplication's bash has no compgen.
           for dir in .venv/lib/python3*/site-packages/sageattention; do
             if [[ -d $dir ]]; then fast+=(--use-sage-attention); fi
           done

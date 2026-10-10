@@ -4,7 +4,7 @@ source "$CONFIG_DIR/icons.sh"
 
 [ -f "$CONFIG_DIR/env.sh" ] && source "$CONFIG_DIR/env.sh"
 
-PLUGIN_DIR="$CONFIG_DIR/plugins" # Directory where all the plugin scripts are stored
+PLUGIN_DIR="$CONFIG_DIR/plugins"
 
 BATT_PERCENT="$(pmset -g batt | grep -Eo "\d+%" | cut -d% -f1)"
 
@@ -13,13 +13,13 @@ FONT="FiraCode Nerd Font"
 
 PADDING=8
 
-# General bar colors
+# Unused: the bar and item defaults below use the COLOR_* roles instead.
 BAR_COLOR=$BG0O85
 BAR_BORDER_COLOR=$COLOR_BORDER
 BACKGROUND_1=$BG1
 BACKGROUND_2=$BG2
-ICON_COLOR=$WHITE  # Color of all icons
-LABEL_COLOR=$WHITE # Color of all labels
+ICON_COLOR=$WHITE
+LABEL_COLOR=$WHITE
 POPUP_BACKGROUND_COLOR=$BAR_COLOR
 POPUP_BORDER_COLOR=$WHITE
 SHADOW_COLOR=$BLACK
@@ -35,13 +35,7 @@ $CONFIG_DIR/helper/helper $HELPER >/dev/null 2>&1 &
 #launchctl unload -F /System/Library/LaunchAgents/com.apple.OSDUIHelper.plist >/dev/null 2>&1 &
 
 ##### Bar Appearance #####
-# Configuring the general appearance of the bar.
-# These are only some of the options available. For all options see:
-# https://felixkratz.github.io/SketchyBar/config/bar
-# If you are looking for other colors, see the color picker:
-# https://felixkratz.github.io/SketchyBar/config/tricks#color-picker
-
-# Setting up the general bar appearance of the bar
+# All bar options: https://felixkratz.github.io/SketchyBar/config/bar
 bar=(
   color=$COLOR_TRANSPARENT
   height=$EXTERNAL_BAR_HEIGHT
@@ -53,8 +47,7 @@ bar=(
 sketchybar --bar "${bar[@]}"
 
 ##### Changing Defaults #####
-# We now change some default values, which are applied to all further items.
-# For a full list of all available item properties see:
+# Applied to every item added after this. All item properties:
 # https://felixkratz.github.io/SketchyBar/config/items
 
 default=(
@@ -148,9 +141,8 @@ sketchybar --add bracket cmd command.logo                         \
                              background.border_color=$COLOR_GREEN
 
 ##### Adding Mission Control Space Indicators #####
-# Let's add some mission control spaces:
+# Disabled (the click script uses yabai). See:
 # https://felixkratz.github.io/SketchyBar/config/components#space----associate-mission-control-spaces-with-an-item
-# to indicate active and available mission control spaces.
 
 # SPACE_ICONS=("1" "2" "3" "4" "5" "6" "7" "8" "9" "10")
 # for i in "${!SPACE_ICONS[@]}"
@@ -172,8 +164,6 @@ sketchybar --add bracket cmd command.logo                         \
 # done
 
 ##### Adding Left Items #####
-# We add some regular items to the left side of the bar, where
-# only the properties deviating from the current defaults need to be set
 
 front_app=(
   display=active
@@ -201,15 +191,8 @@ sketchybar --add bracket front_app front_app  \
            --set         front_app background.color=$COLOR_BACKGROUND
 
 ##### Adding Right Items #####
-# In the same way as the left items we can add items to the right side.
-# Additional position (e.g. center) are available, see:
-# https://felixkratz.github.io/SketchyBar/config/items#adding-items-to-sketchybar
-
-# Some items refresh on a fixed cycle, e.g. the clock runs its script once
-# every 10s. Other items respond to events they subscribe to, e.g. the
-# volume.sh script is only executed once an actual change in system audio
-# volume is registered. More info about the event system can be found here:
-# https://felixkratz.github.io/SketchyBar/config/events
+# Items either poll (update_freq, in seconds) or run on events they subscribe
+# to: https://felixkratz.github.io/SketchyBar/config/events
 
 
 clock=(
@@ -282,14 +265,9 @@ if [ "$BATT_PERCENT" != "" ]; then
              --subscribe battery system_woke power_source_change
 fi
 
-# Runs "brew outdated" command and shows you amount of outdated packages
-# Will install an old package so you can see the number increase
-# `brew install ~/Downloads/wezterm.rb`
-# `https://github.com/wez/wezterm/releases`
-# `brew update && brew upgrade` updates the package and clears the counter
-# -----> Make sure to add the section to the .zshrc file, so that package count is
-# updated automatically after running brew commands
-# `https://github.com/linkarzu/dotfiles-latest/blob/8fd9af824fc1db73de185b3733dac5d8514f9fb0/zshrc/zshrc-file.sh#L225-L247`
+# Count of outdated brew packages. The `brew` wrapper in
+# modules/home/shell/functions.nix triggers brew_update after brew commands,
+# so the count refreshes without waiting for the poll.
 brew=(
   icon=󰏗
   label=

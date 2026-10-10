@@ -1,8 +1,7 @@
-// Multi-monitor regression check for the running edgebar: every NSScreen must
-// have (a) a bar window (level 5) spanning its full width at its top edge and
-// (b) a native frame window (level 6) matching its full bounds. Exits 0 on
-// PASS. There is no headless seam for NSWindow layout, so this live check is
-// the regression test for stale/missing per-display geometry.
+// Multi-monitor check against a running edgebar: every NSScreen must have a
+// bar window (level 5) spanning its top edge and a frame window (level 6)
+// matching its bounds. Exits 0 on PASS. NSWindow layout has no headless test
+// seam, so this live check is the regression test for per-display geometry.
 //
 //   DEVELOPER_DIR=/Library/Developer/CommandLineTools \
 //     /Library/Developer/CommandLineTools/usr/bin/swiftc \
@@ -10,8 +9,8 @@
 //     -o /tmp/barcheck scripts/barcheck.swift
 //   /tmp/barcheck "$(pgrep -f edgebar | head -1)" 64        # 64 = windowHeight
 //
-// (The direct CLT paths matter: the bare `swiftc` shim defers to the Nix
-// xcrun on this machine and fails with "tool not found".)
+// Use the CLT paths directly: the bare `swiftc` shim defers to the Nix xcrun
+// and fails with "tool not found".
 
 import AppKit
 import CoreGraphics

@@ -1,11 +1,8 @@
-# gitleaks configuration tuned for nix flakes.
-#
-# Strategy:
-#   - Inherit the upstream default ruleset (covers AWS, GitHub, OpenAI,
-#     Anthropic, GCP, Stripe, generic high-entropy, etc.)
-#   - Add nix-specific allowlists so flake.lock narHashes, nix store paths,
-#     and SSH public keys don't trip false positives
-#   - Add custom rules for the things the default set misses
+# gitleaks configuration tuned for nix flakes:
+#   - Inherit the upstream default ruleset (AWS, GitHub, OpenAI, Anthropic,
+#     GCP, Stripe, generic high-entropy, etc.)
+#   - Allowlist nix-shaped strings (narHashes, store paths, SSH public keys)
+#   - Add custom rules on top
 
 title = "brettsvoid/nixos-config"
 
@@ -49,13 +46,15 @@ paths = [
 [[allowlists]]
 description = "files that contain public-key material by design"
 paths = [
-  # Phase A.5b: secrets registry holds public keys (decryption recipients)
+  # agenix secrets registry: public keys (decryption recipients)
   '''.*/secrets\.nix$''',
   # nvim plugin lockfiles
   '''lazy-lock\.json$''',
 ]
 
-# ─── Custom rules: catch things the default misses ────────────────────────
+# ─── Custom rules ─────────────────────────────────────────────────────────
+# A rule that reuses a default rule's id replaces that rule's regex
+# (anthropic-api-key and openai-api-key do).
 
 [[rules]]
 id = "anthropic-api-key"
@@ -93,10 +92,9 @@ regex = '''(?i)aws_secret_access_key[\s=:]+["']?[A-Za-z0-9/+=]{40}["']?'''
 keywords = ["aws_secret_access_key"]
 
 # ─── Low-entropy infra identifiers the default ruleset ignores ────────────
-# These are what leaked once before: an EC2 instance ID and a hardcoded
-# server IP. gitleaks' entropy-based rules skip them because they aren't
-# high-entropy secrets — so they need explicit rules. No keywords: the
-# regexes run against all content so nothing slips by on a fast-path miss.
+# An EC2 instance ID and a hardcoded server IP have leaked before; they are
+# not high-entropy, so the default rules skip them. No keywords, so the
+# regexes run against all content rather than a keyword-filtered subset.
 
 [[rules]]
 id = "aws-ec2-instance-id"
@@ -108,9 +106,8 @@ id = "hardcoded-ipv4"
 description = "Hardcoded IPv4 address — catches internal/topology-revealing IPs"
 # Octet-validated (0-255) so version strings like 1.2.3.999 don't match.
 regex = '''\b(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\b'''
-# RFC-1918 private ranges (10/8, 172.16/12, 192.168/16) are intentionally
-# NOT allowlisted — in a public repo they reveal internal topology and are
-# exactly what we want flagged. Only universally-safe IPs are excepted.
+# RFC 1918 private ranges are deliberately not allowlisted: in a public repo
+# they reveal internal topology. Only universally safe IPs are excepted.
 [[rules.allowlists]]
 description = "IPs that are safe to commit"
 regexes = [

@@ -1,4 +1,4 @@
--- https://github.com/norcalli/nvim-colorizer.lua
+-- https://github.com/NvChad/nvim-colorizer.lua
 return {
 	"NvChad/nvim-colorizer.lua",
 	--cmd = { "ColorizerToggle" },

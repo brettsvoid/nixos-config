@@ -13,22 +13,22 @@ FocusScope {
 
     readonly property var actions: [
         {
-            icon: 0xF033E, // nf-md-lock
+            icon: 0xF033E, // md-lock
             label: "Lock",
             run: () => Lock.lock()
         },
         {
-            icon: 0xF0343, // nf-md-logout
+            icon: 0xF0343, // md-logout
             label: "Log out",
             command: ["session-exit", "logout"]
         },
         {
-            icon: 0xF0709, // nf-md-restart
+            icon: 0xF0709, // md-restart
             label: "Restart",
             command: ["session-exit", "reboot"]
         },
         {
-            icon: 0xF0425, // nf-md-power
+            icon: 0xF0425, // md-power
             label: "Shut down",
             command: ["session-exit", "poweroff"]
         }

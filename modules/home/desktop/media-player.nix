@@ -1,10 +1,9 @@
 # Now-playing card: a Quickshell panel at the top centre of every screen that
 # follows the active MPRIS player (track, progress, play/pause/next) and
-# collapses to a small pill. Themed from ambxst's colours.json.
+# collapses to a small round button. Themed from ambxst's colors.json.
 #
-# Currently no host imports it (disabled 27 Sep 2026). To bring it back, add
-# `desktop-media-player` to a host's home-manager imports; the module starts
-# itself from Hyprland's exec-once.
+# No host imports it. To bring it back, add `desktop-media-player` to a host's
+# home-manager imports; it starts itself from Hyprland's exec-once.
 _: {
   flake.modules.homeManager.desktop-media-player =
     { config, pkgs, ... }:
@@ -39,13 +38,13 @@ _: {
 
               property var screen
 
-              // ── Minimize state ──
+              // ── Minimised state ──
               property bool minimized: false
 
               // ── Asset path (injected by Nix) ──
               property string configDir: "${config.xdg.configHome}/quickshell/media-player"
 
-              // ── Dynamic theme colors ──
+              // ── Dynamic theme colours ──
               property var themeColors: ({})
 
               FileView {
@@ -223,7 +222,7 @@ _: {
                               maskSpreadAtMin: 1.0
                           }
 
-                          // ── Minimize button ──
+                          // ── Minimise button ──
                           Rectangle {
                               anchors.top: parent.top
                               anchors.right: parent.right
@@ -431,7 +430,7 @@ _: {
               }
 
               // ══════════════════════════════════════
-              // ── Minimized Button Window ──
+              // ── Minimised Button Window ──
               // ══════════════════════════════════════
               PanelWindow {
                   id: buttonWindow

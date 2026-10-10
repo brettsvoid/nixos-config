@@ -9,7 +9,7 @@
 
   <body>
     <!-- screen frame is drawn natively (src-tauri); this window is just the bar -->
-    <!-- top bar: workspaces + cpu left, notch center, status + clock right -->
+    <!-- top bar: workspaces, cpu | notch | controls, status, clock -->
     <!-- Icons are inline Lucide SVGs in a shared .icon cell (see styles.css). -->
     <div class="bar">
       <div class="cluster left">
@@ -83,10 +83,9 @@
             </button>
           </div>
         </div>
-        <!-- CPU: rolling system/user load graph with the hungriest process and
-             the total percentage. Ported from the sketchybar mach helper; the
-             canvas is drawn by main.ts from samples Rust pushes on the "cpu"
-             event. Purely a readout — nothing here is clickable. -->
+        <!-- CPU: hungriest process, total percentage and a rolling
+             system/user load graph, drawn by main.ts from the "cpu" event.
+             A readout only; nothing here is clickable. -->
         <div class="pill detached" id="cpu">
           <span class="cpu-icon icon"
             ><svg
@@ -142,9 +141,9 @@
               </span>
               <span class="ni-progress"><i></i></span>
             </span>
-            <!-- Media with transport: an inset pill over blurred album art —
-                 play/pause, a wavy playhead, and the source app's icon. No
-                 title: the art and the icon already say what it is. -->
+            <!-- Media with transport: an inset pill over an album-art
+                 backdrop, with play/pause, a wavy playhead and the source app's
+                 icon. No title; it's in the tooltip. -->
             <span class="ni-media" hidden>
               <span class="nm-art"></span>
               <button class="nm-play" type="button" aria-label="Play/pause"></button>
@@ -154,10 +153,9 @@
           </div>
           <div class="notch-panel-clip">
             <div class="notch-panel">
-              <!-- Tab rail (ambxst Dashboard.qml tabsContainer): 48px of icon
-                   buttons, settings pinned to the bottom. It sits beside the
-                   tab body rather than inside a view, so it survives every
-                   switch. main.ts moves .active to match the shown view. -->
+              <!-- Tab rail (ambxst Dashboard.qml tabsContainer), beside the
+                   tab body so it survives view switches. main.ts moves
+                   .active to match the shown view. -->
               <nav class="dash-rail">
                 <button
                   class="rail-tab view-switch active"
@@ -281,18 +279,16 @@
                 </button>
               </nav>
 
-              <!-- Tab body: only this swaps between views, so the rail
-                   stays put — ambxst's Dashboard.qml does the same, with
-                   the rail beside a stack rather than inside each tab. -->
+              <!-- Tab body: only this swaps between views (as in ambxst's
+                   Dashboard.qml). -->
               <div class="tab-body">
-                <!-- Dashboard — ambxst's WidgetsTab, column for column: player,
-                     widgets, notification history, control rail. Elements
-                     carrying .wip are layout only; nothing behind them is wired
-                     to Rust yet. Drop the class as each one lands. -->
+                <!-- Dashboard: ambxst's WidgetsTab, column for column.
+                     .wip elements are layout only, not yet wired to Rust; drop
+                     the class as each one lands. -->
                 <div class="view view-default">
                   <!-- 1. player column (ambxst FullPlayer, 216px): art, title,
-                       transport and a seek bar. The collapsed notch already has a
-                       compact player, so this reuses that data when it lands. -->
+                       transport and a seek bar, reusing the collapsed notch's
+                       media data when it lands. -->
                   <div class="ph ph-col" data-for="FullPlayer">
                     <span class="ph-icon icon"
                       ><svg
@@ -312,8 +308,8 @@
                     <span class="ph-note">art · title · transport · seek</span>
                   </div>
 
-                  <!-- 2. widgets column: quick toggles, the clock, the metric
-                       rows, then the calendar. Scrolls, like ambxst's Flickable. -->
+                  <!-- 2. widgets column: quick toggles, then the calendar.
+                       Scrolls, like ambxst's Flickable. -->
                   <div class="dash-col dash-widgets">
                     <!-- QuickControls: five square toggles across the column -->
                     <div class="quick-controls">
@@ -416,8 +412,7 @@
                       </button>
                     </div>
 
-                    <!-- Calendar: month grid, day picker, event dots. Complex
-                         enough to own its component, so it's reserved space. -->
+                    <!-- Calendar: month grid, day picker, event dots. -->
                     <div class="ph ph-cal" data-for="Calendar">
                       <span class="ph-icon icon"
                         ><svg
@@ -466,8 +461,8 @@
                   </div>
 
                   <!-- 4. control rail (ambxst: a vertical brightness slider over
-                       two CircularControl dials — volume and mic). The sliders
-                       that drive these already exist in the controls popup. -->
+                       volume and mic dials). The controls popup already has
+                       working sliders for all three. -->
                   <div class="dash-controls">
                     <div class="ph ph-vslider" data-for="Brightness">
                       <span class="ph-icon icon"
@@ -658,9 +653,8 @@
                           stroke-linejoin="round"
                           aria-hidden="true"
                         >
-                          <!-- droplet, not palette: the rail's wallpapers tab
-                               owns the palette now, and two of them on screen
-                               at once would read as the same control -->
+                          <!-- droplet, not palette: the rail's wallpapers
+                               tab already uses the palette icon -->
                           <path
                             d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"
                           /></svg
@@ -711,13 +705,12 @@
                     <span class="ph-name">FilterBar</span>
                     <span class="ph-note">type chips · subfolders</span>
                   </div>
-                  <!-- Wallpaper grid: real, populated by main.ts from Rust -->
+                  <!-- Wallpaper grid, filled by main.ts -->
                   <div class="filmstrip" id="filmstrip"></div>
                 </div>
 
-                <!-- Performance — ambxst's metrics tab (Dashboard.qml tab 2).
-                     The rows sample only while this view is showing, the way
-                     ambxst polls SystemResources only for the open tab. -->
+                <!-- Performance: ambxst's metrics tab (Dashboard.qml tab 2).
+                     The rows sample only while this view is showing. -->
                 <div class="view view-metrics" hidden>
                   <div class="view-head">
                     <span class="view-title">Performance</span>
@@ -935,8 +928,8 @@
             </div>
           </div>
         </div>
-        <!-- Wi-Fi / network + battery, merged into one detached pill. The icon
-             SVGs are swapped by main.ts to reflect state. -->
+        <!-- Wi-Fi / network + battery in one detached pill; main.ts swaps
+             the icons to reflect state. -->
         <div class="pill detached" id="status">
           <span class="stat-grp" id="wifi">
             <span class="wifi-icon icon"

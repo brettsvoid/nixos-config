@@ -40,18 +40,8 @@ in
         ];
 
         # ─── Homebrew (host-only) ──────────────────────────────────────
-        # Appended to the shared lists in modules/system/darwin/homebrew.nix
-        # — these options are lists, so the effective Brewfile is shared ++
-        # this. Everything here is on the MBP and not the mac mini: iOS/
-        # Android build tooling, the work HashiCorp/Stripe/Auth0 CLIs, and
-        # `borders`. The one exception is `sonobus`, declared on both hosts
-        # because it is the two ends of one audio bridge (see the cask
-        # comment below).
-        # The mini dropped `borders` when it moved to the aerospace
-        # stack; this host kept it, and its brew-installed launchd agent
-        # (`homebrew.mxcl.borders`) is still running alongside AeroSpace.
-        # Nothing here depends on it — it is a standing decision to revisit,
-        # not a requirement.
+        # Appended to the shared lists in modules/system/darwin/homebrew.nix.
+        # `borders` is optional: nothing in the repo depends on it.
         homebrew = {
           taps = [
             "anirudhg07/anirudhg07"
@@ -102,32 +92,22 @@ in
           casks = [
             "arduino-ide"
             # ─── Audio bridge to the mac mini ──────────────────────────
-            # Video calls run on this machine (it has the webcam) while the
-            # headset stays plugged into the KVM on the mini. SonoBus
-            # carries audio both ways over the LAN, reading from and
-            # writing to two virtual devices on this side:
+            # Calls run here (it has the webcam); the headset is on the mini.
+            # SonoBus carries audio both ways over the LAN via two virtual
+            # devices on this side:
             #
             #   call app  ──out──▶ BlackHole 16ch ──▶ SonoBus ──▶ mini
             #   call app ◀──mic─── BlackHole 2ch  ◀── SonoBus ◀── mini
             #
-            # Two distinct devices are required: with one, SonoBus would
-            # read back its own output and loop. The channel-count variants
-            # ship as separate installers with distinct device UIDs, so
-            # they coexist as independent devices without recompiling.
-            # 2ch is deliberately the microphone side — call apps are
-            # fussier about input devices than output devices, and a
-            # 16-channel device offered as a mic invites misbehaviour.
-            #
-            # The mini needs no virtual devices at all; it already declares
-            # `sonobus` and uses the real headset for both directions, so
-            # nothing driver-level lands on the work machine.
-            #
-            # Both BlackHole casks are .pkg installers and need a reboot
-            # before the devices appear.
+            # Two devices, or SonoBus reads back its own output and loops.
+            # 2ch is the mic side because call apps are fussier about input
+            # devices. The mini uses the real headset and needs neither. Both
+            # casks are .pkg installers and need a reboot before the devices
+            # appear.
             "blackhole-16ch"
             "blackhole-2ch"
             "mqtt-explorer"
-            # This end of the audio bridge above; the mini declares its own.
+            # This end of the audio bridge above.
             "sonobus"
             "vlc"
           ];
@@ -140,9 +120,8 @@ in
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
           users.${username} = {
-            # `darwin-sketchybar` is imported for its config tree only — the
-            # daemon is disabled (edgebar replaced it); the tree is kept as
-            # the reference edgebar is ported from.
+            # darwin-sketchybar only links its config tree, kept as the
+            # reference edgebar is ported from; the daemon does not run.
             imports = with config.flake.modules.homeManager; [
               base
               shell-zsh
@@ -184,28 +163,19 @@ in
             ];
 
             # ─── Desktop look (per machine) ────────────────────────────
-            # Seeded on the first switch that declares them and re-applied
-            # only when these values change — `select-wallpaper` and
-            # `select-scheme` picks survive later rebuilds.
+            # Applied when first declared and again only when changed, so
+            # `select-wallpaper` and `select-scheme` picks survive rebuilds.
             local.wallpaper.default = "chisato_petals_of_silence_4k.jpg";
             local.edgebar.scheme = "scheme-tonal-spot";
 
-            # This end of the SonoBus bridge sends the call/music audio that
-            # ends up in the headset, NOT a microphone, so it stays stereo.
+            # This end sends programme audio for the headset, not a mic.
             local.sonobus.sendChannels = "stereo";
 
             # ─── Workspace assignment (this machine only) ──────────────
-            # Captured from a live layout with:
-            #   aerospace list-windows --all --json \
-            #     --format '%{app-bundle-id}%{app-name}%{workspace}'
-            #
-            # Order matters — only the first matching rule runs. Tyto is a
-            # Chrome PWA, so its bundle ID extends com.google.Chrome and must
-            # come first.
-            #
-            # 8, 9 and 0 are force-assigned to the secondary display in
-            # aerospace.toml.in, so SonoBus, Spotify and Obsidian follow the
-            # external monitor when one is attached.
+            # appId must match the bundle ID exactly; Tyto, a Chrome PWA, has
+            # its own. 8, 9 and 0 are force-assigned to the secondary display
+            # in aerospace.toml.in, so SonoBus, Spotify and Obsidian follow
+            # the external monitor when one is attached.
             local.aerospace.windowAssignments = [
               {
                 appId = "com.google.Chrome.app.fiegnlgmbkhlmacibejnbdmickgdeojg"; # Tyto

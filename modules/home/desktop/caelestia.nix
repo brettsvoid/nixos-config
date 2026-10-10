@@ -21,12 +21,11 @@ in
 
       roninScheme = lib.importJSON "${ronin}/state/caelestia/scheme.json";
 
-      # Crimson Ronin ships its palette as a "dynamic" scheme, and the CLI
-      # regenerates a dynamic scheme from the image on every wallpaper change
-      # (set_wallpaper → update_colours in utils/wallpaper.py), so the first
-      # wallpaper pick would throw the hand-tuned colours away. As a static
-      # scheme they survive. The CLI only reads static schemes from inside its
-      # own package — there is no user directory for them — hence the override.
+      # Crimson Ronin ships its palette as a "dynamic" scheme, which the CLI
+      # regenerates from the image on every wallpaper change (set_wallpaper in
+      # utils/wallpaper.py), losing the hand-tuned colours. A static scheme
+      # keeps them, and the CLI reads static schemes only from inside its own
+      # package, hence the override.
       schemeFile = pkgs.writeText "crimsonronin-dark.txt" (
         lib.concatLines (lib.mapAttrsToList (name: hex: "${name} ${hex}") roninScheme.colours)
       );
@@ -80,9 +79,9 @@ in
             showOverFullscreen = false;
             apps.terminal = [ "kitty" ];
             # Upstream locks at 3 min, turns the screens off at 5 and
-            # suspend-then-hibernates at 10. Hibernate cannot work here (zram
-            # only, no swap partition) and a gaming desktop should not
-            # suspend by itself, so the trial leaves power behaviour alone.
+            # suspend-then-hibernates at 10. There is no hibernate here (zram
+            # only, no swap partition) and a gaming desktop should not suspend
+            # by itself.
             idle.timeouts = [ ];
           };
           appearance = {
@@ -143,10 +142,9 @@ in
             openExpanded = false;
           };
           # The session menu's and lock screen's power buttons. Caelestia's
-          # defaults call logind directly; session-exit (from
-          # desktop-session-restore) saves the open apps for the next login,
-          # then has hyprshutdown close them before Hyprland exits. Caelestia
-          # runs a command it does not recognise as a plain process.
+          # defaults call logind directly; session-exit (desktop-session-restore)
+          # saves the open apps for the next login, then has hyprshutdown close
+          # them before Hyprland exits.
           session.commands = {
             logout = [
               "session-exit"
@@ -166,10 +164,10 @@ in
         cli = {
           enable = true;
           package = cli;
-          # Each of these defaults to on (`check` in utils/theme.py), and each
-          # rewrites that app's config on every scheme or wallpaper change —
-          # GTK and Qt included, which home-manager also writes. Off for the
-          # trial, so only the shell itself takes the palette.
+          # Each defaults to on (`check` in utils/theme.py) and rewrites that
+          # app's config on every scheme or wallpaper change, GTK and Qt
+          # included, which home-manager also writes. Off, so only the shell
+          # takes the palette.
           settings.theme = lib.genAttrs [
             "enableTerm"
             "enableHypr"
@@ -208,19 +206,16 @@ in
         fi
       '';
 
-      # Crimson Ronin's GTK theme for GTK 3 apps — Thunar, and Firefox's
-      # window chrome — which otherwise fall back to light Adwaita here. GTK 4
-      # is left unset on purpose: given a theme package, home-manager takes
-      # over gtk-4.0/gtk.css, and ambxst writes its colours into that file.
-      # GTK 3's gtk.css stays ambxst's too (home-manager only writes it for
-      # gtk3.extraCss).
+      # Crimson Ronin's GTK theme for GTK 3 apps (Thunar, Firefox's window
+      # chrome), which otherwise fall back to light Adwaita. GTK 4 is left
+      # unset on purpose: given a theme package, home-manager takes over
+      # gtk-4.0/gtk.css, which ambxst writes its colours into. GTK 3's gtk.css
+      # stays ambxst's too (home-manager writes it only for gtk3.extraCss).
       #
-      # colorScheme writes org.gnome.desktop.interface color-scheme, which
-      # xdg-desktop-portal-gtk passes on as the system's light/dark
-      # preference (Firefox's prefers-color-scheme follows it). Unset, the
-      # portal reports "no preference". Nothing switches it by time of day,
-      # so it is dark to match Crimson Ronin. It does not make home-manager
-      # write gtk-4.0/gtk.css.
+      # colorScheme sets org.gnome.desktop.interface color-scheme, which
+      # xdg-desktop-portal-gtk reports as the light/dark preference (Firefox's
+      # prefers-color-scheme follows it); unset, it reports none. It does not
+      # make home-manager write gtk-4.0/gtk.css.
       gtk = {
         enable = true;
         colorScheme = "dark";

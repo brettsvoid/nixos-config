@@ -1,26 +1,17 @@
-# sketchybar status bar config. Symlinks ~/.config/sketchybar → repo so the
-# whole config tree stays editable in place.
+# sketchybar config. Symlinks ~/.config/sketchybar to the repo so the tree
+# stays editable in place. Only the bar height (EXTERNAL_BAR_HEIGHT) comes
+# from Nix: it's rendered from flake.lib.barGeometry (bar-geometry.nix) into
+# ~/.config/sketchybar-vars.sh, which config.sh sources, so changing it needs
+# a rebuild.
 #
-# The one value that must stay in sync with AeroSpace's window gaps — the bar
-# height (EXTERNAL_BAR_HEIGHT) — is single-sourced in Nix as
-# flake.lib.barGeometry (modules/home/darwin/bar-geometry.nix) and rendered to
-# ~/.config/sketchybar-vars.sh here. config.sh sources that file, so changing
-# the height needs a rebuild; everything else in the dir is read straight off
-# disk.
+# helper/ is a small C program that feeds CPU stats to sketchybar; sketchybarrc
+# runs `make` there on each start (the committed binary is Mach-O arm64).
 #
-# The helper/ subdir contains a small C program that exports CPU stats
-# to sketchybar via the SketchyBar event API. The compiled `helper`
-# binary committed here is Mach-O arm64; if you ever need to rebuild:
-#   cd modules/home/darwin/sketchybar/helper && make
-#
-# The daemon does NOT run: edgebar (apps/edgebar) replaced it, and the only
-# `services.sketchybar` left in the repo is the commented-out block in
-# modules/system/darwin/window-manager-aerospace.nix. This home module is kept
-# on purpose all the same — the config tree is the reference edgebar is being
-# ported from, and the symlink keeps it editable for a side-by-side comparison
-# or a future re-enable. Nothing here starts, reloads or even installs
-# sketchybar — re-enabling means uncommenting that services block, and a
-# `sketchybar --reload` after a geometry change would then be manual.
+# The daemon is disabled (edgebar replaced it): re-enabling means uncommenting
+# services.sketchybar in modules/system/darwin/window-manager-aerospace.nix.
+# This module is kept as the reference edgebar is ported from. Nothing here
+# starts, reloads or installs sketchybar, so a re-enabled daemon would need a
+# manual `sketchybar --reload` after a geometry change.
 { config, ... }:
 let
   geom = config.flake.lib.barGeometry;

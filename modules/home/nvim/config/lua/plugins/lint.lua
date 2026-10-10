@@ -21,7 +21,7 @@ return {
 				require("lint").try_lint()
 			end,
 		})
-		-- No manual <leader>cl trigger: linting already fires on the events
-		-- above, and <leader>cl is owned by trouble.nvim (LSP references).
+		-- No manual lint mapping: the events above cover it, and <leader>cl is
+		-- trouble.nvim's (LSP).
 	end,
 }

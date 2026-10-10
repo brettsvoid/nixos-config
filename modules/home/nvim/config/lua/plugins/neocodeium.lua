@@ -8,7 +8,7 @@ return {
       manual = true,
     }
 
-    -- make sure to have a mapping to accept a completion
+    -- Accept all / word / line
     vim.keymap.set('i', '<M-f>', function()
       neocodeium.accept()
     end)
@@ -18,7 +18,7 @@ return {
     vim.keymap.set('i', '<M-a>', function()
       neocodeium.accept_line()
     end)
-    -- set up some sort of keymap to cycle and complete to trigger completion
+    -- manual = true: <M-e>/<M-r> show and cycle suggestions
     vim.keymap.set('i', '<M-e>', function()
       neocodeium.cycle_or_complete()
     end)

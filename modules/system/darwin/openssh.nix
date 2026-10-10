@@ -1,18 +1,13 @@
-# Apple's built-in OpenSSH server, managed declaratively (darwin half).
+# Apple's built-in OpenSSH server (Remote Login), managed by nix-darwin.
 #
-# Password login on this Mac was never *set* anywhere — `sudo sshd -T` reports
-# `passwordauthentication yes` purely from OpenSSH's compiled-in default, since
-# nix-darwin left sshd_config.d/100-nix-darwin.conf empty. The block below
-# closes that: pubkey-only auth, no keyboard-interactive/PAM password path,
-# no root. (The NixOS hosts get the equivalent from
-# modules/system/nixos/openssh.nix.)
-#
-# Authorised keys are shared across every machine and live in
-# modules/system/authorized-keys.nix, which grafts onto this same module.
+# Without extraConfig, sshd_config.d/100-nix-darwin.conf is empty and sshd
+# falls back to OpenSSH's default of accepting passwords. The block below
+# makes it pubkey-only with no root login, as modules/system/nixos/openssh.nix
+# does on NixOS. Authorised keys: modules/system/authorized-keys.nix.
 _: {
   flake.modules.darwin.openssh = {
     services.openssh = {
-      enable = true; # keep Remote Login on, managed by nix rather than macOS
+      enable = true;
       extraConfig = ''
         PasswordAuthentication no
         KbdInteractiveAuthentication no

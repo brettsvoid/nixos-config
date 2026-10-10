@@ -32,7 +32,8 @@ Rectangle {
     }
 
     // Spectrum bars behind the controls. Loaded from its own file, so a Quickshell
-    // without the shell-native plugin (qs-dev from a plain qs) just leaves them out.
+    // without the shell-native plugin (a plain `qs`, not custom-shell.nix's) just
+    // leaves them out.
     Loader {
         anchors.left: parent.left
         anchors.right: parent.right

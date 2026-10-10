@@ -1,19 +1,15 @@
-# Renders edgebar's runtime config (~/.config/edgebar/config.json) so the one
-# value that must stay in sync with AeroSpace's window gaps — the bar height —
-# is single-sourced in Nix (flake.lib.barGeometry, see bar-geometry.nix) and
-# shared with aerospace.nix's outer.top.
+# Renders edgebar's runtime config (~/.config/edgebar/config.json) from
+# apps/edgebar/src-tauri/config.default.json, which is also the binary's
+# bundled fallback when this file is absent. Edit colours, role maps and
+# geometry there, except geometry.barHeight (from flake.lib.barGeometry,
+# shared with the AeroSpace gaps) and geometry.concave, which are overridden
+# here. The commands the in-app theme view runs are added here too.
 #
-# Colors/role-maps + geometry stay editable in the committed source of truth,
-# apps/edgebar/src-tauri/config.default.json (also the binary's bundled
-# fallback); we import that and override only geometry.barHeight, so editing it
-# there + rebuild is all that's needed. edgebar reads this file at startup,
-# falling back to the bundled default when it's absent.
-#
-# The wallpaper-derived PALETTE is separate: `generate-edgebar-theme` runs
-# matugen (edgebar/matugen) over the current wallpaper to write
-# ~/.config/edgebar/palette.json (light + dark), then pings edgebar's theme.sock
-# so the running bar re-themes live. edgebar falls back to the bundled
-# palette.default.json (Catppuccin Latte/Mocha) when that file is absent.
+# The wallpaper-derived palette is separate: `generate-edgebar-theme` runs
+# matugen over the current wallpaper to write ~/.config/edgebar/palette.json
+# (light + dark), then pings theme.sock so the running bar re-themes live.
+# Without that file edgebar uses the bundled palette.default.json (Catppuccin
+# Latte/Mocha).
 { config, lib, ... }:
 let
   geom = config.flake.lib.barGeometry;
@@ -90,7 +86,7 @@ in
           SRC="$TMP/src.png"
         fi
 
-        # Render to a staging file in OUT's directory, then atomically rename — so
+        # Render to a staging file beside OUT, then rename it into place, so
         # edgebar never reads a half-written palette and concurrent runs can't
         # interleave.
         mkdir -p "$(dirname "$OUT")"
@@ -114,9 +110,8 @@ in
         fi
       '';
 
-      # Wallpaper commands. They only SET the desktop picture; the launchd watcher
-      # below re-themes edgebar from whatever the wallpaper becomes, so the theme
-      # follows the wallpaper however it was changed.
+      # Wallpaper commands. Each sets the desktop picture and re-themes edgebar
+      # directly; the launchd watcher below covers changes made elsewhere.
       cycle-wallpaper = pkgs.writeShellApplication {
         name = "cycle-wallpaper";
         runtimeInputs = [
@@ -141,7 +136,7 @@ in
       };
       # Seeds the persisted scheme choice for this machine. Same
       # stamp-on-change rule as the wallpaper: writes ~/.config/edgebar/scheme
-      # only when the DECLARED scheme differs from the one last applied, so a
+      # only when the declared scheme differs from the one last applied, so a
       # later `select-scheme` pick survives every unchanged rebuild.
       seed-scheme = pkgs.writeShellScript "seed-edgebar-scheme" ''
         stamp="$HOME/.local/state/edgebar/scheme-default"
@@ -190,30 +185,24 @@ in
           select-scheme
         ];
 
-        # Scheme first, so the palette below is generated with it. Runs before
-        # the wallpaper seed's own re-theme too — both are idempotent.
+        # Scheme first, so the palette below is generated with it.
         home.activation.edgebarScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           run ${seed-scheme}
         '';
 
-        # Seed palette.json from the wallpaper on first build (later wallpaper
-        # changes are driven by running generate-edgebar-theme). Absent the
-        # file, edgebar uses the bundled Catppuccin fallback, so a matugen
-        # failure here is non-fatal.
+        # Seed palette.json on first build only. A matugen failure is
+        # non-fatal: without the file edgebar uses its bundled palette.
         home.activation.edgebarTheme = lib.hm.dag.entryAfter [ "edgebarScheme" ] ''
           if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
             run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
           fi
         '';
 
-        # Catch wallpaper changes made OUTSIDE edgebar (System Settings, other
-        # tools) — edgebar's own commands re-theme directly and instantly.
-        # macOS rewrites this plist whenever the desktop picture changes
-        # (verified: desktoppr and System Settings both touch it); launchd
-        # WatchPaths fires generate-edgebar-theme, which reads the now-current
-        # wallpaper and pings the bar. Event-driven, no polling.
-        # ThrottleInterval=1 trims launchd's default 10s minimum respawn so
-        # external changes still follow within ~1s.
+        # Re-theme on wallpaper changes made outside edgebar (System Settings,
+        # other tools). macOS rewrites this plist whenever the desktop picture
+        # changes, so WatchPaths runs generate-edgebar-theme on each change.
+        # ThrottleInterval=1 trims launchd's default 10s respawn minimum so the
+        # bar follows within about a second.
         launchd.agents.edgebar-wallpaper-theme = {
           enable = true;
           config = {

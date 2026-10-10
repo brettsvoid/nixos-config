@@ -16,7 +16,8 @@ function score(query, text) {
     let previous = -2;
     let first = -1;
     for (let i = 0; i < q.length; ++i) {
-        // Prefer the next word start that has this letter, else its next occurrence.
+        // Take the first occurrence that directly follows the previous match or
+        // starts a word, else the first occurrence.
         let at = -1;
         for (let j = t.indexOf(q[i], from); j !== -1; j = t.indexOf(q[i], j + 1)) {
             if (j === previous + 1 || isWordStart(text, j)) {

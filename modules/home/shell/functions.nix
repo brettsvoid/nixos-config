@@ -24,16 +24,14 @@ _: {
           # mkdir + cd in one command (single dir; cd takes one arg)
           md() { mkdir -p -- "$1" && cd -- "$1"; }
 
-          # Quick "what's this" — opens a Google search in the default browser.
-          # Joins all args into the query and picks the platform opener.
+          # Quick "what's this": Google the arguments in the default browser.
           wtf() {
             local q="$*" opener
             if command -v xdg-open >/dev/null 2>&1; then opener=xdg-open; else opener=open; fi
             "$opener" "https://www.google.com/search?q=''${q// /+}"
           }
 
-          # cht.sh launcher: pick a language/util via fzf, prompt for a query,
-          # fetch the cheatsheet from cht.sh.
+          # cht.sh: pick a language or util with fzf, then enter a query.
           cht() {
             local languages="rust lua python typescript nodejs"
             local utils="xargs find mv sed awk"
@@ -56,7 +54,7 @@ _: {
             VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args "$@"
           }
 
-          # Sketchybar brew wrapper: bumps the brew-package count widget
+          # Sketchybar brew wrapper: refreshes the brew-package count widget
           # whenever brew state could have changed.
           if command -v sketchybar >/dev/null 2>&1; then
             brew() {

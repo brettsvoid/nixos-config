@@ -40,7 +40,7 @@ _: {
           set -g allow-passthrough on
           set -gq allow-passthrough on
 
-          # Bind <leader>r to source tmux config
+          # prefix + r reloads the config
           unbind r
           bind r source-file ~/.config/tmux/tmux.conf
 
@@ -82,8 +82,7 @@ _: {
           bind -n M-H previous-window
           bind -n M-L next-window
 
-          # The sesh picker (prefix + T) lives in apps-sesh, alongside the
-          # package it needs — it is not defined here.
+          # prefix + T (the sesh picker) is bound in apps-sesh, beside sesh.
 
           # Status bar position
           set -g status-position bottom

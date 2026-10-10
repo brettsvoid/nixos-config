@@ -1,23 +1,16 @@
 # Spotify, with a launcher that carries its volume across crashes.
 #
-# ─── The problem ───────────────────────────────────────────────────────
-# Spotify keeps its own volume as `app.player.volume` (slider × 65535) in
-# ~/.config/spotify/Users/<id>-user/prefs, and writes it ONLY on a clean quit
-# (window close or MPRIS Quit). It ignores SIGTERM, and powering off from the
-# shell takes XWayland down under it, so in practice it crashed at shutdown
-# (SIGTRAP coredump) and never saved. At launch it pushes that saved value onto
-# its PipeWire stream, overriding WirePlumber's restored per-app volume, and
-# with no saved value it starts at 100%. Net effect: full volume every launch.
+# Spotify saves its volume (`app.player.volume`, slider × 65535, in
+# ~/.config/spotify/Users/<id>-user/prefs) only on a clean quit, which it
+# rarely gets: it ignores SIGTERM and crashes at shutdown. At launch it pushes
+# that value onto its PipeWire stream, overriding WirePlumber's restored
+# volume, and with none saved it starts at 100%.
 #
-# ─── The fix ───────────────────────────────────────────────────────────
-# WirePlumber already records Spotify's stream volume on every change, in
-# ~/.local/state/wireplumber/stream-properties. So the launcher copies that
-# value into Spotify's prefs just before starting it, and Spotify then applies
-# it itself. WirePlumber stores the slider value cubed, hence the cube root.
-#
-# WirePlumber only sees the volume while Spotify has a stream (i.e. is
-# playing). A change made while paused reaches only Spotify's prefs, on a clean
-# quit, so a prefs file newer than WirePlumber's record is left alone.
+# WirePlumber records the stream volume on every change (cubed, hence the
+# cube root) in ~/.local/state/wireplumber/stream-properties, so the launcher
+# copies it into the prefs before starting Spotify. WirePlumber only sees
+# changes while Spotify is playing; one made while paused reaches only the
+# prefs, so a prefs file newer than WirePlumber's record is left alone.
 _: {
   flake.modules.homeManager.apps-spotify =
     { pkgs, ... }:

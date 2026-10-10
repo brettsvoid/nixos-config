@@ -9,9 +9,8 @@ _: {
       ];
       nixpkgs.config.allowUnfree = true;
 
-      # Weekly garbage collection: delete store paths older than 30 days.
-      # `dates` is a systemd OnCalendar string here (the NixOS form),
-      # unlike the launchd StartCalendarInterval used on Darwin.
+      # Weekly GC of generations older than 30 days. (The Macs use
+      # `nh clean` instead: system/darwin/nh-gc.nix.)
       nix.gc = {
         automatic = true;
         dates = "weekly";
@@ -24,13 +23,10 @@ _: {
         dates = [ "weekly" ];
       };
 
-      # Workaround: openldap's test017-syncreplication-refresh is flaky
-      # and intermittently fails on x86_64-linux. openldap arrives as a
-      # transitive build dep of GTK theme stack (gnome-themes-extra ⇒
-      # gnome-keyring ⇒ openldap). When cache.nixos.org has built it we
-      # never see this; on fresh nixpkgs revisions before the cache
-      # catches up, the test runs locally and sometimes fails.
-      # Drop this when the upstream test stabilizes.
+      # Skip openldap's tests: test017-syncreplication-refresh is flaky on
+      # x86_64-linux. The override changes openldap's hash, so it and what
+      # depends on it (gnupg, gpgme, …) are built locally, not fetched from
+      # cache.nixos.org. Drop it once the upstream test is fixed.
       nixpkgs.overlays = [
         (_: prev: {
           openldap = prev.openldap.overrideAttrs (_: {
@@ -45,7 +41,6 @@ _: {
 
       programs.zsh.enable = true;
 
-      # Always-installed system packages
       environment.systemPackages = with pkgs; [
         vim
         git

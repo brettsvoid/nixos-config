@@ -5,12 +5,9 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# The `_lib` suffix keeps the lib name distinct from the bin's (a Windows
+# issue: https://github.com/rust-lang/cargo/issues/8519).
 name = "edgebar_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -21,16 +18,15 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["macos-private-api"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# System metrics for the notch's Metrics view (CPU/RAM/disk/swap). Pure Rust,
-# cross-platform; sampled on demand only while the notch is open (lazy poll).
+# CPU/RAM/disk/swap for the notch's metrics view, and the CPU pill's
+# top-process lookup.
 sysinfo = "0.37"
 
-# Native macOS: NSWindow collection behavior (Stationary, via raw msg_send) and
-# the native frame window drawn with CALayer/CAShapeLayer (no webview). All
-# pinned to the 0.3 objc2 ecosystem already in the tree via tao/wry.
+# Native macOS: AppKit windows, events and icons, and the frame window drawn
+# with CAShapeLayer. Pinned to the objc2 0.3 crates tao/wry already pull in.
 [target.'cfg(target_os = "macos")'.dependencies]
-# mach `host_statistics(HOST_CPU_LOAD_INFO)` for the CPU pill's system/user tick
-# split — sysinfo only exposes an aggregate percentage, with no such breakdown.
+# mach `host_statistics` for the CPU pill's system/user split (sysinfo has no
+# such breakdown), and `proc_pidinfo` for the notch's audio-source lookup.
 libc = "0.2"
 objc2 = "0.6"
 # Objective-C blocks for the NSEvent cursor monitors that drive bar click-through.
@@ -63,9 +59,9 @@ objc2-quartz-core = { version = "0.3", features = [
   "CAShapeLayer",
   "objc2-core-foundation",
 ] }
-# CGWindow/CGGeometry: the on-screen window list that tells us when an app has
-# taken a whole display (native fullscreen), so the bar + frame can get out of
-# the way. Reading bounds/layer needs no screen-recording permission.
+# CGWindow: the on-screen window list that shows when an app has taken a whole
+# display (native fullscreen), so the bar and frame can hide. Reading
+# bounds/layer needs no screen-recording permission.
 objc2-core-graphics = { version = "0.3", features = [
   "CGColor",
   "CGPath",
@@ -80,9 +76,8 @@ objc2-core-foundation = { version = "0.3", features = [
   "CFString",
 ] }
 
-# Event-driven network reachability (SCNetworkReachability): pushes a network
-# update on route/interface/VPN changes instead of polling on a timer. The 0.9
-# core-foundation matches the run-loop types this crate's reachability API expects
-# (distinct from the objc2-core-foundation above; both coexist).
+# SCNetworkReachability: pushes a network update on route/interface/VPN
+# changes instead of polling. core-foundation 0.9 matches the run-loop types
+# system-configuration 0.7 expects (separate from objc2-core-foundation).
 system-configuration = "0.7"
 core-foundation = "0.9"

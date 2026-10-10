@@ -17,12 +17,11 @@ ShellRoot {
         Lock.locked;
     }
 
-    // Hyprland's workspacev2 event does not say which monitor the workspace is on, so
-    // Quickshell gives it to the monitor it last saw focused. Switching another screen
-    // to a new workspace while the pointer is on this one moves focus there and back
-    // before that event, so this screen takes the workspace and keeps it until it is
-    // next focused. Re-reading the monitors once the burst of events is over puts each
-    // screen's active workspace right again.
+    // Hyprland's workspacev2 event does not name the monitor, so Quickshell gives the
+    // workspace to the monitor it last saw focused. Switching another screen's
+    // workspace while the pointer is here moves focus there and back first, so this
+    // screen takes it. Re-reading the monitors once the events settle puts each screen
+    // right again.
     Connections {
         target: Hyprland
 

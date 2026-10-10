@@ -1,16 +1,10 @@
 #!/bin/sh
 #
-# Catppuccin colour palette for SketchyBar.
-#
-# Layered so there's a single source of truth:
+# Catppuccin colour palette for SketchyBar, in three layers:
 #   1. Raw palette  — the canonical Catppuccin colours, opaque (0xff…).
 #   2. Surfaces     — base tints, some pre-alpha'd for translucent backgrounds.
 #   3. Semantic roles (COLOR_*) — what sketchybarrc and the plugins reference.
-#      Accents and backgrounds carry an 0xe0 alpha (~88%) so brackets stay
-#      slightly translucent, matching the original look.
-#
-# Previously this file paired a Gruvbox accent set (mislabelled "Catpuccin")
-# with a Catppuccin base. It is now Catppuccin throughout.
+#      Most carry an 0xe0 alpha (~88%) so brackets stay slightly translucent.
 
 # ── Raw palette (opaque) ────────────────────────────────────────────────────
 export RED=0xffed8796
@@ -45,7 +39,7 @@ export BG1=0x603c3e4f
 export BG2=0x60494d64
 
 # ── Semantic roles ──────────────────────────────────────────────────────────
-# Accents, translucent (0xe0) to preserve the original bracket appearance.
+# Accents (0xe0 alpha, except orange).
 export COLOR_RED=0xe0ed8796
 export COLOR_GREEN=0xe0a6da95
 export COLOR_YELLOW=0xe0eed49f
@@ -70,7 +64,8 @@ export COLOR_ICON=$COLOR_YELLOW
 export COLOR_LABEL=$COLOR_YELLOW
 export COLOR_DATE_TIME=$COLOR_RED
 
-# Bar chrome (referenced by sketchybarrc's appearance block)
+# Bar chrome. Unused: sketchybarrc reassigns these, and its bar and item
+# defaults use the COLOR_* roles instead.
 export BAR_COLOR=$BG0O85
 export BAR_BORDER_COLOR=$BG2
 export BACKGROUND_1=$BG1

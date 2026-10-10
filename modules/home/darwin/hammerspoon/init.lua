@@ -34,12 +34,6 @@ end
 -- 	unbind()
 -- end)
 
--- hs.hotkey.bind({ "cmd", "alt" }, "A", "Open Application", function()
--- 	for _, app in pairs(apps) do
--- 		app:enable()
--- 	end
--- end)
-
 -- local apps_mode = hs.hotkey.modal.new({ "cmd", "shift" }, "a", "Open Application")
 -- apps_mode:bind({}, "escape", function()
 -- 	hs.alert("Exited")

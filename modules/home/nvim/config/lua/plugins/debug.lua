@@ -19,20 +19,15 @@ end
 return {
 	"mfussenegger/nvim-dap",
 	dependencies = {
-		-- Creates a beautiful debugger UI
 		"rcarriga/nvim-dap-ui",
-
-		-- Virtual text for the debugger
 		{ "theHamsta/nvim-dap-virtual-text", opts = {} },
+		"nvim-neotest/nvim-nio", -- required by nvim-dap-ui
 
-		-- Required dependency for nvim-dap-ui
-		"nvim-neotest/nvim-nio",
-
-		-- Installs the debug adapters for you
+		-- Debug adapter installs
 		"williamboman/mason.nvim",
 		"jay-babu/mason-nvim-dap.nvim",
 
-		-- Add your own debuggers here
+		-- Language configs
 		"leoluz/nvim-dap-go",
 		"mxsdev/nvim-dap-vscode-js", -- typescript
 		"mfussenegger/nvim-dap-python", -- python
@@ -42,16 +37,13 @@ return {
 		local dapui = require("dapui")
 
 		require("mason-nvim-dap").setup({
-			-- Makes a best effort to setup the various debuggers with
-			-- reasonable debug configurations
+			-- Install adapters set up via dap that Mason doesn't have yet
 			automatic_installation = true,
 
-			-- You can provide additional configuration to the handlers,
-			-- see mason-nvim-dap README for more information
+			-- Empty: mason-nvim-dap's default setup for each adapter
 			handlers = {},
 
 			ensure_installed = {
-				-- Update this to ensure that you have the debuggers for the langs you want
 				"python", -- debugpy, used by dap-python below
 			},
 		})
@@ -80,10 +72,8 @@ return {
 		vim.keymap.set("n", "<leader>dt", dap.terminate, { desc = "Debug: Terminate" })
 		vim.keymap.set("n", "<leader>dw", require("dap.ui.widgets").hover, { desc = "Debug: Widgets" })
 
-		-- Dap UI setup
-		-- For more information, see |:help nvim-dap-ui|
 		dapui.setup({
-			-- Set icons to characters that are more likely to work in every terminal.
+			-- Icons likely to render in any terminal
 			icons = { expanded = "▾", collapsed = "▸", current_frame = "*" },
 			controls = {
 				icons = {
@@ -100,18 +90,18 @@ return {
 			},
 		})
 
-		-- Toggle to see last session result. Without this, you can't see session output in case of unhandled exception.
 		vim.keymap.set({ "n", "v" }, "<leader>de", dapui.eval, { desc = "Debug: Eval" })
+		-- Toggle the UI, e.g. to see the last session's output after an unhandled exception
 		vim.keymap.set("n", "<leader>du", dapui.toggle, { desc = "Debug: Dap UI" })
 
 		dap.listeners.after.event_initialized["dapui_config"] = dapui.open
 		dap.listeners.before.event_terminated["dapui_config"] = dapui.close
 		dap.listeners.before.event_exited["dapui_config"] = dapui.close
 
-		-- Install golang specific config
+		-- Go
 		require("dap-go").setup({})
 
-		-- Install python specific config
+		-- Python
 		require("dap-python").setup(vim.fn.stdpath("data") .. "/mason/packages/debugpy/venv/bin/python")
 
 		dap.configurations.python = {
@@ -123,10 +113,8 @@ return {
 			},
 		}
 
-		-- Install typescript specific config
+		-- JS/TS
 		require("dap-vscode-js").setup({
-			--node_path = "node",
-			--debugger_path = vim.fn.stdpath("data") .. "/mason/packages/js-debug-adapter/js-debug/src/dapDebugServer.js",
 			debugger_path = vim.fn.stdpath("data") .. "/mason/packages/js-debug-adapter",
 			debugger_cmd = { "js-debug-adapter" },
 			adapters = { "pwa-node", "pwa-chrome", "pwa-msedge", "node-terminal", "pwa-extensionHost" },
@@ -137,7 +125,6 @@ return {
 			"typescript",
 			"javascriptreact",
 			"typescriptreact",
-			-- using pwa-chrome
 			"vue",
 			"svelte",
 		}
@@ -214,7 +201,6 @@ return {
 					cwd = "${workspaceFolder}",
 					processId = require("dap.utils").pick_process,
 					skipFiles = { "<node_internals>/**" },
-					--args = { "${port}" },
 					port = 9229,
 				},
 			}

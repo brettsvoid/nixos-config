@@ -1,14 +1,10 @@
--- nixd — evaluation-driven Nix LSP. Unlike nil (static lints), nixd links the
--- real Nix evaluator, so the `nixpkgs`/`options` exprs below unlock:
---   • option completion (services.*, programs.*, home.*) with types/defaults
---   • hover docs and goto-definition into nixpkgs / home-manager sources
---   • package completion under `with pkgs; [ ... ]`
--- The exprs are evaluated impurely via builtins.getFlake on this repo; each was
--- checked with `nix eval` before being committed.
+-- nixd — evaluation-driven Nix LSP. The `nixpkgs`/`options` exprs below
+-- (evaluated impurely via builtins.getFlake on this repo) give option and
+-- package completion, hover docs and goto-definition into nixpkgs/home-manager.
 local flake = '(builtins.getFlake "' .. os.getenv("HOME") .. '/nixos-config")'
 
--- Map hostname -> the flake attribute holding *this* machine's evaluated config,
--- so the laptop doesn't try to evaluate the darwin host (or vice versa).
+-- Hostname -> this machine's evaluated config, so each host only evaluates its
+-- own system. Unlisted hosts get no option completion.
 local hosts = {
 	["brett-m1-mbp"] = { kind = "nix-darwin", attr = flake .. ".darwinConfigurations.brett-m1-mbp" },
 	["brett-msi-laptop"] = { kind = "nixos", attr = flake .. ".nixosConfigurations.brett-msi-laptop" },
@@ -36,8 +32,7 @@ return {
 		nixd = {
 			nixpkgs = { expr = "import " .. flake .. ".inputs.nixpkgs { }" },
 			options = options,
-			-- Match the repo's formatter (formatter.nix / git-hooks use
-			-- nixfmt-rfc-style), not the previous nixpkgs-fmt.
+			-- Match formatter.nix and the git-hooks pre-commit.
 			formatting = { command = { "nixfmt" } },
 		},
 	},

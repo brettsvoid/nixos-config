@@ -1,34 +1,21 @@
-# nix-darwin window-manager stack for AeroSpace — the only WM stack; both
-# Macs import it. (It replaced a yabai/skhd/sketchybar stack, removed once
-# both hosts had settled on AeroSpace; `git log -- modules/home/darwin/yabai`
-# has it if it is ever wanted back.)
+# AeroSpace, the window manager on both Macs.
+#   - Virtual workspaces rather than macOS Spaces, so no SIP changes.
+#   - Its own hotkey engine: all bindings are in
+#     modules/home/darwin/aerospace/aerospace.toml.in.
+#   - gaps.outer.top reserves the edgebar band (flake.lib.barGeometry.outerTop).
 #
-# Notes:
-#   - Virtual workspaces (not native macOS Spaces), so no SIP work and no
-#     scripting addition are needed.
-#   - Built-in hotkey engine, so no separate hotkey daemon. The
-#     aerospace.toml under modules/home/darwin/aerospace/ holds all bindings.
-#   - The top-of-screen band for the edgebar overlay is reserved via
-#     gaps.outer.top (= barHeight + outerGap = 42 from flake.lib.barGeometry).
-#     The sketchybar daemon is disabled below — edgebar replaced it.
-#
-# nix-darwin has no `services.aerospace` module yet, so we register a
-# launchd user agent manually. `--start-at-login`-style behaviour is
-# unnecessary because launchd loads us at user-session start.
+# A hand-written launchd user agent, not nix-darwin's services.aerospace
+# (which the pinned nix-darwin has). launchd starts it at login, so
+# AeroSpace's own start-at-login stays off.
 _: {
   flake.modules.darwin.window-manager-aerospace =
     { pkgs, ... }:
     {
       environment.systemPackages = [ pkgs.aerospace ];
 
-      # AeroSpace ships two binaries:
-      #   - bin/aerospace        — CLI client (what `aerospace reload-config` etc. uses)
-      #   - Applications/AeroSpace.app/Contents/MacOS/AeroSpace — the GUI/server
-      # Running the CLI as a daemon just prints the help banner and exits;
-      # the server lives in the .app bundle. macOS also needs the launchd
-      # process to be visible as the .app for Accessibility permission to
-      # stick to the right identity, which is why we exec the bundle's
-      # binary directly.
+      # The server is the binary inside the .app; bin/aerospace is only the
+      # CLI client. Running the bundle's binary also keeps Accessibility
+      # permission tied to the .app's identity.
       launchd.user.agents.aerospace = {
         command = "${pkgs.aerospace}/Applications/AeroSpace.app/Contents/MacOS/AeroSpace";
         serviceConfig = {
@@ -40,16 +27,11 @@ _: {
         };
       };
 
-      # macOS Accessibility (TCC) can't be pre-seeded without SIP off —
-      # which is the whole reason we picked AeroSpace. So when permission
-      # is missing, the only honest thing to do is tell the user how to
-      # grant it and how to restart AeroSpace afterward. No auto-restart.
-      #
-      # AeroSpace itself writes "Successfully reset Accessibility approval
-      # status" to /tmp/aerospace.out.log when it's running without
-      # permission, so we use that as the detection signal. Truncating
-      # the log after printing means the message will reappear if the
-      # condition recurs after the next rebuild.
+      # Accessibility permission (TCC) can't be pre-granted with SIP on, so
+      # say how to grant it when it's missing. AeroSpace logs "Successfully
+      # reset Accessibility approval status" when running without it; the
+      # log is truncated afterwards so the notice only reappears if the
+      # problem recurs.
       system.activationScripts.postActivation.text = ''
                 log="/tmp/aerospace.out.log"
                 if [ -f "$log" ] && grep -q "reset Accessibility approval" "$log"; then
@@ -72,8 +54,7 @@ _: {
                 fi
       '';
 
-      # Disabled — replaced by the edgebar Tauri overlay (apps/edgebar).
-      # Re-enable to bring the sketchybar daemon back.
+      # Disabled: the edgebar Tauri overlay (apps/edgebar) replaced it.
       # services.sketchybar = {
       #   enable = true;
       #   package = pkgs.sketchybar;

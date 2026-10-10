@@ -1,9 +1,6 @@
-# Ghostty doesn't yet have a first-class home-manager module on every channel,
-# so we manage it via xdg.configFile + the package directly.
-#
-# On Darwin the package install is skipped — nixpkgs.ghostty currently
-# blocks aarch64-darwin, so we let the homebrew cask own the binary and
-# nix only manages the config file.
+# Ghostty, configured through a raw xdg.configFile rather than home-manager's
+# programs.ghostty. On Darwin only the config is managed: nixpkgs' ghostty is
+# Linux-only, so the Homebrew cask provides the app.
 { config, ... }:
 let
   theme = config.flake.lib.theme;

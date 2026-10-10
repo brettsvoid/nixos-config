@@ -1,20 +1,12 @@
-# Declare `flake.darwinConfigurations` as a mergeable attrset so more than one
-# host file can contribute a machine. Same reasoning as lib.nix: flake-parts
-# otherwise treats it as one opaque flake output, and the second host file to
-# define it fails with "defined multiple times … can't be merged".
+# Declare `flake.darwinConfigurations` as a mergeable attrset so each host file
+# can add a machine. As with lib.nix, flake-parts otherwise treats it as one
+# opaque output and the second host file fails with "defined multiple times …
+# can't be merged". `raw`, not `anything`: hosts must never be deep-merged.
+# `lazyAttrsOf` so evaluating one host doesn't force the others.
 #
-# This only surfaces at the second host of a given class — one nixosSystem and
-# one darwinSystem coexisted fine because they are different attributes.
-#
-# `raw` rather than `anything` (which lib.nix uses): a system configuration is
-# an opaque value keyed by hostname, and deep-merging two of them is never what
-# is wanted — hosts should stay independent. `lazyAttrsOf` so evaluating one
-# host doesn't force the others.
-#
-# nixosConfigurations is deliberately NOT declared here: flake-parts declares it
-# upstream (modules/nixosConfigurations.nix) as of 2026-07-01, and declaring it
-# again is a hard error — "already declared in …". Drop this whole file if
-# flake-parts ever ships the darwin equivalent too.
+# Don't declare nixosConfigurations here: flake-parts already does
+# (modules/nixosConfigurations.nix), and a second declaration is an error.
+# Drop this file if flake-parts adds the darwin equivalent.
 { lib, ... }:
 {
   options.flake.darwinConfigurations = lib.mkOption {

@@ -1,21 +1,17 @@
-# Sets the macOS desktop picture. nix-darwin has no native wallpaper option,
-# and the old `System Events` AppleScript route has been broken since Sonoma,
-# so we drive `desktoppr` (NSWorkspace.setDesktopImageURL under the hood).
+# Sets the macOS desktop picture with `desktoppr`: nix-darwin has no
+# wallpaper option, and the `System Events` AppleScript route has been broken
+# since Sonoma.
 #
-# The image comes from ~/Pictures/Wallpapers, which the `desktop-wallpapers`
-# home module populates from modules/home/desktop/wallpapers — so this module
-# requires that one to be imported alongside it (done in the host's imports).
-# Pointing at the home copy rather than a /nix/store path keeps the wallpaper
-# stable across GC and visible in Finder.
+# The image comes from ~/Pictures/Wallpapers, populated by the
+# desktop-wallpapers home module, so import that alongside this one. The home
+# path, unlike a /nix/store path, stays stable across GC.
 #
-# Per machine: set `local.wallpaper.default` in the host file's home-manager
-# block. It falls back to flake.lib.wallpaper.default when a host says nothing.
+# Per machine: set `local.wallpaper.default` in the host's home-manager block;
+# it falls back to flake.lib.wallpaper.default.
 #
-# Activation SEEDS the wallpaper, it does not pin it. A stamp file records the
-# declared name that was last applied, and we only call desktoppr when the
-# declared name differs. So `select-wallpaper`/`cycle-wallpaper` picks survive
-# every later rebuild, while editing the host's default still takes effect on
-# the next switch.
+# Activation seeds the wallpaper rather than pinning it: a stamp file records
+# the last declared name applied, and desktoppr only runs when that changes.
+# So `select-wallpaper`/`cycle-wallpaper` picks survive unchanged rebuilds.
 { config, ... }:
 let
   wp = config.flake.lib.wallpaper;

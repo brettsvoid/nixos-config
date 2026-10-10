@@ -1,16 +1,14 @@
--- nil — static-analysis Nix LSP (oxalica/nil), runs alongside nixd.
--- nil contributes the lints nixd lacks (unused let bindings, unused `with`,
--- dead code, deprecated syntax); nixd contributes evaluation-driven
--- completion. Formatting is owned by conform (nixfmt), so nil's
--- formatting capability is never invoked here.
+-- nil — static-analysis Nix LSP, run alongside nixd (evaluation-driven
+-- completion). Their lints overlap: nixd also flags unused let bindings and
+-- `with`. Formatting is conform's (nixfmt).
 return {
 	filetypes = { "nix" },
 	root_markers = { "flake.nix", "default.nix", "shell.nix", ".git" },
 	settings = {
 		["nil"] = {
 			nix = {
-				-- Don't copy flake inputs into the store just to analyze; keeps
-				-- nil fast and avoids surprise network/store churn on open.
+				-- Only load flake inputs already on disk: never `nix flake archive`
+				-- (may use the network), and don't ask each time (the null default).
 				flake = { autoArchive = false },
 			},
 		},

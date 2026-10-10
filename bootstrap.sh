@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-command bootstrap. Usage: bootstrap.sh [hostname]
-# Detects platform, ensures Nix is installed, clones the repo,
-# and runs the appropriate rebuilder.
+# Installs Nix if missing (macOS only), clones the repo and runs the
+# platform's rebuilder.
 set -euo pipefail
 
 REPO_URL="https://github.com/brettsvoid/nixos-config.git"
@@ -19,20 +19,13 @@ if ! command -v nix >/dev/null 2>&1; then
       # shellcheck disable=SC1091
       . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
     else
-      # Upstream Nix, NOT Determinate. nix-darwin manages Nix here (nix.enable
-      # defaults true) and its activation check aborts with "Determinate
-      # detected" if /usr/local/bin/determinate-nixd exists — see nix-darwin's
-      # modules/system/checks.nix, gated on `mkIf config.nix.enable`. To adopt
-      # Determinate instead, set nix.enable = false (and lose the `nix.*`
-      # options: nix.settings and nix.optimise in system/darwin/common.nix
-      # would have to move to /etc/nix/nix.custom.conf, outside this repo).
-      #
-      # `--prefer-upstream-nix` is REQUIRED, not belt-and-braces. Omitting it
-      # used to give upstream Nix, but as of nix-installer v3.21.8 Determinate
-      # is the default — a plain `install` puts the machine straight into the
-      # state that aborts activation. Recovery is
-      # `sudo /nix/nix-installer uninstall` followed by a reinstall with the
-      # flag. (Equivalent env var: NIX_INSTALLER_PREFER_UPSTREAM_NIX=1.)
+      # Upstream Nix, not Determinate: nix-darwin manages Nix here
+      # (nix.enable, default true) and aborts activation if
+      # /usr/local/bin/determinate-nixd exists. The installer defaults to
+      # Determinate since v3.21.8, so --prefer-upstream-nix is required.
+      # Adopting Determinate instead means nix.enable = false, with
+      # nix.settings and nix.optimise (system/darwin/common.nix) moving to
+      # /etc/nix/nix.custom.conf, outside this repo.
       echo "==> Installing Nix (upstream)"
       curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
         | sh -s -- install --prefer-upstream-nix
@@ -42,11 +35,9 @@ if ! command -v nix >/dev/null 2>&1; then
   fi
 fi
 
-# 1b. Refuse to continue against a Determinate install. Deliberately OUTSIDE
-# the block above: the common case is a machine that already has Determinate
-# Nix on PATH, where none of the install branches run at all. Failing here
-# with a fix is friendlier than failing at activation with "Determinate
-# detected", which happens after a full build.
+# 1b. Refuse to continue on Determinate Nix. Outside the block above, which a
+# machine with Determinate already on PATH skips entirely. Failing here beats
+# failing at activation, after a full build.
 if [[ "$uname_s" == "Darwin" && -e /usr/local/bin/determinate-nixd ]]; then
   echo "==> ERROR: Determinate Nix detected (/usr/local/bin/determinate-nixd)." >&2
   echo "    nix-darwin refuses to activate while nix.enable = true, because" >&2

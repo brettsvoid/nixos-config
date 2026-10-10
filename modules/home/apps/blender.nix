@@ -1,17 +1,11 @@
-# Blender from nixpkgs rather than the Homebrew cask. The darwin build
-# installs a real Blender.app bundle (plus a `blender` CLI wrapper), which
-# home-manager's targets.darwin.linkApps symlinks into
-# ~/Applications/Home Manager Apps — the same route terminals-kitty takes.
+# Blender from nixpkgs rather than the Homebrew cask. On darwin the package
+# ships Blender.app (plus a `blender` wrapper), which home-manager's
+# targets.darwin.linkApps symlinks into ~/Applications/Home Manager Apps.
+# The cask would also bring a `command_wrapper` artifact, the type that broke
+# `brew bundle` on the mini (see modules/hosts/brett-mac-mini.nix).
 #
-# nixpkgs is the preferred source for anything it packages; a cask is the
-# fallback for what it does not. Beyond the usual pinning argument, casks
-# are exposed to artifact skew: the blender cask declares a
-# `command_wrapper`, the artifact type whose arrival in the kitty cask
-# aborted `brew bundle` mid-activation on the mini (see that host file).
-#
-# Preferences live in ~/Library/Application Support/Blender/<major.minor>,
-# outside the store, so upgrades leave them alone and each series keeps its
-# own directory.
+# Preferences live outside the store, in
+# ~/Library/Application Support/Blender/<major.minor>.
 _: {
   flake.modules.homeManager.apps-blender =
     { pkgs, ... }:

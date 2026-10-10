@@ -1,58 +1,35 @@
-# Homebrew, fully managed by nix via two cooperating layers:
-#   * nix-homebrew installs and owns /opt/homebrew itself, so a fresh Mac
-#     bootstraps Homebrew from `darwin-rebuild switch` alone — no separate
-#     install step. brew lives in the nix store, but while nix-homebrew is
-#     active that path is part of the system closure (a GC root), so it
-#     can't be garbage-collected out from under us. (Abandoning it is what
-#     orphaned the old store path and broke brew — hence the re-adoption.)
-#   * nix-darwin's built-in `homebrew = { ... }` module runs `brew bundle`
-#     at activation to install the taps/brews/casks declared below.
-# mutableTaps stays at its default (true), so the third-party taps below
-# are added imperatively by brew and don't each need to be a flake input.
+# Homebrew, managed by nix in two layers:
+#   * nix-homebrew installs and owns /opt/homebrew, so a fresh Mac gets
+#     Homebrew from `darwin-rebuild switch` alone. Its brew lives in the nix
+#     store but is part of the system closure, so GC can't remove it.
+#   * nix-darwin's `homebrew` module runs `brew bundle` at activation for
+#     the taps/brews/casks below. mutableTaps stays true, so taps are added
+#     by brew and need not be flake inputs.
 #
 # ─── nixpkgs first; Homebrew is the fallback ────────────────────────────
-# A package belongs in this file only when nixpkgs has no working darwin
-# build of it. Before adding a cask or brew, check the repo's own pinned
-# nixpkgs — not `nixpkgs#...`, which resolves through the floating registry:
+# Add a package here only when nixpkgs has no working darwin build. Check
+# the repo's pinned nixpkgs (not `nixpkgs#...`, the floating registry):
 #
 #   nix eval .#darwinConfigurations.brett-m1-mbp.pkgs.<pkg>.meta.platforms
 #   nix build --dry-run .#darwinConfigurations.brett-m1-mbp.pkgs.<pkg>
 #
-# The first must list aarch64-darwin. The second must say "will be
-# fetched" rather than "will be built" — a from-source build of a large GUI
-# app is not worth taking. (It prints nothing at all when the closure is
-# already local.) If both pass, add modules/home/apps/<name>.nix exposing
-# `flake.modules.homeManager.apps-<name>` with `home.packages`, import it
-# from the host, and leave this file alone. modules/home/apps/blender.nix
-# is the worked example — home-manager's targets.darwin.linkApps (on by
-# default) symlinks any $out/Applications bundle into
-# ~/Applications/Home Manager Apps, so a GUI app lands somewhere usable
-# without a cask.
+# The first must list aarch64-darwin; the second must say "will be fetched",
+# not "will be built" (it prints nothing if the closure is already local).
+# If both pass, write a modules/home/apps/<name>.nix module instead, as
+# modules/home/apps/blender.nix does: home-manager's linkApps (on at this
+# home.stateVersion) puts its .app in ~/Applications/Home Manager Apps.
+# Besides pinning, a cask can gain an artifact type the pinned brew does not
+# implement, and a failing `brew bundle` aborts the whole switch (the kitty
+# cask did this on the mini; see modules/hosts/brett-mac-mini.nix).
 #
-# The reason is not only pinning. A failing `brew bundle` aborts the whole
-# switch, and a cask can gain an artifact type the pinned brew does not
-# implement — which is how the kitty cask broke activation on the mini (see
-# modules/hosts/brett-mac-mini.nix).
-#
-# The lists below predate this rule and have not been audited against it,
-# so a package sitting here is not evidence that nixpkgs lacks it.
-#
-# `onActivation.cleanup = "uninstall"` — the brews/casks lists are
-# authoritative: anything installed but not declared here is uninstalled on
-# activation (cask user-data is preserved; "zap" would also wipe that).
+# The lists below predate this rule and have not been audited against it.
 #
 # ─── Shared vs. per-host ────────────────────────────────────────────────
-# The lists below are the SHARED set: everything installed on every Mac.
-# Host-only packages live in the host file (modules/hosts/*.nix), which
-# appends to the same options — `taps`/`brews`/`casks` are list options, so
-# the module system concatenates them and the authoritative Brewfile for a
-# given machine is shared ++ that host's extras. Adding a package to only
-# one Mac means editing only that host file; nothing here needs to change.
-#
-# Because cleanup is authoritative, a package missing from BOTH lists is
-# uninstalled on the next switch — so when adding a host, snapshot its
-# `brew leaves --installed-on-request` first and put anything worth keeping
-# in its host file.
+# The lists below are installed on every Mac. Host-only packages go in the
+# host file (modules/hosts/*.nix); the list options concatenate, so each
+# Mac's Brewfile is this plus its host's extras. cleanup = "uninstall"
+# removes anything in neither, so before adding a host, check its
+# `brew leaves --installed-on-request` and keep what's worth keeping.
 _: {
   flake.modules.darwin.homebrew =
     {
@@ -65,31 +42,26 @@ _: {
     {
       imports = [ inputs.nix-homebrew.darwinModules.nix-homebrew ];
 
-      # nix-homebrew installs and owns Homebrew, so `switch` bootstraps it
-      # on a fresh machine. autoMigrate lets it adopt a pre-existing
-      # /opt/homebrew (keeping installed packages) rather than erroring.
+      # autoMigrate adopts an existing /opt/homebrew, keeping its packages,
+      # rather than erroring.
       nix-homebrew = {
         enable = true;
         user = flake.lib.username;
         autoMigrate = true;
-        # Baked into the `brew` launcher, so it applies to every brew call
-        # including the activation bundle — not just interactive shells.
+        # Set in the `brew` launcher, so it covers every brew call,
+        # activation included.
         extraEnv.HOMEBREW_NO_ANALYTICS = "1";
       };
 
-      # Two ordered steps wrapped around nix-darwin's bundle (default,
-      # 1000), so this single attribute needs mkMerge. Both run as user
-      # brett so trust.json / the cache dir are brett's, not root's.
+      # Three steps ordered around nix-darwin's bundle (default priority,
+      # 1000). They run as brett so trust.json and the cache stay his.
       system.activationScripts.homebrew.text = lib.mkMerge [
         # ─── Trust non-official taps before `brew bundle` ───────────
-        # brew 6.x refuses to load formulae/casks from non-official taps
-        # unless trusted (HOMEBREW_REQUIRE_TAP_TRUST defaults to true; the
-        # opt-out is deprecated). Trust exactly the declared taps — `brew
-        # trust` persists to trust.json, is idempotent, accepts many taps
-        # at once, and doesn't need them tapped first (bundle taps them).
-        # mkOrder 600: after nix-homebrew's prefix setup (mkBefore, 500)
-        # installs brew, before the bundle. On a fresh Mac brew doesn't
-        # exist until this activation, so no earlier phase could do it.
+        # brew 6.x won't load formulae/casks from non-official taps unless
+        # they are trusted (HOMEBREW_REQUIRE_TAP_TRUST defaults to true).
+        # `brew trust` is idempotent and doesn't need the taps tapped yet.
+        # mkOrder 600: after nix-homebrew installs brew (mkBefore, 500),
+        # before the bundle.
         (lib.mkOrder 600 ''
           if [ -x /opt/homebrew/bin/brew ]; then
             sudo --user=${flake.lib.username} --set-home /opt/homebrew/bin/brew trust --tap ${
@@ -98,20 +70,13 @@ _: {
           fi
         '')
         # ─── Upgrade the casks marked `greedy` ──────────────────────
-        # `onActivation.upgrade` stays false: a blanket upgrade would also
-        # re-run the .pkg casks (sonobus, blackhole-*), whose installers
-        # macOS App Management blocks from modifying an app bundle that
-        # already exists — and `brew bundle` failing aborts the whole
-        # switch. So upgrades are opt-in per cask via `greedy = true`.
-        #
-        # `--greedy` is what makes it work at all: every cask worth marking
-        # here is an `auto_updates` cask (it ships its own updater, which is
-        # what nags), and brew never considers those outdated without it.
-        #
-        # mkOrder 1400: after the bundle (1000) has installed anything
-        # missing, before `brew cleanup` (mkAfter, 1500) reclaims the
-        # download it just used. `|| true` for the same reason the upgrade
-        # is out of the bundle — a failed upgrade must not fail the switch.
+        # Not onActivation.upgrade: that would also re-run the .pkg casks
+        # (sonobus, blackhole-*), whose installers macOS App Management
+        # blocks from modifying an existing app, failing the whole switch.
+        # `--greedy` is needed because brew never reports `auto_updates`
+        # casks as outdated without it. mkOrder 1400: after the bundle,
+        # before `brew cleanup` (mkAfter, 1500). `|| true` so a failed
+        # upgrade can't fail the switch.
         (lib.mkOrder 1400 (
           let
             greedy = map (c: c.name) (lib.filter (c: c.greedy == true) config.homebrew.casks);
@@ -124,9 +89,8 @@ _: {
           ''
         ))
         # ─── Prune caches/logs after `brew bundle` ──────────────────
-        # --force-cleanup uninstalls undeclared *packages* but doesn't
-        # reclaim cache disk space, and the bundle never runs a full
-        # `brew cleanup`. mkAfter (1500) runs this after the bundle.
+        # The bundle's cleanup uninstalls undeclared packages but doesn't
+        # reclaim cache space, and it never runs a full `brew cleanup`.
         (lib.mkAfter ''
           if [ -x /opt/homebrew/bin/brew ]; then
             sudo --user=${flake.lib.username} --set-home /opt/homebrew/bin/brew cleanup || true
@@ -139,38 +103,23 @@ _: {
         onActivation = {
           autoUpdate = false;
           upgrade = false;
-          # Authoritative: any formula/cask installed but not declared here
-          # is uninstalled on activation. "uninstall" (not "zap") so cask
-          # user-data/preferences are preserved.
+          # Uninstall anything not declared. "uninstall", not "zap", keeps
+          # cask user data and preferences.
           cleanup = "uninstall";
-          # nix-darwin emits `brew bundle ... --cleanup`, which in brew 6.x
-          # only *asks* to clean up (it requires --force/--force-cleanup/
-          # $HOMEBREW_ASK). --force-cleanup makes activation unattended; it's
-          # narrower than --force, which would also overwrite installs.
+          # Redundant at the pinned nix-darwin, which already passes
+          # --force-cleanup for cleanup = "uninstall".
           extraFlags = [ "--force-cleanup" ];
         };
 
-        # Third-party taps. homebrew/{core,cask,bundle} are auto-tapped by
-        # brew on first use and don't need to be declared here.
-        #
-        # Empty: no *shared* brew comes from a third-party tap — every
-        # tapped formula belongs to a single host, so the taps are declared
-        # alongside them in the host files. Kept as an explicit `[ ]` so the
-        # shared/per-host split is visible rather than looking like an
-        # oversight.
+        # No shared formula comes from a third-party tap, so taps live in
+        # the host files. homebrew/{core,cask,bundle} need no declaring.
         taps = [ ];
 
-        # `brew leaves --installed-on-request`. Anything migratable to
-        # nixpkgs without losing platform-specific behaviour should move
-        # over time; the remainder lives here. Items intentionally absent
-        # because nix manages them (and the brew copy is redundant):
-        # `direnv` (programs.direnv in profile-code), `aerospace` (a launchd
-        # agent in system/darwin/window-manager-aerospace.nix);
-        # `gh` (programs.gh in apps-git),
-        # `lazygit`/`git-delta`(→delta)/`git-lfs` (profile-code),
-        # `bat`/`fd`/`dust`/`duf`/`procs`/`zoxide` (shell-tools),
-        # `awscli`(→awscli2) (profile-work). The brew copies shadowed the
-        # nix ones on PATH; removed here + `brew uninstall`d (cleanup=none).
+        # Deliberately absent because nix installs them, and brew copies
+        # would shadow them on PATH: direnv, lazygit, git-delta, git-lfs
+        # (profile-code), gh (apps-git), bat, fd, dust, duf, procs, zoxide
+        # (shell-tools), awscli (profile-work) and aerospace
+        # (window-manager-aerospace.nix).
         brews = [
           "age"
           "angband"
@@ -225,13 +174,10 @@ _: {
           "sevenzip"
           "sshs"
           "taskwarrior-tui"
-          # Was declared for the skhd bindings' desktop notifications; skhd
-          # is gone and nothing in the repo calls this any more. Kept anyway,
-          # deliberately: macOS binds notification authorisation to the
-          # delivering bundle, both Macs have already authorised THIS copy,
-          # and undeclaring it would uninstall it and throw that grant away.
-          # Homebrew rather than nixpkgs for the same reason. Drop it if you
-          # are sure you want no ad-hoc notifier on PATH.
+          # netwatch's alerts use it (/opt/homebrew/bin/terminal-notifier).
+          # Homebrew rather than nixpkgs because macOS ties notification
+          # permission to the delivering bundle, and both Macs have granted
+          # it to this copy.
           "terminal-notifier"
           "terragrunt"
           "tflint"
@@ -248,9 +194,8 @@ _: {
           "zsh-syntax-highlighting"
         ];
 
-        # Snapshot from `brew list --cask`. `syncthing` (moved to formula) and
-        # `zen-browser` (renamed to `zen`) are stale local-only entries —
-        # excluded here so brew bundle doesn't fail on them.
+        # Not `syncthing` or `zen-browser`: Homebrew renamed those casks to
+        # `syncthing-app` and `zen`.
         casks = [
           "amethyst"
           "bitwarden"
@@ -262,9 +207,8 @@ _: {
           "font-symbols-only-nerd-font"
           "ghostty"
           "hammerspoon"
-          # greedy: karabiner-elements is an `auto_updates` cask, so brew
-          # never reports it outdated and its own updater is what nags. See
-          # the greedy-upgrade activation step above.
+          # greedy: an `auto_updates` cask, which brew only upgrades greedily
+          # (see the greedy-upgrade step above).
           {
             name = "karabiner-elements";
             greedy = true;

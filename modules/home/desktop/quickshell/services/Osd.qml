@@ -64,8 +64,7 @@ Singleton {
     }
 
     // The brightness keys run brightnessctl themselves (so they work under any shell)
-    // and also fire this. Read the level once the change has landed. Only backlights:
-    // without the class, brightnessctl falls back to a keyboard LED.
+    // and also fire this. Read the level once the change has landed.
     GlobalShortcut {
         appid: "custom-shell"
         name: "brightness"
@@ -84,6 +83,7 @@ Singleton {
         onTriggered: brightnessRead.running = true
     }
 
+    // Backlights only: without the class, brightnessctl falls back to a keyboard LED.
     Process {
         id: brightnessRead
         command: ["brightnessctl", "--machine-readable", "--class=backlight", "info"]

@@ -87,8 +87,8 @@ fn read_times() -> Vec<Times> {
         .collect()
 }
 
-/// The package sensor: Intel's coretemp "Package id 0", AMD's k10temp "Tctl", else the
-/// first input of either driver.
+/// The package sensor: coretemp's "Package id 0", or "Tctl" / "Tdie" from k10temp or
+/// zenpower; else the first input of any of those drivers.
 fn find_temp_sensor() -> Option<String> {
     let mut fallback = None;
     for entry in fs::read_dir("/sys/class/hwmon").ok()?.flatten() {
