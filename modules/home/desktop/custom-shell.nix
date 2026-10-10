@@ -14,7 +14,68 @@ in
       ...
     }:
     let
-      qsPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      # The audio visualiser's QML plugin (shell-native: Rust, cxx-qt), `import
+      # CustomShell.Native`. cxx-qt finds Qt through qmake, which has to see Qt's QML
+      # module as well, and qtbase's setup hook points QMAKE at its own, so it is set
+      # again before the build. cxx-qt links with lld; pipewire-rs needs bindgen.
+      shell-native = pkgs.rustPlatform.buildRustPackage {
+        pname = "shell-native";
+        version = "0.1.0";
+        src = ./shell-native;
+        cargoLock.lockFile = ./shell-native/Cargo.lock;
+        nativeBuildInputs = [
+          pkgs.pkg-config
+          pkgs.lld
+          pkgs.rustPlatform.bindgenHook
+        ];
+        buildInputs = [
+          pkgs.qt6.qtbase
+          pkgs.qt6.qtdeclarative
+          pkgs.pipewire
+        ];
+        dontWrapQtApps = true;
+        preBuild = ''
+          export QMAKE=${pkgs.qt6.env "qt-cxxqt" [ pkgs.qt6.qtdeclarative ]}/bin/qmake
+        '';
+        # The test binary links Qt and PipeWire but has no rpath to them.
+        preCheck = ''
+          export LD_LIBRARY_PATH=${
+            lib.makeLibraryPath [
+              pkgs.qt6.qtbase
+              pkgs.qt6.qtdeclarative
+              pkgs.pipewire
+              pkgs.stdenv.cc.cc.lib
+            ]
+          }
+        '';
+        # The library, renamed as the module's qmldir names it, beside its qmldir.
+        installPhase = ''
+          runHook preInstall
+          dir=$out/lib/qt-6/qml/CustomShell/Native
+          mkdir -p $dir
+          module=$(find target -path '*qml_modules/CustomShell/Native' -type d | head -n 1)
+          cp "$module/qmldir" "$module/plugin.qmltypes" $dir/
+          cp "$(find target -name libshell_native.so -path '*release*' | head -n 1)" $dir/libCustomShell_Native.so
+          runHook postInstall
+        '';
+        # Linked as a plugin, it gets no run path; give it the Qt and PipeWire it was
+        # built against (the same Qt as Quickshell's).
+        postFixup = ''
+          patchelf --add-rpath ${
+            lib.makeLibraryPath [
+              pkgs.qt6.qtbase
+              pkgs.qt6.qtdeclarative
+              pkgs.pipewire
+              pkgs.stdenv.cc.cc.lib
+            ]
+          } $out/lib/qt-6/qml/CustomShell/Native/libCustomShell_Native.so
+        '';
+      };
+
+      # Quickshell with the shell's own QML modules on its import path.
+      qsPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default.withModules [
+        shell-native
+      ];
 
       # Qt loads shaders as .qsb, so each one under quickshell/shaders is compiled
       # here and by qs-dev. A shader that does not compile fails the build.
@@ -30,6 +91,11 @@ in
       iconThemeEnv = lib.optionalString (
         config.gtk.iconTheme != null
       ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
+
+      # MangoHud is on for the whole session (profile-gaming), and its Vulkan layer
+      # loads into the shell too, where its NVIDIA thread took about 28% of a core all
+      # the time (measured on brett-desktop, 2026-10-10). Keep it out of the shell.
+      noMangoHud = "export DISABLE_MANGOHUD=1";
 
       # `custom-shell-or <drawer> <fallback...>` opens one of the custom shell's drawers
       # while that shell runs (its global shortcut is registered), and runs the fallback
@@ -148,6 +214,7 @@ in
             echo "Starting custom shell..."
             export QSG_RHI_BACKEND=vulkan
             ${iconThemeEnv}
+            ${noMangoHud}
             ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" >/dev/null 2>&1 &
             echo $! > "$CUSTOM_PID_FILE"
             echo "Custom shell started (pid $!)"
@@ -293,6 +360,7 @@ in
         echo "Runs ON TOP of ambxst -- nothing killed."
         export QSG_RHI_BACKEND=vulkan
         ${iconThemeEnv}
+        ${noMangoHud}
         exec ${qsPkg}/bin/qs -p "$SHELL_DIR"
       '';
     in

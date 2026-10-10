@@ -1,0 +1,22 @@
+[package]
+name = "shell-native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Native QML types for the custom Quickshell shell: the audio spectrum."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
+pipewire = "0.10"
+rustfft = "6"
+
+[build-dependencies]
+cxx-qt-build = "0.10"
+
+[profile.release]
+strip = true

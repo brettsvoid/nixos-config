@@ -30,6 +30,19 @@ Rectangle {
         onTriggered: root.player.positionChanged()
     }
 
+    // Spectrum bars behind the controls. Loaded from its own file, so a Quickshell
+    // without the shell-native plugin (qs-dev from a plain qs) just leaves them out.
+    Loader {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: Theme.spacingLarge
+        height: 72
+        visible: root.player !== null
+        source: "Visualiser.qml"
+        onLoaded: item.active = Qt.binding(() => root.player?.isPlaying ?? false)
+    }
+
     Column {
         anchors.centerIn: parent
         visible: root.player === null
