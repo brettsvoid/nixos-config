@@ -11,3 +11,15 @@ function step(event) {
         return -1;
     return 0;
 }
+
+// Ctrl+D and Ctrl+U, as in Vim and less: half a page down or up (ScrollBar.halfPage).
+// Returns 1 for down, -1 for up and 0 for any other key.
+function halfPage(event) {
+    if ((event.modifiers & Qt.ControlModifier) === 0)
+        return 0;
+    if (event.key === Qt.Key_D)
+        return 1;
+    if (event.key === Qt.Key_U)
+        return -1;
+    return 0;
+}

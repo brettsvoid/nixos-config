@@ -5,12 +5,14 @@ import Quickshell.Io
 import "../components"
 import "../services"
 import "../theme"
+import "../components/navigation.js" as Navigation
 
 // The dashboard's wallpaper tab: the images in ~/Pictures/Wallpapers as a grid, the
 // current one outlined; choosing one sets it, and the theme follows. Above, matugen's
 // light or dark and its scheme variant. Thumbnails come from wallpaper-thumbnails
 // (custom-shell.nix), run once each time the tab opens; it only makes missing ones.
 // Both folders are watched, so a new image, then its thumbnail, show while it is open.
+// The arrow keys move through the grid, and Ctrl+D and Ctrl+U half a page.
 FocusScope {
     id: root
 
@@ -117,6 +119,13 @@ FocusScope {
 
         Keys.onReturnPressed: Wallpaper.set(images.get(grid.currentIndex, "filePath"))
         Keys.onEnterPressed: Wallpaper.set(images.get(grid.currentIndex, "filePath"))
+        Keys.onPressed: event => {
+            const half = Navigation.halfPage(event);
+            if (half === 0)
+                return;
+            scrollBar.halfPage(half, true);
+            event.accepted = true;
+        }
 
         delegate: Item {
             id: cell

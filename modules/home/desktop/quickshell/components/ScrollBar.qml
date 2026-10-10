@@ -10,6 +10,9 @@ import "../theme"
 // wheel is caught by an area over the view, as a sibling: Flickable takes wheel events
 // from its children, so a handler inside it never sees them. That area takes only the
 // wheel, so clicks and hover still reach the view.
+//
+// The keys are left to the view's owner, which knows what has focus: it calls
+// halfPage() for Ctrl+D and Ctrl+U (navigation.js).
 Item {
     id: root
 
@@ -39,6 +42,37 @@ Item {
         // Repeated notches add up from where the last one was heading.
         const from = motion.running ? motion.to : root.flickable.contentY;
         root.scrollTo(from + delta, true);
+    }
+
+    // Half a page down (1) or up (-1), for Ctrl+D and Ctrl+U. With `moveCurrent`, the
+    // view's current item (a ListView's or GridView's) moves as far too, as in Vim, so
+    // it keeps its place on screen; where the view can go no further, the current item
+    // still moves. That takes no animation: the view keeps its current item in sight,
+    // and would jump to it part way through one.
+    function halfPage(direction, moveCurrent) {
+        const view = root.flickable;
+        const distance = direction * view.height / 2;
+        const current = moveCurrent ? view.currentItem : null;
+        if (!current) {
+            root.scrollBy(distance);
+            return;
+        }
+        const before = view.contentY;
+        // Where its middle is on screen; one scrolled out of sight counts as at the edge.
+        const offset = Math.max(0, Math.min(view.height - 1, current.y + current.height / 2 - before));
+        root.scrollTo(before + distance, false);
+        view.forceLayout();
+        // The item half a page on from that place, in the same column (a GridView's). A
+        // section heading or gap has no item, so it looks on in the same direction; past
+        // either end, it is the first or last item.
+        const x = current.x + current.width / 2;
+        const end = view.originY + view.contentHeight;
+        let index = -1;
+        for (let y = before + offset + distance; index < 0 && y >= view.originY && y < end; y += direction * 4)
+            index = view.indexAt(x, y);
+        if (index < 0)
+            index = direction > 0 ? view.count - 1 : 0;
+        view.currentIndex = index;
     }
 
     implicitWidth: 8

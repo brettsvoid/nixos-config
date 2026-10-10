@@ -2,9 +2,11 @@ import QtQuick
 import "../components"
 import "../services"
 import "../theme"
+import "../components/navigation.js" as Navigation
 
 // The notification history drawer's content: everything not yet dismissed, grouped by
 // app (the app with the latest notification first), with do-not-disturb and clear all.
+// Ctrl+D and Ctrl+U scroll half a page.
 FocusScope {
     id: root
 
@@ -27,6 +29,14 @@ FocusScope {
 
     implicitWidth: 420
     implicitHeight: 640
+
+    Keys.onPressed: event => {
+        const half = Navigation.halfPage(event);
+        if (half === 0)
+            return;
+        scrollBar.halfPage(half, false);
+        event.accepted = true;
+    }
 
     Item {
         id: header

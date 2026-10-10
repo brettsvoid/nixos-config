@@ -10,7 +10,8 @@ import "../components/navigation.js" as Navigation
 // shows depends on the mode, picked by the prefix the query starts with; apps are the
 // mode without one. A mode provides `prefix`, `placeholder`, `results(query)` and
 // `activate(item)`, and optionally `refresh()`, called when the mode is entered; it is
-// added to `modes`. Up and Down, or Ctrl+P and Ctrl+N, move through the results.
+// added to `modes`. Up and Down, or Ctrl+P and Ctrl+N, move through the results, and
+// Ctrl+D and Ctrl+U half a page.
 FocusScope {
     id: root
 
@@ -81,12 +82,15 @@ FocusScope {
 
             Keys.onPressed: event => {
                 const step = Navigation.step(event);
-                if (step === 0)
-                    return;
+                const half = Navigation.halfPage(event);
                 if (step > 0)
                     list.incrementCurrentIndex();
-                else
+                else if (step < 0)
                     list.decrementCurrentIndex();
+                else if (half !== 0)
+                    scrollBar.halfPage(half, true);
+                else
+                    return;
                 event.accepted = true;
             }
             Keys.onReturnPressed: root.activate(list.currentIndex)

@@ -7,7 +7,7 @@ import "../components/navigation.js" as Navigation
 
 // The keybind cheatsheet drawer's content: every Hyprland bind, read when it opens,
 // grouped by purpose. Typing filters by keys or description; Up and Down, or Ctrl+P and
-// Ctrl+N, move through the list.
+// Ctrl+N, move through the list, and Ctrl+D and Ctrl+U half a page.
 FocusScope {
     id: root
 
@@ -68,9 +68,13 @@ FocusScope {
 
             Keys.onPressed: event => {
                 const step = Navigation.step(event);
-                if (step === 0)
+                const half = Navigation.halfPage(event);
+                if (step !== 0)
+                    list.currentIndex = Math.max(0, Math.min(list.count - 1, list.currentIndex + step));
+                else if (half !== 0)
+                    scrollBar.halfPage(half, true);
+                else
                     return;
-                list.currentIndex = Math.max(0, Math.min(list.count - 1, list.currentIndex + step));
                 event.accepted = true;
             }
 

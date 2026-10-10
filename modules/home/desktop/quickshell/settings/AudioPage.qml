@@ -16,6 +16,11 @@ FocusScope {
     readonly property var inputs: root.nodes.filter(node => !node.isStream && !node.isSink)
     readonly property var streams: root.nodes.filter(node => node.isStream)
 
+    // Ctrl+D and Ctrl+U, from the settings window.
+    function halfPage(direction) {
+        scrollBar.halfPage(direction, false);
+    }
+
     function label(node) {
         return node.properties["application.name"] || node.description || node.nickname || node.name;
     }

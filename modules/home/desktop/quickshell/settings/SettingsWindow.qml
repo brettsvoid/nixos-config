@@ -3,11 +3,13 @@ import Quickshell
 import "../config"
 import "../services"
 import "../theme"
+import "../components/navigation.js" as Navigation
 
 // The settings window: a normal window, which a window rule floats and centres
 // (custom-shell.nix, matched on the title). The pages are listed on the left and only
-// the one showing is loaded. Escape closes it; Ctrl+Tab moves to the next page. The
-// whole window exists only while open (shell.qml), so nothing here runs otherwise.
+// the one showing is loaded. Escape closes it; Ctrl+Tab moves to the next page, and
+// Ctrl+D and Ctrl+U scroll it half a page. The whole window exists only while open
+// (shell.qml), so nothing here runs otherwise.
 FloatingWindow {
     id: root
 
@@ -55,11 +57,16 @@ FloatingWindow {
 
         Keys.onEscapePressed: Windows.settings = false
         Keys.onPressed: event => {
+            const half = Navigation.halfPage(event);
             if (event.key === Qt.Key_Tab && event.modifiers & Qt.ControlModifier) {
                 root.show((root.current + 1) % root.pages.length);
                 event.accepted = true;
             } else if (event.key === Qt.Key_Backtab && event.modifiers & Qt.ControlModifier) {
                 root.show((root.current + root.pages.length - 1) % root.pages.length);
+                event.accepted = true;
+            } else if (half !== 0 && page.item.halfPage) {
+                // Only a page that scrolls has halfPage().
+                page.item.halfPage(half);
                 event.accepted = true;
             }
         }
@@ -167,6 +174,7 @@ FloatingWindow {
         }
 
         Loader {
+            id: page
             anchors.top: warning.visible ? warning.bottom : parent.top
             anchors.bottom: parent.bottom
             anchors.left: sidebar.right

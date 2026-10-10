@@ -42,6 +42,11 @@ FocusScope {
         }
     }
 
+    // Ctrl+D and Ctrl+U, from the settings window.
+    function halfPage(direction) {
+        scrollBar.halfPage(direction, false);
+    }
+
     function glyph(device) {
         // BlueZ's icon names, as in freedesktop's icon theme.
         const glyphs = {

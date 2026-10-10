@@ -22,6 +22,11 @@ FocusScope {
     // What went wrong, by network name.
     property var failures: ({})
 
+    // Ctrl+D and Ctrl+U, from the settings window.
+    function halfPage(direction) {
+        scrollBar.halfPage(direction, false);
+    }
+
     function setFailure(name, text) {
         const failures = Object.assign({}, root.failures);
         if (text)

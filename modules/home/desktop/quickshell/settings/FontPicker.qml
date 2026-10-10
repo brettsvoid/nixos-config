@@ -5,8 +5,8 @@ import "../theme"
 import "../components/navigation.js" as Navigation
 
 // Chooses the shell's font from the installed families, each shown in itself. Typing
-// filters the list; Up and Down, or Ctrl+P and Ctrl+N, move; Enter or a click chooses;
-// Escape closes.
+// filters the list; Up and Down, or Ctrl+P and Ctrl+N, move, and Ctrl+D and Ctrl+U half
+// a page; Enter or a click chooses; Escape closes.
 // The icons are Nerd Font glyphs: in a font without them, fontconfig falls back to one
 // that has them (FiraCode Nerd Font here).
 Rectangle {
@@ -60,12 +60,15 @@ Rectangle {
             onTextChanged: list.currentIndex = 0
             Keys.onPressed: event => {
                 const step = Navigation.step(event);
-                if (step === 0)
-                    return;
+                const half = Navigation.halfPage(event);
                 if (step > 0)
                     list.incrementCurrentIndex();
-                else
+                else if (step < 0)
                     list.decrementCurrentIndex();
+                else if (half !== 0)
+                    scrollBar.halfPage(half, true);
+                else
+                    return;
                 event.accepted = true;
             }
             Keys.onReturnPressed: root.choose(root.families[list.currentIndex])
