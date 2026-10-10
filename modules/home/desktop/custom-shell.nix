@@ -31,14 +31,18 @@ in
         config.gtk.iconTheme != null
       ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
 
-      # Super+R: the custom shell's launcher while it runs (its global shortcut is
-      # registered), Fuzzel under the other shells. Fuzzel goes once the custom shell is
-      # the session's shell (custom-shell issue 22).
-      app-launcher = pkgs.writeShellScriptBin "app-launcher" ''
-        if hyprctl globalshortcuts -j | ${pkgs.jq}/bin/jq -e 'any(.[]; .name == "custom-shell:launcher")' >/dev/null; then
-          exec hyprctl dispatch global custom-shell:launcher
+      # `custom-shell-or <drawer> <fallback...>` opens one of the custom shell's drawers
+      # while that shell runs (its global shortcut is registered), and runs the fallback
+      # under the other shells. It keeps Super+R and Super+/ working everywhere until
+      # the custom shell is the session's shell (custom-shell issue 22), which binds the
+      # globals directly and drops Fuzzel.
+      custom-shell-or = pkgs.writeShellScriptBin "custom-shell-or" ''
+        drawer=$1
+        shift
+        if hyprctl globalshortcuts -j | ${pkgs.jq}/bin/jq -e --arg name "custom-shell:$drawer" 'any(.[]; .name == $name)' >/dev/null; then
+          exec hyprctl dispatch global "custom-shell:$drawer"
         fi
-        exec ${pkgs.fuzzel}/bin/fuzzel
+        exec "$@"
       '';
 
       shellConfig = pkgs.runCommand "custom-shell-config" { } ''
@@ -236,7 +240,7 @@ in
         toggle-shell
         qs-dev
         generate-theme
-        app-launcher
+        custom-shell-or
       ];
 
       xdg.configFile."quickshell/custom-shell".source = shellConfig;
@@ -246,7 +250,8 @@ in
       # matches a key, so this shares Super+Escape with Caelestia's and ambxst's menus.
       wayland.windowManager.hyprland.settings = {
         bindd = [
-          "$mod, R, App launcher, exec, app-launcher"
+          "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
+          "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
           "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
         ];
         # The brightness keys still run brightnessctl (hyprland.nix); this also tells

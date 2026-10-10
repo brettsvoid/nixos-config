@@ -413,7 +413,6 @@ in
             "$mod, F, Toggle fullscreen, fullscreen"
             "$mod, V, Toggle floating, togglefloating"
             "$mod, M, Exit Hyprland, exit"
-            "$mod, slash, Keybinding cheatsheet, exec, hypr-cheatsheet"
 
             # Focus (ALT + arrow keys)
             "ALT, Left, Focus window left, movefocus, l"

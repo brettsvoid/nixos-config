@@ -52,6 +52,13 @@ ShellRoot {
         onPressed: Drawers.toggle("launcher")
     }
 
+    GlobalShortcut {
+        appid: "custom-shell"
+        name: "cheatsheet"
+        description: "Open or close the keybind cheatsheet"
+        onPressed: Drawers.toggle("cheatsheet")
+    }
+
     // One set of windows per screen; screens added or removed come and go with
     // Quickshell.screens.
     Variants {

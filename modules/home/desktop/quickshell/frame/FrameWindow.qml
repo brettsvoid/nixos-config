@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import "../bar"
+import "../cheatsheet"
 import "../launcher"
 import "../osd"
 import "../services"
@@ -27,7 +28,7 @@ PanelWindow {
     readonly property real fillet: Theme.frameFillet * reveal
     // The area inside the frame, below the bar.
     readonly property rect inside: Qt.rect(thickness, barHeight, width - thickness * 2, height - barHeight - thickness)
-    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open
+    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open || cheatsheetDrawer.open
 
     anchors {
         top: true
@@ -78,6 +79,10 @@ PanelWindow {
         Region {
             item: launcherDrawer.hitArea
         }
+
+        Region {
+            item: cheatsheetDrawer.hitArea
+        }
     }
 
     FrameShape {
@@ -96,6 +101,7 @@ PanelWindow {
             },
             sessionDrawer.shape,
             launcherDrawer.shape,
+            cheatsheetDrawer.shape,
             osdDrawer.shape
         ]
         fillet: root.fillet
@@ -123,6 +129,17 @@ PanelWindow {
         open: Drawers.isOpen("launcher", root.screen?.name ?? "")
         content: Component {
             Launcher {}
+        }
+    }
+
+    Drawer {
+        id: cheatsheetDrawer
+        anchors.fill: parent
+        edge: "top"
+        inside: root.inside
+        open: Drawers.isOpen("cheatsheet", root.screen?.name ?? "")
+        content: Component {
+            Cheatsheet {}
         }
     }
 
