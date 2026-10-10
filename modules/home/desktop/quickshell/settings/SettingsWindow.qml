@@ -22,6 +22,11 @@ FloatingWindow {
             name: "Audio",
             icon: 0xF057E, // md-volume_high
             component: audioPage
+        },
+        {
+            name: "Network",
+            icon: 0xF05A9, // md-wifi
+            component: networkPage
         }
     ]
     readonly property int current: Math.max(0, root.pages.findIndex(page => page.name === Windows.settingsPage))
@@ -177,5 +182,11 @@ FloatingWindow {
         id: audioPage
 
         AudioPage {}
+    }
+
+    Component {
+        id: networkPage
+
+        NetworkPage {}
     }
 }

@@ -5,3 +5,4 @@ SettingRow 1.0 SettingRow.qml
 SliderRow 1.0 SliderRow.qml
 FontPicker 1.0 FontPicker.qml
 AudioPage 1.0 AudioPage.qml
+NetworkPage 1.0 NetworkPage.qml
