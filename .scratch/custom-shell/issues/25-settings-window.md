@@ -1,6 +1,6 @@
 # Settings window and settings file
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -38,16 +38,50 @@ other pages are issues 26 to 29.
 
 ## Acceptance criteria
 
-- [ ] The keybind, the session menu and the dashboard button all open the window. Opening
+- [x] The keybind, the session menu and the dashboard button all open the window. Opening
       it again brings it forward rather than opening a second one.
-- [ ] Changing the font, rounding, frame thickness or animation speed changes the shell at
+- [x] Changing the font, rounding, frame thickness or animation speed changes the shell at
       once. The change is still there after `toggle-shell custom` restarts the shell.
-- [ ] Wallpaper, scheme and light/dark changed here show in the dashboard's Wallpaper
+- [x] Wallpaper, scheme and light/dark changed here show in the dashboard's Wallpaper
       tab, and the other way round.
-- [ ] A hand edit of `settings.json` applies without a restart. A missing or invalid
+- [x] A hand edit of `settings.json` applies without a restart. A missing or invalid
       file gives the defaults, and the shell still starts.
-- [ ] With the window closed, settings start no timers and no processes.
+- [x] With the window closed, settings start no timers and no processes.
 
 ## Blocked by
 
 None - can start immediately.
+
+## Comments
+
+**2026-10-10:** Done in fc9e432. It is not live until the next `nix-rebuild` and
+`toggle-shell custom`: it was tested from the working tree with qs-dev.
+
+- **Keybind:** Super+I, as on Windows, was free. The cheatsheet reads `hyprctl binds`,
+  so the bind's description puts it there.
+- **Where:** `settings/` (window and pages), `config/Settings.qml` (the store, which
+  imports nothing else from the shell so Theme can read it) and `services/Windows.qml`
+  (open or closed, and the page shown).
+- **Decisions:**
+  - Settings are keyed `section.name` and stored nested. Each has a default and a range
+    in `schema`; the file holds only what the user changed.
+  - Text size, corner rounding and animation speed are scales on Theme's tokens. Speed
+    k gives the springs k² times the stiffness and divides durations by k. The bar's
+    height does not follow the text size.
+  - Any installed font can be chosen. The Nerd Font icons still draw in another font,
+    because fontconfig falls back to FiraCode Nerd Font for them; checked with DejaVu
+    Sans Mono.
+- **Two Quickshell behaviours worked round:**
+  - FileView watches the file's directory, and only if that existed when it loaded. A
+    file made later by hand was never seen, so the directory is made once and the file
+    read again.
+  - `loaded` comes after the first reads, so the shell started with the defaults and
+    then changed. The store reads `text()` on completion instead; blockLoading makes it
+    wait.
+- **Checked live**, with a virtual pointer and wtype; see the commit for the list.
+- **Not checked:** pressing Super+I itself. Hyprland runs no binds for wtype's virtual
+  keyboard (Super+D did nothing either). The global it calls was checked, and the bind is
+  in the generated `hyprland.conf`.
+- **Left on the desktop:** a runtime copy of the window rule, the same as the one in the
+  config, until Hyprland next reloads. `~/.config/custom-shell/` exists, with no
+  settings file.
