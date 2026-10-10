@@ -7,8 +7,9 @@
 # a reload re-reads the whole config, which also drops binds other programs added at
 # runtime (Caelestia adds some) and re-applies the monitor rules.
 #
-# The state is in $XDG_RUNTIME_DIR/game-mode/state, "on" or "off", for a shell to show
-# and watch; other programs change it by running `game-mode`. CPU-side tuning is Feral
+# The state is the file $XDG_RUNTIME_DIR/game-mode, "on" or "off", for a shell to show
+# and watch (a file directly in the runtime directory, which always exists, so a watcher
+# sees it appear); other programs change it by running `game-mode`. CPU-side tuning is Feral
 # GameMode's job (profile-gaming) and is not touched here.
 #
 # Tearing: game mode turns on `general:allow_tearing`, the master switch. Hyprland only
@@ -30,10 +31,10 @@ _: {
             pkgs.libnotify
           ]
         }:$PATH
-        DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/game-mode"
-        STATE="$DIR/state"
+        DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+        STATE="$DIR/game-mode"
         # The values to put back, one `keyword <option> <value>` per line.
-        SAVED="$DIR/saved"
+        SAVED="$DIR/game-mode.saved"
         OPTIONS="animations:enabled decoration:shadow:enabled decoration:blur:enabled general:gaps_in general:gaps_out general:border_size decoration:rounding general:allow_tearing"
 
         status() {
@@ -41,7 +42,6 @@ _: {
         }
 
         write_state() {
-          mkdir -p "$DIR"
           echo "$1" > "$STATE.tmp"
           mv "$STATE.tmp" "$STATE"
         }
@@ -53,7 +53,6 @@ _: {
 
         on() {
           [ "$(status)" = on ] && return 0
-          mkdir -p "$DIR"
           : > "$SAVED.tmp"
           for option in $OPTIONS; do
             # An int, a float or a custom string such as "8 8 8 8".

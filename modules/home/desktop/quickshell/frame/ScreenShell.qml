@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import "../services"
 import "../theme"
 
 // Everything the shell puts on one screen: the frame window, and four windows that
@@ -36,7 +37,10 @@ Scope {
     // 120 ms each, which held the frame back for most of a second. The edges stay
     // reserved: a fullscreen window ignores them, and the windows behind it do not
     // re-tile.
-    property real reveal: root.fullscreen ? 0 : 1
+    //
+    // Game mode (services/GameMode.qml) does the same, and also releases the edges, so
+    // a windowed game gets the whole screen.
+    property real reveal: root.fullscreen || GameMode.on ? 0 : 1
 
     Behavior on reveal {
         NumberAnimation {
@@ -48,25 +52,25 @@ Scope {
     EdgeReservation {
         screen: root.modelData
         edge: "top"
-        size: Theme.barHeight
+        size: GameMode.on ? 0 : Theme.barHeight
     }
 
     EdgeReservation {
         screen: root.modelData
         edge: "bottom"
-        size: Theme.frameThickness
+        size: GameMode.on ? 0 : Theme.frameThickness
     }
 
     EdgeReservation {
         screen: root.modelData
         edge: "left"
-        size: Theme.frameThickness
+        size: GameMode.on ? 0 : Theme.frameThickness
     }
 
     EdgeReservation {
         screen: root.modelData
         edge: "right"
-        size: Theme.frameThickness
+        size: GameMode.on ? 0 : Theme.frameThickness
     }
 
     WallpaperWindow {

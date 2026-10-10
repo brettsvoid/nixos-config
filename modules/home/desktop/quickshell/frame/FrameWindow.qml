@@ -218,6 +218,8 @@ PanelWindow {
         anchors.right: parent.right
         height: root.barHeight
         opacity: root.reveal
+        // Hidden, its clock and icons no longer ask for redraws.
+        visible: root.reveal > 0
         screen: root.screen
     }
 }

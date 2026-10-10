@@ -6,9 +6,9 @@ import Quickshell.Io
 import Quickshell.Services.Notifications
 
 // The shell's notification server. Every notification goes into the history; a pop-up
-// shows unless do-not-disturb is on, but critical ones always show. Pop-ups hide after
-// the app's timeout (5 s if it gives none), except critical ones, which wait to be
-// closed; the history keeps everything until it is dismissed.
+// shows unless do-not-disturb or game mode is on, but critical ones always show.
+// Pop-ups hide after the app's timeout (5 s if it gives none), except critical ones,
+// which wait to be closed; the history keeps everything until it is dismissed.
 //
 // Only one program can own org.freedesktop.Notifications. If another has it (mako starts
 // on demand when nothing owns it), the server takes over as soon as that one leaves.
@@ -64,7 +64,8 @@ Singleton {
             notification.tracked = true;
             // An app closing it, or a dismiss, takes it off the screen too.
             notification.closed.connect(() => root.hidePopup(notification));
-            if (!root.doNotDisturb || notification.urgency === NotificationUrgency.Critical) {
+            const quiet = root.doNotDisturb || GameMode.on;
+            if (!quiet || notification.urgency === NotificationUrgency.Critical) {
                 root.screen = Hyprland.focusedMonitor?.name ?? "";
                 root.popups = [notification].concat(root.popups);
             }

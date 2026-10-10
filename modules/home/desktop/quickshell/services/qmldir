@@ -4,3 +4,4 @@ singleton Osd 1.0 Osd.qml
 singleton AppUsage 1.0 AppUsage.qml
 singleton Notifications 1.0 Notifications.qml
 singleton Wallpaper 1.0 Wallpaper.qml
+singleton GameMode 1.0 GameMode.qml
