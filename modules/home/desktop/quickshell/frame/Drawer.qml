@@ -14,6 +14,9 @@ Item {
     property string edge: "right"
     property bool open: false
     property Component content
+    // Whether its content takes the keyboard focus when it opens. The OSD does not, so
+    // it never pulls focus away from a menu that is open.
+    property bool takesFocus: true
     // The inside of the frame. The drawer centres on it, and the content is clipped to
     // it, so it slides out from behind the frame.
     property rect inside
@@ -127,9 +130,12 @@ Item {
                 anchors.margins: Theme.drawerPadding
                 active: root.shown
                 sourceComponent: root.content
-                focus: true
+                focus: root.takesFocus
 
-                onLoaded: item.forceActiveFocus()
+                onLoaded: {
+                    if (root.takesFocus)
+                        item.forceActiveFocus();
+                }
             }
         }
     }

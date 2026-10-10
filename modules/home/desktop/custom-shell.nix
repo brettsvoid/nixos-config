@@ -220,9 +220,17 @@ in
       # The shell's drawers are Hyprland global shortcuts, like Caelestia's panels: each
       # does nothing while this shell is not running. Hyprland runs every bind that
       # matches a key, so this shares Super+Escape with Caelestia's and ambxst's menus.
-      wayland.windowManager.hyprland.settings.bindd = [
-        "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
-      ];
+      wayland.windowManager.hyprland.settings = {
+        bindd = [
+          "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
+        ];
+        # The brightness keys still run brightnessctl (hyprland.nix); this also tells
+        # the shell, which shows the new level. The backlight sends no change events.
+        binddel = [
+          ", XF86MonBrightnessUp, Show the brightness level (custom shell), global, custom-shell:brightness"
+          ", XF86MonBrightnessDown, Show the brightness level (custom shell), global, custom-shell:brightness"
+        ];
+      };
 
       home.activation.generateTheme = config.lib.dag.entryAfter [ "writeBoundary" ] ''
         CACHE_DIR="$HOME/.cache/qs-theme"

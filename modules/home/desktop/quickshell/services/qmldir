@@ -1,2 +1,3 @@
 module services
 singleton Drawers 1.0 Drawers.qml
+singleton Osd 1.0 Osd.qml

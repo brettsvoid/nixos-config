@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import "../bar"
+import "../osd"
 import "../services"
 import "../session"
 import "../theme"
@@ -88,7 +89,8 @@ PanelWindow {
                 height: root.barHeight + Theme.frameFillet,
                 radius: 0
             },
-            sessionDrawer.shape
+            sessionDrawer.shape,
+            osdDrawer.shape
         ]
         fillet: root.fillet
         shadowSize: Theme.frameShadowSize * root.reveal
@@ -104,6 +106,20 @@ PanelWindow {
         open: Drawers.isOpen("session", root.screen?.name ?? "")
         content: Component {
             SessionMenu {}
+        }
+    }
+
+    // The on-screen display. It takes no input: it is not in the mask, and leaves the
+    // keyboard alone.
+    Drawer {
+        id: osdDrawer
+        anchors.fill: parent
+        edge: "bottom"
+        inside: root.inside
+        open: Osd.shown && Osd.screen === (root.screen?.name ?? "")
+        takesFocus: false
+        content: Component {
+            OsdContent {}
         }
     }
 
