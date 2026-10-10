@@ -1,6 +1,6 @@
 # Starting settings from Nix
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -29,14 +29,46 @@ Caelestia's `shell.json` has that problem here.
 
 ## Acceptance criteria
 
-- [ ] With no `settings.json`, a value set in Nix shows in the shell after `nix-rebuild`.
-- [ ] Changing that setting in the window overrides the Nix value and survives a restart.
+- [x] With no `settings.json`, a value set in Nix shows in the shell after `nix-rebuild`.
+- [x] Changing that setting in the window overrides the Nix value and survives a restart.
       The Nix file is untouched.
-- [ ] Resetting the setting in the window returns it to the Nix value.
-- [ ] A rebuild that changes a Nix value the user has not overridden applies without a
+- [x] Resetting the setting in the window returns it to the Nix value.
+- [x] A rebuild that changes a Nix value the user has not overridden applies without a
       restart, or the reason it needs one is recorded here.
-- [ ] Each host can set its own values.
+- [x] Each host can set its own values.
 
 ## Blocked by
 
 - .scratch/custom-shell/issues/25-settings-window.md
+
+## Comments
+
+**2026-10-10:** Done in b30e596. To use it, set values in a host's home-manager config,
+for example:
+
+```nix
+home-manager.users.brett.local.customShell.settings.appearance = {
+  fontFamily = "Inter";
+  textScale = 1.1;
+};
+```
+
+The keys are the ones in `quickshell/config/Settings.qml`'s `schema`. Nothing is set
+yet, so both hosts get an empty `{}`.
+
+- **A copy, not a link:** `~/.config/custom-shell/defaults.json` is copied into place
+  during activation, not linked by home-manager. Quickshell's file watch follows a link
+  to its store file, which never changes. A link swapped with `ln -sfT`, as a rebuild
+  does, went unseen. A file renamed into place is seen, so activation installs it read
+  only next to the old one and renames it over, and leaves it alone when unchanged.
+- **Reset:** the window shows which settings you have changed by their reset button. A
+  value from Nix has none.
+- **Testing:** a full rebuild was not run, because sudo needs a password. Instead:
+  - `extendModules` built each host with a different value: the desktop's file held 10
+    and the laptop's 4.
+  - The generated activation snippet, run by hand against the working tree's shell,
+    passed every criterion: details in the commit. Changing a Nix value applies with no
+    restart.
+- **One thing to know:** the module's body moved under `config` beside the new option.
+  Most of the commit's diff is that indentation, plus comments re-wrapped to 88
+  columns.
