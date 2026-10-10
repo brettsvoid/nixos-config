@@ -11,6 +11,13 @@ _: {
       };
       programs.gamemode.enable = true;
 
+      # Recent Proton (GE-Proton10-10, for one) syncs Windows threads
+      # through /dev/ntsync when it exists, and falls back to fsync
+      # otherwise. The kernel builds ntsync as a module but nothing loads
+      # it, so load it at boot. Fluorine (Nolvus) also sets
+      # PROTON_NO_NTSYNC=1 whenever the device is missing.
+      boot.kernelModules = [ "ntsync" ];
+
       # MangoHud's GPU power is garbage in 32-bit games. Since the 570
       # drivers, NVIDIA's 32-bit NVML returns nonsense from
       # nvmlDeviceGetPowerUsage, with NVML_SUCCESS. The patch computes power
@@ -42,7 +49,12 @@ _: {
     };
 
   flake.modules.homeManager.profile-gaming =
-    { pkgs, lib, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     lib.mkIf pkgs.stdenv.isLinux {
       home.packages = with pkgs; [
         discord
@@ -67,8 +79,14 @@ _: {
           battery = false;
           battery_watt = false;
           battery_time = false;
+          # Shift_L+F2 starts and stops a frame-time log (a CSV per run),
+          # even with the HUD hidden. Without this, MangoHud writes them
+          # loose in $HOME. It does not create the folder, hence the
+          # .keep below.
+          output_folder = "${config.xdg.stateHome}/mangohud";
         };
       };
+      xdg.stateFile."mangohud/.keep".text = "";
 
       # Set via Hyprland rather than enableSessionWide: Steam is started
       # from Hyprland and does not inherit home.sessionVariables.
