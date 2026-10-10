@@ -147,6 +147,7 @@ in
                 desktop-ambxst
                 desktop-wallpapers
                 desktop-custom-shell
+                desktop-game-mode
                 nvim
                 apps-firefox
                 apps-git

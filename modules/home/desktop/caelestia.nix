@@ -255,8 +255,6 @@ in
           "$mod, D, Caelestia dashboard, global, caelestia:dashboard"
           "$mod, N, Caelestia sidebar, global, caelestia:sidebar"
           "$mod, ESCAPE, Caelestia session menu, global, caelestia:session"
-          # Animations, blur, gaps, shadows and rounding off; tearing on.
-          "$mod SHIFT, G, Toggle game mode (Caelestia), exec, caelestia shell gameMode toggle"
 
           # Screenshots on Print, split the way macOS splits them: plain
           # opens the region in swappy to mark up and save (Cmd+Shift+4),
