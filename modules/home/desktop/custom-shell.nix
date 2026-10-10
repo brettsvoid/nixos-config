@@ -45,6 +45,17 @@ in
         exec "$@"
       '';
 
+      # Statistics for the dashboard's performance tab: a JSON line a second while the
+      # tab shows (shell-stats/src/main.rs). Its only crate, libc, comes from
+      # Cargo.lock, so the build itself needs no network.
+      shell-stats = pkgs.rustPlatform.buildRustPackage {
+        pname = "shell-stats";
+        version = "0.1.0";
+        src = ./shell-stats;
+        cargoLock.lockFile = ./shell-stats/Cargo.lock;
+        meta.mainProgram = "shell-stats";
+      };
+
       shellConfig = pkgs.runCommand "custom-shell-config" { } ''
         cp -r ${./quickshell} $out
         chmod -R u+w $out
@@ -244,6 +255,7 @@ in
         qs-dev
         generate-theme
         custom-shell-or
+        shell-stats
       ];
 
       xdg.configFile."quickshell/custom-shell".source = shellConfig;

@@ -1,0 +1,13 @@
+[package]
+name = "shell-stats"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Prints CPU, memory, GPU, disk and network statistics as one JSON object per line, for the custom Quickshell shell."
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+lto = true
+strip = true

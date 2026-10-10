@@ -11,6 +11,10 @@ FocusScope {
         {
             name: "Overview",
             component: overviewTab
+        },
+        {
+            name: "Performance",
+            component: performanceTab
         }
     ]
     property int current: 0
@@ -75,5 +79,11 @@ FocusScope {
         id: overviewTab
 
         OverviewTab {}
+    }
+
+    Component {
+        id: performanceTab
+
+        PerformanceTab {}
     }
 }

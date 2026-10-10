@@ -3,3 +3,7 @@ Dashboard 1.0 Dashboard.qml
 OverviewTab 1.0 OverviewTab.qml
 Calendar 1.0 Calendar.qml
 MediaCard 1.0 MediaCard.qml
+PerformanceTab 1.0 PerformanceTab.qml
+GraphCard 1.0 GraphCard.qml
+UsageBar 1.0 UsageBar.qml
+HistoryGraph 1.0 HistoryGraph.qml
