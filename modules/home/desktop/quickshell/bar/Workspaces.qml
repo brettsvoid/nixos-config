@@ -15,7 +15,6 @@ Item {
 
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
-    Layout.alignment: Qt.AlignVCenter
 
     RowLayout {
         id: row

@@ -8,7 +8,6 @@ Item {
 
     implicitWidth: clockLayout.implicitWidth
     implicitHeight: clockLayout.implicitHeight
-    Layout.alignment: Qt.AlignVCenter
 
     // Minute precision: wakes once a minute instead of the old 1s Timer.
     SystemClock {

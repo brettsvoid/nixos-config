@@ -17,7 +17,6 @@ Item {
 
     implicitWidth: batteryRow.implicitWidth
     implicitHeight: batteryRow.implicitHeight
-    Layout.alignment: Qt.AlignVCenter
 
     function batteryColor() {
         if (charging) return Theme.batteryGood

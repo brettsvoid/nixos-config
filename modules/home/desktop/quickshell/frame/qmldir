@@ -1,0 +1,4 @@
+module frame
+ScreenShell 1.0 ScreenShell.qml
+FrameWindow 1.0 FrameWindow.qml
+EdgeReservation 1.0 EdgeReservation.qml

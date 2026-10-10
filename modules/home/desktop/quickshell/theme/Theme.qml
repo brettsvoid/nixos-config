@@ -54,24 +54,16 @@ QtObject {
         return roundness > 0 ? Math.max(roundness + offset, 0) : 0
     }
 
-    // Bar config. This shell's own values: docs/bar-spec.md covers edgebar only
-    // since 2026-10-09 (.scratch/custom-shell/PRD.md).
+    // Frame and bar. This shell's own values: docs/bar-spec.md covers edgebar only
+    // since 2026-10-09 (.scratch/custom-shell/PRD.md). The bar is the frame's top
+    // band, so barHeight is also the top edge's thickness.
     readonly property int barHeight: 32
-    readonly property int barMargin: 4
-    readonly property int barRadius: radius(0)
-    readonly property real barOpacity: 1.0
+    readonly property int frameThickness: 8
+    readonly property color frameColor: base
+    readonly property int barPadding: 12
     readonly property string fontFamily: "FiraCode Nerd Font"
     readonly property int fontSize: 13
     readonly property int fontSizeSmall: fontSize - 1
-
-    // Spacing / sizing tokens (single source for the segments).
-    readonly property int barSpacing: barMargin
-    readonly property int segmentPadding: 12
     readonly property int iconSize: 16
     readonly property int animDuration: 150
-
-    // Segment shadow (BarSegment MultiEffect).
-    readonly property color shadowColor: "#000000"
-    readonly property real shadowOpacity: 0.5
-    readonly property real shadowBlur: 1.0
 }
