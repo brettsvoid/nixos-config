@@ -74,36 +74,6 @@ FocusScope {
         font.pixelSize: Theme.typeBodyMedium
     }
 
-    component IconButton: Rectangle {
-        id: button
-
-        property int glyph
-        property color glyphColor: Theme.text
-
-        signal clicked
-
-        width: 36
-        height: width
-        radius: width / 2
-        color: buttonArea.containsMouse ? Theme.surfaceContainerHigh : Theme.surfaceContainer
-
-        Text {
-            anchors.centerIn: parent
-            text: String.fromCodePoint(button.glyph)
-            color: button.glyphColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.typeTitleMedium
-        }
-
-        MouseArea {
-            id: buttonArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: button.clicked()
-        }
-    }
-
     Flickable {
         anchors.fill: parent
         contentHeight: column.implicitHeight
@@ -217,18 +187,20 @@ FocusScope {
 
                     Item {
                         width: parent.width
-                        height: wifiHeading.implicitHeight
+                        height: 40 + (root.wired.length > 0 ? Theme.spacingLarge : 0)
 
                         Heading {
-                            id: wifiHeading
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: (40 - implicitHeight) / 2
+                            topPadding: 0
+                            bottomPadding: 0
                             text: root.wifi.length > 1 ? `Wi-Fi (${wifiDevice.modelData.name})` : "Wi-Fi"
-                            topPadding: root.wired.length > 0 ? Theme.spacingLarge : 0
                         }
 
                         Switch {
                             anchors.right: parent.right
                             anchors.bottom: parent.bottom
-                            anchors.bottomMargin: Theme.spacingSmall
+                            anchors.bottomMargin: 4
                             checked: Networking.wifiEnabled
                             enabled: Networking.wifiHardwareEnabled
                             onToggled: checked => Networking.wifiEnabled = checked

@@ -27,6 +27,11 @@ FloatingWindow {
             name: "Network",
             icon: 0xF05A9, // md-wifi
             component: networkPage
+        },
+        {
+            name: "Bluetooth",
+            icon: 0xF00AF, // md-bluetooth
+            component: bluetoothPage
         }
     ]
     readonly property int current: Math.max(0, root.pages.findIndex(page => page.name === Windows.settingsPage))
@@ -188,5 +193,11 @@ FloatingWindow {
         id: networkPage
 
         NetworkPage {}
+    }
+
+    Component {
+        id: bluetoothPage
+
+        BluetoothPage {}
     }
 }

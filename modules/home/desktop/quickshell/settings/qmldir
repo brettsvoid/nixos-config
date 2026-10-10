@@ -6,3 +6,5 @@ SliderRow 1.0 SliderRow.qml
 FontPicker 1.0 FontPicker.qml
 AudioPage 1.0 AudioPage.qml
 NetworkPage 1.0 NetworkPage.qml
+IconButton 1.0 IconButton.qml
+BluetoothPage 1.0 BluetoothPage.qml
