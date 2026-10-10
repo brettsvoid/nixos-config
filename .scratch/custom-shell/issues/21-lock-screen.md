@@ -1,6 +1,6 @@
 # Lock screen
 
-Status: ready-for-human
+Status: done
 Type: HITL (a broken lock either locks you out or fails to lock)
 
 ## Parent
@@ -28,11 +28,11 @@ Safety comes first:
 
 ## Acceptance criteria
 
-- [ ] The session menu's Lock and the lock keybind lock every screen; the right password
+- [x] The session menu's Lock and the lock keybind lock every screen; the right password
       unlocks; a wrong one shows an error.
-- [ ] Suspending and resuming shows the lock screen straight away, with no flash of the
+- [x] Suspending and resuming shows the lock screen straight away, with no flash of the
       desktop.
-- [ ] Killing the shell while locked leaves the session locked, and the written recovery
+- [x] Killing the shell while locked leaves the session locked, and the written recovery
       steps get you back in.
 - [x] Plugging a monitor in while locked shows the lock on it too.
 - [x] Nothing in the lock screen animates while idle.
@@ -98,12 +98,12 @@ Found while testing:
 
 Still to do, after switching (needs you):
 
-- [ ] Under the custom shell (`toggle-shell custom`): Super+L and the session menu
+- [x] Under the custom shell (`toggle-shell custom`): Super+L and the session menu
       lock; your real password unlocks; a wrong one shows the error.
 - [x] Suspend and resume (`systemctl suspend`): the lock is up at once, no desktop.
       Checked by Brett 2026-10-10. The keyboard does not wake this desktop, the power
       button does; fine for this setup.
-- [ ] Recovery from a text console: lock with Super+L, Ctrl+Alt+F2, log in,
+- [x] Recovery from a text console: lock with Super+L, Ctrl+Alt+F2, log in,
       `kill $(cat /tmp/custom-shell.pid)` (the crash), `lock-recover`, Ctrl+Alt+F1 when
       it says, unlock.
 
@@ -121,5 +121,14 @@ VT (its logind session's VTNr) is showing, waits 2 s, then locks, and leaves the
 on tty2. `toggle-shell custom` sends the shell's output to
 `$XDG_RUNTIME_DIR/custom-shell.log` instead of /dev/null. docs/lock-screen.md updated.
 Needs the test again.
-- [ ] Not tested: the laptop. hypridle gets this config there too, under ambxst, which
-      locks on logind's Lock signal like Caelestia does.
+- Not tested: the laptop (issue 23). hypridle gets this config there too, under ambxst,
+  which locks on logind's Lock signal like Caelestia does.
+
+**2026-10-10, after the switch (Brett, hypridle's log for the times):** locked and
+unlocked with the real password at 11:01; suspend at 11:03:33 went Lock signal, locked
+within the second, then sleep; woke 11:03:58, unlocked 11:04:06. Recovery with the new
+`lock-recover` from tty2: the lock screen replaced the lockdead one a few seconds after
+Ctrl+Alt+F1 (locked 11:32:11, unlocked 11:32:52); `misc:allow_session_lock_restore`
+back to 0 afterwards. A wrong password was not tried against `/etc/pam.d/custom-shell`
+itself; it was against /etc/pam.d/hyprlock, which has the same auth lines. The laptop is
+left to issue 23.
