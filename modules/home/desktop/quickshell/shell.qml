@@ -66,6 +66,13 @@ ShellRoot {
         onPressed: Drawers.toggle("notifications")
     }
 
+    GlobalShortcut {
+        appid: "custom-shell"
+        name: "dashboard"
+        description: "Open or close the dashboard"
+        onPressed: Drawers.toggle("dashboard")
+    }
+
     // One set of windows per screen; screens added or removed come and go with
     // Quickshell.screens.
     Variants {

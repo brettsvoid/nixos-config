@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import "../bar"
 import "../cheatsheet"
+import "../dashboard"
 import "../launcher"
 import "../notifications"
 import "../osd"
@@ -30,7 +31,7 @@ PanelWindow {
     // The area inside the frame, below the bar.
     readonly property rect inside: Qt.rect(thickness, barHeight, width - thickness * 2, height - barHeight - thickness)
     readonly property string screenName: root.screen?.name ?? ""
-    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open || cheatsheetDrawer.open || historyDrawer.open
+    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open || cheatsheetDrawer.open || historyDrawer.open || dashboardDrawer.open
 
     anchors {
         top: true
@@ -91,6 +92,10 @@ PanelWindow {
         }
 
         Region {
+            item: dashboardDrawer.hitArea
+        }
+
+        Region {
             item: popupsDrawer.hitArea
         }
     }
@@ -113,6 +118,7 @@ PanelWindow {
             launcherDrawer.shape,
             cheatsheetDrawer.shape,
             historyDrawer.shape,
+            dashboardDrawer.shape,
             popupsDrawer.shape,
             osdDrawer.shape
         ]
@@ -152,6 +158,17 @@ PanelWindow {
         open: Drawers.isOpen("cheatsheet", root.screenName)
         content: Component {
             Cheatsheet {}
+        }
+    }
+
+    Drawer {
+        id: dashboardDrawer
+        anchors.fill: parent
+        edge: "top"
+        inside: root.inside
+        open: Drawers.isOpen("dashboard", root.screenName)
+        content: Component {
+            Dashboard {}
         }
     }
 

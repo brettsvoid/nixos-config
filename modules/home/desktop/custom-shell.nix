@@ -257,6 +257,7 @@ in
           "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
           "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
           "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
+          "$mod, D, Dashboard (custom shell), global, custom-shell:dashboard"
         ];
         # The brightness keys still run brightnessctl (hyprland.nix); this also tells
         # the shell, which shows the new level. The backlight sends no change events.

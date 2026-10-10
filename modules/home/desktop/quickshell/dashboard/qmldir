@@ -1,0 +1,5 @@
+module dashboard
+Dashboard 1.0 Dashboard.qml
+OverviewTab 1.0 OverviewTab.qml
+Calendar 1.0 Calendar.qml
+MediaCard 1.0 MediaCard.qml
