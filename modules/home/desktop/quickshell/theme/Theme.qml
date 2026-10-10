@@ -107,6 +107,8 @@ QtObject {
     readonly property color frameShadowColor: Qt.rgba(0, 0, 0, 0.3)
     // The frame shrinking away for fullscreen, and growing back.
     readonly property int frameRevealDuration: 300
+    // A new wallpaper fading in over the old one.
+    readonly property int wallpaperFadeDuration: 600
     // Drawers: the corners away from the frame, the space around their content, and
     // the spring they open and close with.
     readonly property int drawerRadius: cornerExtraLarge

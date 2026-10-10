@@ -69,6 +69,10 @@ Scope {
         size: Theme.frameThickness
     }
 
+    WallpaperWindow {
+        screen: root.modelData
+    }
+
     FrameWindow {
         screen: root.modelData
         reveal: root.reveal

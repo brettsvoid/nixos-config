@@ -172,66 +172,88 @@ in
 
       matugenDir = ./quickshell/matugen;
 
+      # Sets the wallpaper and generates the shell's theme from it with matugen:
+      #   generate-theme [image] [--scheme X] [--mode light|dark | --light | --dark]
+      # Anything not given comes from the saved choice; with no saved image, the first
+      # in ~/Pictures/Wallpapers. The choice is kept in
+      # ~/.local/state/custom-shell/wallpaper.json, which the shell watches to show the
+      # image; the colours go to ~/.cache/qs-theme/colors.json. Paths are kept as given,
+      # so a ~/Pictures/Wallpapers link stays valid across rebuilds where the store path
+      # behind it would not.
       generate-theme = pkgs.writeShellScriptBin "generate-theme" ''
-        CACHE_DIR="$HOME/.cache/qs-theme"
-        CONFIG_DIR="${matugenDir}"
-        mkdir -p "$CACHE_DIR"
+        export PATH=${
+          lib.makeBinPath [
+            pkgs.coreutils
+            pkgs.findutils
+            pkgs.jq
+            pkgs.matugen
+          ]
+        }:$PATH
+        STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell"
+        STATE="$STATE_DIR/wallpaper.json"
+        # Where the choice lived before, as a store path that a rebuild leaves stale.
+        OLD_STATE="$HOME/.cache/qs-theme/wallpaper.json"
+        WALLPAPERS="$HOME/Pictures/Wallpapers"
+        mkdir -p "$STATE_DIR" "$HOME/.cache/qs-theme"
 
         WALLPAPER=""
-        SCHEME="scheme-neutral"
-        MODE="light"
-
-        # Parse args: generate-theme [wallpaper] [--scheme X] [--mode light|dark]
+        SCHEME=""
+        MODE=""
         while [ $# -gt 0 ]; do
           case "$1" in
             --scheme) SCHEME="$2"; shift 2 ;;
             --mode) MODE="$2"; shift 2 ;;
             --dark) MODE="dark"; shift ;;
             --light) MODE="light"; shift ;;
+            -h|--help)
+              echo "Usage: generate-theme [image] [--scheme X] [--mode light|dark]"
+              echo "Schemes: scheme-neutral, scheme-tonal-spot, scheme-content, scheme-fidelity,"
+              echo "         scheme-expressive, scheme-fruit-salad, scheme-monochrome, scheme-rainbow"
+              exit 0 ;;
             *) WALLPAPER="$1"; shift ;;
           esac
         done
 
-        if [ -z "$WALLPAPER" ]; then
-          if [ -f "$CACHE_DIR/wallpaper.json" ]; then
-            WALLPAPER=$(${pkgs.jq}/bin/jq -r '.currentWall // empty' "$CACHE_DIR/wallpaper.json")
-            SAVED_SCHEME=$(${pkgs.jq}/bin/jq -r '.scheme // empty' "$CACHE_DIR/wallpaper.json")
-            SAVED_MODE=$(${pkgs.jq}/bin/jq -r '.mode // empty' "$CACHE_DIR/wallpaper.json")
-            [ -n "$SAVED_SCHEME" ] && SCHEME="$SAVED_SCHEME"
-            [ -n "$SAVED_MODE" ] && MODE="$SAVED_MODE"
+        if [ -f "$STATE" ]; then
+          [ -z "$WALLPAPER" ] && WALLPAPER=$(jq -r '.path // empty' "$STATE")
+          [ -z "$SCHEME" ] && SCHEME=$(jq -r '.scheme // empty' "$STATE")
+          [ -z "$MODE" ] && MODE=$(jq -r '.mode // empty' "$STATE")
+        elif [ -f "$OLD_STATE" ]; then
+          [ -z "$SCHEME" ] && SCHEME=$(jq -r '.scheme // empty' "$OLD_STATE")
+          [ -z "$MODE" ] && MODE=$(jq -r '.mode // empty' "$OLD_STATE")
+          if [ -z "$WALLPAPER" ]; then
+            NAME=$(basename "$(jq -r '.currentWall // empty' "$OLD_STATE")")
+            [ -n "$NAME" ] && [ -e "$WALLPAPERS/$NAME" ] && WALLPAPER="$WALLPAPERS/$NAME"
           fi
         fi
-
-        if [ -z "$WALLPAPER" ]; then
-          if [ -f "$HOME/.cache/ambxst/wallpapers.json" ]; then
-            WALLPAPER=$(${pkgs.jq}/bin/jq -r '.currentWall // empty' "$HOME/.cache/ambxst/wallpapers.json")
-          fi
+        if [ -z "$WALLPAPER" ] || [ ! -e "$WALLPAPER" ]; then
+          WALLPAPER=$(find -L "$WALLPAPERS" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) 2>/dev/null | sort | head -n 1)
         fi
-
-        if [ -z "$WALLPAPER" ] || [ ! -f "$WALLPAPER" ]; then
-          echo "Usage: generate-theme [wallpaper-path] [--scheme X] [--mode light|dark]"
-          echo "Schemes: scheme-neutral, scheme-tonal-spot, scheme-content, scheme-fidelity,"
-          echo "         scheme-expressive, scheme-fruit-salad, scheme-monochrome, scheme-rainbow"
+        if [ -z "$WALLPAPER" ]; then
+          echo "No wallpaper: give an image, or put some in $WALLPAPERS" >&2
           exit 1
         fi
+        case "$WALLPAPER" in
+          /*) ;;
+          *) WALLPAPER="$PWD/$WALLPAPER" ;;
+        esac
+        SCHEME="''${SCHEME:-scheme-neutral}"
+        MODE="''${MODE:-light}"
+
+        # The choice first, so the shell starts loading the image while matugen runs.
+        jq -n --arg path "$WALLPAPER" --arg scheme "$SCHEME" --arg mode "$MODE" \
+          '{path: $path, scheme: $scheme, mode: $mode}' > "$STATE.tmp"
+        mv "$STATE.tmp" "$STATE"
 
         echo "Generating theme: $WALLPAPER (scheme: $SCHEME, mode: $MODE)"
-        if ! ${pkgs.matugen}/bin/matugen image "$WALLPAPER" \
+        if ! matugen image "$WALLPAPER" \
           --source-color-index 0 \
-          -c "$CONFIG_DIR/config.toml" \
+          -c "${matugenDir}/config.toml" \
           -t "$SCHEME" \
           -m "$MODE"; then
           echo "matugen failed — theme not generated" >&2
           exit 1
         fi
-
-        ${pkgs.jq}/bin/jq -n \
-          --arg wall "$WALLPAPER" \
-          --arg scheme "$SCHEME" \
-          --arg mode "$MODE" \
-          '{currentWall: $wall, scheme: $scheme, mode: $mode}' > "$CACHE_DIR/wallpaper.json"
-
-        echo "Theme generated; selection saved to $CACHE_DIR/wallpaper.json"
       '';
 
       qs-dev = pkgs.writeShellScriptBin "qs-dev" ''
@@ -293,23 +315,12 @@ in
         ];
       };
 
-      home.activation.generateTheme = config.lib.dag.entryAfter [ "writeBoundary" ] ''
-        CACHE_DIR="$HOME/.cache/qs-theme"
-        mkdir -p "$CACHE_DIR"
-
-        if [ ! -f "$CACHE_DIR/colors.json" ]; then
-          WALLPAPER=""
-          if [ -f "$HOME/.cache/ambxst/wallpapers.json" ]; then
-            WALLPAPER=$(${pkgs.jq}/bin/jq -r '.currentWall // empty' "$HOME/.cache/ambxst/wallpapers.json")
-          fi
-          if [ -n "$WALLPAPER" ] && [ -f "$WALLPAPER" ]; then
-            ${pkgs.matugen}/bin/matugen image "$WALLPAPER" \
-              --source-color-index 0 \
-              -c "${matugenDir}/config.toml" \
-              -t scheme-neutral \
-              -m light || true
-            ${pkgs.jq}/bin/jq -n --arg wall "$WALLPAPER" '{currentWall: $wall, scheme: "scheme-neutral", mode: "light"}' > "$CACHE_DIR/wallpaper.json"
-          fi
+      # First run, or the theme cache was cleared: choose the wallpaper (the saved choice,
+      # else the first in ~/Pictures/Wallpapers, linked by then) and generate the theme.
+      home.activation.generateTheme = config.lib.dag.entryAfter [ "linkGeneration" ] ''
+        if [ ! -f "$HOME/.cache/qs-theme/colors.json" ] \
+          || [ ! -f "''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell/wallpaper.json" ]; then
+          run ${generate-theme}/bin/generate-theme || true
         fi
       '';
     };

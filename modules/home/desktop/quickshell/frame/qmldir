@@ -4,3 +4,4 @@ FrameWindow 1.0 FrameWindow.qml
 FrameShape 1.0 FrameShape.qml
 Drawer 1.0 Drawer.qml
 EdgeReservation 1.0 EdgeReservation.qml
+WallpaperWindow 1.0 WallpaperWindow.qml
