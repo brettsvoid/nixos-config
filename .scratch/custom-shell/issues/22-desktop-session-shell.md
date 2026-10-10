@@ -60,3 +60,9 @@ switch back.
 added by issues 05 and 06: bind Super+R and Super+/ to `global, custom-shell:launcher`
 and `global, custom-shell:cheatsheet` directly, remove `custom-shell-or`, Fuzzel and
 `hypr-cheatsheet`, and decide whether Super+Space also opens the launcher.
+
+**2026-10-10:** Notifications: mako is D-Bus activated and won the race for
+org.freedesktop.Notifications at login against Caelestia (it owned it all of the
+2026-10-09 session). When the custom shell starts from `exec-once`, stop or stop
+installing mako (it is in `modules/system/nixos/hyprland.nix`), or the shell's server
+waits until mako exits.
