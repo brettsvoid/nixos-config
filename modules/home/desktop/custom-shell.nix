@@ -495,6 +495,12 @@ in
           "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
           "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
           "$mod, D, Dashboard (custom shell), global, custom-shell:dashboard"
+          "$mod, I, Shell settings (custom shell), global, custom-shell:settings"
+        ];
+        # The settings window is an ordinary window (quickshell/settings): float it,
+        # centred, at the size it is drawn for.
+        windowrule = [
+          "float on, center on, size 960 700, match:class ^(org\\.quickshell)$, match:title ^(Shell settings)$"
         ];
         # The brightness keys still run brightnessctl (hyprland.nix); this also tells
         # the shell, which shows the new level. The backlight sends no change events.

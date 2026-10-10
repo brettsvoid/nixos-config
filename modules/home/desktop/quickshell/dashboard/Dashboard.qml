@@ -1,4 +1,5 @@
 import QtQuick
+import "../services"
 import "../theme"
 
 // The dashboard drawer's content: tabs, of which only the one showing is loaded (a tab
@@ -66,6 +67,35 @@ FocusScope {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.current = tab.index
                 }
+            }
+        }
+    }
+
+    // Opens the settings window, and closes the dashboard.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        width: tabBar.height
+        height: width
+        radius: width / 2
+        color: settingsArea.containsMouse ? Theme.surfaceContainerHigh : Theme.surfaceContainer
+
+        Text {
+            anchors.centerIn: parent
+            text: String.fromCodePoint(0xF0493) // md-cog
+            color: Theme.text
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.typeTitleMedium
+        }
+
+        MouseArea {
+            id: settingsArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                Drawers.close();
+                Windows.showSettings();
             }
         }
     }

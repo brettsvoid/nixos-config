@@ -4,10 +4,10 @@ import "../lock"
 import "../services"
 import "../theme"
 
-// The session drawer's content: lock, log out, restart and shut down. The arrow keys
-// move between them, Enter or a click runs one. Lock is the shell's own lock screen; log
-// out, restart and shut down go through session-exit, which saves the open apps for the
-// next login.
+// The session drawer's content: lock, log out, restart and shut down, then the shell's
+// settings. The arrow keys move between them, Enter or a click runs one. Lock is the
+// shell's own lock screen; log out, restart and shut down go through session-exit,
+// which saves the open apps for the next login.
 FocusScope {
     id: root
 
@@ -31,6 +31,11 @@ FocusScope {
             icon: 0xF0425, // md-power
             label: "Shut down",
             command: ["session-exit", "poweroff"]
+        },
+        {
+            icon: 0xF0493, // md-cog
+            label: "Settings",
+            run: () => Windows.showSettings()
         }
     ]
     property int current: 0

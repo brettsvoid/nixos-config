@@ -1,0 +1,6 @@
+module settings
+SettingsWindow 1.0 SettingsWindow.qml
+AppearancePage 1.0 AppearancePage.qml
+SettingRow 1.0 SettingRow.qml
+SliderRow 1.0 SliderRow.qml
+FontPicker 1.0 FontPicker.qml

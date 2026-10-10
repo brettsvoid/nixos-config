@@ -7,6 +7,7 @@ import Quickshell.Hyprland
 import "frame"
 import "lock"
 import "services"
+import "settings"
 
 ShellRoot {
     Component.onCompleted: {
@@ -75,6 +76,13 @@ ShellRoot {
         onPressed: Drawers.toggle("dashboard")
     }
 
+    GlobalShortcut {
+        appid: "custom-shell"
+        name: "settings"
+        description: "Open the shell's settings"
+        onPressed: Windows.showSettings()
+    }
+
     // Super+L, and hypridle on `loginctl lock-session` (before sleep). There is no
     // unlock shortcut: only the password unlocks.
     GlobalShortcut {
@@ -82,6 +90,13 @@ ShellRoot {
         name: "lock"
         description: "Lock the session"
         onPressed: Lock.lock()
+    }
+
+    // Only while open, so a closed settings window costs nothing.
+    LazyLoader {
+        active: Windows.settings
+
+        SettingsWindow {}
     }
 
     // One set of windows per screen; screens added or removed come and go with

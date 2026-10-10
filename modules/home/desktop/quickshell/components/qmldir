@@ -2,3 +2,4 @@ module components
 Spring 1.0 Spring.qml
 Pill 1.0 Pill.qml
 MediaControls 1.0 MediaControls.qml
+Slider 1.0 Slider.qml
