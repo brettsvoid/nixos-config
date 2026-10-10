@@ -1,9 +1,12 @@
 import QtQuick
+import "../components"
 import "../config"
 import "../theme"
+import "../components/navigation.js" as Navigation
 
 // Chooses the shell's font from the installed families, each shown in itself. Typing
-// filters the list; the arrow keys move, Enter or a click chooses, Escape closes.
+// filters the list; Up and Down, or Ctrl+P and Ctrl+N, move; Enter or a click chooses;
+// Escape closes.
 // The icons are Nerd Font glyphs: in a font without them, fontconfig falls back to one
 // that has them (FiraCode Nerd Font here).
 Rectangle {
@@ -55,8 +58,16 @@ Rectangle {
             clip: true
 
             onTextChanged: list.currentIndex = 0
-            Keys.onUpPressed: list.decrementCurrentIndex()
-            Keys.onDownPressed: list.incrementCurrentIndex()
+            Keys.onPressed: event => {
+                const step = Navigation.step(event);
+                if (step === 0)
+                    return;
+                if (step > 0)
+                    list.incrementCurrentIndex();
+                else
+                    list.decrementCurrentIndex();
+                event.accepted = true;
+            }
             Keys.onReturnPressed: root.choose(root.families[list.currentIndex])
             Keys.onEnterPressed: root.choose(root.families[list.currentIndex])
             Keys.onEscapePressed: root.done()
@@ -76,8 +87,9 @@ Rectangle {
         anchors.top: field.bottom
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.right: scrollBar.left
         anchors.margins: Theme.spacingMedium
+        anchors.rightMargin: Theme.spacingExtraSmall
         clip: true
         model: root.families
         boundsBehavior: Flickable.StopAtBounds
@@ -127,5 +139,14 @@ Rectangle {
                 onClicked: root.choose(row.modelData)
             }
         }
+    }
+
+    ScrollBar {
+        id: scrollBar
+        anchors.top: list.top
+        anchors.bottom: list.bottom
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.spacingMedium
+        flickable: list
     }
 }

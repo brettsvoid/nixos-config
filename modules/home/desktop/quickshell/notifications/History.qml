@@ -1,4 +1,5 @@
 import QtQuick
+import "../components"
 import "../services"
 import "../theme"
 
@@ -70,7 +71,8 @@ FocusScope {
         anchors.top: header.bottom
         anchors.topMargin: Theme.spacingSmall
         anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.right: scrollBar.left
+        anchors.rightMargin: Theme.spacingExtraSmall
         anchors.bottom: parent.bottom
         clip: true
         spacing: Theme.spacingSmall
@@ -106,5 +108,13 @@ FocusScope {
             font.family: Theme.fontFamily
             font.pixelSize: Theme.typeBodyLarge
         }
+    }
+
+    ScrollBar {
+        id: scrollBar
+        anchors.top: list.top
+        anchors.bottom: list.bottom
+        anchors.right: parent.right
+        flickable: list
     }
 }

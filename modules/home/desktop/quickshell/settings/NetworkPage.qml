@@ -75,7 +75,12 @@ FocusScope {
     }
 
     Flickable {
-        anchors.fill: parent
+        id: page
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: scrollBar.left
+        anchors.rightMargin: Theme.spacingSmall
         contentHeight: column.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -432,5 +437,13 @@ FocusScope {
                 text: Networking.backend === NetworkBackendType.None ? "NetworkManager is not running" : "No network devices"
             }
         }
+    }
+
+    ScrollBar {
+        id: scrollBar
+        anchors.top: page.top
+        anchors.bottom: page.bottom
+        anchors.right: parent.right
+        flickable: page
     }
 }

@@ -104,7 +104,8 @@ FocusScope {
         anchors.top: controls.bottom
         anchors.topMargin: Theme.spacingMedium
         anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.right: scrollBar.left
+        anchors.rightMargin: Theme.spacingExtraSmall
         anchors.bottom: parent.bottom
         cellWidth: width / 4
         cellHeight: cellWidth * 9 / 16
@@ -154,5 +155,13 @@ FocusScope {
                 onClicked: Wallpaper.set(cell.filePath)
             }
         }
+    }
+
+    ScrollBar {
+        id: scrollBar
+        anchors.top: grid.top
+        anchors.bottom: grid.bottom
+        anchors.right: parent.right
+        flickable: grid
     }
 }

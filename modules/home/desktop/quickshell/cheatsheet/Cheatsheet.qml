@@ -1,10 +1,13 @@
 import QtQuick
 import Quickshell.Io
+import "../components"
 import "../theme"
 import "binds.js" as Binds
+import "../components/navigation.js" as Navigation
 
 // The keybind cheatsheet drawer's content: every Hyprland bind, read when it opens,
-// grouped by purpose. Typing filters by keys or description.
+// grouped by purpose. Typing filters by keys or description; Up and Down, or Ctrl+P and
+// Ctrl+N, move through the list.
 FocusScope {
     id: root
 
@@ -61,8 +64,15 @@ FocusScope {
             font.pixelSize: Theme.typeBodyLarge
             clip: true
 
-            Keys.onUpPressed: list.flick(0, 800)
-            Keys.onDownPressed: list.flick(0, -800)
+            onTextChanged: list.currentIndex = 0
+
+            Keys.onPressed: event => {
+                const step = Navigation.step(event);
+                if (step === 0)
+                    return;
+                list.currentIndex = Math.max(0, Math.min(list.count - 1, list.currentIndex + step));
+                event.accepted = true;
+            }
 
             Text {
                 anchors.fill: parent
@@ -80,11 +90,13 @@ FocusScope {
         anchors.top: search.bottom
         anchors.topMargin: Theme.spacingSmall
         anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.right: scrollBar.left
+        anchors.rightMargin: Theme.spacingExtraSmall
         anchors.bottom: parent.bottom
         clip: true
         model: root.rows
         boundsBehavior: Flickable.StopAtBounds
+        highlightMoveDuration: 0
 
         section.property: "group"
         section.delegate: Text {
@@ -101,13 +113,22 @@ FocusScope {
             font.bold: true
         }
 
-        delegate: Item {
+        delegate: Rectangle {
             id: row
 
             required property var modelData
+            required property int index
 
             width: ListView.view.width
             height: 32
+            radius: Theme.cornerSmall
+            color: row.ListView.isCurrentItem ? Theme.surfaceContainerHigh : "transparent"
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: list.currentIndex = row.index
+            }
 
             Row {
                 id: keys
@@ -152,5 +173,13 @@ FocusScope {
                 font.pixelSize: Theme.typeBodyMedium
             }
         }
+    }
+
+    ScrollBar {
+        id: scrollBar
+        anchors.top: list.top
+        anchors.bottom: list.bottom
+        anchors.right: parent.right
+        flickable: list
     }
 }

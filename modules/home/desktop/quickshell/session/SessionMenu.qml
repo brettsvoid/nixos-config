@@ -3,11 +3,12 @@ import Quickshell
 import "../lock"
 import "../services"
 import "../theme"
+import "../components/navigation.js" as Navigation
 
 // The session drawer's content: lock, log out, restart and shut down, then the shell's
-// settings. The arrow keys move between them, Enter or a click runs one. Lock is the
-// shell's own lock screen; log out, restart and shut down go through session-exit,
-// which saves the open apps for the next login.
+// settings. Up and Down, or Ctrl+P and Ctrl+N, move between them; Enter or a click runs
+// one. Lock is the shell's own lock screen; log out, restart and shut down go through
+// session-exit, which saves the open apps for the next login.
 FocusScope {
     id: root
 
@@ -52,8 +53,13 @@ FocusScope {
         Drawers.close();
     }
 
-    Keys.onUpPressed: root.current = (root.current + root.actions.length - 1) % root.actions.length
-    Keys.onDownPressed: root.current = (root.current + 1) % root.actions.length
+    Keys.onPressed: event => {
+        const step = Navigation.step(event);
+        if (step === 0)
+            return;
+        root.current = (root.current + step + root.actions.length) % root.actions.length;
+        event.accepted = true;
+    }
     Keys.onReturnPressed: root.run(root.current)
     Keys.onEnterPressed: root.run(root.current)
 

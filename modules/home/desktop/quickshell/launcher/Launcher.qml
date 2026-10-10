@@ -1,14 +1,16 @@
 import QtQuick
 import Quickshell
 import Quickshell.Widgets
+import "../components"
 import "../services"
 import "../theme"
+import "../components/navigation.js" as Navigation
 
 // The launcher drawer's content: a search field over a list of results. What the list
 // shows depends on the mode, picked by the prefix the query starts with; apps are the
 // mode without one. A mode provides `prefix`, `placeholder`, `results(query)` and
 // `activate(item)`, and optionally `refresh()`, called when the mode is entered; it is
-// added to `modes`.
+// added to `modes`. Up and Down, or Ctrl+P and Ctrl+N, move through the results.
 FocusScope {
     id: root
 
@@ -77,8 +79,16 @@ FocusScope {
 
             onTextChanged: list.currentIndex = 0
 
-            Keys.onUpPressed: list.decrementCurrentIndex()
-            Keys.onDownPressed: list.incrementCurrentIndex()
+            Keys.onPressed: event => {
+                const step = Navigation.step(event);
+                if (step === 0)
+                    return;
+                if (step > 0)
+                    list.incrementCurrentIndex();
+                else
+                    list.decrementCurrentIndex();
+                event.accepted = true;
+            }
             Keys.onReturnPressed: root.activate(list.currentIndex)
             Keys.onEnterPressed: root.activate(list.currentIndex)
 
@@ -98,7 +108,8 @@ FocusScope {
         anchors.top: search.bottom
         anchors.topMargin: Theme.spacingSmall
         anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.right: scrollBar.left
+        anchors.rightMargin: Theme.spacingExtraSmall
         height: root.rows * root.rowHeight
         clip: true
         model: root.results
@@ -162,5 +173,13 @@ FocusScope {
                 onClicked: root.activate(row.index)
             }
         }
+    }
+
+    ScrollBar {
+        id: scrollBar
+        anchors.top: list.top
+        anchors.bottom: list.bottom
+        anchors.right: parent.right
+        flickable: list
     }
 }
