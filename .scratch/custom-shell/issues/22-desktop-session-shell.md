@@ -53,6 +53,10 @@ switch back.
 - .scratch/custom-shell/issues/17-game-mode-toggle.md
 - .scratch/custom-shell/issues/20-screenshots.md
 - .scratch/custom-shell/issues/21-lock-screen.md
+- .scratch/custom-shell/issues/25-settings-window.md
+- .scratch/custom-shell/issues/26-settings-audio.md
+- .scratch/custom-shell/issues/27-settings-network.md
+- .scratch/custom-shell/issues/28-settings-bluetooth.md
 
 ## Comments
 
