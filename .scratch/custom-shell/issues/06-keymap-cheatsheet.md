@@ -1,6 +1,6 @@
 # Keymap cheatsheet panel, replacing the Fuzzel one on Super+/
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -37,3 +37,28 @@ Once this lands, nothing uses Fuzzel any more: remove the package and the old sc
 ## Blocked by
 
 - .scratch/custom-shell/issues/04-session-menu-drawer.md
+
+## Comments
+
+**2026-10-10:** Done, tested live on brett-desktop, except removing Fuzzel and
+`hypr-cheatsheet`, which stay as fallbacks (below).
+- `cheatsheet/Cheatsheet.qml` is a Drawer from the top edge. Each time it opens it runs
+  `hyprctl binds -j` once and lists every bind as key caps and a description, in
+  sections; typing filters on all the words given, across keys, description and group.
+- `cheatsheet/binds.js` decodes the mod mask (64 Super, 4 Ctrl, 8 Alt, 1 Shift), names
+  mouse, media and named keys ("Left click", "Volume up", "Caps Lock", "Space"), and
+  describes binds that have no description from their dispatcher. Live, two binds have
+  none: Caelestia's runtime Caps_Lock/Num_Lock binds, shown as their global's name.
+- Grouping needs no new convention: the group comes from what the bind does, the
+  dispatcher (exec → Apps, global → Shell, window dispatchers → Windows, workspace ones
+  → Workspaces, exit → Session), and the key for media (XF86…) and screenshots (Print).
+  New binds from other modules land in a group without changes here.
+- Checked: opened on `global custom-shell:cheatsheet`; filters "click" (the two mouse
+  binds), "volume", "move 3" and "lock" each showed the right rows.
+- **Change from the brief:** Super+/ and Super+R run `custom-shell-or <drawer>
+  <fallback>`, which opens the drawer when the custom shell's global shortcut is
+  registered and runs the fallback otherwise (`hypr-cheatsheet`, Fuzzel). Removing
+  them now would take both keys away from Caelestia and the laptop before the custom
+  shell is the daily shell. The built helper opened the drawer with the shell running
+  and ran `hypr-cheatsheet` with it stopped. Issue 22 binds the globals directly and
+  removes Fuzzel and `hypr-cheatsheet`.

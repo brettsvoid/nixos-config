@@ -53,3 +53,10 @@ switch back.
 - .scratch/custom-shell/issues/17-game-mode-toggle.md
 - .scratch/custom-shell/issues/20-screenshots.md
 - .scratch/custom-shell/issues/21-lock-screen.md
+
+## Comments
+
+**2026-10-10:** When the custom shell becomes the session's shell, drop the fallbacks
+added by issues 05 and 06: bind Super+R and Super+/ to `global, custom-shell:launcher`
+and `global, custom-shell:cheatsheet` directly, remove `custom-shell-or`, Fuzzel and
+`hypr-cheatsheet`, and decide whether Super+Space also opens the launcher.
