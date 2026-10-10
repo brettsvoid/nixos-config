@@ -32,6 +32,27 @@ in
 
         nixpkgs.hostPlatform = "aarch64-darwin";
 
+        # ─── Mouse ─────────────────────────────────────────────────────
+        # No pointer acceleration, set the way System Settings' own toggle
+        # (Mouse > Advanced > Pointer acceleration) sets it. Replaces the
+        # SteelSeries ExactMouse Tool, an Intel-only 2010 build that stops
+        # opening when Rosetta goes in macOS 28.
+        #
+        # `com.apple.mouse.linear` is that toggle's key (MachineSettings'
+        # UseLinearAccelerationKey). It makes IOHIDPointerScrollFilter use a
+        # plain multiplier, and `scaling` becomes that multiplier, so the
+        # Tracking Speed slider keeps working. At 1.0 motion passes through
+        # unscaled, exactly as under ExactMouse's -1, so the feel is
+        # unchanged. -1 (nix-darwin's documented hack) still works, but
+        # makes the slider meaningless.
+        #
+        # The switch only writes the keys and leaves the live HID state
+        # alone. This applies them without a re-login:
+        #   /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+        # (`ioreg -l | grep HIDUseLinearScaling` reads 1 once it has).
+        system.defaults.".GlobalPreferences"."com.apple.mouse.scaling" = 1.0;
+        system.defaults.CustomUserPreferences.NSGlobalDomain."com.apple.mouse.linear" = true;
+
         # ─── SSH ───────────────────────────────────────────────────────
         # Merged with the shared list in system/authorized-keys.nix.
         users.users.${username}.openssh.authorizedKeys.keys = [
