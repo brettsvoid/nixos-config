@@ -6,12 +6,13 @@ import "../theme"
 
 // The launcher drawer's content: a search field over a list of results. What the list
 // shows depends on the mode, picked by the prefix the query starts with; apps are the
-// mode without one. A later mode (clipboard history) only has to provide `prefix`,
-// `placeholder`, `results(query)` and `activate(item)`, and be added to `modes`.
+// mode without one. A mode provides `prefix`, `placeholder`, `results(query)` and
+// `activate(item)`, and optionally `refresh()`, called when the mode is entered; it is
+// added to `modes`.
 FocusScope {
     id: root
 
-    readonly property var modes: [appsMode]
+    readonly property var modes: [appsMode, clipboardMode]
     readonly property var mode: root.modes.find(m => m.prefix !== "" && field.text.startsWith(m.prefix)) ?? appsMode
     readonly property string query: field.text.slice(root.mode.prefix.length).trim()
     readonly property var results: root.mode.results(root.query)
@@ -29,8 +30,14 @@ FocusScope {
         Drawers.close();
     }
 
+    onModeChanged: root.mode.refresh?.()
+
     AppsMode {
         id: appsMode
+    }
+
+    ClipboardMode {
+        id: clipboardMode
     }
 
     Rectangle {

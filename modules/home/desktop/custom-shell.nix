@@ -248,6 +248,20 @@ in
 
       xdg.configFile."quickshell/custom-shell".source = shellConfig;
 
+      # Clipboard history for the launcher's "cc" mode. wl-paste --watch hands every
+      # copy to cliphist, which keeps the newest 500 in ~/.cache/cliphist and skips
+      # copies a password manager marks secret (wl-paste reports the
+      # x-kde-passwordManagerHint type as CLIPBOARD_STATE=sensitive). A user service, so
+      # copies are kept under any shell.
+      services.cliphist = {
+        enable = true;
+        allowImages = true;
+        extraOptions = [
+          "-max-items"
+          "500"
+        ];
+      };
+
       # The shell's drawers are Hyprland global shortcuts, like Caelestia's panels: each
       # does nothing while this shell is not running. Hyprland runs every bind that
       # matches a key, so this shares Super+Escape with Caelestia's and ambxst's menus.

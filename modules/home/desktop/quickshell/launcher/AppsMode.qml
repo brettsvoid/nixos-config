@@ -9,7 +9,7 @@ QtObject {
     id: root
 
     readonly property string prefix: ""
-    readonly property string placeholder: "Search apps"
+    readonly property string placeholder: "Search apps, or cc for the clipboard"
     // Apps marked Terminal=true run in this.
     readonly property var terminal: ["kitty"]
 
