@@ -1,3 +1,6 @@
+// Tray menus are Qt platform menus, which need QApplication rather than the default
+// QGuiApplication.
+//@ pragma UseQApplication
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland

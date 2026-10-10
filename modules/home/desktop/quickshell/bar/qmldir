@@ -3,3 +3,8 @@ Bar 1.0 Bar.qml
 Workspaces 1.0 Workspaces.qml
 Clock 1.0 Clock.qml
 BatteryStatus 1.0 BatteryStatus.qml
+StatusIcon 1.0 StatusIcon.qml
+AudioStatus 1.0 AudioStatus.qml
+NetworkStatus 1.0 NetworkStatus.qml
+BluetoothStatus 1.0 BluetoothStatus.qml
+Tray 1.0 Tray.qml
