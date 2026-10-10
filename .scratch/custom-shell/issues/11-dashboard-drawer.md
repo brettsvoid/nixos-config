@@ -1,6 +1,6 @@
 # Dashboard drawer: calendar and media
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -38,3 +38,22 @@ not run any animation while paused (ambxst's progress line kept repainting when 
 ## Blocked by
 
 - .scratch/custom-shell/issues/04-session-menu-drawer.md
+
+## Comments
+
+**2026-10-10:** Done, tested live on brett-desktop with a silent mpv (`--ao=null`, the
+mpv-mpris script) playing a tagged three-minute tone.
+- `dashboard/Dashboard.qml`: a Drawer from the top edge (Super+D, beside Caelestia's
+  bind). Tabs are entries in `tabs` with a Component each; one Loader shows the current
+  tab, so leaving a tab destroys it. Tab cycles tabs. A temporary second tab with
+  creation logs showed: overview created, destroyed on switching, probe created,
+  destroyed on switching back, and the overview destroyed when the dashboard closed.
+- Overview: the date, and a Monday-first month calendar (`Calendar.qml`, ours) with
+  today marked and arrows between months (checked: October → November → September).
+  `MediaCard.qml` picks the playing MPRIS player, else the first; shows cover (or a
+  placeholder), title, artist, previous/play-pause/next (dimmed when the player cannot)
+  and a position bar. Clicking the bar's middle seeked to 1:30 (mpv's Position
+  90.5 s); the button paused it. With nothing playing it says so.
+- Repaints, counted with Qt's render log over 5 s: open and paused 0, closed and paused
+  0, closed and playing 0, open and playing 5 (MPRIS sends no position as it moves, so
+  the card asks once a second, only while playing and only while it exists).
