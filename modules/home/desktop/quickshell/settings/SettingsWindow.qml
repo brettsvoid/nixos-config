@@ -17,6 +17,11 @@ FloatingWindow {
             name: "Appearance",
             icon: 0xF03D8, // md-palette
             component: appearancePage
+        },
+        {
+            name: "Audio",
+            icon: 0xF057E, // md-volume_high
+            component: audioPage
         }
     ]
     readonly property int current: Math.max(0, root.pages.findIndex(page => page.name === Windows.settingsPage))
@@ -166,5 +171,11 @@ FloatingWindow {
         id: appearancePage
 
         AppearancePage {}
+    }
+
+    Component {
+        id: audioPage
+
+        AudioPage {}
     }
 }
