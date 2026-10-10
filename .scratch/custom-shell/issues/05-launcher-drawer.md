@@ -1,6 +1,6 @@
 # Launcher drawer, replacing Fuzzel on Super+R
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -38,3 +38,38 @@ after starting them.
 ## Blocked by
 
 - .scratch/custom-shell/issues/04-session-menu-drawer.md
+
+## Comments
+
+**2026-10-10:** Done, tested live on brett-desktop. One deliberate change from the brief,
+below.
+- `launcher/Launcher.qml` is a Drawer from the top edge, under the bar (drawers are one
+  at a time, so the dashboard can share the edge; the OSD keeps the bottom). A search
+  field over a fixed-height list (8 rows, so the drawer does not resize while typing);
+  Up/Down, Enter, hover and click; Escape closes.
+- Modes: the query's prefix picks the mode; `AppsMode` has none. A mode provides
+  `prefix`, `placeholder`, `results(query)` and `activate(item)`; clipboard history
+  adds one to `modes`.
+- Matching: `launcher/fuzzy.js` (ours) scores a subsequence match, favouring word
+  starts, consecutive letters, an early start and a whole-query hit, over the name, the
+  generic name (×0.7) and keywords (×0.6). Rank = match + 4·log2(1 + starts), so usage
+  breaks ties: after one start, "h" put Htop above Heat Signature, which sorts first
+  alphabetically. Counts are in `Quickshell.statePath("app-usage.json")`.
+- Launching: `DesktopEntry.execute()` runs the command fully detached
+  (`execDetached`); `Terminal=true` entries run as `kitty <command>`. Htop started from
+  the launcher kept running across a shell restart. Steam and Nolvus entries were not
+  started (they would launch games); they run detached the same way.
+- Icons: Quickshell only knew hicolor (generic icons came out as Qt's missing-image
+  checker). `toggle-shell` and `qs-dev` now export `QS_ICON_THEME` from
+  `gtk.iconTheme.name` (Papirus-Dark), so the icons match other apps.
+- First open: `shell.qml` reads `DesktopEntries` at start. After a fresh start the
+  frame bulged at +44 ms and the panel was sliding out with icons by +81 ms.
+- Fixed in Drawer: `shown` now follows the spring's value. It followed `spring.running`,
+  which is false for an instant after `open` turns false, so closing from inside the
+  content destroyed it mid-call ("Property 'activate' ... is not a function").
+- **Change from the brief:** Super+R runs `app-launcher`, which opens this launcher when
+  the custom shell's global shortcut is registered (`hyprctl globalshortcuts`) and runs
+  Fuzzel otherwise. Removing Fuzzel outright would leave Caelestia sessions and the
+  laptop (ambxst's reload drops its own launcher bind) without Super+R until issue 22/23.
+  Drop the fallback there. Super+Space stays Caelestia's until Caelestia is retired.
+  Tested: with the shell running the wrapper opened the drawer; with it stopped, Fuzzel.
