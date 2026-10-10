@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import "frame"
+import "services"
 
 ShellRoot {
     Component.onCompleted: Quickshell.watchFiles = true
@@ -26,6 +27,15 @@ ShellRoot {
 
         interval: 50
         onTriggered: Hyprland.refreshMonitors()
+    }
+
+    // Hyprland binds the keys to these (custom-shell.nix). Each drawer opens on the
+    // focused monitor.
+    GlobalShortcut {
+        appid: "custom-shell"
+        name: "session"
+        description: "Open or close the session menu"
+        onPressed: Drawers.toggle("session")
     }
 
     // One set of windows per screen; screens added or removed come and go with

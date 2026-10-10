@@ -48,11 +48,49 @@ QtObject {
     readonly property color batteryMid: c("yellow", "#f9e2af")
     readonly property color batteryLow: error
 
-    // Styling
-    readonly property int roundness: 16
-    function radius(offset) {
-        return roundness > 0 ? Math.max(roundness + offset, 0) : 0
-    }
+    // Shared design values (custom-shell issue 04): drawers and later panels take their
+    // motion, corners, spacing and type from here.
+
+    // Motion: the Material 3 Expressive springs (damping ratio, stiffness; mass 1), from
+    // androidx's ExpressiveMotionTokens. The spec defines springs, not easing curves.
+    // Spatial springs move and resize things and may overshoot; effects springs fade
+    // and recolour without overshooting. See components/Spring.qml.
+    readonly property var springFastSpatial: ({ damping: 0.6, stiffness: 800 })
+    readonly property var springDefaultSpatial: ({ damping: 0.8, stiffness: 380 })
+    readonly property var springSlowSpatial: ({ damping: 0.8, stiffness: 200 })
+    readonly property var springFastEffects: ({ damping: 1, stiffness: 3800 })
+    readonly property var springDefaultEffects: ({ damping: 1, stiffness: 1600 })
+    readonly property var springSlowEffects: ({ damping: 1, stiffness: 800 })
+
+    // Corners: the Material 3 corner scale (androidx ShapeTokens).
+    readonly property int cornerExtraSmall: 4
+    readonly property int cornerSmall: 8
+    readonly property int cornerMedium: 12
+    readonly property int cornerLarge: 16
+    readonly property int cornerLargeIncreased: 20
+    readonly property int cornerExtraLarge: 28
+    readonly property int cornerExtraLargeIncreased: 32
+    readonly property int cornerExtraExtraLarge: 48
+
+    // Spacing: steps of a 4 px grid.
+    readonly property int spacingExtraSmall: 4
+    readonly property int spacingSmall: 8
+    readonly property int spacingMedium: 12
+    readonly property int spacingLarge: 16
+    readonly property int spacingExtraLarge: 24
+
+    // Type: the Material 3 type scale in px (androidx TypeScaleTokens). The bar keeps
+    // its own smaller sizes below.
+    readonly property int typeLabelSmall: 11
+    readonly property int typeLabelMedium: 12
+    readonly property int typeLabelLarge: 14
+    readonly property int typeBodySmall: 12
+    readonly property int typeBodyMedium: 14
+    readonly property int typeBodyLarge: 16
+    readonly property int typeTitleSmall: 14
+    readonly property int typeTitleMedium: 16
+    readonly property int typeTitleLarge: 22
+    readonly property int typeHeadlineSmall: 24
 
     // Frame and bar. This shell's own values: docs/bar-spec.md covers edgebar only
     // since 2026-10-09 (.scratch/custom-shell/PRD.md). The bar is the frame's top
@@ -61,14 +99,19 @@ QtObject {
     readonly property int frameThickness: 8
     readonly property color frameColor: base
     // Corner radius of the area inside the frame, seen at the bottom corners.
-    readonly property int frameRounding: radius(0)
+    readonly property int frameRounding: cornerLarge
     // Radius of the curve where the bar (and later each drawer) meets the frame.
-    readonly property int frameFillet: radius(0)
+    readonly property int frameFillet: cornerLarge
     // How far the frame's shadow reaches over the windows, and how dark it starts.
     readonly property int frameShadowSize: 12
     readonly property color frameShadowColor: Qt.rgba(0, 0, 0, 0.3)
     // The frame shrinking away for fullscreen, and growing back.
     readonly property int frameRevealDuration: 300
+    // Drawers: the corners away from the frame, the space around their content, and
+    // the spring they open and close with.
+    readonly property int drawerRadius: cornerExtraLarge
+    readonly property int drawerPadding: spacingLarge
+    readonly property var drawerSpring: springDefaultSpatial
     readonly property int barPadding: 12
     readonly property string fontFamily: "FiraCode Nerd Font"
     readonly property int fontSize: 13

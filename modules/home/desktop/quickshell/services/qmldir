@@ -1,0 +1,2 @@
+module services
+singleton Drawers 1.0 Drawers.qml

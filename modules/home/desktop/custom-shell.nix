@@ -217,6 +217,13 @@ in
 
       xdg.configFile."quickshell/custom-shell".source = shellConfig;
 
+      # The shell's drawers are Hyprland global shortcuts, like Caelestia's panels: each
+      # does nothing while this shell is not running. Hyprland runs every bind that
+      # matches a key, so this shares Super+Escape with Caelestia's and ambxst's menus.
+      wayland.windowManager.hyprland.settings.bindd = [
+        "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
+      ];
+
       home.activation.generateTheme = config.lib.dag.entryAfter [ "writeBoundary" ] ''
         CACHE_DIR="$HOME/.cache/qs-theme"
         mkdir -p "$CACHE_DIR"
