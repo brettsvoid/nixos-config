@@ -155,6 +155,7 @@ in
                 desktop-session-restore
                 desktop-game-launcher
                 desktop-game-mode
+                desktop-screenshots
                 desktop-window-dissolve
                 nvim
                 apps-firefox

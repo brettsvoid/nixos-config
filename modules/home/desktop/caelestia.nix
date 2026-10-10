@@ -190,18 +190,6 @@ in
         };
       };
 
-      # Caelestia's region picker and the Open button on a full-screen shot
-      # both open swappy. The shell's and the CLI's wrappers carry swappy on
-      # their own PATH, so only its config is needed here. Swappy saves to
-      # ~/Desktop, else $HOME, and there is no ~/Desktop (desktop-hyprland).
-      # Pictures/Screenshots is where Caelestia's Save puts full-screen
-      # shots; swappy creates it if it is missing.
-      programs.swappy = {
-        enable = true;
-        package = null;
-        settings.Default.save_dir = "${config.xdg.userDirs.pictures}/Screenshots";
-      };
-
       # In the wallpaper picker next to desktop-wallpapers' images.
       home.file."Pictures/Wallpapers/crimson-ronin-4k.png".source = wallpaper;
 
@@ -255,19 +243,7 @@ in
           "$mod, D, Caelestia dashboard, global, caelestia:dashboard"
           "$mod, N, Caelestia sidebar, global, caelestia:sidebar"
           "$mod, ESCAPE, Caelestia session menu, global, caelestia:session"
-
-          # Screenshots on Print, split the way macOS splits them: plain
-          # opens the region in swappy to mark up and save (Cmd+Shift+4),
-          # Ctrl copies the region (Ctrl+Cmd+Shift+4), Shift takes the whole
-          # focused monitor (Cmd+Shift+3), to the clipboard with Open and
-          # Save in its notification. macOS's own keys are taken here:
-          # Super+Shift+3/4 move windows between workspaces. The region
-          # picker freezes the screen first, so it captures what was there
-          # when the key went down, and clicking a window selects the whole
-          # window.
-          ", Print, Screenshot a region (swappy), global, caelestia:screenshotFreeze"
-          "CTRL, Print, Screenshot a region to the clipboard, global, caelestia:screenshotFreezeClip"
-          "SHIFT, Print, Screenshot the monitor to the clipboard, exec, caelestia screenshot"
+          # Print screenshots are desktop-screenshots', under any shell.
         ];
 
         # Crimson Ronin's window borders: a crimson edge that fades back to

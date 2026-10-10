@@ -148,6 +148,7 @@ in
                 desktop-wallpapers
                 desktop-custom-shell
                 desktop-game-mode
+                desktop-screenshots
                 nvim
                 apps-firefox
                 apps-git
