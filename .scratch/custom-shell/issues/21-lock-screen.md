@@ -100,10 +100,26 @@ Still to do, after switching (needs you):
 
 - [ ] Under the custom shell (`toggle-shell custom`): Super+L and the session menu
       lock; your real password unlocks; a wrong one shows the error.
-- [ ] Suspend and resume (`systemctl suspend`, wake with a key): the lock is up at once,
-      no desktop.
+- [x] Suspend and resume (`systemctl suspend`): the lock is up at once, no desktop.
+      Checked by Brett 2026-10-10. The keyboard does not wake this desktop, the power
+      button does; fine for this setup.
 - [ ] Recovery from a text console: lock with Super+L, Ctrl+Alt+F2, log in,
-      `kill $(cat /tmp/custom-shell.pid)` (the crash), `lock-recover`, Ctrl+Alt+F1,
-      unlock.
+      `kill $(cat /tmp/custom-shell.pid)` (the crash), `lock-recover`, Ctrl+Alt+F1 when
+      it says, unlock.
+
+**2026-10-10, recovery from tty2 failed:** `lock-recover` reported success, but the
+restarted shell died about 3 s later with `wl_display#1: error 0: invalid object 465`
+(Qt exits on a protocol error, so Quickshell's own log had nothing; the shell's stderr,
+then sent to /dev/null, had it), and the "lockscreen app died" screen stayed. Twice with
+tty2 active. The shell started from tty2 without locking ran normally; the same lock
+steps run once tty1 was active locked, and the password unlocked. Hyprland stops
+rendering while its VT is inactive and sets its monitors up again when it comes back
+(Compositor.cpp, Renderer.cpp); why the lock request breaks is not known.
+
+`lock-recover` now starts the shell, says to press Ctrl+Alt+F1, waits until Hyprland's
+VT (its logind session's VTNr) is showing, waits 2 s, then locks, and leaves the result
+on tty2. `toggle-shell custom` sends the shell's output to
+`$XDG_RUNTIME_DIR/custom-shell.log` instead of /dev/null. docs/lock-screen.md updated.
+Needs the test again.
 - [ ] Not tested: the laptop. hypridle gets this config there too, under ambxst, which
       locks on logind's Lock signal like Caelestia does.
