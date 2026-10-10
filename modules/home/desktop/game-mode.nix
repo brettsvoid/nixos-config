@@ -21,7 +21,11 @@
 # for a fullscreen window alone on its monitor, with no hardware cursor showing, on a
 # monitor that supports async flips, and only if the game asks (tearing-control
 # protocol) or a window rule marks it `immediate`. Game mode adds no such rules.
-_: {
+{ config, ... }:
+let
+  inherit (config.flake.lib) liveHyprland;
+in
+{
   flake.modules.homeManager.desktop-game-mode =
     { pkgs, lib, ... }:
     let
@@ -37,12 +41,9 @@ _: {
           ]
         }:$PATH:/run/current-system/sw/bin
         DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-        # Run from a service, the session's Hyprland may not be in the environment: take
-        # the newest instance.
-        if [ -z "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -d "$DIR/hypr" ]; then
-          HYPRLAND_INSTANCE_SIGNATURE=$(ls -1t "$DIR/hypr" | head -n 1)
-          export HYPRLAND_INSTANCE_SIGNATURE
-        fi
+        # Run from a service, the session's Hyprland may not be in the environment, and
+        # run from an old terminal it may be one that has gone: take the running one.
+        ${liveHyprland pkgs}
         STATE="$DIR/game-mode"
         # The values to put back, one `keyword <option> <value>` per line.
         SAVED="$DIR/game-mode.saved"

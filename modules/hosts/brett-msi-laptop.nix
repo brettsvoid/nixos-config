@@ -104,11 +104,11 @@ in
               Type = "oneshot";
               User = username;
               ExecStart = pkgs.writeShellScript "hyprland-resume-monitors" ''
-                INSTANCE_DIR="/run/user/1000/hypr"
-                [ ! -d "$INSTANCE_DIR" ] && exit 0
-                INSTANCE=$(ls "$INSTANCE_DIR" | head -1)
-                [ -z "$INSTANCE" ] && exit 0
-                export HYPRLAND_INSTANCE_SIGNATURE="$INSTANCE"
+                # Hyprland keeps a directory for every instance since boot, so the
+                # first one is not always the running one.
+                export PATH=/run/current-system/sw/bin:$PATH
+                ${config.flake.lib.liveHyprland pkgs}
+                [ -n "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || exit 0
 
                 # Disable laptop monitor to tear down stale framebuffer from Intel iGPU
                 /run/current-system/sw/bin/hyprctl keyword monitor "eDP-1,disable"

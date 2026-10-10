@@ -3,8 +3,27 @@ let
   mocha = config.flake.lib.theme.catppuccin.mocha;
   # hyprland colours are rgba(RRGGBBAA) with no leading '#'.
   rgba = role: alpha: "rgba(${lib.removePrefix "#" role}${alpha})";
+
+  # Shell code (bash or zsh) that points HYPRLAND_INSTANCE_SIGNATURE and
+  # WAYLAND_DISPLAY at the newest running Hyprland, unless they already name a
+  # running one. Hyprland leaves a directory under $XDG_RUNTIME_DIR/hypr for
+  # every instance since boot, so the newest directory is not always the live
+  # one. A terminal that outlives a Hyprland restart (herdr's panes take the
+  # environment its server started with) keeps a dead instance's signature,
+  # and hyprctl, and anything started from it, then cannot reach Hyprland.
+  # Needs hyprctl, grep and head on PATH.
+  liveHyprland = pkgs: ''
+    live=$(hyprctl instances -j 2>/dev/null \
+      | ${pkgs.jq}/bin/jq -r 'sort_by(-.time) | .[] | "\(.instance) \(.wl_socket)"')
+    if [ -n "$live" ] && ! grep -q "^''${HYPRLAND_INSTANCE_SIGNATURE:-none} " <<<"$live"; then
+      read -r HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY <<<"$(head -n 1 <<<"$live")"
+      export HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY
+    fi
+  '';
 in
 {
+  flake.lib.liveHyprland = liveHyprland;
+
   flake.modules.homeManager.desktop-hyprland =
     { config, pkgs, ... }:
     let
@@ -476,6 +495,25 @@ in
         };
         Install.WantedBy = [ "graphical-session.target" ];
       };
+
+      # Before each prompt, follow Hyprland if the shell's instance has gone (see
+      # liveHyprland), so commands typed after a Hyprland restart reach it. The
+      # check is the one `hyprctl instances` makes: the instance's lock file
+      # holds its pid, and signalling that pid with 0 tells whether it runs. It
+      # uses builtins only (about 12 µs); hyprctl runs only for a dead instance
+      # (about 8 ms). A shell without the variable (a text console, SSH) is left
+      # alone. Programs already running keep their environment.
+      programs.zsh.initContent = ''
+        _follow_live_hyprland() {
+          [[ -n $HYPRLAND_INSTANCE_SIGNATURE ]] || return 0
+          local lock=''${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr/$HYPRLAND_INSTANCE_SIGNATURE/hyprland.lock
+          local pid live
+          { read -r pid <"$lock" && kill -0 "$pid"; } 2>/dev/null && return 0
+          ${liveHyprland pkgs}
+        }
+        autoload -Uz add-zsh-hook
+        add-zsh-hook precmd _follow_live_hyprland
+      '';
 
       # Packages useful alongside Hyprland
       home.packages = [

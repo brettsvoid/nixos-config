@@ -3,7 +3,7 @@
 # Caelestia trial; `toggle-shell` switches between them.
 { inputs, config, ... }:
 let
-  repoDir = config.flake.lib.repoDir;
+  inherit (config.flake.lib) repoDir liveHyprland;
 in
 {
   flake.modules.homeManager.desktop-custom-shell =
@@ -91,19 +91,6 @@ in
       iconThemeEnv = lib.optionalString (
         config.gtk.iconTheme != null
       ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
-
-      # A terminal started before Hyprland last restarted still carries the old instance's
-      # signature. A shell started with it cannot reach Hyprland's socket, so it does not
-      # know which monitor is focused and no drawer opens. Unless the inherited instance
-      # is still running, take the newest one that is.
-      liveHyprland = ''
-        live=$(hyprctl instances -j 2>/dev/null \
-          | ${pkgs.jq}/bin/jq -r 'sort_by(-.time) | .[] | "\(.instance) \(.wl_socket)"')
-        if [ -n "$live" ] && ! grep -q "^''${HYPRLAND_INSTANCE_SIGNATURE:-none} " <<<"$live"; then
-          read -r HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY <<<"$(head -n 1 <<<"$live")"
-          export HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY
-        fi
-      '';
 
       # MangoHud is on for the whole session (profile-gaming), and its Vulkan layer
       # loads into the shell too, where its NVIDIA thread kept about 28% of a core busy.
@@ -253,7 +240,10 @@ in
 
       toggle-shell = pkgs.writeShellScriptBin "toggle-shell" ''
         CUSTOM_PID_FILE="/tmp/custom-shell.pid"
-        ${liveHyprland}
+        # A shell started from a terminal that outlived a Hyprland restart cannot reach
+        # Hyprland's socket, so it does not know which monitor is focused and no drawer
+        # opens.
+        ${liveHyprland pkgs}
 
         AMBXST_PATTERN="quickshell.*ambxst-shell"
         # The qs process runs with `-p <store>/share/caelestia-shell`.
@@ -459,7 +449,7 @@ in
         ${compileShaders "$SHELL_DIR"}
         echo "Starting quickshell from $SHELL_DIR (Ctrl+C to stop)"
         echo "Runs ON TOP of ambxst -- nothing killed."
-        ${liveHyprland}
+        ${liveHyprland pkgs}
         export QSG_RHI_BACKEND=vulkan
         ${iconThemeEnv}
         ${noMangoHud}
