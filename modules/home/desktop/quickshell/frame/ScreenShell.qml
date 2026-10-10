@@ -20,7 +20,7 @@ Scope {
     // For a moment after another screen switches to a new workspace, Quickshell can
     // hold that workspace as this screen's active one (see shell.qml). The workspace's
     // own monitor comes from Hyprland, so checking it stops a fullscreen window over
-    // there from hiding this screen's frame and re-tiling its windows.
+    // there from shrinking this screen's frame away.
     readonly property bool fullscreen: {
         const ws = root.monitor?.activeWorkspace;
         if (!ws || ws.monitor !== root.monitor)
@@ -28,40 +28,49 @@ Scope {
         return ws.toplevels.values.some(t => t.wayland?.fullscreen ?? false);
     }
 
-    // While fullscreen, every window here is unmapped: nothing reserved, drawn or
-    // clickable, so a game can go straight to the display.
-    readonly property bool shown: !root.fullscreen
+    // While fullscreen, the frame shrinks to nothing, which also leaves it no input
+    // area, and grows back afterwards. The windows stay mapped. Hyprland fades Top-layer
+    // surfaces out under a fullscreen window, and a faded one does not stop that window
+    // being the only thing on the monitor (`solitary` in `hyprctl monitors`), which
+    // direct scanout and tearing need. Mapping the five windows again instead took about
+    // 120 ms each, which held the frame back for most of a second. The edges stay
+    // reserved: a fullscreen window ignores them, and the windows behind it do not
+    // re-tile.
+    property real reveal: root.fullscreen ? 0 : 1
+
+    Behavior on reveal {
+        NumberAnimation {
+            duration: Theme.frameRevealDuration
+            easing.type: Easing.InOutCubic
+        }
+    }
 
     EdgeReservation {
         screen: root.modelData
-        visible: root.shown
         edge: "top"
         size: Theme.barHeight
     }
 
     EdgeReservation {
         screen: root.modelData
-        visible: root.shown
         edge: "bottom"
         size: Theme.frameThickness
     }
 
     EdgeReservation {
         screen: root.modelData
-        visible: root.shown
         edge: "left"
         size: Theme.frameThickness
     }
 
     EdgeReservation {
         screen: root.modelData
-        visible: root.shown
         edge: "right"
         size: Theme.frameThickness
     }
 
     FrameWindow {
         screen: root.modelData
-        visible: root.shown
+        reveal: root.reveal
     }
 }

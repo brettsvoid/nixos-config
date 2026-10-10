@@ -12,6 +12,15 @@ import "../theme"
 PanelWindow {
     id: root
 
+    // 1 shows the frame in full; towards 0 its thickness, rounding and bar shrink to
+    // nothing. ScreenShell animates it around fullscreen.
+    property real reveal: 1
+
+    readonly property real thickness: Theme.frameThickness * reveal
+    readonly property real barHeight: Theme.barHeight * reveal
+    readonly property real rounding: Theme.frameRounding * reveal
+    readonly property real fillet: Theme.frameFillet * reveal
+
     anchors {
         top: true
         bottom: true
@@ -25,58 +34,52 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "custom-shell-frame"
 
-    // The whole window minus the area inside the frame.
+    // The whole window minus the area inside the frame, with the same corners as the
+    // drawn shape: the fillet where the bar meets the sides, the rounding at the bottom.
     mask: Region {
         width: root.width
         height: root.height
 
         Region {
-            x: Theme.frameThickness
-            y: Theme.barHeight
-            width: root.width - Theme.frameThickness * 2
-            height: root.height - Theme.barHeight - Theme.frameThickness
+            x: root.thickness
+            y: root.barHeight
+            width: root.width - root.thickness * 2
+            height: root.height - root.barHeight - root.thickness
+            topLeftRadius: root.fillet
+            topRightRadius: root.fillet
+            bottomLeftRadius: root.rounding
+            bottomRightRadius: root.rounding
             intersection: Intersection.Subtract
         }
     }
 
-    // Plain rectangles for now; the frame shader (custom-shell issue 03) replaces them.
-    Rectangle {
-        id: topEdge
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Theme.barHeight
-        color: Theme.frameColor
-    }
+    FrameShape {
+        anchors.fill: parent
 
-    Rectangle {
-        id: leftEdge
-        anchors.top: topEdge.bottom
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        width: Theme.frameThickness
-        color: Theme.frameColor
-    }
-
-    Rectangle {
-        id: rightEdge
-        anchors.top: topEdge.bottom
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        width: Theme.frameThickness
-        color: Theme.frameColor
-    }
-
-    Rectangle {
-        anchors.bottom: parent.bottom
-        anchors.left: leftEdge.right
-        anchors.right: rightEdge.left
-        height: Theme.frameThickness
-        color: Theme.frameColor
+        // The hole runs off the top of the screen: the bar is the top edge.
+        hole: Qt.rect(root.thickness, -root.height, root.width - root.thickness * 2, root.height * 2 - root.thickness)
+        holeRadius: root.rounding
+        shapes: [
+            {
+                x: -Theme.frameFillet,
+                y: -Theme.frameFillet,
+                width: root.width + Theme.frameFillet * 2,
+                height: root.barHeight + Theme.frameFillet,
+                radius: 0
+            }
+        ]
+        fillet: root.fillet
+        shadowSize: Theme.frameShadowSize * root.reveal
+        fillColor: Theme.frameColor
+        shadowColor: Theme.frameShadowColor
     }
 
     Bar {
-        anchors.fill: topEdge
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: root.barHeight
+        opacity: root.reveal
         screen: root.screen
     }
 }

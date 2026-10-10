@@ -11,6 +11,21 @@ in
     let
       qsPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
+      # Qt loads shaders as .qsb, so each one under quickshell/shaders is compiled
+      # here and by qs-dev. A shader that does not compile fails the build.
+      compileShaders = dir: ''
+        for shader in "${dir}"/shaders/*.frag "${dir}"/shaders/*.vert; do
+          [ -e "$shader" ] || continue
+          ${pkgs.qt6.qtshadertools}/bin/qsb --qt6 -o "$shader.qsb" "$shader" || exit 1
+        done
+      '';
+
+      shellConfig = pkgs.runCommand "custom-shell-config" { } ''
+        cp -r ${./quickshell} $out
+        chmod -R u+w $out
+        ${compileShaders "$out"}
+      '';
+
       toggle-shell = pkgs.writeShellScriptBin "toggle-shell" ''
         CUSTOM_PID_FILE="/tmp/custom-shell.pid"
 
@@ -185,6 +200,7 @@ in
           echo "Error: $SHELL_DIR/shell.qml not found"
           exit 1
         fi
+        ${compileShaders "$SHELL_DIR"}
         echo "Starting quickshell from $SHELL_DIR (Ctrl+C to stop)"
         echo "Runs ON TOP of ambxst -- nothing killed."
         export QSG_RHI_BACKEND=vulkan
@@ -199,7 +215,7 @@ in
         generate-theme
       ];
 
-      xdg.configFile."quickshell/custom-shell".source = ./quickshell;
+      xdg.configFile."quickshell/custom-shell".source = shellConfig;
 
       home.activation.generateTheme = config.lib.dag.entryAfter [ "writeBoundary" ] ''
         CACHE_DIR="$HOME/.cache/qs-theme"

@@ -60,6 +60,15 @@ QtObject {
     readonly property int barHeight: 32
     readonly property int frameThickness: 8
     readonly property color frameColor: base
+    // Corner radius of the area inside the frame, seen at the bottom corners.
+    readonly property int frameRounding: radius(0)
+    // Radius of the curve where the bar (and later each drawer) meets the frame.
+    readonly property int frameFillet: radius(0)
+    // How far the frame's shadow reaches over the windows, and how dark it starts.
+    readonly property int frameShadowSize: 12
+    readonly property color frameShadowColor: Qt.rgba(0, 0, 0, 0.3)
+    // The frame shrinking away for fullscreen, and growing back.
+    readonly property int frameRevealDuration: 300
     readonly property int barPadding: 12
     readonly property string fontFamily: "FiraCode Nerd Font"
     readonly property int fontSize: 13
