@@ -50,3 +50,8 @@ window rule only stops the shaders. Check that a reload after an unload is clean
 ## Blocked by
 
 None - can start immediately.
+
+**2026-10-10 (from custom-shell 18):** Question 5 answered: with `animations:enabled 0`
+(set by `game-mode on`, desktop-game-mode), a kitty window opened in a single frame in a
+60 fps recording of DP-2, with no burn. The dissolve does not play while animations are
+off; only the plugin's per-frame hooks remain to measure.

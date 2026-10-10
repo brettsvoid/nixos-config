@@ -1,6 +1,6 @@
 # In game mode the shell steps aside
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -38,3 +38,31 @@ shell comes back as it was.
 
 - .scratch/custom-shell/issues/02-shell-skeleton.md
 - .scratch/custom-shell/issues/17-game-mode-toggle.md
+
+## Comments
+
+**2026-10-10:** Done and tested live on brett-desktop, apart from a measurement with a game
+running (see the last points).
+- `services/GameMode.qml` watches `$XDG_RUNTIME_DIR/game-mode` (issue 17). The state file
+  moved there from `$XDG_RUNTIME_DIR/game-mode/state`: FileView watches a file's folder
+  to see it appear, so the folder has to exist from the start.
+- While on: open drawers close (their content unloads, which stops shell-stats and the
+  media position timer); the frame and bar shrink away as for fullscreen and the edges
+  reserve nothing, so a windowed game gets the whole screen (this costs less than a
+  minimal bar, which would still redraw for its clock); normal notifications wait in the
+  history, critical ones pop up; the bar is hidden, and its clock stops (SystemClock
+  `enabled` follows visibility; without that the hidden clock still caused a redraw per
+  screen each minute).
+- Checked: with the dashboard open on Performance, `game-mode on` closed it, shell-stats
+  was gone and both screens reserved `[0,0,0,0]` within a second; a normal notification
+  was held, a critical one showed; 0 frames in 65 s across a minute boundary (2 before
+  the clock fix); `game-mode off` brought back the frame, bar and `[8,32,8,8]`, and the
+  history held what came in meanwhile. A shell started while game mode was on came up
+  without the frame.
+- Indicator: no bar remains, so game-mode's own "Game mode on/off" notifications are
+  it; "off" shows and both land in the history.
+- Dissolve: with game mode's `animations:enabled 0`, a kitty window opened in a single
+  frame (60 fps recording), so the dissolve does not play while game mode is on. Whether
+  to also unload the plugin (its per-frame hooks) is window-dissolve issue 05's
+  measurement, which needs a game running.
+- Not measured: GPU work with a game running under MangoHud (unattended run, no game).
