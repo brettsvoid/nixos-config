@@ -269,12 +269,17 @@ in
           fi
         }
 
+        # Waits for it to exit (2 s at most), as the next one may start straight after:
+        # Hyprland refuses a global shortcut another program still holds, with a
+        # protocol error that ends the new shell.
         stop_custom() {
           if custom_running; then
             echo "Stopping custom shell..."
-            kill "$(cat "$CUSTOM_PID_FILE")" 2>/dev/null
+            pid=$(cat "$CUSTOM_PID_FILE")
+            kill "$pid" 2>/dev/null
+            for _ in $(seq 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+            kill -9 "$pid" 2>/dev/null
             rm -f "$CUSTOM_PID_FILE"
-            sleep 0.5
           fi
         }
 
@@ -284,6 +289,22 @@ in
             caelestia shell -k >/dev/null 2>&1 || pkill -f "$CAELESTIA_PATTERN" 2>/dev/null
             sleep 0.5
           fi
+        }
+
+        start_custom() {
+          echo "Starting custom shell..."
+          export QSG_RHI_BACKEND=vulkan
+          ${iconThemeEnv}
+          ${noMangoHud}
+          # Quickshell's own log misses the last words of a shell killed by a Wayland
+          # protocol error (Qt exits at once); its output keeps them.
+          ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" \
+            >"''${XDG_RUNTIME_DIR:-/tmp}/custom-shell.log" 2>&1 &
+          echo $! > "$CUSTOM_PID_FILE"
+          echo "Custom shell started (pid $!)"
+          # mako starts on demand whenever nothing owns the notification service, so it
+          # may hold it now. The shell takes the service as soon as mako lets go.
+          systemctl --user stop mako.service 2>/dev/null || true
         }
 
         case "''${1:-}" in
@@ -299,19 +320,24 @@ in
             fi
             stop_ambxst
             stop_caelestia
-            echo "Starting custom shell..."
-            export QSG_RHI_BACKEND=vulkan
-            ${iconThemeEnv}
-            ${noMangoHud}
-            # Quickshell's own log misses the last words of a shell killed by a Wayland
-            # protocol error (Qt exits at once); its output keeps them.
-            ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" \
-              >"''${XDG_RUNTIME_DIR:-/tmp}/custom-shell.log" 2>&1 &
-            echo $! > "$CUSTOM_PID_FILE"
-            echo "Custom shell started (pid $!)"
-            # mako starts on demand whenever nothing owns the notification service, so it
-            # may hold it now. The shell takes the service as soon as mako lets go.
-            systemctl --user stop mako.service 2>/dev/null || true
+            start_custom
+            ;;
+          restart)
+            # The custom shell again, on the config installed now: a running one keeps
+            # the config it started with. A rebuild that changes it runs this (the
+            # onChange below). Not while the session is locked: the lock screen is the
+            # shell's, and a lock whose program dies leaves the session stuck
+            # (lock-recover).
+            if ! custom_running; then
+              echo "Custom shell not running"
+              exit 0
+            fi
+            if hyprctl -j locked | ${pkgs.jq}/bin/jq -e .locked >/dev/null; then
+              echo "The session is locked; restart the custom shell once unlocked" >&2
+              exit 1
+            fi
+            stop_custom
+            start_custom
             ;;
           ambxst)
             if ambxst_running; then
@@ -343,9 +369,10 @@ in
             echo "Caelestia started"
             ;;
           *)
-            echo "Usage: toggle-shell {custom|ambxst|caelestia|status}"
+            echo "Usage: toggle-shell {custom|restart|ambxst|caelestia|status}"
             echo ""
             echo "  custom     - Stop the other shells, start custom shell"
+            echo "  restart    - Restart the custom shell if running (to load a rebuild)"
             echo "  ambxst     - Stop the other shells, restart ambxst"
             echo "  caelestia  - Stop the other shells, start Caelestia"
             echo "  status     - Show which shell is running"
@@ -488,7 +515,25 @@ in
           wallpaper-thumbnails
         ];
 
-        xdg.configFile."quickshell/custom-shell".source = shellConfig;
+        # A rebuild that changes the shell restarts it, if it is running. Hyprland runs
+        # the restart, so the shell starts with the session's environment rather than
+        # this activation's. Nothing happens while Hyprland is not running (as at
+        # boot); the activation carries on whatever happens here.
+        xdg.configFile."quickshell/custom-shell" = {
+          source = shellConfig;
+          onChange = ''
+            (
+              export PATH=/run/current-system/sw/bin:$PATH
+              # Without a Hyprland, jq is handed something that is not JSON.
+              {
+                ${liveHyprland pkgs}
+              } 2>/dev/null
+              [ -n "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || exit 0
+              echo "Restarting the custom shell, if it is running"
+              hyprctl dispatch exec "${toggle-shell}/bin/toggle-shell restart" >/dev/null
+            ) || true
+          '';
+        };
 
         # Clipboard history for the launcher's "cc" mode. wl-paste --watch hands every
         # copy to cliphist, which keeps the newest 500 and skips copies a password
