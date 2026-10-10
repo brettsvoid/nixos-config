@@ -3,6 +3,14 @@
 # minimum, and allows tearing; `game-mode off` puts every one of those back as it was.
 # Super+Shift+G toggles it.
 #
+# It also comes on by itself while a game runs under Feral GameMode: GameMode runs
+# `game-mode auto-on` when the first game starts and `auto-off` when the last one exits
+# (~/.config/gamemode.ini, below). auto-on does nothing if game mode is already on, and
+# auto-off only turns off what auto-on turned on, so a game ending never undoes a
+# manual choice. A game opts in to GameMode: in Steam, set its launch options to
+# `gamemoderun %command%` (Properties > General). The rofi game library starts games
+# through Steam, so they pick that up; anything else needs to run under `gamemoderun`.
+#
 # Off restores the values saved when it went on rather than running `hyprctl reload`:
 # a reload re-reads the whole config, which also drops binds other programs added at
 # runtime (Caelestia adds some) and re-applies the monitor rules.
@@ -24,17 +32,27 @@ _: {
     let
       game-mode = pkgs.writeShellScriptBin "game-mode" ''
         set -eu
+        # GameMode runs this with a bare PATH: hyprctl comes from the system profile, the
+        # same Hyprland the session runs.
         export PATH=${
           lib.makeBinPath [
             pkgs.coreutils
             pkgs.jq
             pkgs.libnotify
           ]
-        }:$PATH
+        }:$PATH:/run/current-system/sw/bin
         DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+        # Run from a service, the session's Hyprland may not be in the environment: take
+        # the newest instance.
+        if [ -z "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -d "$DIR/hypr" ]; then
+          HYPRLAND_INSTANCE_SIGNATURE=$(ls -1t "$DIR/hypr" | head -n 1)
+          export HYPRLAND_INSTANCE_SIGNATURE
+        fi
         STATE="$DIR/game-mode"
         # The values to put back, one `keyword <option> <value>` per line.
         SAVED="$DIR/game-mode.saved"
+        # Present while game mode is on because a game started it (auto-on).
+        AUTO="$DIR/game-mode.auto"
         OPTIONS="animations:enabled decoration:shadow:enabled decoration:blur:enabled general:gaps_in general:gaps_out general:border_size decoration:rounding general:allow_tearing"
 
         status() {
@@ -79,12 +97,29 @@ _: {
         }
 
         case "''${1:-status}" in
-          on) on ;;
-          off) off ;;
-          toggle) if [ "$(status)" = on ]; then off; else on; fi ;;
+          # By hand: whatever a game started, the user now decides.
+          on) rm -f "$AUTO"; on ;;
+          off) rm -f "$AUTO"; off ;;
+          toggle)
+            rm -f "$AUTO"
+            if [ "$(status)" = on ]; then off; else on; fi
+            ;;
+          # From GameMode's start and end scripts.
+          auto-on)
+            if [ "$(status)" = off ]; then
+              on
+              : > "$AUTO"
+            fi
+            ;;
+          auto-off)
+            if [ -e "$AUTO" ]; then
+              rm -f "$AUTO"
+              off
+            fi
+            ;;
           status) status ;;
           *)
-            echo "Usage: game-mode {on|off|toggle|status}" >&2
+            echo "Usage: game-mode {on|off|toggle|status|auto-on|auto-off}" >&2
             exit 2
             ;;
         esac
@@ -96,5 +131,13 @@ _: {
       wayland.windowManager.hyprland.settings.bindd = [
         "$mod SHIFT, G, Toggle game mode, exec, game-mode toggle"
       ];
+
+      # GameMode runs these through /bin/sh in its own environment, so the full path.
+      # It reads this file as well as /etc/gamemode.ini and reloads it when it changes.
+      xdg.configFile."gamemode.ini".text = ''
+        [custom]
+        start=${game-mode}/bin/game-mode auto-on
+        end=${game-mode}/bin/game-mode auto-off
+      '';
     };
 }
