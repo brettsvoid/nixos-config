@@ -59,6 +59,13 @@ ShellRoot {
         onPressed: Drawers.toggle("cheatsheet")
     }
 
+    GlobalShortcut {
+        appid: "custom-shell"
+        name: "notifications"
+        description: "Open or close the notification history"
+        onPressed: Drawers.toggle("notifications")
+    }
+
     // One set of windows per screen; screens added or removed come and go with
     // Quickshell.screens.
     Variants {

@@ -2,3 +2,4 @@ module services
 singleton Drawers 1.0 Drawers.qml
 singleton Osd 1.0 Osd.qml
 singleton AppUsage 1.0 AppUsage.qml
+singleton Notifications 1.0 Notifications.qml

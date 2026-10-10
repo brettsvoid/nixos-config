@@ -12,6 +12,9 @@ Item {
 
     // "right", "left", "top" or "bottom".
     property string edge: "right"
+    // Where along that edge: "centre", or "start" / "end" (top or left / bottom or right),
+    // where the box runs on into the corner of the frame.
+    property string align: "centre"
     property bool open: false
     property Component content
     // Whether its content takes the keyboard focus when it opens. The OSD does not, so
@@ -52,28 +55,47 @@ Item {
     readonly property bool sideways: root.edge === "left" || root.edge === "right"
     readonly property real panelWidth: (loader.item?.implicitWidth ?? 0) + Theme.drawerPadding * 2
     readonly property real panelHeight: (loader.item?.implicitHeight ?? 0) + Theme.drawerPadding * 2
-    // How far the panel reaches into the frame when open.
+    // How far the panel reaches into the frame when open. Changes while it shows (a
+    // notification joining the stack) ease through `size` rather than jump.
     readonly property real extent: root.sideways ? root.panelWidth : root.panelHeight
     readonly property real breadth: root.sideways ? root.panelHeight : root.panelWidth
     // Distance from the screen edge to the box's inner edge. Closed, that edge waits a
     // fillet's width behind the frame's inner edge: the fillet union blends any two edges
     // closer than that, so closer it would bulge the frame. As it comes out it raises a
     // smooth bump first, then a panel joined by fillets.
-    readonly property real reach: root.inset - Theme.frameFillet + Math.max(spring.value, 0) * (root.extent + Theme.frameFillet)
+    readonly property real reach: root.inset - Theme.frameFillet + Math.max(spring.value, 0) * (size.value + Theme.frameFillet)
     // The box runs this far past the screen edge, so its outer corners never show.
     readonly property real overhang: Theme.drawerRadius + 1
-    readonly property real centreX: root.inside.x + root.inside.width / 2
-    readonly property real centreY: root.inside.y + root.inside.height / 2
+
+    // Positions along the edge (y for left and right, x for top and bottom).
+    readonly property real alongMin: root.sideways ? root.inside.y : root.inside.x
+    readonly property real alongMax: root.sideways ? root.inside.y + root.inside.height : root.inside.x + root.inside.width
+    readonly property real alongScreen: root.sideways ? root.height : root.width
+    readonly property real contentAlong: {
+        switch (root.align) {
+        case "start":
+            return root.alongMin;
+        case "end":
+            return root.alongMax - root.breadth;
+        default:
+            return (root.alongMin + root.alongMax - root.breadth) / 2;
+        }
+    }
+    readonly property real boxAlongStart: root.align === "start" ? -root.overhang : root.contentAlong
+    readonly property real boxAlongEnd: root.align === "end" ? root.alongScreen + root.overhang : root.contentAlong + root.breadth
+
     readonly property rect box: {
+        const start = root.boxAlongStart;
+        const length = root.boxAlongEnd - root.boxAlongStart;
         switch (root.edge) {
         case "left":
-            return Qt.rect(-root.overhang, root.centreY - root.breadth / 2, root.reach + root.overhang, root.breadth);
+            return Qt.rect(-root.overhang, start, root.reach + root.overhang, length);
         case "right":
-            return Qt.rect(root.width - root.reach, root.centreY - root.breadth / 2, root.reach + root.overhang, root.breadth);
+            return Qt.rect(root.width - root.reach, start, root.reach + root.overhang, length);
         case "top":
-            return Qt.rect(root.centreX - root.breadth / 2, -root.overhang, root.breadth, root.reach + root.overhang);
+            return Qt.rect(start, -root.overhang, length, root.reach + root.overhang);
         default:
-            return Qt.rect(root.centreX - root.breadth / 2, root.height - root.reach, root.breadth, root.reach + root.overhang);
+            return Qt.rect(start, root.height - root.reach, length, root.reach + root.overhang);
         }
     }
 
@@ -81,6 +103,12 @@ Item {
         id: spring
         spec: Theme.drawerSpring
         target: root.open ? 1 : 0
+    }
+
+    Spring {
+        id: size
+        spec: Theme.drawerSpring
+        target: root.extent
     }
 
     Item {
@@ -109,7 +137,7 @@ Item {
                 case "right":
                     return root.width - root.reach - parent.x;
                 default:
-                    return root.box.x - parent.x;
+                    return root.contentAlong - parent.x;
                 }
             }
             y: {
@@ -119,7 +147,7 @@ Item {
                 case "bottom":
                     return root.height - root.reach - parent.y;
                 default:
-                    return root.box.y - parent.y;
+                    return root.contentAlong - parent.y;
                 }
             }
             width: root.panelWidth
@@ -136,6 +164,8 @@ Item {
                 focus: root.takesFocus
 
                 onLoaded: {
+                    // Open at the content's size; only later changes ease.
+                    size.snap();
                     if (root.takesFocus)
                         item.forceActiveFocus();
                 }

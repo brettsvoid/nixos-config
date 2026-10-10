@@ -114,6 +114,9 @@ in
             ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" >/dev/null 2>&1 &
             echo $! > "$CUSTOM_PID_FILE"
             echo "Custom shell started (pid $!)"
+            # mako starts on demand whenever nothing owns the notification service, so it
+            # may hold it now. The shell takes the service as soon as mako lets go.
+            systemctl --user stop mako.service 2>/dev/null || true
             ;;
           ambxst)
             if ambxst_running; then
@@ -253,6 +256,7 @@ in
           "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
           "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
           "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
+          "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
         ];
         # The brightness keys still run brightnessctl (hyprland.nix); this also tells
         # the shell, which shows the new level. The backlight sends no change events.

@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import "../bar"
 import "../cheatsheet"
 import "../launcher"
+import "../notifications"
 import "../osd"
 import "../services"
 import "../session"
@@ -28,7 +29,8 @@ PanelWindow {
     readonly property real fillet: Theme.frameFillet * reveal
     // The area inside the frame, below the bar.
     readonly property rect inside: Qt.rect(thickness, barHeight, width - thickness * 2, height - barHeight - thickness)
-    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open || cheatsheetDrawer.open
+    readonly property string screenName: root.screen?.name ?? ""
+    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open || cheatsheetDrawer.open || historyDrawer.open
 
     anchors {
         top: true
@@ -83,6 +85,14 @@ PanelWindow {
         Region {
             item: cheatsheetDrawer.hitArea
         }
+
+        Region {
+            item: historyDrawer.hitArea
+        }
+
+        Region {
+            item: popupsDrawer.hitArea
+        }
     }
 
     FrameShape {
@@ -102,6 +112,8 @@ PanelWindow {
             sessionDrawer.shape,
             launcherDrawer.shape,
             cheatsheetDrawer.shape,
+            historyDrawer.shape,
+            popupsDrawer.shape,
             osdDrawer.shape
         ]
         fillet: root.fillet
@@ -115,7 +127,7 @@ PanelWindow {
         anchors.fill: parent
         edge: "right"
         inside: root.inside
-        open: Drawers.isOpen("session", root.screen?.name ?? "")
+        open: Drawers.isOpen("session", root.screenName)
         content: Component {
             SessionMenu {}
         }
@@ -126,7 +138,7 @@ PanelWindow {
         anchors.fill: parent
         edge: "top"
         inside: root.inside
-        open: Drawers.isOpen("launcher", root.screen?.name ?? "")
+        open: Drawers.isOpen("launcher", root.screenName)
         content: Component {
             Launcher {}
         }
@@ -137,9 +149,35 @@ PanelWindow {
         anchors.fill: parent
         edge: "top"
         inside: root.inside
-        open: Drawers.isOpen("cheatsheet", root.screen?.name ?? "")
+        open: Drawers.isOpen("cheatsheet", root.screenName)
         content: Component {
             Cheatsheet {}
+        }
+    }
+
+    Drawer {
+        id: historyDrawer
+        anchors.fill: parent
+        edge: "right"
+        inside: root.inside
+        open: Drawers.isOpen("notifications", root.screenName)
+        content: Component {
+            History {}
+        }
+    }
+
+    // Notification pop-ups, from the right end of the bar. They wait while another
+    // drawer is open here: on the portrait screen the launcher would overlap them.
+    Drawer {
+        id: popupsDrawer
+        anchors.fill: parent
+        edge: "top"
+        align: "end"
+        inside: root.inside
+        open: Notifications.popups.length > 0 && Notifications.screen === root.screenName && !root.drawerOpen
+        takesFocus: false
+        content: Component {
+            Popups {}
         }
     }
 
@@ -150,7 +188,7 @@ PanelWindow {
         anchors.fill: parent
         edge: "bottom"
         inside: root.inside
-        open: Osd.shown && Osd.screen === (root.screen?.name ?? "")
+        open: Osd.shown && Osd.screen === root.screenName
         takesFocus: false
         content: Component {
             OsdContent {}

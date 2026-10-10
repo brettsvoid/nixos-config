@@ -1,0 +1,5 @@
+module notifications
+NotificationCard 1.0 NotificationCard.qml
+Popups 1.0 Popups.qml
+History 1.0 History.qml
+HeaderButton 1.0 HeaderButton.qml

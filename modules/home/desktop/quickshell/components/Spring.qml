@@ -16,6 +16,13 @@ FrameAnimation {
     // times it per second.
     property real precision: 0.001
 
+    // Jumps straight to the target, for changes that should not animate.
+    function snap() {
+        root.value = root.target;
+        root.velocity = 0;
+        root.running = false;
+    }
+
     onTargetChanged: running = true
 
     // Each frame steps the exact solution of the spring from where it is now, so the
