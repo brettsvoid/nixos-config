@@ -66,3 +66,8 @@ org.freedesktop.Notifications at login against Caelestia (it owned it all of the
 2026-10-09 session). When the custom shell starts from `exec-once`, stop or stop
 installing mako (it is in `modules/system/nixos/hyprland.nix`), or the shell's server
 waits until mako exits.
+
+**2026-10-10:** Start the shell from Hyprland (`exec-once`, or a user unit after
+Hyprland's environment import), not from a terminal. A herdr pane kept a dead
+Hyprland's signature, and a shell started there opened no drawers. See
+.scratch/hyprland-session-env/issues/01-stale-hyprland-signature.md.
