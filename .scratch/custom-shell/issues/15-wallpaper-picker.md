@@ -1,6 +1,6 @@
 # Wallpaper picker drawer
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## Parent
@@ -31,3 +31,29 @@ scheme variant and light or dark mode, since `generate-theme` already supports b
 
 - .scratch/custom-shell/issues/04-session-menu-drawer.md
 - .scratch/custom-shell/issues/14-wallpaper-background.md
+
+## Comments
+
+**2026-10-10:** Done, tested live on brett-desktop; the wallpaper and theme were put back
+(chisato, neutral, light; colors.json byte-identical).
+- Where: a **Wallpaper tab in the dashboard** (Super+D, then Tab). The dashboard
+  already loads tabs only while they show; a grid of thumbnails does not fit the
+  launcher's one-column list; and it needs no key of its own.
+- Thumbnails: `wallpaper-thumbnails` (custom-shell.nix, ImageMagick) makes 384×216
+  JPEGs in `~/.cache/custom-shell/wallpaper-thumbnails/<name>.<bytes>.jpg`, only the
+  missing ones, each time the tab opens. The tab lists the wallpaper and thumbnail
+  folders with FolderListModel, which watches both. Two traps found: on the first run
+  the thumbnail folder did not exist when the tab started watching (the script now
+  creates it and prints "ready", and the tab only then points at it), and a temporary
+  name ending in .jpg hid the last thumbnail (renaming does not change the count the
+  tab follows; the temporary file is now `<thumb>.part`).
+- The grid shows every image (19), the current one outlined; arrows and Enter, hover
+  and click. Pills above set light/dark and the matugen scheme through
+  `generate-theme --mode/--scheme`; the dashboard itself recolours.
+- Checked: cold, thumbnails filled in as they were made, all 19 within about 4 s;
+  reopened, they were there at once. Right, Right, Enter chose dan_da_dan_1; Left,
+  Left, Enter went back. Content then Neutral, Dark then Light changed the saved choice.
+  The wheel scrolls the grid. A test image added to the folder showed, with its
+  thumbnail, at the end of the grid on the next open; it was removed afterwards.
+- Fixed in Dashboard: the tab Loader now gives the loaded tab focus, so the grid gets
+  the arrow keys.
