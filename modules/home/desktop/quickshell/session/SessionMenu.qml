@@ -1,11 +1,13 @@
 import QtQuick
 import Quickshell
+import "../lock"
 import "../services"
 import "../theme"
 
 // The session drawer's content: lock, log out, restart and shut down. The arrow keys
-// move between them, Enter or a click runs one. Log out, restart and shut down go
-// through session-exit, which saves the open apps for the next login.
+// move between them, Enter or a click runs one. Lock is the shell's own lock screen; log
+// out, restart and shut down go through session-exit, which saves the open apps for the
+// next login.
 FocusScope {
     id: root
 
@@ -13,7 +15,7 @@ FocusScope {
         {
             icon: 0xF033E, // nf-md-lock
             label: "Lock",
-            command: ["hyprlock"]
+            run: () => Lock.lock()
         },
         {
             icon: 0xF0343, // nf-md-logout
@@ -37,7 +39,11 @@ FocusScope {
     implicitHeight: column.implicitHeight
 
     function run(index) {
-        Quickshell.execDetached(root.actions[index].command);
+        const action = root.actions[index];
+        if (action.run)
+            action.run();
+        else
+            Quickshell.execDetached(action.command);
         Drawers.close();
     }
 

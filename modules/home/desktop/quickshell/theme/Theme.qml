@@ -114,6 +114,9 @@ QtObject {
     readonly property int drawerRadius: cornerExtraLarge
     readonly property int drawerPadding: spacingLarge
     readonly property var drawerSpring: springDefaultSpatial
+    // Lock screen: a wrong password shakes the field. Not one of Material's springs:
+    // damped lightly enough to swing three times, settling in about half a second.
+    readonly property var lockShakeSpring: ({ damping: 0.3, stiffness: 800 })
     readonly property int barPadding: 12
     readonly property string fontFamily: "FiraCode Nerd Font"
     readonly property int fontSize: 13

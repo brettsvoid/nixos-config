@@ -97,11 +97,11 @@ in
       # the time (measured on brett-desktop, 2026-10-10). Keep it out of the shell.
       noMangoHud = "export DISABLE_MANGOHUD=1";
 
-      # `custom-shell-or <drawer> <fallback...>` opens one of the custom shell's drawers
-      # while that shell runs (its global shortcut is registered), and runs the fallback
-      # under the other shells. It keeps Super+R and Super+/ working everywhere until
-      # the custom shell is the session's shell (custom-shell issue 22), which binds the
-      # globals directly and drops Fuzzel.
+      # `custom-shell-or <shortcut> <fallback...>` runs one of the custom shell's global
+      # shortcuts (a drawer, or the lock) while that shell runs (the shortcut is
+      # registered), and runs the fallback under the other shells. It keeps Super+R,
+      # Super+/ and Super+L working everywhere until the custom shell is the session's
+      # shell (custom-shell issue 22), which binds the globals directly and drops Fuzzel.
       custom-shell-or = pkgs.writeShellScriptBin "custom-shell-or" ''
         drawer=$1
         shift
@@ -109,6 +109,59 @@ in
           exec hyprctl dispatch global "custom-shell:$drawer"
         fi
         exec "$@"
+      '';
+
+      # From a text console (Ctrl+Alt+F2, log in), when the lock screen has died or will
+      # not take the password: starts the custom shell again and has it lock, so the
+      # password unlocks back on Ctrl+Alt+F1 (docs/lock-screen.md). Hyprland lets a new
+      # lock take over only while misc:allow_session_lock_restore is on, which would let
+      # any program replace a working lock too, so it is on just for these few seconds.
+      lock-recover = pkgs.writeShellScriptBin "lock-recover" ''
+        set -u
+        export PATH=${
+          lib.makeBinPath [
+            pkgs.coreutils
+            pkgs.jq
+          ]
+        }:$PATH
+        hypr() { hyprctl --instance 0 "$@"; }
+        if ! hypr version >/dev/null 2>&1; then
+          echo "Hyprland is not running" >&2
+          exit 1
+        fi
+
+        pidfile=/tmp/custom-shell.pid
+        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+          echo "Stopping the custom shell..."
+          pid=$(cat "$pidfile")
+          kill "$pid"
+          for _ in $(seq 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+          kill -9 "$pid" 2>/dev/null
+          rm -f "$pidfile"
+        fi
+
+        echo "Starting the custom shell..."
+        hypr dispatch exec toggle-shell custom >/dev/null
+        started=false
+        for _ in $(seq 50); do
+          if hypr globalshortcuts -j | jq -e 'any(.[]; .name == "custom-shell:lock")' >/dev/null; then
+            started=true
+            break
+          fi
+          sleep 0.2
+        done
+        if ! $started; then
+          echo "The custom shell did not start within 10 s, so nothing could lock." >&2
+          echo "Last resort, which ends the session and loses unsaved work:" >&2
+          echo "  hyprctl --instance 0 dispatch exit" >&2
+          exit 1
+        fi
+
+        hypr keyword misc:allow_session_lock_restore 1 >/dev/null
+        hypr dispatch global custom-shell:lock >/dev/null
+        sleep 2
+        hypr keyword misc:allow_session_lock_restore 0 >/dev/null
+        echo "Locked by the custom shell: go back with Ctrl+Alt+F1 and type your password."
       '';
 
       # Statistics for the dashboard's performance tab: a JSON line a second while the
@@ -371,6 +424,7 @@ in
         qs-dev
         generate-theme
         custom-shell-or
+        lock-recover
         shell-stats
         wallpaper-thumbnails
       ];
@@ -398,6 +452,8 @@ in
         bindd = [
           "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
           "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
+          # Caelestia and ambxst each lock on logind's Lock signal.
+          "$mod, L, Lock the session, exec, custom-shell-or lock loginctl lock-session"
           "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
           "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
           "$mod, D, Dashboard (custom shell), global, custom-shell:dashboard"
@@ -408,6 +464,30 @@ in
           ", XF86MonBrightnessUp, Show the brightness level (custom shell), global, custom-shell:brightness"
           ", XF86MonBrightnessDown, Show the brightness level (custom shell), global, custom-shell:brightness"
         ];
+      };
+
+      # Lock before the machine sleeps, and never sleep showing the desktop. On suspend,
+      # logind asks the session to lock; the custom shell locks through hypridle's
+      # lock_cmd, and Caelestia and ambxst on the signal itself. With inhibit_sleep = 3,
+      # hypridle holds the sleep back (logind allows 5 s) until Hyprland reports the
+      # session locked, which it does once every screen has drawn a lock frame. No idle
+      # timeouts: this desktop does not lock or sleep by itself. (hypridle logs "Config
+      # has errors: No rules configured" for that, and carries on.)
+      #
+      # The unit is NixOS's (programs.hyprlock turns hypridle on), and failed at every
+      # login for want of this file; it does not restart by itself when the file changes.
+      xdg.configFile."hypr/hypridle.conf" = {
+        text = ''
+          general {
+              lock_cmd = ${custom-shell-or}/bin/custom-shell-or lock true
+              before_sleep_cmd = loginctl lock-session
+              inhibit_sleep = 3
+          }
+        '';
+        onChange = ''
+          ${pkgs.systemd}/bin/systemctl --user reset-failed hypridle.service 2>/dev/null || true
+          ${pkgs.systemd}/bin/systemctl --user restart hypridle.service 2>/dev/null || true
+        '';
       };
 
       # First run, or the theme cache was cleared: choose the wallpaper (the saved choice,

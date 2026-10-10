@@ -23,6 +23,11 @@ _: {
         tumbler.enable = true;
       };
 
+      # The custom shell's lock screen checks the password against this
+      # (home/desktop/quickshell/lock). Its own service rather than hyprlock's,
+      # which goes if hyprlock does: with no service, no password unlocks.
+      security.pam.services.custom-shell = { };
+
       xdg.portal.config.common.default = "*";
 
       environment.systemPackages = with pkgs; [
