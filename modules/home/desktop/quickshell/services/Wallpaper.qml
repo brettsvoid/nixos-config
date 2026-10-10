@@ -12,9 +12,21 @@ Singleton {
 
     readonly property string stateFile: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/custom-shell/wallpaper.json"
     readonly property string path: state.path
+    // matugen's scheme variant and light or dark.
+    readonly property string scheme: state.scheme
+    readonly property string mode: state.mode
+    readonly property var schemes: ["scheme-neutral", "scheme-tonal-spot", "scheme-content", "scheme-fidelity", "scheme-expressive", "scheme-fruit-salad", "scheme-monochrome", "scheme-rainbow"]
 
     function set(path) {
         Quickshell.execDetached(["generate-theme", path]);
+    }
+
+    function setScheme(scheme) {
+        Quickshell.execDetached(["generate-theme", "--scheme", scheme]);
+    }
+
+    function setMode(mode) {
+        Quickshell.execDetached(["generate-theme", "--mode", mode]);
     }
 
     FileView {

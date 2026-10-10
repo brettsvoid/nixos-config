@@ -15,6 +15,10 @@ FocusScope {
         {
             name: "Performance",
             component: performanceTab
+        },
+        {
+            name: "Wallpaper",
+            component: wallpaperTab
         }
     ]
     property int current: 0
@@ -72,7 +76,10 @@ FocusScope {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
+        // Keys reach the tab (the wallpaper grid's arrows); Tab still comes back here.
+        focus: true
         sourceComponent: root.tabs[root.current].component
+        onLoaded: item.forceActiveFocus()
     }
 
     Component {
@@ -85,5 +92,11 @@ FocusScope {
         id: performanceTab
 
         PerformanceTab {}
+    }
+
+    Component {
+        id: wallpaperTab
+
+        WallpaperTab {}
     }
 }
