@@ -34,7 +34,10 @@ Item {
         }
     }
 
-    readonly property bool shown: root.open || spring.running
+    // Still shown while it closes. Following the spring's value rather than whether it
+    // is moving: when `open` turns false the spring has not started yet, and the content
+    // would be destroyed in the middle of whatever closed it.
+    readonly property bool shown: root.open || spring.value > 0
     // The part of the screen it covers, for the window's input mask.
     readonly property Item hitArea: hit
     // The box for FrameShape: { x, y, width, height, radius }.

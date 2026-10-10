@@ -7,7 +7,12 @@ let
 in
 {
   flake.modules.homeManager.desktop-custom-shell =
-    { config, pkgs, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     let
       qsPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
@@ -18,6 +23,22 @@ in
           [ -e "$shader" ] || continue
           ${pkgs.qt6.qtshadertools}/bin/qsb --qt6 -o "$shader.qsb" "$shader" || exit 1
         done
+      '';
+
+      # Quickshell only knows hicolor unless told the icon theme; use the GTK one, so
+      # the launcher's icons match every other app's.
+      iconThemeEnv = lib.optionalString (
+        config.gtk.iconTheme != null
+      ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
+
+      # Super+R: the custom shell's launcher while it runs (its global shortcut is
+      # registered), Fuzzel under the other shells. Fuzzel goes once the custom shell is
+      # the session's shell (custom-shell issue 22).
+      app-launcher = pkgs.writeShellScriptBin "app-launcher" ''
+        if hyprctl globalshortcuts -j | ${pkgs.jq}/bin/jq -e 'any(.[]; .name == "custom-shell:launcher")' >/dev/null; then
+          exec hyprctl dispatch global custom-shell:launcher
+        fi
+        exec ${pkgs.fuzzel}/bin/fuzzel
       '';
 
       shellConfig = pkgs.runCommand "custom-shell-config" { } ''
@@ -85,6 +106,7 @@ in
             stop_caelestia
             echo "Starting custom shell..."
             export QSG_RHI_BACKEND=vulkan
+            ${iconThemeEnv}
             ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" >/dev/null 2>&1 &
             echo $! > "$CUSTOM_PID_FILE"
             echo "Custom shell started (pid $!)"
@@ -204,6 +226,7 @@ in
         echo "Starting quickshell from $SHELL_DIR (Ctrl+C to stop)"
         echo "Runs ON TOP of ambxst -- nothing killed."
         export QSG_RHI_BACKEND=vulkan
+        ${iconThemeEnv}
         exec ${qsPkg}/bin/qs -p "$SHELL_DIR"
       '';
     in
@@ -213,6 +236,7 @@ in
         toggle-shell
         qs-dev
         generate-theme
+        app-launcher
       ];
 
       xdg.configFile."quickshell/custom-shell".source = shellConfig;
@@ -222,6 +246,7 @@ in
       # matches a key, so this shares Super+Escape with Caelestia's and ambxst's menus.
       wayland.windowManager.hyprland.settings = {
         bindd = [
+          "$mod, R, App launcher, exec, app-launcher"
           "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
         ];
         # The brightness keys still run brightnessctl (hyprland.nix); this also tells

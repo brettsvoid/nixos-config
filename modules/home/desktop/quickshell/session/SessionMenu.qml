@@ -37,8 +37,8 @@ FocusScope {
     implicitHeight: column.implicitHeight
 
     function run(index) {
-        Drawers.close();
         Quickshell.execDetached(root.actions[index].command);
+        Drawers.close();
     }
 
     Keys.onUpPressed: root.current = (root.current + root.actions.length - 1) % root.actions.length

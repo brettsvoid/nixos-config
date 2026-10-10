@@ -8,7 +8,11 @@ import "frame"
 import "services"
 
 ShellRoot {
-    Component.onCompleted: Quickshell.watchFiles = true
+    Component.onCompleted: {
+        Quickshell.watchFiles = true;
+        // Read the desktop entries now, not on the launcher's first open.
+        DesktopEntries.applications;
+    }
 
     // Hyprland's workspacev2 event does not say which monitor the workspace is on, so
     // Quickshell gives it to the monitor it last saw focused. Switching another screen
@@ -39,6 +43,13 @@ ShellRoot {
         name: "session"
         description: "Open or close the session menu"
         onPressed: Drawers.toggle("session")
+    }
+
+    GlobalShortcut {
+        appid: "custom-shell"
+        name: "launcher"
+        description: "Open or close the app launcher"
+        onPressed: Drawers.toggle("launcher")
     }
 
     // One set of windows per screen; screens added or removed come and go with

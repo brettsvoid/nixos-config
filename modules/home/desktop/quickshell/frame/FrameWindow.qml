@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import "../bar"
+import "../launcher"
 import "../osd"
 import "../services"
 import "../session"
@@ -26,7 +27,7 @@ PanelWindow {
     readonly property real fillet: Theme.frameFillet * reveal
     // The area inside the frame, below the bar.
     readonly property rect inside: Qt.rect(thickness, barHeight, width - thickness * 2, height - barHeight - thickness)
-    readonly property bool drawerOpen: sessionDrawer.open
+    readonly property bool drawerOpen: sessionDrawer.open || launcherDrawer.open
 
     anchors {
         top: true
@@ -73,6 +74,10 @@ PanelWindow {
         Region {
             item: sessionDrawer.hitArea
         }
+
+        Region {
+            item: launcherDrawer.hitArea
+        }
     }
 
     FrameShape {
@@ -90,6 +95,7 @@ PanelWindow {
                 radius: 0
             },
             sessionDrawer.shape,
+            launcherDrawer.shape,
             osdDrawer.shape
         ]
         fillet: root.fillet
@@ -106,6 +112,17 @@ PanelWindow {
         open: Drawers.isOpen("session", root.screen?.name ?? "")
         content: Component {
             SessionMenu {}
+        }
+    }
+
+    Drawer {
+        id: launcherDrawer
+        anchors.fill: parent
+        edge: "top"
+        inside: root.inside
+        open: Drawers.isOpen("launcher", root.screen?.name ?? "")
+        content: Component {
+            Launcher {}
         }
     }
 
