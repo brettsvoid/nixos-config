@@ -92,6 +92,19 @@ in
         config.gtk.iconTheme != null
       ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
 
+      # A terminal started before Hyprland last restarted still carries the old instance's
+      # signature. A shell started with it cannot reach Hyprland's socket, so it does not
+      # know which monitor is focused and no drawer opens. Unless the inherited instance
+      # is still running, take the newest one that is.
+      liveHyprland = ''
+        live=$(hyprctl instances -j 2>/dev/null \
+          | ${pkgs.jq}/bin/jq -r 'sort_by(-.time) | .[] | "\(.instance) \(.wl_socket)"')
+        if [ -n "$live" ] && ! grep -q "^''${HYPRLAND_INSTANCE_SIGNATURE:-none} " <<<"$live"; then
+          read -r HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY <<<"$(head -n 1 <<<"$live")"
+          export HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY
+        fi
+      '';
+
       # MangoHud is on for the whole session (profile-gaming), and its Vulkan layer
       # loads into the shell too, where its NVIDIA thread took about 28% of a core all
       # the time (measured on brett-desktop, 2026-10-10). Keep it out of the shell.
@@ -112,10 +125,11 @@ in
       '';
 
       # From a text console (Ctrl+Alt+F2, log in), when the lock screen has died or will
-      # not take the password: starts the custom shell again and has it lock, so the
-      # password unlocks back on Ctrl+Alt+F1 (docs/lock-screen.md). Hyprland lets a new
-      # lock take over only while misc:allow_session_lock_restore is on, which would let
-      # any program replace a working lock too, so it is on just for these few seconds.
+      # not take the password: starts the custom shell again and, once you are back on
+      # Hyprland's VT, has it lock, so the password unlocks (docs/lock-screen.md).
+      # Hyprland lets a new lock take over only while misc:allow_session_lock_restore is
+      # on, which would let any program replace a working lock too, so it is on just for
+      # these few seconds.
       lock-recover = pkgs.writeShellScriptBin "lock-recover" ''
         set -u
         export PATH=${
@@ -150,18 +164,50 @@ in
           fi
           sleep 0.2
         done
-        if ! $started; then
-          echo "The custom shell did not start within 10 s, so nothing could lock." >&2
+        last_resort() {
           echo "Last resort, which ends the session and loses unsaved work:" >&2
           echo "  hyprctl --instance 0 dispatch exit" >&2
+        }
+        if ! $started; then
+          echo "The custom shell did not start within 10 s, so nothing could lock." >&2
+          last_resort
           exit 1
         fi
+
+        # A lock asked for while Hyprland's VT is in the background breaks: the shell
+        # died with a Wayland protocol error both times it was tried from here, and
+        # locked once Hyprland's VT was showing (2026-10-10). So lock only once you are
+        # back there. Hyprland's VT is its logind session's.
+        hpid=$(hyprctl instances -j | jq -r 'sort_by(-.time) | .[0].pid')
+        vt=$(loginctl show-session "$(cat "/proc/$hpid/sessionid")" -p VTNr --value 2>/dev/null)
+        vt=''${vt:-1}
+        echo "Now press Ctrl+Alt+F$vt: the lock screen appears there a few seconds later."
+        for _ in $(seq 300); do
+          [ "$(cat /sys/class/tty/tty0/active)" = "tty$vt" ] && break
+          sleep 1
+        done
+        if [ "$(cat /sys/class/tty/tty0/active)" != "tty$vt" ]; then
+          echo "tty$vt was not showing within 5 minutes; run lock-recover again." >&2
+          exit 1
+        fi
+        # Hyprland sets its monitors up again as its VT comes back.
+        sleep 2
 
         hypr keyword misc:allow_session_lock_restore 1 >/dev/null
         hypr dispatch global custom-shell:lock >/dev/null
         sleep 2
         hypr keyword misc:allow_session_lock_restore 0 >/dev/null
-        echo "Locked by the custom shell: go back with Ctrl+Alt+F1 and type your password."
+
+        # You are on tty$vt by now: this is for when you come back here.
+        sleep 2
+        if kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
+          echo "Locked by the custom shell. Once unlocked, log out here with exit."
+        else
+          echo "The custom shell died while locking; its output is in" >&2
+          echo "''${XDG_RUNTIME_DIR:-/tmp}/custom-shell.log. Run lock-recover again." >&2
+          last_resort
+          exit 1
+        fi
       '';
 
       # Statistics for the dashboard's performance tab: a JSON line a second while the
@@ -209,6 +255,7 @@ in
 
       toggle-shell = pkgs.writeShellScriptBin "toggle-shell" ''
         CUSTOM_PID_FILE="/tmp/custom-shell.pid"
+        ${liveHyprland}
 
         AMBXST_PATTERN="quickshell.*ambxst-shell"
         # The qs process runs with `-p <store>/share/caelestia-shell`.
@@ -268,7 +315,10 @@ in
             export QSG_RHI_BACKEND=vulkan
             ${iconThemeEnv}
             ${noMangoHud}
-            ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" >/dev/null 2>&1 &
+            # Quickshell's own log misses the last words of a shell killed by a Wayland
+            # protocol error (Qt exits at once); its output keeps them.
+            ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" \
+              >"''${XDG_RUNTIME_DIR:-/tmp}/custom-shell.log" 2>&1 &
             echo $! > "$CUSTOM_PID_FILE"
             echo "Custom shell started (pid $!)"
             # mako starts on demand whenever nothing owns the notification service, so it
@@ -411,6 +461,7 @@ in
         ${compileShaders "$SHELL_DIR"}
         echo "Starting quickshell from $SHELL_DIR (Ctrl+C to stop)"
         echo "Runs ON TOP of ambxst -- nothing killed."
+        ${liveHyprland}
         export QSG_RHI_BACKEND=vulkan
         ${iconThemeEnv}
         ${noMangoHud}
