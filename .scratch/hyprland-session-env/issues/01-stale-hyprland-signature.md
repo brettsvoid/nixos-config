@@ -1,6 +1,6 @@
 # Commands typed in long-lived terminals talk to a Hyprland that has gone
 
-Status: ready-for-agent
+Status: done
 Type: AFK
 
 ## What happened
@@ -48,13 +48,13 @@ only new commands are fixed. Give `game-mode` the same live-instance check as
 
 ## Acceptance criteria
 
-- [ ] In a zsh started with a dead instance's signature, the next prompt has the live
+- [x] In a zsh started with a dead instance's signature, the next prompt has the live
       instance's signature and `WAYLAND_DISPLAY`, and `hyprctl version` answers.
-- [ ] A shell whose signature is live is left alone. So is a shell where no Hyprland
+- [x] A shell whose signature is live is left alone. So is a shell where no Hyprland
       runs: a text console, SSH, macOS. The prompt is not noticeably slower.
-- [ ] `game-mode status` reaches the running Hyprland when started with a stale
+- [x] `game-mode status` reaches the running Hyprland when started with a stale
       signature.
-- [ ] The scripts in the repo that call `hyprctl` from a terminal were checked for the
+- [x] The scripts in the repo that call `hyprctl` from a terminal were checked for the
       same assumption.
 
 ## Blocked by
@@ -66,3 +66,37 @@ None - can start immediately.
 - custom-shell issue 22: when the custom shell becomes the session's shell, start it
   from Hyprland (`exec-once`, or a user unit after Hyprland's environment import), never
   from a terminal.
+
+## Comments
+
+**2026-10-10:** Done in 458f41d. Not live until the next `nix-rebuild`: sudo needs a
+password, so it was tested from the built generation.
+
+- **One helper.** `liveHyprland` moved from custom-shell.nix to `flake.lib`
+  (hyprland.nix), and toggle-shell, qs-dev, game-mode, the zsh hook and the laptop's
+  resume service all use it.
+- **The prompt's check.** It does not test for `.socket.sock`. `strace` shows how
+  `hyprctl instances` decides an instance is live: it reads `hyprland.lock` (pid, then
+  Wayland socket) and calls `kill(pid, 0)`. The hook does the same with zsh builtins.
+  The dead instances here had no `.socket.sock` left, but a hard-killed Hyprland would
+  leave one, and its pid would still be dead.
+- **Results**, with the built hook in zsh:
+  - Started with this terminal's dead signature, the live one was set before the first
+    prompt, and `hyprctl version` answered.
+  - A live signature and an unset one were left alone, with no hyprctl call.
+  - A fake hard-killed instance (`hyprland.lock` with a dead pid, plus `.socket.sock`)
+    was treated as dead, and WAYLAND_DISPLAY changed with the signature.
+  - It costs 19 µs a prompt, and about 8 ms when the instance is gone.
+  - The Darwin config has no hook (only the Linux hosts import desktop-hyprland).
+- **game-mode.** `status` only reads `$XDG_RUNTIME_DIR/game-mode`. The real test was
+  `on` and `off` from the stale terminal, which turned animations off and on again in
+  the running Hyprland. Game mode was off before and after.
+- **Scripts checked:**
+  - Fixed: the laptop's `hyprland-resume-monitors` took the first directory in
+    `/run/user/1000/hypr`, which `ls` sorts oldest first, so after a Hyprland restart it
+    named a dead instance. Its lookup, run in an empty environment here, now picks the
+    live one. Its monitor commands were not run (laptop only).
+  - Already safe: `exec-once` and bind commands (Hyprland's own environment; hyprland,
+    window-dissolve, ambxst, xwayland-primary-odyssey, hypr-cheatsheet, Thunar's Quick
+    Look). `thunar-quick-look-keys`, a user service, restarted with the current Hyprland
+    and has its signature. `lock-recover` uses `--instance 0`.
