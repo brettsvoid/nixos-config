@@ -457,88 +457,134 @@ in
       '';
     in
     {
-      home.packages = [
-        qsPkg
-        toggle-shell
-        qs-dev
-        generate-theme
-        custom-shell-or
-        lock-recover
-        shell-stats
-        wallpaper-thumbnails
-      ];
-
-      xdg.configFile."quickshell/custom-shell".source = shellConfig;
-
-      # Clipboard history for the launcher's "cc" mode. wl-paste --watch hands every
-      # copy to cliphist, which keeps the newest 500 and skips copies a password manager
-      # marks secret (CLIPBOARD_STATE=sensitive). A user service, so it runs under any
-      # shell.
-      services.cliphist = {
-        enable = true;
-        allowImages = true;
-        extraOptions = [
-          "-max-items"
-          "500"
-        ];
+      # Starting values for the shell's settings (quickshell/config/Settings.qml), so a
+      # fresh install or another host starts with them. The shell uses each one unless
+      # the user has chosen otherwise in the settings window, whose choices stay in
+      # ~/.config/custom-shell/settings.json; resetting a setting there returns it to
+      # the value here. A value the shell does not know, or of the wrong type, is
+      # ignored.
+      options.local.customShell.settings = lib.mkOption {
+        inherit (pkgs.formats.json { }) type;
+        default = { };
+        example = {
+          appearance = {
+            fontFamily = "Inter";
+            textScale = 1.1;
+            frameThickness = 6;
+          };
+        };
+        description = "The shell's settings by the same keys as its settings file, as starting values the settings window can override.";
       };
 
-      # The shell's drawers are Hyprland global shortcuts, like Caelestia's panels: each
-      # does nothing while this shell is not running. Hyprland runs every bind that
-      # matches a key, so Super+D, N and Escape are shared with Caelestia and ambxst.
-      wayland.windowManager.hyprland.settings = {
-        bindd = [
-          "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
-          "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
-          # Caelestia and ambxst each lock on logind's Lock signal.
-          "$mod, L, Lock the session, exec, custom-shell-or lock loginctl lock-session"
-          "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
-          "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
-          "$mod, D, Dashboard (custom shell), global, custom-shell:dashboard"
-          "$mod, I, Shell settings (custom shell), global, custom-shell:settings"
+      config = {
+        home.packages = [
+          qsPkg
+          toggle-shell
+          qs-dev
+          generate-theme
+          custom-shell-or
+          lock-recover
+          shell-stats
+          wallpaper-thumbnails
         ];
-        # The settings window is an ordinary window (quickshell/settings): float it,
-        # centred, at the size it is drawn for.
-        windowrule = [
-          "float on, center on, size 960 700, match:class ^(org\\.quickshell)$, match:title ^(Shell settings)$"
-        ];
-        # The brightness keys still run brightnessctl (hyprland.nix); this also tells
-        # the shell, which shows the new level. The backlight sends no change events.
-        binddel = [
-          ", XF86MonBrightnessUp, Show the brightness level (custom shell), global, custom-shell:brightness"
-          ", XF86MonBrightnessDown, Show the brightness level (custom shell), global, custom-shell:brightness"
-        ];
-      };
 
-      # Lock before the machine sleeps. On suspend logind asks the session to lock: the
-      # custom shell locks through hypridle's lock_cmd, Caelestia and ambxst on the signal
-      # itself. inhibit_sleep = 3 holds the sleep back (logind allows 5 s) until Hyprland
-      # reports every screen locked. No idle timeouts: this desktop never locks or sleeps
-      # by itself (hypridle logs "No rules configured" for that, and carries on).
-      #
-      # The unit is NixOS's (programs.hyprlock turns hypridle on), and it does not
-      # restart by itself when this file changes.
-      xdg.configFile."hypr/hypridle.conf" = {
-        text = ''
-          general {
-              lock_cmd = ${custom-shell-or}/bin/custom-shell-or lock true
-              before_sleep_cmd = loginctl lock-session
-              inhibit_sleep = 3
-          }
-        '';
-        onChange = ''
-          ${pkgs.systemd}/bin/systemctl --user reset-failed hypridle.service 2>/dev/null || true
-          ${pkgs.systemd}/bin/systemctl --user restart hypridle.service 2>/dev/null || true
-        '';
-      };
+        xdg.configFile."quickshell/custom-shell".source = shellConfig;
 
-      # First run, or the theme cache was cleared: choose the wallpaper (the saved choice,
-      # else the first in ~/Pictures/Wallpapers, linked by then) and generate the theme.
-      home.activation.generateTheme = config.lib.dag.entryAfter [ "linkGeneration" ] ''
-        if [ ! -f "$HOME/.cache/qs-theme/colors.json" ] \
-          || [ ! -f "''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell/wallpaper.json" ]; then
-          run ${generate-theme}/bin/generate-theme || true
-        fi
-      '';
+        # Clipboard history for the launcher's "cc" mode. wl-paste --watch hands every
+        # copy to cliphist, which keeps the newest 500 and skips copies a password
+        # manager marks secret (CLIPBOARD_STATE=sensitive). A user service, so it runs
+        # under any shell.
+        services.cliphist = {
+          enable = true;
+          allowImages = true;
+          extraOptions = [
+            "-max-items"
+            "500"
+          ];
+        };
+
+        # The shell's drawers are Hyprland global shortcuts, like Caelestia's panels:
+        # each does nothing while this shell is not running. Hyprland runs every bind
+        # that matches a key, so Super+D, N and Escape are shared with Caelestia and
+        # ambxst.
+        wayland.windowManager.hyprland.settings = {
+          bindd = [
+            "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
+            "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
+            # Caelestia and ambxst each lock on logind's Lock signal.
+            "$mod, L, Lock the session, exec, custom-shell-or lock loginctl lock-session"
+            "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
+            "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
+            "$mod, D, Dashboard (custom shell), global, custom-shell:dashboard"
+            "$mod, I, Shell settings (custom shell), global, custom-shell:settings"
+          ];
+          # The settings window is an ordinary window (quickshell/settings): float it,
+          # centred, at the size it is drawn for.
+          windowrule = [
+            "float on, center on, size 960 700, match:class ^(org\\.quickshell)$, match:title ^(Shell settings)$"
+          ];
+          # The brightness keys still run brightnessctl (hyprland.nix); this also tells
+          # the shell, which shows the new level. The backlight sends no change events.
+          binddel = [
+            ", XF86MonBrightnessUp, Show the brightness level (custom shell), global, custom-shell:brightness"
+            ", XF86MonBrightnessDown, Show the brightness level (custom shell), global, custom-shell:brightness"
+          ];
+        };
+
+        # Lock before the machine sleeps. On suspend logind asks the session to lock:
+        # the custom shell locks through hypridle's lock_cmd, Caelestia and ambxst on
+        # the signal itself. inhibit_sleep = 3 holds the sleep back (logind allows 5 s)
+        # until Hyprland reports every screen locked. No idle timeouts: this desktop
+        # never locks or sleeps by itself (hypridle logs "No rules configured" for that,
+        # and carries on).
+        #
+        # The unit is NixOS's (programs.hyprlock turns hypridle on), and it does not
+        # restart by itself when this file changes.
+        xdg.configFile."hypr/hypridle.conf" = {
+          text = ''
+            general {
+                lock_cmd = ${custom-shell-or}/bin/custom-shell-or lock true
+                before_sleep_cmd = loginctl lock-session
+                inhibit_sleep = 3
+            }
+          '';
+          onChange = ''
+            ${pkgs.systemd}/bin/systemctl --user reset-failed hypridle.service 2>/dev/null || true
+            ${pkgs.systemd}/bin/systemctl --user restart hypridle.service 2>/dev/null || true
+          '';
+        };
+
+        home.activation = {
+          # First run, or the theme cache was cleared: choose the wallpaper (the saved
+          # choice, else the first in ~/Pictures/Wallpapers, linked by then) and
+          # generate the theme.
+          generateTheme = config.lib.dag.entryAfter [ "linkGeneration" ] ''
+            if [ ! -f "$HOME/.cache/qs-theme/colors.json" ] \
+              || [ ! -f "''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell/wallpaper.json" ]; then
+              run ${generate-theme}/bin/generate-theme || true
+            fi
+          '';
+
+          # The settings from Nix, beside the user's own settings.json, which the
+          # settings window writes and so must not be a home-manager file. A copy rather
+          # than a home-manager link: the shell's watch follows a link to its store
+          # file, which never changes, so it misses a rebuild's new link; a file renamed
+          # into place it sees. Read only, as edits belong in Nix.
+          customShellSettings =
+            let
+              defaults =
+                (pkgs.formats.json { }).generate "custom-shell-defaults.json"
+                  config.local.customShell.settings;
+            in
+            config.lib.dag.entryAfter [ "writeBoundary" ] ''
+              dir="${config.xdg.configHome}/custom-shell"
+              run mkdir -p "$dir"
+              if ! ${pkgs.diffutils}/bin/cmp -s ${defaults} "$dir/defaults.json"; then
+                run install -m444 ${defaults} "$dir/.defaults.json.new"
+                run mv -f "$dir/.defaults.json.new" "$dir/defaults.json"
+              fi
+            '';
+        };
+      };
     };
 }

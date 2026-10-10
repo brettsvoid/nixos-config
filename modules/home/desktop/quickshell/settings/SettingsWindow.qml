@@ -159,7 +159,7 @@ FloatingWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.margins: Theme.spacingMedium
                 wrapMode: Text.Wrap
-                text: `${Settings.file} is not valid JSON, so the defaults are in use and changes made here are not saved. Fix or delete the file.`
+                text: `${Settings.file} is not valid JSON, so it is ignored and changes made here are not saved. Fix or delete the file.`
                 color: Theme.text
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeBodyMedium

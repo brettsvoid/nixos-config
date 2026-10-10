@@ -3,21 +3,26 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// The shell's preferences. Each one has a default in `schema`; the user's own choices,
-// from the settings window or a hand edit, are kept in
-// ~/.config/custom-shell/settings.json, which holds only the settings that differ from
-// the default. home-manager does not manage that file, so the window can write it.
+// The shell's preferences, from three layers: each one's default in `schema`, then the
+// Nix config's values in ~/.config/custom-shell/defaults.json (local.customShell.settings
+// in custom-shell.nix, read only), then the user's own choices, from the settings window
+// or a hand edit, in ~/.config/custom-shell/settings.json. That file holds only what the
+// user changed, so resetting a setting returns it to the Nix value or the default.
+// home-manager does not manage it, so the window can write it. A rebuild that changes a
+// Nix value applies at once, unless the user has chosen that setting.
 //
 // A change applies at once: `set()` updates the value in memory and saves shortly
 // after, and the file is watched, so a hand edit applies too. A file that is not valid
-// JSON gives the defaults and is never written over, so the edit is not lost; the
-// settings window says so.
+// JSON is ignored and never written over, so the edit is not lost; the settings window
+// says so.
 //
 // This module imports nothing else from the shell, so Theme can read it.
 Singleton {
     id: root
 
-    readonly property string file: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/custom-shell/settings.json"
+    readonly property string directory: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/custom-shell"
+    readonly property string file: root.directory + "/settings.json"
+    readonly property string nixFile: root.directory + "/defaults.json"
 
     // Every setting by its key ("section.name", stored as nested objects). A number is
     // kept within min..max and rounded to `step`; anything else must have the
@@ -59,8 +64,10 @@ Singleton {
     readonly property int frameThickness: root.value("appearance.frameThickness")
     readonly property real animationSpeed: root.value("appearance.animationSpeed")
 
-    // The file's contents: { "appearance": { "textScale": 1.2 } }.
+    // The user's file: { "appearance": { "textScale": 1.2 } }.
     property var user: ({})
+    // The Nix config's file, the same shape.
+    property var nix: ({})
     // The file is not valid JSON.
     property bool broken: false
 
@@ -97,7 +104,10 @@ Singleton {
 
     function value(key) {
         const chosen = root._valid(key, root._lookup(root.user, key));
-        return chosen !== undefined ? chosen : root.schema[key].default;
+        if (chosen !== undefined)
+            return chosen;
+        const fromNix = root._valid(key, root._lookup(root.nix, key));
+        return fromNix !== undefined ? fromNix : root.schema[key].default;
     }
 
     // Whether the user has chosen this one, so the window can offer to reset it.
@@ -143,7 +153,10 @@ Singleton {
     // text() waits for the file (blockLoading), so the values are in force before
     // anything reads them; `loaded` would come too late, and the shell would start with
     // the defaults and then change.
-    Component.onCompleted: root._read(fileView.text())
+    Component.onCompleted: {
+        root._readNix(nixView.text());
+        root._read(fileView.text());
+    }
 
     function _save() {
         if (!root.broken)
@@ -164,9 +177,19 @@ Singleton {
             root.user = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
             root.broken = false;
         } catch (e) {
-            console.warn(`Settings: ${root.file} is not valid JSON (${e.message}); using the defaults`);
+            console.warn(`Settings: ${root.file} is not valid JSON (${e.message}); ignoring it`);
             root.user = {};
             root.broken = true;
+        }
+    }
+
+    function _readNix(text) {
+        try {
+            const parsed = text.trim() === "" ? {} : JSON.parse(text);
+            root.nix = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch (e) {
+            console.warn(`Settings: ${root.nixFile} is not valid JSON (${e.message}); ignoring it`);
+            root.nix = {};
         }
     }
 
@@ -208,6 +231,21 @@ Singleton {
         onSaveFailed: error => console.warn(`Settings: could not save ${root.file}: ${FileViewError.toString(error)}`)
     }
 
+    // home-manager replaces its link on a rebuild, which the watch sees.
+    FileView {
+        id: nixView
+        path: root.nixFile
+        watchChanges: true
+        printErrors: false
+        blockLoading: true
+        onLoaded: root._readNix(nixView.text())
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound)
+                root.nix = {};
+        }
+        onFileChanged: nixView.reload()
+    }
+
     // FileView watches the file's directory, and only if it exists when it loads; so
     // that a file written later by hand is seen, make the directory and load again.
     // Once: the directory stays.
@@ -216,7 +254,10 @@ Singleton {
 
         property bool done: false
 
-        command: ["mkdir", "-p", root.file.substring(0, root.file.lastIndexOf("/"))]
-        onExited: fileView.reload()
+        command: ["mkdir", "-p", root.directory]
+        onExited: {
+            fileView.reload();
+            nixView.reload();
+        }
     }
 }
