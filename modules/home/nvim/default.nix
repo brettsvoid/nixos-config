@@ -18,58 +18,73 @@ in
     let
       configRoot = "${config.home.homeDirectory}/${repoDir}/modules/home/nvim/config";
 
-      # Treesitter parsers from this flake's nixpkgs (ABI matches its neovim),
-      # not `:TSUpdate`. This is the one list of languages that get a parser.
-      # The nvim-treesitter plugin (lazy, branch=main) adds ft→lang aliases and
-      # indentexpr only: main puts its queries on the rtp via :TSInstall, which
-      # this setup never runs.
+      # Treesitter parsers and queries from this flake's nixpkgs (ABI matches
+      # its neovim), not `:TSInstall`/`:TSUpdate`. This is the one list of
+      # languages that get them.
+      treesitterLanguages = [
+        "bash"
+        "c"
+        "css"
+        "csv"
+        "diff"
+        "dockerfile"
+        "git_config"
+        "git_rebase"
+        "gitattributes"
+        "gitcommit"
+        "gitignore"
+        "go"
+        "gomod"
+        "gosum"
+        "hcl"
+        "html"
+        "ini"
+        "javascript"
+        "json"
+        "lua"
+        "luadoc"
+        "markdown"
+        "markdown_inline"
+        "mermaid"
+        "nix"
+        "pem"
+        "php"
+        "python"
+        "query"
+        "rust"
+        "sql"
+        "ssh_config"
+        "terraform"
+        # No "tmux": nixpkgs dropped nvim-treesitter-parsers.tmux. Re-add if it
+        # returns.
+        "toml"
+        "tsx"
+        "typescript"
+        "vim"
+        "vimdoc"
+        "xml"
+        "yaml"
+      ];
+
       treesitterParsers = pkgs.symlinkJoin {
         name = "nvim-treesitter-parsers";
-        paths = map (l: pkgs.vimPlugins.nvim-treesitter-parsers.${l}) [
-          "bash"
-          "c"
-          "css"
-          "csv"
-          "diff"
-          "dockerfile"
-          "git_config"
-          "git_rebase"
-          "gitattributes"
-          "gitcommit"
-          "gitignore"
-          "go"
-          "gomod"
-          "gosum"
-          "hcl"
-          "html"
-          "ini"
-          "javascript"
-          "json"
-          "lua"
-          "luadoc"
-          "markdown"
-          "markdown_inline"
-          "mermaid"
-          "nix"
-          "pem"
-          "php"
-          "python"
-          "query"
-          "rust"
-          "sql"
-          "ssh_config"
-          "terraform"
-          # No "tmux": nixpkgs dropped nvim-treesitter-parsers.tmux. Re-add if it
-          # returns.
-          "toml"
-          "tsx"
-          "typescript"
-          "vim"
-          "vimdoc"
-          "xml"
-          "yaml"
-        ];
+        paths = map (l: pkgs.vimPlugins.nvim-treesitter-parsers.${l}) treesitterLanguages;
       };
+
+      # The highlight, injection, fold and indent queries, from the same
+      # nvim-treesitter revision as the parsers. The plugin keeps its own
+      # under runtime/queries, which is not on the rtp, and only :TSInstall
+      # copies them out. `requires` adds the sets a language inherits, such
+      # as ecma for typescript.
+      treesitterQueries =
+        let
+          inherit (pkgs.vimPlugins.nvim-treesitter) queries;
+          withRequired = l: [ queries.${l} ] ++ lib.concatMap withRequired queries.${l}.requires;
+        in
+        pkgs.symlinkJoin {
+          name = "nvim-treesitter-queries";
+          paths = lib.unique (lib.concatMap withRequired treesitterLanguages);
+        };
     in
     {
       programs.neovim = {
@@ -172,5 +187,10 @@ in
         # is on the rtp, so vim.treesitter.start finds parser/<lang>.so here.
         "nvim/parser".source = "${treesitterParsers}/parser";
       };
+
+      # Not ~/.config/nvim/queries, which holds the repo's own queries. site
+      # comes after it on the rtp (lazy.nvim's reset keeps it), so a repo
+      # query marked `; extends` adds to these, and one without replaces them.
+      xdg.dataFile."nvim/site/queries".source = "${treesitterQueries}/queries";
     };
 }

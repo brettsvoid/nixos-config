@@ -1,3 +1,4 @@
+; extends
 ; Slonik style sql queries
 ; sql.unsafe`<sql>`, sql.fragment`<sql>`
 (call_expression

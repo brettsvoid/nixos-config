@@ -2,10 +2,9 @@ return {
 	"nvim-treesitter/nvim-treesitter",
 	branch = "main",
 	lazy = false,
-	-- No build step or install(): parsers come prebuilt from Nix (treesitterParsers
-	-- in modules/home/nvim/default.nix, linked to ~/.config/nvim/parser). Kept for
-	-- ft→lang aliases and indentexpr; its queries reach the rtp only via
-	-- :TSInstall, which isn't run.
+	-- No build step or install(): parsers and queries come prebuilt from Nix
+	-- (modules/home/nvim/default.nix). Kept for ft→lang aliases, indentexpr and
+	-- the query predicates its queries use.
 	config = function()
 		vim.api.nvim_create_autocmd("FileType", {
 			callback = function(args)
