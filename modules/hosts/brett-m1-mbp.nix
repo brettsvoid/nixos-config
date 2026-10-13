@@ -22,6 +22,7 @@ in
           tailscale
           timemachine
           nh-gc
+          vnode-watch
           window-manager-aerospace
         ];
 
