@@ -12,7 +12,7 @@ Column {
         NotificationCard {
             required property var modelData
 
-            notification: modelData
+            entry: modelData
             popup: true
         }
     }

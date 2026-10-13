@@ -11,7 +11,7 @@ FocusScope {
     id: root
 
     readonly property var rows: {
-        const all = Notifications.history.values.slice().reverse();
+        const all = Notifications.history.slice().reverse();
         const apps = [...new Set(all.map(n => n.appName))];
         // Plain loops: Qt's JavaScript engine has no Array.prototype.flatMap.
         const rows = [];
@@ -19,7 +19,7 @@ FocusScope {
             for (const n of all) {
                 if (n.appName === app)
                     rows.push({
-                        notification: n,
+                        entry: n,
                         appName: app || "Unknown app"
                     });
             }
@@ -107,7 +107,7 @@ FocusScope {
             required property var modelData
 
             width: ListView.view.width
-            notification: modelData.notification
+            entry: modelData.entry
         }
 
         Text {

@@ -6,3 +6,4 @@ singleton Notifications 1.0 Notifications.qml
 singleton Wallpaper 1.0 Wallpaper.qml
 singleton GameMode 1.0 GameMode.qml
 singleton Windows 1.0 Windows.qml
+NotificationEntry 1.0 NotificationEntry.qml

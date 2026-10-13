@@ -1,6 +1,12 @@
 // Tray menus are Qt platform menus, which need QApplication rather than the default
 // QGuiApplication.
 //@ pragma UseQApplication
+// Quickshell names a shell's directories after a hash of its config's path, which is a
+// new store path on every rebuild, so the state (Quickshell.statePath) would start
+// empty each time. A fixed id keeps them, and the state sits in
+// ~/.local/state/custom-shell beside wallpaper.json.
+//@ pragma ShellId custom-shell
+//@ pragma StateDir $BASE/custom-shell
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland

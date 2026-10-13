@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "../notifications"
 import "../services"
 import "../theme"
 
@@ -63,6 +64,13 @@ PanelWindow {
         asynchronous: true
         cache: false
         onStatusChanged: if (status === Image.Ready && z === 1) fadeIn.start(second)
+    }
+
+    // One screen saves notification images for all.
+    Loader {
+        active: root.screen === Quickshell.screens[0]
+
+        sourceComponent: NotificationImages {}
     }
 
     NumberAnimation {
