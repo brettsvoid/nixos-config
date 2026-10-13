@@ -84,6 +84,16 @@ _: {
             _restore_terminal_input_modes
             printf '\e[?1049l'
           }
+
+          # Claude Code runs its commands in a copy of this shell (a snapshot of
+          # its aliases, functions and options), written as for bash. There,
+          # the tools keep their usual flags, a glob that matches nothing is
+          # passed on as written (grep --include=*.nix), and $var splits into
+          # words.
+          if [[ -n $CLAUDECODE ]]; then
+            unalias ls ll la tree df du 2>/dev/null
+            setopt nonomatch shwordsplit
+          fi
         '';
       };
     };
