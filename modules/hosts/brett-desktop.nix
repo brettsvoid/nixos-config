@@ -143,6 +143,7 @@ in
                 desktop-session-restore
                 desktop-game-launcher
                 desktop-game-mode
+                desktop-display-doctor
                 desktop-screenshots
                 desktop-window-dissolve
                 nvim
