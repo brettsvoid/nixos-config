@@ -58,6 +58,17 @@
       flake = false;
     };
 
+    # Two MIT collections of niri window open and close shaders, wrapped for
+    # HyprWindowShade at build time (window-dissolve/build-library.py).
+    nirimation = {
+      url = "github:Xansidev/nirimation";
+      flake = false;
+    };
+    niri-shaders = {
+      url = "github:liixini/shaders";
+      flake = false;
+    };
+
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
