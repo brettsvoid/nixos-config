@@ -78,14 +78,24 @@
       flake = false;
     };
 
-    # Matt Pocock's agent skills (/grill-with-docs, /tdd, /diagnose,
+    # Matt Pocock's agent skills (/grill-with-docs, /tdd, /diagnosing-bugs,
     # /triage, …), linked into ~/.claude/skills by apps/claude-code.nix.
     # Pinned to a rev on purpose: upstream renames and deletes skills often,
     # so tracking a branch would silently swap slash commands on an update.
     # `nix flake update` won't move it; bump the rev by hand after reading
     # the diff.
     mattpocock-skills = {
-      url = "github:mattpocock/skills/694fa30311e02c2639942308513555e61ee84a6f";
+      url = "github:mattpocock/skills/49dd158d1076134a641b33efb035946536778336";
+      flake = false;
+    };
+
+    # Lauren Tan's (poteto's) pstack (/poteto-mode, /architect, /how, …) and
+    # its two subagents, linked into ~/.claude by apps/claude-code.nix.
+    # Upstream lives in cursor/plugins and assumes Cursor; backnotprop's
+    # mirror tracks it and rewrites the Cursor-only steps for any harness.
+    # Pinned by rev like mattpocock-skills, for the same reason.
+    pstack = {
+      url = "github:backnotprop/pstack/fce11a3442cfd59a21136de0b7010474c6a10ef5";
       flake = false;
     };
 

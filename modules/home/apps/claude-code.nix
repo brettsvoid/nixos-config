@@ -212,6 +212,20 @@
           bucket: _: lib.mapAttrs (name: _: "${root}/${bucket}/${name}") (subdirs "${root}/${bucket}")
         ) (subdirs root);
 
+      # pstack keeps its skills flat, skills/<name>/SKILL.md. Its tdd and
+      # teach share names with mattpocock's; it is merged before them, so
+      # mattpocock's win. No pstack skill runs either; only poteto-help's menu
+      # lists them, and those entries open mattpocock's.
+      pstackSkills = lib.mapAttrs (name: _: "${inputs.pstack}/skills/${name}") (
+        subdirs "${inputs.pstack}/skills"
+      );
+
+      # Spawned by name: poteto-mode delegates to poteto-agent, no-comments to
+      # comment-sicko.
+      pstackAgents = lib.mapAttrs' (
+        file: _: lib.nameValuePair (lib.removeSuffix ".md" file) "${inputs.pstack}/agents/${file}"
+      ) (builtins.readDir "${inputs.pstack}/agents");
+
       # Local skills last: `//` lets the right-hand side win, so a skill in
       # claude/skills always beats a third-party one of the same name.
       localSkills = lib.mapAttrs (name: _: ./claude/skills + "/${name}") (subdirs ./claude/skills);
@@ -268,8 +282,12 @@
           # `nix flake update simple-english` is the upgrade.
           simple-english = "${inputs.simple-english}/skills/simple-english";
         }
+        // pstackSkills
         // flattenBuckets "${inputs.mattpocock-skills}/skills"
         // localSkills;
+
+        # ~/.claude/agents/<name>.md, one link per file.
+        agents = pstackAgents;
       };
 
       # The installer puts the launcher in ~/.local/bin. The Macs get that on

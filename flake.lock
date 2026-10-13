@@ -322,17 +322,17 @@
     "mattpocock-skills": {
       "flake": false,
       "locked": {
-        "lastModified": 1781103704,
-        "narHash": "sha256-NGRKdnHSBKoR48zGotmJ3zGXnQ58ogudv8T4Va/2DSY=",
+        "lastModified": 1791543409,
+        "narHash": "sha256-NljCSZNI3sZ+vbCw7pRdrwR7try4BxOFp4gdjuWYtzs=",
         "owner": "mattpocock",
         "repo": "skills",
-        "rev": "694fa30311e02c2639942308513555e61ee84a6f",
+        "rev": "49dd158d1076134a641b33efb035946536778336",
         "type": "github"
       },
       "original": {
         "owner": "mattpocock",
         "repo": "skills",
-        "rev": "694fa30311e02c2639942308513555e61ee84a6f",
+        "rev": "49dd158d1076134a641b33efb035946536778336",
         "type": "github"
       }
     },
@@ -427,6 +427,23 @@
         "type": "github"
       }
     },
+    "pstack": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791810836,
+        "narHash": "sha256-RkOzNIzyG20OKI1DLruJcuEh/qG3i30PGicSOxjuEDQ=",
+        "owner": "backnotprop",
+        "repo": "pstack",
+        "rev": "fce11a3442cfd59a21136de0b7010474c6a10ef5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "backnotprop",
+        "repo": "pstack",
+        "rev": "fce11a3442cfd59a21136de0b7010474c6a10ef5",
+        "type": "github"
+      }
+    },
     "quickshell": {
       "inputs": {
         "nixpkgs": [
@@ -508,6 +525,7 @@
         "nix-homebrew": "nix-homebrew",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs",
+        "pstack": "pstack",
         "quickshell": "quickshell_3",
         "secrets": "secrets",
         "simple-english": "simple-english"
