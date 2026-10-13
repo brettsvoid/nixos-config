@@ -1,6 +1,6 @@
 # Library of window effects, switchable without a rebuild
 
-Status: ready-for-agent
+Status: ready-for-human
 Type: AFK
 
 ## What to build
@@ -79,3 +79,49 @@ window until kitty's first real frame (up to ~0.2 s). The smoke open guards with
 `textureSize(tex, 0).x <= 1`. Also measured: a colour fit of the veil gave
 0.30 grey at ~0.4 alpha where the shader wrote 0.70 smoke, which may mean the plugin's
 offscreen path premultiplies a second time; check before tuning any translucent colour.
+
+**2026-10-13:** Built, not yet committed when written. 50 effects: our dissolve, fade
+and none, plus 32 from liixini/shaders and 15 from nirimation. liixini's glass-warp is
+left out because its upstream files are cut off and do not compile.
+
+- **The library** is the `window-effects` derivation in `window-dissolve.nix`, made by
+  `window-dissolve/build-library.py` from the flake inputs `niri-shaders` and
+  `nirimation`. It is linked to `~/.local/share/window-effects`.
+  - A wrapper turns each niri `open_color`/`close_color` into a HyprWindowShade shader.
+    It maps niri's uniforms, applies niri's easing curve or spring to `progress`, and
+    sets `@duration` from the niri config. Outside the window it samples transparent.
+    An open shows nothing while the texture is kitty's 1x1 placeholder. A close fades
+    out over its last 3%, because the plugin requires full transparency at the end.
+  - Springs use the closed-form response for any damping ratio. Checked against a
+    simulation: within 0.0001.
+  - nirimation's `.kdl` files are read with kdl-py, not by hand.
+  - Each ported file names its source, revision and licence, and the licences are
+    copied beside them. Adding an upstream effect needs no edits: bump the input.
+- **Compile check:** every shader is compiled at build time, as GLSL ES 3.20 (glslang)
+  and as the picker's preview (qsb). One of ours that fails stops the build. A ported
+  one is left out and listed in `excluded.json`.
+- **Switching:** run `window-effect open|close <id>`, or `window-effect list` and
+  `window-effect status`.
+  - The window rules name `~/.local/state/window-effects/{open,close}.glsl`, and the
+    command copies the chosen effect over them.
+  - The plugin caches a shader by its path and its mtime in whole seconds, so each
+    copy's mtime is made later than the last. Symlinks would not work: every store
+    file has the same mtime.
+  - Activation runs `window-effect refresh`, so a rebuild updates the active effects.
+    The choice lives in that state folder, so it survives a logout.
+- **"None"** is a pass-through shader. On close it uses `// @overlay`, so Hyprland's
+  own animation is all that shows.
+- **Checked live** on the fallback output: the screens were off, so I recorded a test
+  kitty window with grim. Runtime rules for the test class only.
+  - The dissolve played from the state files.
+  - roll-drop fell in from the top, tilted, which confirms the orientation.
+  - explode's close flashed across the whole screen, as its author intends.
+  - smoke broke the window into wisps.
+  - none played Hyprland's popin, slide and fade.
+  - Switching took effect on the next window, and three switches within two seconds
+    got mtimes one second apart.
+- **Not done:** our own smoke (shelved, above). liixini's smoke is in the library, so
+  try it first.
+- **Left for you:** rebuild, then run `hyprctl reload` or log in again, so Hyprland
+  takes the new window rules. Then try a few effects with `window-effect open <id>`,
+  or from the dashboard's Effects tab (custom-shell 24).
