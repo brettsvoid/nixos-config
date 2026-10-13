@@ -92,111 +92,33 @@ in
         config.gtk.iconTheme != null
       ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
 
-      # MangoHud is on for the whole session (profile-gaming), and its Vulkan layer
-      # loads into the shell too, where its NVIDIA thread kept about 28% of a core busy.
-      noMangoHud = "export DISABLE_MANGOHUD=1";
-
-      # `custom-shell-or <shortcut> <fallback...>` fires one of the custom shell's global
-      # shortcuts (a drawer, or the lock) while that shell has it registered, and runs
-      # the fallback under the other shells. It keeps Super+R, Super+/ and Super+L
-      # working everywhere until the custom shell is the session's shell (custom-shell
-      # issue 22).
-      custom-shell-or = pkgs.writeShellScriptBin "custom-shell-or" ''
-        drawer=$1
-        shift
-        if hyprctl globalshortcuts -j | ${pkgs.jq}/bin/jq -e --arg name "custom-shell:$drawer" 'any(.[]; .name == $name)' >/dev/null; then
-          exec hyprctl dispatch global "custom-shell:$drawer"
-        fi
-        exec "$@"
-      '';
-
-      # From a text console (Ctrl+Alt+F2, log in), when the lock screen has died or will
-      # not take the password: starts the custom shell again and, once you are back on
-      # Hyprland's VT, has it lock, so the password unlocks (docs/lock-screen.md).
-      # Hyprland lets a new lock take over only while misc:allow_session_lock_restore is
-      # on, which would let any program replace a working lock too, so it is on just for
-      # these few seconds.
-      lock-recover = pkgs.writeShellScriptBin "lock-recover" ''
-        set -u
-        export PATH=${
-          lib.makeBinPath [
-            pkgs.coreutils
-            pkgs.jq
-          ]
-        }:$PATH
-        hypr() { hyprctl --instance 0 "$@"; }
-        if ! hypr version >/dev/null 2>&1; then
-          echo "Hyprland is not running" >&2
-          exit 1
-        fi
-
-        pidfile="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/custom-shell.pid"
-        pid=$(cat "$pidfile" 2>/dev/null)
-        # Only while that pid is still the shell: the file can outlive it (a session
-        # left without logging out), and the pid be another process's by now.
-        if [ -n "$pid" ] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "quickshell/custom-shell"; then
-          echo "Stopping the custom shell..."
-          kill "$pid"
-          for _ in $(seq 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
-          kill -9 "$pid" 2>/dev/null
-          rm -f "$pidfile"
-        fi
-
-        echo "Starting the custom shell..."
-        hypr dispatch exec toggle-shell custom >/dev/null
-        started=false
-        for _ in $(seq 50); do
-          if hypr globalshortcuts -j | jq -e 'any(.[]; .name == "custom-shell:lock")' >/dev/null; then
-            started=true
-            break
-          fi
-          sleep 0.2
-        done
-        last_resort() {
-          echo "Last resort, which ends the session and loses unsaved work:" >&2
-          echo "  hyprctl --instance 0 dispatch exit" >&2
+      # The environment the shell runs in, for toggle-shell and qs-dev. MangoHud is on
+      # for the whole session (profile-gaming), and its Vulkan layer loads into the
+      # shell too, where its NVIDIA thread kept about 28% of a core busy.
+      qsEnv = ''
+        qs_env() {
+          export QSG_RHI_BACKEND=vulkan
+          ${iconThemeEnv}
+          export DISABLE_MANGOHUD=1
         }
-        if ! $started; then
-          echo "The custom shell did not start within 10 s, so nothing could lock." >&2
-          last_resort
-          exit 1
-        fi
-
-        # A lock asked for while Hyprland's VT is in the background breaks: the shell
-        # died with a Wayland protocol error both times it was tried from here, and
-        # locked once Hyprland's VT was showing (2026-10-10). So lock only once you are
-        # back there. Hyprland's VT is its logind session's.
-        hpid=$(hyprctl instances -j | jq -r 'sort_by(-.time) | .[0].pid')
-        vt=$(loginctl show-session "$(cat "/proc/$hpid/sessionid")" -p VTNr --value 2>/dev/null)
-        vt=''${vt:-1}
-        echo "Now press Ctrl+Alt+F$vt: the lock screen appears there a few seconds later."
-        for _ in $(seq 300); do
-          [ "$(cat /sys/class/tty/tty0/active)" = "tty$vt" ] && break
-          sleep 1
-        done
-        if [ "$(cat /sys/class/tty/tty0/active)" != "tty$vt" ]; then
-          echo "tty$vt was not showing within 5 minutes; run lock-recover again." >&2
-          exit 1
-        fi
-        # Hyprland sets its monitors up again as its VT comes back.
-        sleep 2
-
-        hypr keyword misc:allow_session_lock_restore 1 >/dev/null
-        hypr dispatch global custom-shell:lock >/dev/null
-        sleep 2
-        hypr keyword misc:allow_session_lock_restore 0 >/dev/null
-
-        # You are on tty$vt by now: this is for when you come back here.
-        sleep 2
-        if kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
-          echo "Locked by the custom shell. Once unlocked, log out here with exit."
-        else
-          echo "The custom shell died while locking; its output is in" >&2
-          echo "''${XDG_RUNTIME_DIR:-/tmp}/custom-shell.log. Run lock-recover again." >&2
-          last_resort
-          exit 1
-        fi
       '';
+
+      # The commands' scripts are in ./custom-shell, each described at its top; the Nix
+      # values one needs go before it as variables. No bash options: the scripts handle
+      # failures themselves.
+      script =
+        name: runtimeInputs: preamble:
+        pkgs.writeShellApplication {
+          inherit name runtimeInputs;
+          bashOptions = [ ];
+          text = preamble + builtins.readFile ./custom-shell/${name}.sh;
+        };
+
+      custom-shell-or = script "custom-shell-or" [ pkgs.jq ] "";
+      lock-recover = script "lock-recover" [
+        pkgs.coreutils
+        pkgs.jq
+      ] "";
 
       # Statistics for the dashboard's performance tab: a JSON line a second while the
       # tab shows (shell-stats/src/main.rs).
@@ -208,31 +130,10 @@ in
         meta.mainProgram = "shell-stats";
       };
 
-      # Thumbnails for the wallpaper picker, made once per image: ~/Pictures/Wallpapers/<name>
-      # becomes ~/.cache/custom-shell/wallpaper-thumbnails/<name>.<size in bytes>.jpg, so
-      # an image replaced under the same name gets a new one. Written under a temporary
-      # name and moved into place, so the picker never shows half a file.
-      wallpaper-thumbnails = pkgs.writeShellScriptBin "wallpaper-thumbnails" ''
-        SRC="''${1:-$HOME/Pictures/Wallpapers}"
-        OUT="''${XDG_CACHE_HOME:-$HOME/.cache}/custom-shell/wallpaper-thumbnails"
-        mkdir -p "$OUT"
-        # The picker starts watching the folder on this line, so it must exist first.
-        echo ready
-        for f in "$SRC"/*; do
-          [ -f "$f" ] || continue
-          case "''${f,,}" in
-            *.jpg | *.jpeg | *.png | *.webp) ;;
-            *) continue ;;
-          esac
-          thumb="$OUT/$(basename "$f").$(stat -L -c %s "$f").jpg"
-          [ -e "$thumb" ] && continue
-          # The temporary name must not end in .jpg: the picker only sees a thumbnail
-          # arrive when the number of .jpg files changes, which a rename does not do.
-          ${pkgs.imagemagick}/bin/magick "$f[0]" -auto-orient -thumbnail '384x216^' \
-            -gravity center -extent 384x216 -quality 85 "jpg:$thumb.part" \
-            && mv "$thumb.part" "$thumb"
-        done
-      '';
+      wallpaper-thumbnails = script "wallpaper-thumbnails" [
+        pkgs.coreutils
+        pkgs.imagemagick
+      ] "";
 
       shellConfig = pkgs.runCommand "custom-shell-config" { } ''
         cp -r ${./quickshell} $out
@@ -240,155 +141,13 @@ in
         ${compileShaders "$out"}
       '';
 
-      toggle-shell = pkgs.writeShellScriptBin "toggle-shell" ''
-        # The runtime directory, which no reboot keeps.
-        CUSTOM_PID_FILE="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/custom-shell.pid"
+      toggle-shell = script "toggle-shell" [ pkgs.jq ] ''
+        qs=${qsPkg}/bin/qs
+        ${qsEnv}
         # A shell started from a terminal that outlived a Hyprland restart cannot reach
         # Hyprland's socket, so it does not know which monitor is focused and no drawer
         # opens.
         ${liveHyprland pkgs}
-
-        AMBXST_PATTERN="quickshell.*ambxst-shell"
-        # The qs process runs with `-p <store>/share/caelestia-shell`.
-        CAELESTIA_PATTERN="share/caelestia-shell"
-
-        ambxst_running() {
-          pgrep -f "$AMBXST_PATTERN" >/dev/null 2>&1
-        }
-
-        # The pid file can outlive the shell (a session left without logging out), and
-        # the pid be another process's by now; at login that would leave the session
-        # without a shell.
-        custom_running() {
-          [ -f "$CUSTOM_PID_FILE" ] || return 1
-          local pid
-          pid=$(cat "$CUSTOM_PID_FILE")
-          kill -0 "$pid" 2>/dev/null \
-            && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "quickshell/custom-shell"
-        }
-
-        caelestia_running() {
-          pgrep -f "$CAELESTIA_PATTERN" >/dev/null 2>&1
-        }
-
-        stop_ambxst() {
-          if ambxst_running; then
-            echo "Stopping ambxst..."
-            pkill -f "$AMBXST_PATTERN" 2>/dev/null
-            sleep 0.5
-          fi
-        }
-
-        # Waits for it to exit (2 s at most), as the next one may start straight after:
-        # Hyprland refuses a global shortcut another program still holds, with a
-        # protocol error that ends the new shell.
-        stop_custom() {
-          if custom_running; then
-            echo "Stopping custom shell..."
-            pid=$(cat "$CUSTOM_PID_FILE")
-            kill "$pid" 2>/dev/null
-            for _ in $(seq 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
-            kill -9 "$pid" 2>/dev/null
-            rm -f "$CUSTOM_PID_FILE"
-          fi
-        }
-
-        stop_caelestia() {
-          if caelestia_running; then
-            echo "Stopping Caelestia..."
-            caelestia shell -k >/dev/null 2>&1 || pkill -f "$CAELESTIA_PATTERN" 2>/dev/null
-            sleep 0.5
-          fi
-        }
-
-        start_custom() {
-          echo "Starting custom shell..."
-          export QSG_RHI_BACKEND=vulkan
-          ${iconThemeEnv}
-          ${noMangoHud}
-          # Quickshell's own log misses the last words of a shell killed by a Wayland
-          # protocol error (Qt exits at once); its output keeps them.
-          ${qsPkg}/bin/qs -p "$HOME/.config/quickshell/custom-shell" \
-            >"''${XDG_RUNTIME_DIR:-/tmp}/custom-shell.log" 2>&1 &
-          echo $! > "$CUSTOM_PID_FILE"
-          echo "Custom shell started (pid $!)"
-          # mako starts on demand whenever nothing owns the notification service, so it
-          # may hold it now. The shell takes the service as soon as mako lets go.
-          systemctl --user stop mako.service 2>/dev/null || true
-        }
-
-        case "''${1:-}" in
-          status)
-            echo "ambxst:       $(ambxst_running && echo "running (pid $(pgrep -f "$AMBXST_PATTERN" | head -1))" || echo "stopped")"
-            echo "custom-shell: $(custom_running && echo "running (pid $(cat "$CUSTOM_PID_FILE"))" || echo "stopped")"
-            echo "caelestia:    $(caelestia_running && echo "running (pid $(pgrep -f "$CAELESTIA_PATTERN" | head -1))" || echo "stopped")"
-            ;;
-          custom)
-            if custom_running; then
-              echo "Custom shell already running"
-              exit 0
-            fi
-            stop_ambxst
-            stop_caelestia
-            start_custom
-            ;;
-          restart)
-            # The custom shell again, on the config installed now: a running one keeps
-            # the config it started with. A rebuild that changes it runs this (the
-            # onChange below). Not while the session is locked: the lock screen is the
-            # shell's, and a lock whose program dies leaves the session stuck
-            # (lock-recover).
-            if ! custom_running; then
-              echo "Custom shell not running"
-              exit 0
-            fi
-            if hyprctl -j locked | ${pkgs.jq}/bin/jq -e .locked >/dev/null; then
-              echo "The session is locked; restart the custom shell once unlocked" >&2
-              exit 1
-            fi
-            stop_custom
-            start_custom
-            ;;
-          ambxst)
-            if ambxst_running; then
-              echo "ambxst already running"
-              exit 0
-            fi
-            stop_custom
-            stop_caelestia
-            echo "Starting ambxst..."
-            ambxst >/dev/null 2>&1 &
-            echo "ambxst restarted"
-            ;;
-          caelestia)
-            if ! command -v caelestia >/dev/null 2>&1; then
-              echo "Caelestia is not installed on this host (desktop-caelestia)" >&2
-              exit 1
-            fi
-            if caelestia_running; then
-              echo "Caelestia already running"
-              exit 0
-            fi
-            stop_ambxst
-            stop_custom
-            # ambxst binds its keys at runtime; a reload drops them so they
-            # cannot fire alongside Caelestia's.
-            hyprctl reload >/dev/null
-            echo "Starting Caelestia..."
-            caelestia shell -d >/dev/null 2>&1
-            echo "Caelestia started"
-            ;;
-          *)
-            echo "Usage: toggle-shell {custom|restart|ambxst|caelestia|status}"
-            echo ""
-            echo "  custom     - Stop the other shells, start custom shell"
-            echo "  restart    - Restart the custom shell if running (to load a rebuild)"
-            echo "  ambxst     - Stop the other shells, restart ambxst"
-            echo "  caelestia  - Stop the other shells, start Caelestia"
-            echo "  status     - Show which shell is running"
-            exit 1
-            ;;
-        esac
       '';
 
       matugenDir = ./quickshell/matugen;
@@ -419,102 +178,19 @@ in
         }
       );
 
-      # Sets the wallpaper and generates the shell's theme from it with matugen:
-      #   generate-theme [image] [--scheme X] [--mode light|dark | --light | --dark]
-      # Anything not given comes from the saved choice; with no saved image, the first
-      # in ~/Pictures/Wallpapers. The choice is kept in
-      # ~/.local/state/custom-shell/wallpaper.json, which the shell watches to show the
-      # image; the colours go to ~/.cache/qs-theme/colors.json. Paths are kept as given,
-      # so a ~/Pictures/Wallpapers link stays valid across rebuilds where the store path
-      # behind it would not.
-      generate-theme = pkgs.writeShellScriptBin "generate-theme" ''
-        export PATH=${
-          lib.makeBinPath [
+      generate-theme =
+        script "generate-theme"
+          [
             pkgs.coreutils
             pkgs.dconf
             pkgs.findutils
             pkgs.jq
             pkgs.matugen
           ]
-        }:$PATH
-        STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell"
-        STATE="$STATE_DIR/wallpaper.json"
-        # Where the choice lived before, as a store path that a rebuild leaves stale.
-        OLD_STATE="$HOME/.cache/qs-theme/wallpaper.json"
-        WALLPAPERS="$HOME/Pictures/Wallpapers"
-        mkdir -p "$STATE_DIR" "$HOME/.cache/qs-theme"
-
-        WALLPAPER=""
-        SCHEME=""
-        MODE=""
-        while [ $# -gt 0 ]; do
-          case "$1" in
-            --scheme) SCHEME="$2"; shift 2 ;;
-            --mode) MODE="$2"; shift 2 ;;
-            --dark) MODE="dark"; shift ;;
-            --light) MODE="light"; shift ;;
-            -h|--help)
-              echo "Usage: generate-theme [image] [--scheme X] [--mode light|dark]"
-              echo "Schemes: scheme-neutral, scheme-tonal-spot, scheme-content, scheme-fidelity,"
-              echo "         scheme-expressive, scheme-fruit-salad, scheme-monochrome, scheme-rainbow"
-              exit 0 ;;
-            *) WALLPAPER="$1"; shift ;;
-          esac
-        done
-
-        if [ -f "$STATE" ]; then
-          [ -z "$WALLPAPER" ] && WALLPAPER=$(jq -r '.path // empty' "$STATE")
-          [ -z "$SCHEME" ] && SCHEME=$(jq -r '.scheme // empty' "$STATE")
-          [ -z "$MODE" ] && MODE=$(jq -r '.mode // empty' "$STATE")
-        elif [ -f "$OLD_STATE" ]; then
-          [ -z "$SCHEME" ] && SCHEME=$(jq -r '.scheme // empty' "$OLD_STATE")
-          [ -z "$MODE" ] && MODE=$(jq -r '.mode // empty' "$OLD_STATE")
-          if [ -z "$WALLPAPER" ]; then
-            NAME=$(basename "$(jq -r '.currentWall // empty' "$OLD_STATE")")
-            [ -n "$NAME" ] && [ -e "$WALLPAPERS/$NAME" ] && WALLPAPER="$WALLPAPERS/$NAME"
-          fi
-        fi
-        if [ -z "$WALLPAPER" ] || [ ! -e "$WALLPAPER" ]; then
-          WALLPAPER=$(find -L "$WALLPAPERS" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) 2>/dev/null | sort | head -n 1)
-        fi
-        if [ -z "$WALLPAPER" ]; then
-          echo "No wallpaper: give an image, or put some in $WALLPAPERS" >&2
-          exit 1
-        fi
-        case "$WALLPAPER" in
-          /*) ;;
-          *) WALLPAPER="$PWD/$WALLPAPER" ;;
-        esac
-        SCHEME="''${SCHEME:-scheme-neutral}"
-        MODE="''${MODE:-light}"
-
-        # The choice first, so the shell starts loading the image while matugen runs.
-        jq -n --arg path "$WALLPAPER" --arg scheme "$SCHEME" --arg mode "$MODE" \
-          '{path: $path, scheme: $scheme, mode: $mode}' > "$STATE.tmp"
-        mv "$STATE.tmp" "$STATE"
-
-        echo "Generating theme: $WALLPAPER (scheme: $SCHEME, mode: $MODE)"
-        if ! matugen image "$WALLPAPER" \
-          --source-color-index 0 \
-          -c ${matugenConfig} \
-          -t "$SCHEME" \
-          -m "$MODE"; then
-          echo "matugen failed — theme not generated" >&2
-          exit 1
-        fi
-        ${lib.optionalString themeApps ''
-
-          # GTK 3's theme in the mode's variant, and the light or dark preference that
-          # libadwaita apps and Firefox follow, both where the settings portal reads them.
-          # Both apply to open apps at once.
-          theme=adw-gtk3
-          [ "$MODE" = dark ] && theme=adw-gtk3-dark
-          if ! dconf write /org/gnome/desktop/interface/gtk-theme "'$theme'" \
-            || ! dconf write /org/gnome/desktop/interface/color-scheme "'prefer-$MODE'"; then
-            echo "Could not set GTK's theme and light or dark preference in dconf" >&2
-          fi
-        ''}
-      '';
+          ''
+            matugen_config=${matugenConfig}
+            theme_apps=${lib.boolToString themeApps}
+          '';
 
       qs-dev = pkgs.writeShellScriptBin "qs-dev" ''
         SHELL_DIR="''${1:-$HOME/${repoDir}/modules/home/desktop/quickshell}"
@@ -526,9 +202,8 @@ in
         echo "Starting quickshell from $SHELL_DIR (Ctrl+C to stop)"
         echo "Runs ON TOP of ambxst -- nothing killed."
         ${liveHyprland pkgs}
-        export QSG_RHI_BACKEND=vulkan
-        ${iconThemeEnv}
-        ${noMangoHud}
+        ${qsEnv}
+        qs_env
         exec ${qsPkg}/bin/qs -p "$SHELL_DIR"
       '';
     in
