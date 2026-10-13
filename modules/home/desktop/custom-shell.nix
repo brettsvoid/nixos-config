@@ -513,6 +513,8 @@ in
           lock-recover
           shell-stats
           wallpaper-thumbnails
+          # qalc, for the launcher's calculator (launcher/CalculatorMode.qml).
+          pkgs.libqalculate
         ];
 
         # A rebuild that changes the shell restarts it, if it is running. Hyprland runs

@@ -10,12 +10,13 @@ import "../components/navigation.js" as Navigation
 // shows depends on the mode, picked by the prefix the query starts with; apps are the
 // mode without one. A mode provides `prefix`, `placeholder`, `results(query)` and
 // `activate(item)`, and optionally `refresh()`, called when the mode is entered; it is
-// added to `modes`. Up and Down, or Ctrl+P and Ctrl+N, move through the results, and
-// Ctrl+D and Ctrl+U half a page.
+// added to `modes`. A result with `hint: true` only informs, and Enter on it does
+// nothing. Up and Down, or Ctrl+P and Ctrl+N, move through the results, and Ctrl+D and
+// Ctrl+U half a page.
 FocusScope {
     id: root
 
-    readonly property var modes: [appsMode, clipboardMode]
+    readonly property var modes: [appsMode, clipboardMode, calculatorMode, actionsMode]
     readonly property var mode: root.modes.find(m => m.prefix !== "" && field.text.startsWith(m.prefix)) ?? appsMode
     readonly property string query: field.text.slice(root.mode.prefix.length).trim()
     readonly property var results: root.mode.results(root.query)
@@ -25,12 +26,14 @@ FocusScope {
     implicitWidth: 560
     implicitHeight: search.height + Theme.spacingSmall + root.rows * root.rowHeight
 
+    // A hint row does nothing. The drawer closes first, so an action that opens another
+    // drawer keeps it; this content stays while the drawer slides away.
     function activate(index) {
         const item = root.results[index];
-        if (!item)
+        if (!item || item.hint)
             return;
-        root.mode.activate(item);
         Drawers.close();
+        root.mode.activate(item);
     }
 
     onModeChanged: root.mode.refresh?.()
@@ -41,6 +44,15 @@ FocusScope {
 
     ClipboardMode {
         id: clipboardMode
+    }
+
+    CalculatorMode {
+        id: calculatorMode
+        query: root.mode === calculatorMode ? root.query : ""
+    }
+
+    ActionsMode {
+        id: actionsMode
     }
 
     Rectangle {

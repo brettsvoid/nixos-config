@@ -12,6 +12,8 @@ Singleton {
     property string open: ""
     // The name of the screen it is on.
     property string screen: ""
+    // The tab the dashboard opens on next, by name; it clears it (dashboard/Dashboard.qml).
+    property string dashboardTab: ""
 
     function isOpen(name, screenName) {
         return root.open === name && root.screen === screenName;

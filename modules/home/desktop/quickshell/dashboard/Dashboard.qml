@@ -29,6 +29,12 @@ FocusScope {
 
     Keys.onTabPressed: root.current = (root.current + 1) % root.tabs.length
 
+    // Opened for one tab (the launcher's Wallpaper action): show it this time only.
+    Component.onCompleted: {
+        root.current = Math.max(0, root.tabs.findIndex(tab => tab.name === Drawers.dashboardTab));
+        Drawers.dashboardTab = "";
+    }
+
     Row {
         id: tabBar
         anchors.top: parent.top
