@@ -130,10 +130,10 @@ in
           exit 1
         fi
 
-        pidfile=/tmp/custom-shell.pid
+        pidfile="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/custom-shell.pid"
         pid=$(cat "$pidfile" 2>/dev/null)
-        # Only while that pid is still the shell: /tmp outlives a reboot here, so it
-        # can be another process's by now.
+        # Only while that pid is still the shell: the file can outlive it (a session
+        # left without logging out), and the pid be another process's by now.
         if [ -n "$pid" ] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "quickshell/custom-shell"; then
           echo "Stopping the custom shell..."
           kill "$pid"
@@ -241,7 +241,8 @@ in
       '';
 
       toggle-shell = pkgs.writeShellScriptBin "toggle-shell" ''
-        CUSTOM_PID_FILE="/tmp/custom-shell.pid"
+        # The runtime directory, which no reboot keeps.
+        CUSTOM_PID_FILE="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/custom-shell.pid"
         # A shell started from a terminal that outlived a Hyprland restart cannot reach
         # Hyprland's socket, so it does not know which monitor is focused and no drawer
         # opens.
@@ -255,8 +256,9 @@ in
           pgrep -f "$AMBXST_PATTERN" >/dev/null 2>&1
         }
 
-        # /tmp outlives a reboot here, so the pid file can name some other process by
-        # now; at login that would leave the session without a shell.
+        # The pid file can outlive the shell (a session left without logging out), and
+        # the pid be another process's by now; at login that would leave the session
+        # without a shell.
         custom_running() {
           [ -f "$CUSTOM_PID_FILE" ] || return 1
           local pid

@@ -36,6 +36,12 @@ _: {
         })
       ];
 
+      # /tmp starts empty at each boot. NixOS keeps it otherwise (systemd-tmpfiles
+      # only removes what is 10 days old), so files from an earlier boot, pid files
+      # among them, look current. Not a tmpfs: Nix builds use /tmp, and large ones
+      # can outgrow it.
+      boot.tmp.cleanOnBoot = true;
+
       time.timeZone = "Europe/London";
       i18n.defaultLocale = "en_GB.UTF-8";
 
