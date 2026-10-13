@@ -30,6 +30,8 @@ in
           monitors=$(hyprctl monitors -j)
           clients=$(hyprctl clients -j)
           setting=$(hyprctl getoption misc:vrr -j | jq -r '.int')
+          # How a window is named in the hints: its title, with the class to match rules on.
+          window_name='def window_name: if .title == "" then .class else "\(.title) (\(.class))" end;'
 
           # The vertical range from the base EDID's range limits descriptor (tag 0xFD),
           # as "min max". Byte 4's low bits add 255 to the max (bit 1) and min (bit 0).
@@ -89,16 +91,27 @@ in
 
             # The window that fills this monitor's workspace: fullscreen 1 is maximised, 2 is fullscreen.
             ws=$(jq -r '.activeWorkspace.id' <<<"$mon")
-            full=$(jq -r --argjson ws "$ws" \
-              '[.[] | select(.workspace.id == $ws and .fullscreen > 0)][0] // empty | "\(.fullscreen) \(.class)"' <<<"$clients")
-            read -r mode class <<<"''${full:-0 none}"
+            full=$(jq -r --argjson ws "$ws" "$window_name"'
+              [.[] | select(.workspace.id == $ws and .fullscreen > 0)][0] // empty | "\(.fullscreen)\t\(window_name)"' <<<"$clients")
+            IFS=$'\t' read -r mode window <<<"''${full:-0}"
+            # A fullscreen window on one of this monitor's other workspaces, such as a game
+            # left while this runs in a terminal.
+            other=$(jq -r --argjson m "$(jq -r '.id' <<<"$mon")" --argjson ws "$ws" "$window_name"'
+              [.[] | select(.monitor == $m and .workspace.id != $ws and .fullscreen == 2)][0] // empty | "\(.workspace.id)\t\(window_name)"' <<<"$clients")
             case "$setting:$mode" in
               0:*) echo "  -> Set misc:vrr in hyprland.nix to turn VRR on." ;;
               1:*) echo "  -> Hyprland asked for VRR and the output refused: look for \"does not accept VRR\" in its log." ;;
-              *:0) echo "  -> Nothing is fullscreen on workspace $ws. VRR turns on when a window is (Super+F)." ;;
-              *:1) echo "  -> $class is maximised, not fullscreen. VRR needs true fullscreen (Super+F)." ;;
-              3:2) echo "  -> $class is fullscreen, but misc:vrr 3 needs it to mark itself as a game or video." ;;
-              *) echo "  -> $class is fullscreen, but VRR is off: look for a no_vrr window rule, then for \"does not accept VRR\" in Hyprland's log." ;;
+              *:0)
+                if [ -n "$other" ]; then
+                  IFS=$'\t' read -r other_ws other_window <<<"$other"
+                  echo "  -> $other_window is fullscreen on workspace $other_ws. VRR turns on when you switch to it."
+                else
+                  echo "  -> Nothing is fullscreen on workspace $ws. VRR turns on when a window is (Super+F)."
+                fi
+                ;;
+              *:1) echo "  -> $window is maximised, not fullscreen. VRR needs true fullscreen (Super+F)." ;;
+              3:2) echo "  -> $window is fullscreen, but misc:vrr 3 needs it to mark itself as a game or video." ;;
+              *) echo "  -> $window is fullscreen, but VRR is off: look for a no_vrr window rule, then for \"does not accept VRR\" in Hyprland's log." ;;
             esac
           done
         '';
