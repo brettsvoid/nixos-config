@@ -75,3 +75,17 @@ waits until mako exits.
 Hyprland's environment import), not from a terminal. A herdr pane kept a dead
 Hyprland's signature, and a shell started there opened no drawers. See
 .scratch/hyprland-session-env/issues/01-stale-hyprland-signature.md.
+
+**2026-10-13:** The custom shell now starts at login on brett-desktop
+(`local.customShell.atLogin = true`, which runs `toggle-shell custom` from exec-once).
+Caelestia stays installed and no longer starts itself. You chose to keep it until the
+migration is done, and `toggle-shell caelestia` switches back.
+
+- `toggle-shell` and `lock-recover` now check that the pid in `/tmp/custom-shell.pid`
+  still belongs to the custom shell. `/tmp` outlives a reboot here, so a reused pid
+  could otherwise mean no shell at login, or lock-recover killing the wrong process.
+  Tested with the built script: the real pid reads as running, while a reused pid and
+  a dead one both read as stopped.
+- Still open: Super+Space, which opens Caelestia's launcher and does nothing under the
+  custom shell; window borders and GTK colours after Caelestia is removed; and the
+  rest of the criteria once you have used it for a few days.

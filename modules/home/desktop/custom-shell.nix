@@ -131,9 +131,11 @@ in
         fi
 
         pidfile=/tmp/custom-shell.pid
-        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+        pid=$(cat "$pidfile" 2>/dev/null)
+        # Only while that pid is still the shell: /tmp outlives a reboot here, so it
+        # can be another process's by now.
+        if [ -n "$pid" ] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "quickshell/custom-shell"; then
           echo "Stopping the custom shell..."
-          pid=$(cat "$pidfile")
           kill "$pid"
           for _ in $(seq 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
           kill -9 "$pid" 2>/dev/null
@@ -253,8 +255,14 @@ in
           pgrep -f "$AMBXST_PATTERN" >/dev/null 2>&1
         }
 
+        # /tmp outlives a reboot here, so the pid file can name some other process by
+        # now; at login that would leave the session without a shell.
         custom_running() {
-          [ -f "$CUSTOM_PID_FILE" ] && kill -0 "$(cat "$CUSTOM_PID_FILE")" 2>/dev/null
+          [ -f "$CUSTOM_PID_FILE" ] || return 1
+          local pid
+          pid=$(cat "$CUSTOM_PID_FILE")
+          kill -0 "$pid" 2>/dev/null \
+            && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "quickshell/custom-shell"
         }
 
         caelestia_running() {
@@ -503,6 +511,11 @@ in
         description = "The shell's settings by the same keys as its settings file, as starting values the settings window can override.";
       };
 
+      # The session's shell from login. Caelestia and ambxst stay installed on a host
+      # that imports them, for `toggle-shell caelestia` or `toggle-shell ambxst`, but
+      # no longer start at login (caelestia.nix, ambxst.nix).
+      options.local.customShell.atLogin = lib.mkEnableOption "the custom shell as the session's shell, started at login";
+
       config = {
         home.packages = [
           qsPkg
@@ -555,6 +568,9 @@ in
         # that matches a key, so Super+D, N and Escape are shared with Caelestia and
         # ambxst.
         wayland.windowManager.hyprland.settings = {
+          # Through toggle-shell, which keeps the pid file the rebuild restart and
+          # lock-recover use.
+          exec-once = lib.mkIf config.local.customShell.atLogin [ "toggle-shell custom" ];
           bindd = [
             "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
             "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"

@@ -166,6 +166,10 @@ in
                 homeDirectory = "/home/brett";
               };
 
+              # The custom shell is the session's shell; Caelestia stays installed
+              # until the migration is done (.scratch/custom-shell/issues/22).
+              local.customShell.atLogin = true;
+
               # XDG profile path from the start: this home has no ~/.mozilla to
               # migrate (unlike the laptop, see docs/TODO.md), and
               # home.stateVersion "24.11" would otherwise keep the legacy path.
