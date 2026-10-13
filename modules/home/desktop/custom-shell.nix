@@ -135,10 +135,39 @@ in
         pkgs.imagemagick
       ] "";
 
+      # The shell in a headless sway, apart from the desktop, for tests and for the
+      # load check in shellConfig.
+      qs-test =
+        script "qs-test"
+          [
+            pkgs.coreutils
+            pkgs.dbus
+            pkgs.findutils
+            pkgs.gnugrep
+            pkgs.gnused
+            pkgs.python3
+          ]
+          ''
+            qs=${qsPkg}/bin/qs
+            sway=${pkgs.sway-unwrapped}/bin/sway
+            dbus_config=${pkgs.dbus}/share/dbus-1/session.conf
+            fake_hyprland=${./custom-shell/fake-hyprland.py}
+            default_config="$HOME/${repoDir}/modules/home/desktop/quickshell"
+            compile_shaders() {
+              ${compileShaders "$1"}
+            }
+          '';
+
+      # The shell must load, without a QML error or warning, or the build fails here,
+      # before a rebuild restarts the running shell on it. It loads with a theme made
+      # from a fixed colour, as the build has no wallpaper.
       shellConfig = pkgs.runCommand "custom-shell-config" { } ''
         cp -r ${./quickshell} $out
         chmod -R u+w $out
         ${compileShaders "$out"}
+        export HOME=$TMPDIR
+        ${pkgs.matugen}/bin/matugen color hex '#b03a3a' -m dark -c ${matugenConfig} >/dev/null
+        ${qs-test}/bin/qs-test -c $out -t 3 --check
       '';
 
       toggle-shell = script "toggle-shell" [ pkgs.jq ] ''
@@ -237,6 +266,7 @@ in
           qsPkg
           toggle-shell
           qs-dev
+          qs-test
           generate-theme
           custom-shell-or
           lock-recover
