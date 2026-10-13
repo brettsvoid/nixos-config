@@ -94,6 +94,17 @@ in
           # kitty's own alt+ mappings below still fire.
           macos_option_as_alt = "no";
           macos_thicken_font = "0.2";
+          # No config watcher. kitty watches the folder of the resolved
+          # kitty.conf, which with home-manager is /nix/store, and kitten's
+          # kqueue backend (fswatcher 1.3.0) ignores the "top level only"
+          # depth: it opens a file for every entry in the store, ~1M of them.
+          # Go lifts its own open-file limit, so only kern.maxfilesperproc
+          # stops it. When that was 1M it filled the kernel's 251k vnodes a
+          # minute after each login: everything failed with "Too many open
+          # files in system", and agents died with SIGBUS (2, 5, 9 Oct 2026).
+          # The config only changes on a rebuild, and reload_config_file
+          # (ctrl+cmd+,) still reloads by hand.
+          auto_reload_config = -1;
         };
         keybindings = {
           # Splits
