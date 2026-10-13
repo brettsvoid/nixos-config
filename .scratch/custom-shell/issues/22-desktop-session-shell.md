@@ -96,3 +96,28 @@ migration is done, and `toggle-shell caelestia` switches back.
   Caelestia's module when that is removed.
 - **Window borders and GTK apps:** these follow the shell's theme (matugen, from the
   wallpaper), not Crimson Ronin. So does the light/dark preference.
+
+**2026-10-13:** Borders, GTK and light/dark now follow the theme (worktree branch
+`worktree-theme-following-apps`):
+
+- The shell sets Hyprland's border colours with `hyprctl keyword`
+  (`quickshell/theme/WindowBorders.qml`). It keeps Crimson Ronin's gradient shape and
+  sets them again after every config reload. It doesn't use a sourced file: Hyprland
+  reloads its whole config when a sourced file changes, and that would undo game mode.
+- `generate-theme` writes `~/.config/gtk-{3,4}.0/gtk.css` from `matugen/gtk.css`. It
+  then sets dconf's `gtk-theme` (`adw-gtk3` or `adw-gtk3-dark`) and `color-scheme`
+  from the mode. This only happens where `local.customShell.atLogin` is set, so the
+  laptop doesn't change. `caelestia.nix` no longer sets GTK there.
+- GTK reads `gtk.css` once, when an app starts, so open apps keep their old colours
+  until they're reopened. Light/dark applies at once. Plain GTK 4 apps that don't use
+  libadwaita aren't recoloured: adw-gtk3's GTK 4 stylesheet doesn't use the named
+  colours.
+
+To check after the rebuild:
+
+1. Look at a window's border. It should be the theme's (currently grey to white,
+   monochrome), not crimson.
+2. Run `hyprctl reload`. The border should change back to the theme's within a second.
+3. Open Thunar (GTK 3) and Loupe (libadwaita). They should use the shell's palette.
+4. Dashboard → Wallpaper: switch to light, then reopen Thunar and Loupe. Firefox should
+   switch to light without being reopened. Then switch back to dark.

@@ -217,7 +217,10 @@ in
       # xdg-desktop-portal-gtk reports as the light/dark preference (Firefox's
       # prefers-color-scheme follows it); unset, it reports none. It does not
       # make home-manager write gtk-4.0/gtk.css.
-      gtk = {
+      #
+      # Not where the custom shell is the session's shell: its theme sets both
+      # (generate-theme in custom-shell.nix).
+      gtk = lib.mkIf (!(config.local.customShell.atLogin or false)) {
         enable = true;
         colorScheme = "dark";
         gtk3.theme = {
@@ -246,7 +249,8 @@ in
 
         # Crimson Ronin's window borders: a crimson edge that fades back to
         # graphite. Forced over the Catppuccin gradient in hyprland.nix; this
-        # also applies while ambxst is running.
+        # also applies while ambxst is running. The custom shell sets its
+        # theme's in their place while it runs (quickshell/theme/WindowBorders.qml).
         general = {
           "col.active_border" =
             lib.mkForce "rgba(24242Bdd) rgba(720B12ee) rgba(E21A28ff) rgba(24242Bdd) 32deg";

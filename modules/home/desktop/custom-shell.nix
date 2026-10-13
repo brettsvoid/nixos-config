@@ -393,6 +393,32 @@ in
 
       matugenDir = ./quickshell/matugen;
 
+      # Where the custom shell is the session's shell, its theme is the desktop's: GTK
+      # apps take the palette and follow light or dark too. Elsewhere another shell
+      # themes them (ambxst on the laptop). The window borders are the shell's own
+      # (quickshell/theme/WindowBorders.qml), set while it runs.
+      themeApps = config.local.customShell.atLogin;
+
+      # The shell's colours, and with themeApps GTK's: libadwaita and adw-gtk3 draw with
+      # the named colours in gtk.css, which GTK 3 and 4 each read from their own folder.
+      matugenConfig = (pkgs.formats.toml { }).generate "matugen.toml" (
+        lib.recursiveUpdate (lib.importTOML ./quickshell/matugen/config.toml) {
+          templates = {
+            custom-shell.input_path = "${matugenDir}/colors.json";
+          }
+          // lib.optionalAttrs themeApps {
+            gtk3 = {
+              input_path = "${matugenDir}/gtk.css";
+              output_path = "~/.config/gtk-3.0/gtk.css";
+            };
+            gtk4 = {
+              input_path = "${matugenDir}/gtk.css";
+              output_path = "~/.config/gtk-4.0/gtk.css";
+            };
+          };
+        }
+      );
+
       # Sets the wallpaper and generates the shell's theme from it with matugen:
       #   generate-theme [image] [--scheme X] [--mode light|dark | --light | --dark]
       # Anything not given comes from the saved choice; with no saved image, the first
@@ -405,6 +431,7 @@ in
         export PATH=${
           lib.makeBinPath [
             pkgs.coreutils
+            pkgs.dconf
             pkgs.findutils
             pkgs.jq
             pkgs.matugen
@@ -469,12 +496,24 @@ in
         echo "Generating theme: $WALLPAPER (scheme: $SCHEME, mode: $MODE)"
         if ! matugen image "$WALLPAPER" \
           --source-color-index 0 \
-          -c "${matugenDir}/config.toml" \
+          -c ${matugenConfig} \
           -t "$SCHEME" \
           -m "$MODE"; then
           echo "matugen failed — theme not generated" >&2
           exit 1
         fi
+        ${lib.optionalString themeApps ''
+
+          # GTK 3's theme in the mode's variant, and the light or dark preference that
+          # libadwaita apps and Firefox follow, both where the settings portal reads them.
+          # Both apply to open apps at once.
+          theme=adw-gtk3
+          [ "$MODE" = dark ] && theme=adw-gtk3-dark
+          if ! dconf write /org/gnome/desktop/interface/gtk-theme "'$theme'" \
+            || ! dconf write /org/gnome/desktop/interface/color-scheme "'prefer-$MODE'"; then
+            echo "Could not set GTK's theme and light or dark preference in dconf" >&2
+          fi
+        ''}
       '';
 
       qs-dev = pkgs.writeShellScriptBin "qs-dev" ''
@@ -530,7 +569,9 @@ in
           wallpaper-thumbnails
           # qalc, for the launcher's calculator (launcher/CalculatorMode.qml).
           pkgs.libqalculate
-        ];
+        ]
+        # GTK 3's theme, recoloured by gtk.css (generate-theme).
+        ++ lib.optional themeApps pkgs.adw-gtk3;
 
         # A rebuild that changes the shell restarts it, if it is running. Hyprland runs
         # the restart, so the shell starts with the session's environment rather than
@@ -622,11 +663,25 @@ in
         home.activation = {
           # First run, or the theme cache was cleared: choose the wallpaper (the saved
           # choice, else the first in ~/Pictures/Wallpapers, linked by then) and
-          # generate the theme.
-          generateTheme = config.lib.dag.entryAfter [ "linkGeneration" ] ''
-            if [ ! -f "$HOME/.cache/qs-theme/colors.json" ] \
-              || [ ! -f "''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell/wallpaper.json" ]; then
-              run ${generate-theme}/bin/generate-theme || true
+          # generate the theme. With themeApps, also when GTK's gtk.css is not
+          # generate-theme's: another shell wrote it (ambxst did before), or themeApps
+          # has just been turned on, and home-manager's dconf step has just reset the
+          # GTK keys it used to set. dconf needs a session bus: outside a session, a
+          # private one, as that step uses.
+          generateTheme = config.lib.dag.entryAfter [ "linkGeneration" "dconfSettings" ] ''
+            regenerate=false
+            [ -f "$HOME/.cache/qs-theme/colors.json" ] || regenerate=true
+            [ -f "''${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell/wallpaper.json" ] || regenerate=true
+            ${lib.optionalString themeApps ''
+              grep -qs generate-theme "${config.xdg.configHome}/gtk-3.0/gtk.css" || regenerate=true
+            ''}
+            if $regenerate; then
+              if [ -v DBUS_SESSION_BUS_ADDRESS ]; then
+                run ${generate-theme}/bin/generate-theme || true
+              else
+                run ${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon \
+                  ${generate-theme}/bin/generate-theme || true
+              fi
             fi
           '';
 

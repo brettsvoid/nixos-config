@@ -14,6 +14,7 @@ import "frame"
 import "lock"
 import "services"
 import "settings"
+import "theme"
 
 ShellRoot {
     Component.onCompleted: {
@@ -97,6 +98,8 @@ ShellRoot {
         description: "Lock the session"
         onPressed: Lock.lock()
     }
+
+    WindowBorders {}
 
     // Only while open, so a closed settings window costs nothing.
     LazyLoader {

@@ -35,6 +35,7 @@ QtObject {
     readonly property color text: c("overBackground", "#cdd6f4")
     readonly property color subtext: c("overSurface", "#a6adc8")
     readonly property color primary: c("primary", "#89b4fa")
+    readonly property color primaryContainer: c("primaryContainer", "#45475a")
     readonly property color onPrimary: c("overPrimary", "#ffffff")
     readonly property color secondary: c("secondary", "#b4befe")
     readonly property color error: c("error", "#f38ba8")
