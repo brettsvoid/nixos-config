@@ -38,8 +38,9 @@ description: Search, create, and manage notes in the Obsidian vault, including r
 
 ## Recipes
 
-- Save to `Recipes/`, tagged `food`, `recipe` and one category (`curry`, `pasta`,
-  `korean`, …).
+- Save to `Recipes/`, tagged `food`, `recipe`, plus a cuisine (`korean`, `chinese`, …)
+  and/or a dish type (`curry`, `pasta`, `rice-bowl`, …). Reuse an existing tag where one
+  fits rather than creating a near-duplicate.
 - Follow the layout of `Recipes/Butter Chicken (Air Fryer).md`: H1 title, a short intro,
   a `**Serves** · **Active**` line, `## Ingredients` with `###` groups, a numbered
   `## Method` with a bold name per step, `## Notes`, then sources after a `---` rule.
