@@ -64,7 +64,7 @@ _: {
       cli = "/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli";
       # Read the profile name off the config rather than hardcoding it, so
       # renaming the profile in karabiner.json cannot silently break the reload.
-      profiles = (builtins.fromJSON (builtins.readFile json)).profiles;
+      inherit ((builtins.fromJSON (builtins.readFile json))) profiles;
       profile = (lib.findFirst (p: p.selected or false) (builtins.head profiles) profiles).name;
     in
     {

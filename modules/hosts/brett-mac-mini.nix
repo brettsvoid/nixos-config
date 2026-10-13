@@ -30,9 +30,11 @@ in
         # ─── Identity ──────────────────────────────────────────────────
         # Must match the flake attribute: the rebuild aliases pick the config
         # by hostname. The first switch needs an explicit `#brett-mac-mini`.
-        networking.hostName = "brett-mac-mini";
-        networking.computerName = "brett-mac-mini";
-        networking.localHostName = "brett-mac-mini";
+        networking = {
+          hostName = "brett-mac-mini";
+          computerName = "brett-mac-mini";
+          localHostName = "brett-mac-mini";
+        };
 
         nixpkgs.hostPlatform = "aarch64-darwin";
 
@@ -163,12 +165,14 @@ in
             # ─── Desktop look (per machine) ────────────────────────────
             # Applied when first declared and again only when changed, so
             # `select-wallpaper` and `select-scheme` picks survive rebuilds.
-            local.wallpaper.default = "chisato_petals_of_silence_4k.jpg";
-            local.edgebar.scheme = "scheme-tonal-spot";
+            local = {
+              wallpaper.default = "chisato_petals_of_silence_4k.jpg";
+              edgebar.scheme = "scheme-tonal-spot";
 
-            # This end sends the PRO X headset's mic, which is mono; stereo
-            # would only duplicate the channel at double the bitrate.
-            local.sonobus.sendChannels = "mono";
+              # This end sends the PRO X headset's mic, which is mono; stereo
+              # would only duplicate the channel at double the bitrate.
+              sonobus.sendChannels = "mono";
+            };
 
             home = {
               inherit username;

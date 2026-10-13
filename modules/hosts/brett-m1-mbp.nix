@@ -26,9 +26,11 @@ in
         ];
 
         # ─── Identity ──────────────────────────────────────────────────
-        networking.hostName = "brett-m1-mbp";
-        networking.computerName = "brett-m1-mbp";
-        networking.localHostName = "brett-m1-mbp";
+        networking = {
+          hostName = "brett-m1-mbp";
+          computerName = "brett-m1-mbp";
+          localHostName = "brett-m1-mbp";
+        };
 
         nixpkgs.hostPlatform = "aarch64-darwin";
 
@@ -186,47 +188,49 @@ in
             # ─── Desktop look (per machine) ────────────────────────────
             # Applied when first declared and again only when changed, so
             # `select-wallpaper` and `select-scheme` picks survive rebuilds.
-            local.wallpaper.default = "chisato_petals_of_silence_4k.jpg";
-            local.edgebar.scheme = "scheme-tonal-spot";
+            local = {
+              wallpaper.default = "chisato_petals_of_silence_4k.jpg";
+              edgebar.scheme = "scheme-tonal-spot";
 
-            # This end sends programme audio for the headset, not a mic.
-            local.sonobus.sendChannels = "stereo";
+              # This end sends programme audio for the headset, not a mic.
+              sonobus.sendChannels = "stereo";
 
-            # ─── Workspace assignment (this machine only) ──────────────
-            # appId must match the bundle ID exactly; Tyto, a Chrome PWA, has
-            # its own. 8, 9 and 0 are force-assigned to the secondary display
-            # in aerospace.toml.in, so SonoBus, Spotify and Obsidian follow
-            # the external monitor when one is attached.
-            local.aerospace.windowAssignments = [
-              {
-                appId = "com.google.Chrome.app.fiegnlgmbkhlmacibejnbdmickgdeojg"; # Tyto
-                workspace = "3";
-              }
-              {
-                appId = "net.kovidgoyal.kitty";
-                workspace = "1";
-              }
-              {
-                appId = "com.vivaldi.Vivaldi";
-                workspace = "2";
-              }
-              {
-                appId = "com.google.Chrome";
-                workspace = "4";
-              }
-              {
-                appId = "com.Sonosaurus.SonoBus";
-                workspace = "8";
-              }
-              {
-                appId = "com.spotify.client";
-                workspace = "9";
-              }
-              {
-                appId = "md.obsidian";
-                workspace = "0";
-              }
-            ];
+              # ─── Workspace assignment (this machine only) ──────────────
+              # appId must match the bundle ID exactly; Tyto, a Chrome PWA, has
+              # its own. 8, 9 and 0 are force-assigned to the secondary display
+              # in aerospace.toml.in, so SonoBus, Spotify and Obsidian follow
+              # the external monitor when one is attached.
+              aerospace.windowAssignments = [
+                {
+                  appId = "com.google.Chrome.app.fiegnlgmbkhlmacibejnbdmickgdeojg"; # Tyto
+                  workspace = "3";
+                }
+                {
+                  appId = "net.kovidgoyal.kitty";
+                  workspace = "1";
+                }
+                {
+                  appId = "com.vivaldi.Vivaldi";
+                  workspace = "2";
+                }
+                {
+                  appId = "com.google.Chrome";
+                  workspace = "4";
+                }
+                {
+                  appId = "com.Sonosaurus.SonoBus";
+                  workspace = "8";
+                }
+                {
+                  appId = "com.spotify.client";
+                  workspace = "9";
+                }
+                {
+                  appId = "md.obsidian";
+                  workspace = "0";
+                }
+              ];
+            };
 
             home = {
               inherit username;

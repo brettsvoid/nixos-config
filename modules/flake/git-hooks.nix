@@ -31,10 +31,17 @@
             excludes = [ "\\.patch$" ];
           };
 
-          # ─── deadnix / statix: devShell tools, not pre-commit hooks ───
-          # Run on demand (`nix develop -c deadnix`, `nix develop -c statix
-          # check`). Too noisy on the generated hardware/*.nix and the host
-          # files to block commits.
+          # ─── Nix lint (blocking) ──────────────────────────────────────
+          # Not on the generated hardware/*.nix. statix checks the whole tree
+          # on any .nix change; deadnix only the changed files.
+          statix = {
+            enable = true;
+            settings.ignore = [ "hardware/*" ];
+          };
+          deadnix = {
+            enable = true;
+            excludes = [ "^hardware/" ];
+          };
         };
       };
 

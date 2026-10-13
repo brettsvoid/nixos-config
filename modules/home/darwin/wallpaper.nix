@@ -39,7 +39,7 @@ in
     {
       options.local.wallpaper.default = lib.mkOption {
         type = lib.types.str;
-        default = wp.default;
+        inherit (wp) default;
         example = "rem_demon.jpg";
         description = ''
           Filename of the desktop picture for this machine, relative to

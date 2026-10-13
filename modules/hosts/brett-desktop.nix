@@ -53,17 +53,21 @@ in
 
         # ─── Boot ──────────────────────────────────────────────────────
         boot = {
-          loader.systemd-boot.enable = true;
-          loader.efi.canTouchEfiVariables = true;
-          # Windows has its own ESP on the P5 Plus, which systemd-boot can't
-          # auto-detect, so this chain-loads it through the EDK2 shell. HD3b
-          # is the shell's handle for that ESP (PARTUUID d5653750-…). Adding
-          # or removing drives can change it: re-run `map -b` in the shell.
-          loader.systemd-boot.windows.windows = {
-            title = "Windows";
-            efiDeviceHandle = "HD3b";
+          loader = {
+            systemd-boot = {
+              enable = true;
+              # Windows has its own ESP on the P5 Plus, which systemd-boot can't
+              # auto-detect, so this chain-loads it through the EDK2 shell. HD3b
+              # is the shell's handle for that ESP (PARTUUID d5653750-…). Adding
+              # or removing drives can change it: re-run `map -b` in the shell.
+              windows.windows = {
+                title = "Windows";
+                efiDeviceHandle = "HD3b";
+              };
+              edk2-uefi-shell.enable = true;
+            };
+            efi.canTouchEfiVariables = true;
           };
-          loader.systemd-boot.edk2-uefi-shell.enable = true;
           # Early KMS: NVIDIA modules in the initrd for a clean DRM handoff
           # to the compositor.
           initrd.kernelModules = [
@@ -176,81 +180,83 @@ in
               # home.stateVersion "24.11" would otherwise keep the legacy path.
               programs.firefox.configPath = ".config/mozilla/firefox";
 
-              # Render only on the 3080 Ti; the iGPU drives nothing. The
-              # symlink comes from the udev rule above.
-              wayland.windowManager.hyprland.settings.env = [
-                "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
-              ];
-
               # MangoHud lists the idle iGPU too; show only the 3080 Ti.
               programs.mangohud.settings.pci_dev = dgpu;
 
-              # Odyssey G5 on the left; Dell AW2518H on the right, turned 90°
-              # clockwise (transform 1 rotates the picture back). The Odyssey
-              # sits 240 px down to centre it on the 1920-tall Dell. The Dell's
-              # EDID prefers 60 Hz, so 240 Hz has to be asked for.
-              wayland.windowManager.hyprland.settings.monitor = [
-                "${odyssey}, 2560x1440@165, 0x240, 1"
-                "${dell}, 1920x1080@240, 2560x0, 1, transform, 1"
-              ];
+              # Render only on the 3080 Ti; the iGPU drives nothing. The
+              # symlink comes from the udev rule above.
+              wayland.windowManager.hyprland.settings = {
+                env = [
+                  "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
+                ];
 
-              # XWayland games (CS2 among them) size themselves to X's first
-              # monitor, which is the rotated Dell unless a primary is set, so
-              # make the Odyssey primary. XWayland drops the primary when the
-              # KVM switches away and back, so redo it on every monitoradded
-              # event. xrandr exits 0 for an output XWayland doesn't have yet,
-              # so success is checked in its monitor list, with retries.
-              wayland.windowManager.hyprland.settings.exec-once = [
-                (lib.getExe (
-                  pkgs.writeShellApplication {
-                    name = "xwayland-primary-odyssey";
-                    runtimeInputs = [
-                      pkgs.gnugrep
-                      pkgs.jq
-                      pkgs.socat
-                      pkgs.xrandr
-                    ];
-                    text = ''
-                      set_primary() {
-                        for _ in $(seq 30); do
-                          output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name') || true
-                          if [ -n "$output" ]; then
-                            xrandr --output "$output" --primary 2>/dev/null || true
-                            monitors=$(xrandr --listmonitors 2>/dev/null) || true
-                            grep -q "^ *[0-9]*: +\*$output " <<<"$monitors" && return 0
-                          fi
-                          sleep 1
-                        done
-                        echo "could not make the Odyssey XWayland's primary output" >&2
-                      }
+                # Odyssey G5 on the left; Dell AW2518H on the right, turned 90°
+                # clockwise (transform 1 rotates the picture back). The Odyssey
+                # sits 240 px down to centre it on the 1920-tall Dell. The Dell's
+                # EDID prefers 60 Hz, so 240 Hz has to be asked for.
+                monitor = [
+                  "${odyssey}, 2560x1440@165, 0x240, 1"
+                  "${dell}, 1920x1080@240, 2560x0, 1, transform, 1"
+                ];
 
-                      set_primary
-                      socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" |
-                        while read -r event; do
-                          case $event in
-                            'monitoradded>>'*) set_primary ;;
-                          esac
-                        done
-                    '';
-                  }
-                ))
-              ];
+                # XWayland games (CS2 among them) size themselves to X's first
+                # monitor, which is the rotated Dell unless a primary is set, so
+                # make the Odyssey primary. XWayland drops the primary when the
+                # KVM switches away and back, so redo it on every monitoradded
+                # event. xrandr exits 0 for an output XWayland doesn't have yet,
+                # so success is checked in its monitor list, with retries.
+                exec-once = [
+                  (lib.getExe (
+                    pkgs.writeShellApplication {
+                      name = "xwayland-primary-odyssey";
+                      runtimeInputs = [
+                        pkgs.gnugrep
+                        pkgs.jq
+                        pkgs.socat
+                        pkgs.xrandr
+                      ];
+                      text = ''
+                        set_primary() {
+                          for _ in $(seq 30); do
+                            output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name') || true
+                            if [ -n "$output" ]; then
+                              xrandr --output "$output" --primary 2>/dev/null || true
+                              monitors=$(xrandr --listmonitors 2>/dev/null) || true
+                              grep -q "^ *[0-9]*: +\*$output " <<<"$monitors" && return 0
+                            fi
+                            sleep 1
+                          done
+                          echo "could not make the Odyssey XWayland's primary output" >&2
+                        }
 
-              # 1–5 on the Odyssey, 6–10 on the Dell. persistent:true keeps a
-              # workspace alive while its monitor is off, so apps land on the
-              # other screen rather than an invisible orphan.
-              wayland.windowManager.hyprland.settings.workspace = [
-                "1, monitor:${odyssey}, default:true, persistent:true"
-                "2, monitor:${odyssey}, persistent:true"
-                "3, monitor:${odyssey}, persistent:true"
-                "4, monitor:${odyssey}, persistent:true"
-                "5, monitor:${odyssey}, persistent:true"
-                "6, monitor:${dell}, default:true, persistent:true"
-                "7, monitor:${dell}, persistent:true"
-                "8, monitor:${dell}, persistent:true"
-                "9, monitor:${dell}, persistent:true"
-                "10, monitor:${dell}, persistent:true"
-              ];
+                        set_primary
+                        socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" |
+                          while read -r event; do
+                            case $event in
+                              'monitoradded>>'*) set_primary ;;
+                            esac
+                          done
+                      '';
+                    }
+                  ))
+                ];
+
+                # 1–5 on the Odyssey, 6–10 on the Dell. persistent:true keeps a
+                # workspace alive while its monitor is off, so apps land on the
+                # other screen rather than an invisible orphan.
+                workspace = [
+                  "1, monitor:${odyssey}, default:true, persistent:true"
+                  "2, monitor:${odyssey}, persistent:true"
+                  "3, monitor:${odyssey}, persistent:true"
+                  "4, monitor:${odyssey}, persistent:true"
+                  "5, monitor:${odyssey}, persistent:true"
+                  "6, monitor:${dell}, default:true, persistent:true"
+                  "7, monitor:${dell}, persistent:true"
+                  "8, monitor:${dell}, persistent:true"
+                  "9, monitor:${dell}, persistent:true"
+                  "10, monitor:${dell}, persistent:true"
+                ];
+              };
             };
         };
       }

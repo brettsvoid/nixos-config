@@ -161,37 +161,41 @@ in
                 homeDirectory = "/home/brett";
               };
 
-              wayland.windowManager.hyprland.settings.monitor = [
-                "DP-1, 2560x1440@165, 1920x0, 1" # external monitor (right)
-                "eDP-1, 1920x1080@144, 0x0, 1" # laptop (left, always at origin)
-              ];
+              wayland.windowManager.hyprland = {
+                settings = {
+                  monitor = [
+                    "DP-1, 2560x1440@165, 1920x0, 1" # external monitor (right)
+                    "eDP-1, 1920x1080@144, 0x0, 1" # laptop (left, always at origin)
+                  ];
 
-              # Force linear blitting for the cross-GPU buffer copy (NVIDIA →
-              # Intel-driven eDP).
-              wayland.windowManager.hyprland.settings.env = [
-                "AQ_FORCE_LINEAR_BLIT, 1"
-              ];
+                  # Force linear blitting for the cross-GPU buffer copy (NVIDIA →
+                  # Intel-driven eDP).
+                  env = [
+                    "AQ_FORCE_LINEAR_BLIT, 1"
+                  ];
 
-              # Written at boot by hyprland-drm-config above.
-              wayland.windowManager.hyprland.extraConfig = ''
-                source = /tmp/hypr-drm-devices.conf
-              '';
+                  # 1–5 on the external monitor, 6–10 on the panel. persistent:true
+                  # keeps a workspace alive while its monitor is absent, so apps
+                  # land on the other screen rather than an invisible orphan.
+                  workspace = [
+                    "1, monitor:DP-1, default:true, persistent:true"
+                    "2, monitor:DP-1, persistent:true"
+                    "3, monitor:DP-1, persistent:true"
+                    "4, monitor:DP-1, persistent:true"
+                    "5, monitor:DP-1, persistent:true"
+                    "6, monitor:eDP-1, default:true, persistent:true"
+                    "7, monitor:eDP-1, persistent:true"
+                    "8, monitor:eDP-1, persistent:true"
+                    "9, monitor:eDP-1, persistent:true"
+                    "10, monitor:eDP-1, persistent:true"
+                  ];
+                };
 
-              # 1–5 on the external monitor, 6–10 on the panel. persistent:true
-              # keeps a workspace alive while its monitor is absent, so apps
-              # land on the other screen rather than an invisible orphan.
-              wayland.windowManager.hyprland.settings.workspace = [
-                "1, monitor:DP-1, default:true, persistent:true"
-                "2, monitor:DP-1, persistent:true"
-                "3, monitor:DP-1, persistent:true"
-                "4, monitor:DP-1, persistent:true"
-                "5, monitor:DP-1, persistent:true"
-                "6, monitor:eDP-1, default:true, persistent:true"
-                "7, monitor:eDP-1, persistent:true"
-                "8, monitor:eDP-1, persistent:true"
-                "9, monitor:eDP-1, persistent:true"
-                "10, monitor:eDP-1, persistent:true"
-              ];
+                # Written at boot by hyprland-drm-config above.
+                extraConfig = ''
+                  source = /tmp/hypr-drm-devices.conf
+                '';
+              };
             };
           };
         }

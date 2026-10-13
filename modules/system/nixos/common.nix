@@ -3,25 +3,27 @@ _: {
   flake.modules.nixos.common =
     { pkgs, ... }:
     {
-      nix.settings.experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
+      nix = {
+        settings.experimental-features = [
+          "nix-command"
+          "flakes"
+        ];
+
+        # Weekly GC of generations older than 30 days. (The Macs use
+        # `nh clean` instead: system/darwin/nh-gc.nix.)
+        gc = {
+          automatic = true;
+          dates = "weekly";
+          options = "--delete-older-than 30d";
+        };
+
+        # Hard-link identical store files to reclaim disk.
+        optimise = {
+          automatic = true;
+          dates = [ "weekly" ];
+        };
+      };
       nixpkgs.config.allowUnfree = true;
-
-      # Weekly GC of generations older than 30 days. (The Macs use
-      # `nh clean` instead: system/darwin/nh-gc.nix.)
-      nix.gc = {
-        automatic = true;
-        dates = "weekly";
-        options = "--delete-older-than 30d";
-      };
-
-      # Hard-link identical store files to reclaim disk.
-      nix.optimise = {
-        automatic = true;
-        dates = [ "weekly" ];
-      };
 
       # Skip openldap's tests: test017-syncreplication-refresh is flaky on
       # x86_64-linux. The override changes openldap's hash, so it and what

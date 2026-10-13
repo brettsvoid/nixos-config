@@ -146,10 +146,12 @@
 
     agenix = {
       url = "github:ryantm/agenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      # Share our home-manager and nix-darwin rather than agenix's own copies.
-      inputs.home-manager.follows = "home-manager";
-      inputs.darwin.follows = "nix-darwin";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        # Share our home-manager and nix-darwin rather than agenix's own copies.
+        home-manager.follows = "home-manager";
+        darwin.follows = "nix-darwin";
+      };
     };
 
     secrets = {

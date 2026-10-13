@@ -17,7 +17,7 @@ let
   defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
   rendered = defaults // {
     geometry = defaults.geometry // {
-      barHeight = geom.barHeight;
+      inherit (geom) barHeight;
       # fillet radius is locked to half the pill height
       concave = defaults.geometry.pillHeight / 2;
     };
@@ -178,25 +178,27 @@ in
           }
         );
 
-        home.packages = [
-          generate-edgebar-theme
-          cycle-wallpaper
-          select-wallpaper
-          select-scheme
-        ];
+        home = {
+          packages = [
+            generate-edgebar-theme
+            cycle-wallpaper
+            select-wallpaper
+            select-scheme
+          ];
 
-        # Scheme first, so the palette below is generated with it.
-        home.activation.edgebarScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          run ${seed-scheme}
-        '';
+          # Scheme first, so the palette below is generated with it.
+          activation.edgebarScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            run ${seed-scheme}
+          '';
 
-        # Seed palette.json on first build only. A matugen failure is
-        # non-fatal: without the file edgebar uses its bundled palette.
-        home.activation.edgebarTheme = lib.hm.dag.entryAfter [ "edgebarScheme" ] ''
-          if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
-            run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
-          fi
-        '';
+          # Seed palette.json on first build only. A matugen failure is
+          # non-fatal: without the file edgebar uses its bundled palette.
+          activation.edgebarTheme = lib.hm.dag.entryAfter [ "edgebarScheme" ] ''
+            if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
+              run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
+            fi
+          '';
+        };
 
         # Re-theme on wallpaper changes made outside edgebar (System Settings,
         # other tools). macOS rewrites this plist whenever the desktop picture

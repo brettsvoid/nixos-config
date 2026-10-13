@@ -72,10 +72,22 @@ _: {
       };
     in
     lib.mkIf pkgs.stdenv.isDarwin {
-      home.packages = [ pkgs.lspmux ];
+      home = {
+        packages = [ pkgs.lspmux ];
 
-      home.file."${lib.removePrefix "${config.home.homeDirectory}/" shimDir}/rust-analyzer".source =
-        "${raShim}/bin/rust-analyzer";
+        file = {
+          "${lib.removePrefix "${config.home.homeDirectory}/" shimDir}/rust-analyzer".source =
+            "${raShim}/bin/rust-analyzer";
+
+          # instance_timeout reaps an index no client has touched for 5 minutes,
+          # rather than leaving it resident to be swapped. Both values equal
+          # lspmux 0.3.0's built-in defaults.
+          "Library/Application Support/lspmux/config.toml".text = ''
+            instance_timeout = 300
+            gc_interval = 10
+          '';
+        };
+      };
 
       # Must land ahead of Homebrew's rustup proxies, or they win and the shim
       # never runs (so ~/.local/bin, which is behind them, won't do).
@@ -128,13 +140,5 @@ _: {
           StandardErrorPath = "/tmp/lspmux.log";
         };
       };
-
-      # instance_timeout reaps an index no client has touched for 5 minutes,
-      # rather than leaving it resident to be swapped. Both values equal
-      # lspmux 0.3.0's built-in defaults.
-      home.file."Library/Application Support/lspmux/config.toml".text = ''
-        instance_timeout = 300
-        gc_interval = 10
-      '';
     };
 }

@@ -84,7 +84,7 @@ _: {
       # Stored as a float even though the parameter is a bool.
       dynamicResampling = "1.0"; # on
       sendChannels = "${toString channelIndex.${cfg.sendChannels}}.0";
-      sendQuality = cfg.sendQuality;
+      inherit (cfg) sendQuality;
     in
     {
       # ─── Per host, because "send" means opposite things on the two ────

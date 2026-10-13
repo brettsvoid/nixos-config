@@ -155,12 +155,6 @@ in
     in
 
     {
-      # xdg-desktop-portal 1.17 no longer guesses which backend serves which
-      # interface. modules/system/nixos/hyprland.nix sets this too, but
-      # home-manager's xdg.portal has its own config and warns when it is
-      # empty. "*" is the old behaviour: the first backend, alphabetically.
-      xdg.portal.config.common.default = "*";
-
       # Without a named icon theme GTK asks for Adwaita, which is not
       # installed, and falls back to its built-in 16px icons: stretched
       # folders in Thunar, and none for images or PDFs. Carmine folders match
@@ -179,63 +173,71 @@ in
         };
       };
 
-      # The freedesktop user dirs (Documents, Downloads, …) in
-      # ~/.config/user-dirs.dirs, so file pickers, browsers and screenshot
-      # tools agree on them. The standard capitalised names match macOS, and
-      # Pictures/Wallpapers is hard-coded elsewhere in this repo. Linux only:
-      # macOS has its own fixed folders.
-      xdg.userDirs = {
-        enable = true;
-        createDirectories = true;
-        # Lowercase, the ghq root in apps-git; the module default is ~/Projects.
-        projects = "${config.home.homeDirectory}/projects";
-        # No desktop icons and no LAN file sharing on a tiling setup. null
-        # leaves them out of user-dirs.dirs, so they are not created either.
-        desktop = null;
-        publicShare = null;
-      };
+      xdg = {
+        # xdg-desktop-portal 1.17 no longer guesses which backend serves which
+        # interface. modules/system/nixos/hyprland.nix sets this too, but
+        # home-manager's xdg.portal has its own config and warns when it is
+        # empty. "*" is the old behaviour: the first backend, alphabetically.
+        portal.config.common.default = "*";
 
-      # Images open in Loupe (GNOME's image viewer). Unset, PNG and JPEG went
-      # to Gradia, an editor that ambxst installs. The types are the MimeType
-      # list from Loupe's desktop file.
-      #
-      # This makes ~/.config/mimeapps.list home-manager's, so an app's own
-      # "set as default" can no longer write to it: defaults go here.
-      xdg.mimeApps = {
-        enable = true;
-        defaultApplications =
-          lib.genAttrs [
-            "image/apng"
-            "image/avif"
-            "image/bmp"
-            "image/gif"
-            "image/heic"
-            "image/jp2"
-            "image/jpeg"
-            "image/jxl"
-            "image/png"
-            "image/qoi"
-            "image/svg+xml"
-            "image/svg+xml-compressed"
-            "image/tiff"
-            "image/vnd.microsoft.icon"
-            "image/webp"
-            "image/x-dds"
-            "image/x-exr"
-            "image/x-portable-anymap"
-            "image/x-portable-bitmap"
-            "image/x-portable-graymap"
-            "image/x-portable-pixmap"
-            "image/x-qoi"
-            "image/x-tga"
-            "image/x-win-bitmap"
-            "image/x-xbitmap"
-            "image/x-xpixmap"
-          ] (_: "org.gnome.Loupe.desktop")
-          // {
-            # Claude Code's URL handler, which it can no longer register itself.
-            "x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
-          };
+        # The freedesktop user dirs (Documents, Downloads, …) in
+        # ~/.config/user-dirs.dirs, so file pickers, browsers and screenshot
+        # tools agree on them. The standard capitalised names match macOS, and
+        # Pictures/Wallpapers is hard-coded elsewhere in this repo. Linux only:
+        # macOS has its own fixed folders.
+        userDirs = {
+          enable = true;
+          createDirectories = true;
+          # Lowercase, the ghq root in apps-git; the module default is ~/Projects.
+          projects = "${config.home.homeDirectory}/projects";
+          # No desktop icons and no LAN file sharing on a tiling setup. null
+          # leaves them out of user-dirs.dirs, so they are not created either.
+          desktop = null;
+          publicShare = null;
+        };
+
+        # Images open in Loupe (GNOME's image viewer). Unset, PNG and JPEG went
+        # to Gradia, an editor that ambxst installs. The types are the MimeType
+        # list from Loupe's desktop file.
+        #
+        # This makes ~/.config/mimeapps.list home-manager's, so an app's own
+        # "set as default" can no longer write to it: defaults go here.
+        mimeApps = {
+          enable = true;
+          defaultApplications =
+            lib.genAttrs [
+              "image/apng"
+              "image/avif"
+              "image/bmp"
+              "image/gif"
+              "image/heic"
+              "image/jp2"
+              "image/jpeg"
+              "image/jxl"
+              "image/png"
+              "image/qoi"
+              "image/svg+xml"
+              "image/svg+xml-compressed"
+              "image/tiff"
+              "image/vnd.microsoft.icon"
+              "image/webp"
+              "image/x-dds"
+              "image/x-exr"
+              "image/x-portable-anymap"
+              "image/x-portable-bitmap"
+              "image/x-portable-graymap"
+              "image/x-portable-pixmap"
+              "image/x-qoi"
+              "image/x-tga"
+              "image/x-win-bitmap"
+              "image/x-xbitmap"
+              "image/x-xpixmap"
+            ] (_: "org.gnome.Loupe.desktop")
+            // {
+              # Claude Code's URL handler, which it can no longer register itself.
+              "x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
+            };
+        };
       };
 
       # Adds the Quick Look action to Thunar's uca.xml and binds it to Space
