@@ -89,3 +89,10 @@ migration is done, and `toggle-shell caelestia` switches back.
 - Still open: Super+Space, which opens Caelestia's launcher and does nothing under the
   custom shell; window borders and GTK colours after Caelestia is removed; and the
   rest of the criteria once you have used it for a few days.
+
+**2026-10-13:** Decisions:
+
+- **Super+Space:** the launcher stays on Super+R for now. Super+Space goes with
+  Caelestia's module when that is removed.
+- **Window borders and GTK apps:** these follow the shell's theme (matugen, from the
+  wallpaper), not Crimson Ronin. So does the light/dark preference.
