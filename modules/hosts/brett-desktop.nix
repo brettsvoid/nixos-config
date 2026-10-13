@@ -98,8 +98,15 @@ in
         # Stable name for the 3080 Ti's DRM node, for AQ_DRM_DEVICES below:
         # cardN numbering is not stable, and the by-path names contain
         # colons, AQ_DRM_DEVICES' list separator.
+        #
+        # Then two NTFS partitions kept out of file managers (udisks'
+        # UDISKS_IGNORE): Windows' on the P5 Plus and "Data" on the HGST disk.
+        # Neither mounts from Thunar. Matched by filesystem UUID, as NVMe
+        # numbering changes; `mount` still works on them.
         services.udev.extraRules = ''
           KERNEL=="card*", KERNELS=="${dgpu}", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
+          SUBSYSTEM=="block", ENV{ID_FS_UUID}=="10B00AA4B00A9100", ENV{UDISKS_IGNORE}="1"
+          SUBSYSTEM=="block", ENV{ID_FS_UUID}=="E8400E89400E5F26", ENV{UDISKS_IGNORE}="1"
         '';
 
         # ─── Memory ────────────────────────────────────────────────────
