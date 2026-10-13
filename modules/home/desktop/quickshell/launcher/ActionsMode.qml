@@ -81,6 +81,16 @@ QtObject {
                 }
             },
             {
+                title: "Window effects",
+                subtitle: "Choose how windows open and close",
+                icon: "preferences-desktop-effects",
+                keywords: ["animation", "dissolve"],
+                run: () => {
+                    Drawers.dashboardTab = "Effects";
+                    Drawers.toggle("dashboard");
+                }
+            },
+            {
                 title: "Random wallpaper",
                 icon: "media-playlist-shuffle",
                 // The picker's images (dashboard/WallpaperTab.qml), not the one showing. They

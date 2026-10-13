@@ -20,6 +20,10 @@ FocusScope {
         {
             name: "Wallpaper",
             component: wallpaperTab
+        },
+        {
+            name: "Effects",
+            component: effectsTab
         }
     ]
     property int current: 0
@@ -134,5 +138,11 @@ FocusScope {
         id: wallpaperTab
 
         WallpaperTab {}
+    }
+
+    Component {
+        id: effectsTab
+
+        EffectsTab {}
     }
 }
