@@ -1,6 +1,6 @@
 # Notification history kept across restarts
 
-Status: ready-for-human
+Status: done
 Type: AFK
 
 ## Parent
@@ -77,3 +77,7 @@ shell on a private D-Bus session bus, with Qt's offscreen platform.
 - **Left for you:** look at the history drawer and pop-ups in the real shell after a
   restart (`toggle-shell custom`, then `toggle-shell restart`). Restored cards should
   show no buttons, and an image sent as data should still show.
+
+**2026-10-13:** Checked on screen after the rebuild. The history survives `toggle-shell
+restart`, and the state is in `~/.local/state/custom-shell/`. Before the rebuild, the
+old shell lost it on restart, as expected.

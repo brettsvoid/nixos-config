@@ -1,6 +1,6 @@
 # Launcher actions
 
-Status: ready-for-human
+Status: done
 Type: AFK
 
 ## Parent
@@ -53,3 +53,5 @@ arguments, so nothing ran for real.
   keeps it open.
 - **Left for you:** try it in the real launcher, and check that Wallpaper opens on the
   Wallpaper tab.
+
+**2026-10-13:** Checked on screen after the rebuild. It works in the real launcher.

@@ -1,6 +1,6 @@
 # Launcher calculator
 
-Status: ready-for-human
+Status: done
 Type: AFK
 
 ## Parent
@@ -45,3 +45,5 @@ evaluates it, so units, currencies and bases work too: `= 5 km to mi`,
 - `libqalculate` is in `home.packages`, so `qalc` works in a terminal too. It writes
   `~/.config/qalculate/qalc.cfg` the first time it runs.
 - **Left for you:** try it in the real launcher.
+
+**2026-10-13:** Checked on screen after the rebuild. It works in the real launcher.
