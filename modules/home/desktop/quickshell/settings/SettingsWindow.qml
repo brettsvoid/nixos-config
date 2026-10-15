@@ -26,6 +26,11 @@ FloatingWindow {
             component: barPage
         },
         {
+            name: "Dashboard",
+            icon: 0xF056E, // md-view_dashboard
+            component: dashboardPage
+        },
+        {
             name: "Audio",
             icon: 0xF057E, // md-volume_high
             component: audioPage
@@ -200,6 +205,12 @@ FloatingWindow {
         id: barPage
 
         BarPage {}
+    }
+
+    Component {
+        id: dashboardPage
+
+        DashboardPage {}
     }
 
     Component {

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Services.Mpris
 import "../components"
+import "../config"
 import "../theme"
 
 // The active media player (the one playing, else the first): cover, title and artist,
@@ -31,15 +32,16 @@ Rectangle {
         onTriggered: root.player.positionChanged()
     }
 
-    // Spectrum bars behind the controls. Loaded from its own file, so a Quickshell
-    // without the shell-native plugin (a plain `qs`, not custom-shell.nix's) just
-    // leaves them out.
+    // Spectrum bars behind the controls, unless the settings turn them off. Loaded from
+    // its own file, so a Quickshell without the shell-native plugin (a plain `qs`, not
+    // custom-shell.nix's) just leaves them out.
     Loader {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: Theme.spacingLarge
         height: 72
+        active: Settings.dashboard.visualiser
         visible: root.player !== null
         source: "Visualiser.qml"
         onLoaded: item.active = Qt.binding(() => root.player?.isPlaying ?? false)

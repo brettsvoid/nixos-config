@@ -1,5 +1,6 @@
 import QtQuick
 import CustomShell.Native
+import "../config"
 import "../theme"
 
 // Spectrum bars for what is playing, from the shell-native plugin. It only captures
@@ -13,9 +14,10 @@ Item {
     property color colour: Theme.primary
     readonly property int spacing: 3
 
+    // A new count restarts the capture.
     Spectrum {
         id: spectrum
-        count: 32
+        count: Settings.dashboard.visualiserBars
         active: root.active
     }
 

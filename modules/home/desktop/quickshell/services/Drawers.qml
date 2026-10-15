@@ -14,6 +14,8 @@ Singleton {
     property string screen: ""
     // The tab the dashboard opens on next, by name; it clears it (dashboard/Dashboard.qml).
     property string dashboardTab: ""
+    // The tab it last showed, for the setting that reopens it there.
+    property string lastDashboardTab: ""
 
     function isOpen(name, screenName) {
         return root.open === name && root.screen === screenName;

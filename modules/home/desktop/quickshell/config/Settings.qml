@@ -56,7 +56,27 @@ Singleton {
             "bar.volumeLabel": { default: true },
             // Percent.
             "bar.volumeStep": { default: 5, min: 1, max: 20, step: 1 },
-            "bar.volumeMax": { default: 100, min: 100, max: 150, step: 5 }
+            "bar.volumeMax": { default: 100, min: 100, max: 150, step: 5 },
+
+            "dashboard.showOverview": { default: true },
+            "dashboard.showPerformance": { default: true },
+            "dashboard.showWallpaper": { default: true },
+            "dashboard.showEffects": { default: true },
+            "dashboard.rememberTab": { default: false },
+            "dashboard.weekStart": { default: "monday", options: ["monday", "sunday", "saturday"] },
+            "dashboard.visualiser": { default: true },
+            "dashboard.visualiserBars": { default: 32, min: 8, max: 96, step: 4 },
+            "dashboard.showCpu": { default: true },
+            "dashboard.showGpu": { default: true },
+            "dashboard.showMemory": { default: true },
+            "dashboard.showSwap": { default: true },
+            "dashboard.showDisks": { default: true },
+            "dashboard.showNetwork": { default: true },
+            "dashboard.byteUnits": { default: "binary", options: ["binary", "decimal"] },
+            "dashboard.fahrenheit": { default: false },
+            // Seconds.
+            "dashboard.graphSeconds": { default: 60, min: 30, max: 600, step: 30 },
+            "dashboard.sampleInterval": { default: 1, min: 0.5, max: 10, step: 0.5 }
         })
 
     // The values in force.
@@ -89,6 +109,24 @@ Singleton {
         readonly property bool volumeLabel: root.value("bar.volumeLabel")
         readonly property int volumeStep: root.value("bar.volumeStep")
         readonly property int volumeMax: root.value("bar.volumeMax")
+    }
+
+    // The tabs are read by name (dashboard.show<Name>) with value().
+    readonly property QtObject dashboard: QtObject {
+        readonly property bool rememberTab: root.value("dashboard.rememberTab")
+        readonly property string weekStart: root.value("dashboard.weekStart")
+        readonly property bool visualiser: root.value("dashboard.visualiser")
+        readonly property int visualiserBars: root.value("dashboard.visualiserBars")
+        readonly property bool showCpu: root.value("dashboard.showCpu")
+        readonly property bool showGpu: root.value("dashboard.showGpu")
+        readonly property bool showMemory: root.value("dashboard.showMemory")
+        readonly property bool showSwap: root.value("dashboard.showSwap")
+        readonly property bool showDisks: root.value("dashboard.showDisks")
+        readonly property bool showNetwork: root.value("dashboard.showNetwork")
+        readonly property string byteUnits: root.value("dashboard.byteUnits")
+        readonly property bool fahrenheit: root.value("dashboard.fahrenheit")
+        readonly property int graphSeconds: root.value("dashboard.graphSeconds")
+        readonly property real sampleInterval: root.value("dashboard.sampleInterval")
     }
 
     // The user's file: { "appearance": { "textScale": 1.2 } }.

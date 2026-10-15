@@ -1,8 +1,9 @@
 import QtQuick
+import "../config"
 import "../theme"
 
-// A month calendar, weeks starting on Monday, with today marked. The arrows move
-// between months.
+// A month calendar, weeks starting on the day the settings choose, with today marked.
+// The arrows move between months.
 Column {
     id: root
 
@@ -11,10 +12,17 @@ Column {
     property int year: root.today.getFullYear()
     property int month: root.today.getMonth()
 
-    // Monday-first offset of the 1st, then 42 cells (six weeks) of dates.
+    // The first day of the week, as Date.getDay() numbers it (0 is Sunday).
+    readonly property int weekStart: ({
+            "sunday": 0,
+            "monday": 1,
+            "saturday": 6
+        })[Settings.dashboard.weekStart]
+
+    // How far into the week the 1st falls, then 42 cells (six weeks) of dates.
     readonly property var cells: {
         const first = new Date(root.year, root.month, 1);
-        const offset = (first.getDay() + 6) % 7;
+        const offset = (first.getDay() - root.weekStart + 7) % 7;
         const out = [];
         for (let i = 0; i < 42; ++i)
             out.push(new Date(root.year, root.month, 1 - offset + i));
@@ -95,7 +103,10 @@ Column {
         width: parent.width
 
         Repeater {
-            model: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+            model: {
+                const days = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+                return days.slice(root.weekStart).concat(days.slice(0, root.weekStart));
+            }
 
             Text {
                 required property string modelData
