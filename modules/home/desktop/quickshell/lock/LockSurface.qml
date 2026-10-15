@@ -3,6 +3,7 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Wayland
 import "../components"
+import "../config"
 import "../services"
 import "../theme"
 
@@ -98,7 +99,8 @@ WlSessionLockSurface {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.formatDateTime(clock.date, "hh:mm")
+            // 12- or 24-hour, as the bar's clock.
+            text: Qt.formatDateTime(clock.date, Settings.clock.twelveHour ? "h:mm AP" : "hh:mm")
             color: Theme.text
             font.family: Theme.fontFamily
             font.pixelSize: 112

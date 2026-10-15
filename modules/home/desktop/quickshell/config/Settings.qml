@@ -25,36 +25,38 @@ Singleton {
     readonly property string nixFile: root.directory + "/defaults.json"
 
     // Every setting by its key ("section.name", stored as nested objects). A number is
-    // kept within min..max and rounded to `step`; anything else must have the
-    // default's type. A value that fails gives the default.
+    // kept within min..max and rounded to `step`. A string must not be empty, and must
+    // be one of `options` where there are some. A list (a default of []) must hold only
+    // strings. Anything else must have the default's type. A value that fails gives the
+    // default.
     readonly property var schema: ({
-            "appearance.fontFamily": {
-                default: "FiraCode Nerd Font"
-            },
-            "appearance.textScale": {
-                default: 1,
-                min: 0.8,
-                max: 1.5,
-                step: 0.05
-            },
-            "appearance.cornerScale": {
-                default: 1,
-                min: 0,
-                max: 1.5,
-                step: 0.05
-            },
-            "appearance.frameThickness": {
-                default: 8,
-                min: 2,
-                max: 24,
-                step: 1
-            },
-            "appearance.animationSpeed": {
-                default: 1,
-                min: 0.5,
-                max: 2,
-                step: 0.1
-            }
+            "appearance.fontFamily": { default: "FiraCode Nerd Font" },
+            "appearance.textScale": { default: 1, min: 0.8, max: 1.5, step: 0.05 },
+            "appearance.cornerScale": { default: 1, min: 0, max: 1.5, step: 0.05 },
+            "appearance.frameThickness": { default: 8, min: 2, max: 24, step: 1 },
+            "appearance.animationSpeed": { default: 1, min: 0.5, max: 2, step: 0.1 },
+
+            "clock.twelveHour": { default: false },
+
+            "bar.edge": { default: "top", options: ["top", "bottom", "left", "right"] },
+            "bar.autoHide": { default: false },
+            // Screens by name (`hyprctl monitors`), so a screen plugged in later has one.
+            "bar.hiddenScreens": { default: [] },
+            "bar.clockSeconds": { default: false },
+            "bar.clockDate": { default: true },
+            "bar.workspaceCount": { default: 10, min: 1, max: 20, step: 1 },
+            "bar.showEmptyWorkspaces": { default: true },
+            "bar.workspacesPerMonitor": { default: false },
+            "bar.scrollWorkspaces": { default: false },
+            "bar.showTray": { default: true },
+            "bar.showBluetooth": { default: true },
+            "bar.showNetwork": { default: true },
+            "bar.showAudio": { default: true },
+            "bar.showBattery": { default: true },
+            "bar.volumeLabel": { default: true },
+            // Percent.
+            "bar.volumeStep": { default: 5, min: 1, max: 20, step: 1 },
+            "bar.volumeMax": { default: 100, min: 100, max: 150, step: 5 }
         })
 
     // The values in force.
@@ -63,6 +65,31 @@ Singleton {
     readonly property real cornerScale: root.value("appearance.cornerScale")
     readonly property int frameThickness: root.value("appearance.frameThickness")
     readonly property real animationSpeed: root.value("appearance.animationSpeed")
+
+    readonly property QtObject clock: QtObject {
+        readonly property bool twelveHour: root.value("clock.twelveHour")
+    }
+
+    readonly property QtObject bar: QtObject {
+        readonly property string edge: root.value("bar.edge")
+        readonly property bool vertical: edge === "left" || edge === "right"
+        readonly property bool autoHide: root.value("bar.autoHide")
+        readonly property var hiddenScreens: root.value("bar.hiddenScreens")
+        readonly property bool clockSeconds: root.value("bar.clockSeconds")
+        readonly property bool clockDate: root.value("bar.clockDate")
+        readonly property int workspaceCount: root.value("bar.workspaceCount")
+        readonly property bool showEmptyWorkspaces: root.value("bar.showEmptyWorkspaces")
+        readonly property bool workspacesPerMonitor: root.value("bar.workspacesPerMonitor")
+        readonly property bool scrollWorkspaces: root.value("bar.scrollWorkspaces")
+        readonly property bool showTray: root.value("bar.showTray")
+        readonly property bool showBluetooth: root.value("bar.showBluetooth")
+        readonly property bool showNetwork: root.value("bar.showNetwork")
+        readonly property bool showAudio: root.value("bar.showAudio")
+        readonly property bool showBattery: root.value("bar.showBattery")
+        readonly property bool volumeLabel: root.value("bar.volumeLabel")
+        readonly property int volumeStep: root.value("bar.volumeStep")
+        readonly property int volumeMax: root.value("bar.volumeMax")
+    }
 
     // The user's file: { "appearance": { "textScale": 1.2 } }.
     property var user: ({})
@@ -88,7 +115,11 @@ Singleton {
     // The value checked against the schema, or undefined if it does not fit.
     function _valid(key, value) {
         const spec = root.schema[key];
-        if (!spec || value === undefined || typeof value !== typeof spec.default)
+        if (!spec || value === undefined || value === null)
+            return undefined;
+        if (Array.isArray(spec.default))
+            return Array.isArray(value) && value.every(item => typeof item === "string") ? value : undefined;
+        if (typeof value !== typeof spec.default)
             return undefined;
         if (typeof value === "number") {
             if (!isFinite(value))
@@ -97,7 +128,7 @@ Singleton {
             // toFixed: 23 steps of 0.05 make 1.1500000000000001.
             return spec.step ? Number((Math.round(clamped / spec.step) * spec.step).toFixed(4)) : clamped;
         }
-        if (typeof value === "string" && value === "")
+        if (typeof value === "string" && (value === "" || (spec.options && !spec.options.includes(value))))
             return undefined;
         return value;
     }

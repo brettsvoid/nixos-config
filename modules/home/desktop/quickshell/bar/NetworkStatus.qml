@@ -19,7 +19,8 @@ StatusIcon {
         return null;
     }
 
-    visible: root.wired.length > 0 || root.wifi.length > 0
+    readonly property bool available: root.wired.length > 0 || root.wifi.length > 0
+
     glyph: {
         if (root.wiredUp)
             return 0xF0200; // md-ethernet

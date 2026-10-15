@@ -8,3 +8,9 @@ AudioPage 1.0 AudioPage.qml
 NetworkPage 1.0 NetworkPage.qml
 IconButton 1.0 IconButton.qml
 BluetoothPage 1.0 BluetoothPage.qml
+OptionsPage 1.0 OptionsPage.qml
+PageHeading 1.0 PageHeading.qml
+SwitchRow 1.0 SwitchRow.qml
+ChoiceRow 1.0 ChoiceRow.qml
+TextRow 1.0 TextRow.qml
+BarPage 1.0 BarPage.qml

@@ -1,48 +1,69 @@
 import QtQuick
+import QtQuick.Layouts
+import "../config"
 import "../theme"
 
-// The bar's content, laid out along the top band of the frame: workspaces on the
-// left, the clock in the middle, the tray and status icons on the right.
+// The bar's content, laid out along the frame's bar band: workspaces at the start, the
+// clock in the middle, the tray and status icons at the end. On a side edge
+// (`vertical`) they run from top to bottom. The settings choose which status icons show.
 Item {
     id: root
 
     required property var screen
+    property bool vertical: false
 
+    // Placed by x and y rather than anchors: anchors swapped by bindings, as the bar
+    // moves between a side and the top, left items where they had been.
     Workspaces {
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.barPadding
-        anchors.verticalCenter: parent.verticalCenter
+        x: root.vertical ? (root.width - width) / 2 : Theme.barPadding
+        y: root.vertical ? Theme.barPadding : (root.height - height) / 2
         screen: root.screen
+        vertical: root.vertical
     }
 
     Clock {
         anchors.centerIn: parent
+        vertical: root.vertical
     }
 
-    Row {
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.barPadding
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spacingLarge
+    // A GridLayout, not a Grid: with more columns than visible items, Grid adds a
+    // spacing's width at the end (Qt 6.11), so the icons would sit off the padding.
+    GridLayout {
+        x: root.vertical ? (root.width - width) / 2 : root.width - width - Theme.barPadding
+        y: root.vertical ? root.height - height - Theme.barPadding : (root.height - height) / 2
+        // One column, or (never more than 99 icons) one row.
+        columns: root.vertical ? 1 : 99
+        rowSpacing: Theme.spacingLarge
+        columnSpacing: Theme.spacingLarge
 
         Tray {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignCenter
+            visible: Settings.bar.showTray && hasItems
+            vertical: root.vertical
         }
 
         BluetoothStatus {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignCenter
+            visible: Settings.bar.showBluetooth && available
+            vertical: root.vertical
         }
 
         NetworkStatus {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignCenter
+            visible: Settings.bar.showNetwork && available
+            vertical: root.vertical
         }
 
         AudioStatus {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignCenter
+            visible: Settings.bar.showAudio && available
+            vertical: root.vertical
         }
 
         BatteryStatus {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignCenter
+            visible: Settings.bar.showBattery && available
+            vertical: root.vertical
         }
     }
 }

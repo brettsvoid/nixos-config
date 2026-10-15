@@ -21,6 +21,11 @@ FloatingWindow {
             component: appearancePage
         },
         {
+            name: "Bar",
+            icon: 0xF1513, // md-dock_top
+            component: barPage
+        },
+        {
             name: "Audio",
             icon: 0xF057E, // md-volume_high
             component: audioPage
@@ -189,6 +194,12 @@ FloatingWindow {
         id: appearancePage
 
         AppearancePage {}
+    }
+
+    Component {
+        id: barPage
+
+        BarPage {}
     }
 
     Component {

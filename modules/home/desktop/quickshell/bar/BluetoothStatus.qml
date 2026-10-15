@@ -9,7 +9,8 @@ StatusIcon {
     readonly property var adapter: Bluetooth.defaultAdapter
     readonly property int connected: root.adapter ? root.adapter.devices.values.filter(d => d.connected).length : 0
 
-    visible: root.adapter !== null
+    readonly property bool available: root.adapter !== null
+
     glyph: {
         if (!root.adapter?.enabled)
             return 0xF00B2; // md-bluetooth_off

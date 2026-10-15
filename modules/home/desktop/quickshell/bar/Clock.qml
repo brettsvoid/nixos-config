@@ -1,29 +1,44 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import "../config"
 import "../theme"
 
+// The time, and the date after a divider. The settings choose 12- or 24-hour time,
+// seconds and the date. On a side bar (`vertical`) each part of the time takes its own
+// line, and the date shortens to the day and its number.
 Item {
     id: root
 
-    implicitWidth: clockLayout.implicitWidth
-    implicitHeight: clockLayout.implicitHeight
+    property bool vertical: false
 
-    // Wakes once a minute, and not at all while the bar is hidden (game mode,
-    // fullscreen), so it asks for no redraws then.
+    readonly property string timeFormat: (Settings.clock.twelveHour ? "h:mm" : "hh:mm") + (Settings.bar.clockSeconds ? ":ss" : "") + (Settings.clock.twelveHour ? " AP" : "")
+    readonly property string time: Qt.formatDateTime(clock.date, root.timeFormat)
+
+    implicitWidth: layout.implicitWidth
+    implicitHeight: layout.implicitHeight
+
+    // Wakes once a minute (or second, with seconds shown), and not at all while the bar
+    // is hidden (game mode, fullscreen), so it asks for no redraws then.
     SystemClock {
         id: clock
-        precision: SystemClock.Minutes
+        precision: Settings.bar.clockSeconds ? SystemClock.Seconds : SystemClock.Minutes
         enabled: root.visible
     }
 
-    RowLayout {
-        id: clockLayout
+    // A GridLayout, not a Grid, which leaves room for a hidden date (see Bar.qml).
+    GridLayout {
+        id: layout
         anchors.centerIn: parent
-        spacing: 8
+        columns: root.vertical ? 1 : 3
+        rowSpacing: Theme.spacingSmall
+        columnSpacing: 8
 
         Text {
-            text: Qt.formatDateTime(clock.date, "hh:mm")
+            Layout.alignment: Qt.AlignCenter
+            text: root.vertical ? root.time.split(/[: ]/).join("\n") : root.time
+            horizontalAlignment: Text.AlignHCenter
+            lineHeight: root.vertical ? 0.9 : 1
             color: Theme.barText
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
@@ -31,14 +46,18 @@ Item {
         }
 
         Rectangle {
-            width: 1
-            height: 16
+            Layout.alignment: Qt.AlignCenter
+            Layout.preferredWidth: root.vertical ? 16 : 1
+            Layout.preferredHeight: root.vertical ? 1 : 16
+            visible: Settings.bar.clockDate
             color: Theme.surfaceBright
-            Layout.alignment: Qt.AlignVCenter
         }
 
         Text {
-            text: Qt.formatDateTime(clock.date, "ddd, MMM d")
+            Layout.alignment: Qt.AlignCenter
+            visible: Settings.bar.clockDate
+            text: Qt.formatDateTime(clock.date, root.vertical ? "ddd\nd" : "ddd, MMM d")
+            horizontalAlignment: Text.AlignHCenter
             color: Theme.subtext
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeSmall

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import "../config"
 import "../services"
 import "../theme"
 
@@ -44,28 +45,37 @@ Scope {
         }
     }
 
+    // The bar's edge keeps the bar's depth free, unless the bar hides itself or this
+    // screen has none: windows then reach the frame, and a raised bar covers them.
+    function reserved(edge) {
+        if (GameMode.on)
+            return 0;
+        const bar = edge === Settings.bar.edge && !Settings.bar.autoHide && !Settings.bar.hiddenScreens.includes(root.modelData.name);
+        return bar ? Theme.barHeight : Theme.frameThickness;
+    }
+
     EdgeReservation {
         screen: root.modelData
         edge: "top"
-        size: GameMode.on ? 0 : Theme.barHeight
+        size: root.reserved("top")
     }
 
     EdgeReservation {
         screen: root.modelData
         edge: "bottom"
-        size: GameMode.on ? 0 : Theme.frameThickness
+        size: root.reserved("bottom")
     }
 
     EdgeReservation {
         screen: root.modelData
         edge: "left"
-        size: GameMode.on ? 0 : Theme.frameThickness
+        size: root.reserved("left")
     }
 
     EdgeReservation {
         screen: root.modelData
         edge: "right"
-        size: GameMode.on ? 0 : Theme.frameThickness
+        size: root.reserved("right")
     }
 
     WallpaperWindow {

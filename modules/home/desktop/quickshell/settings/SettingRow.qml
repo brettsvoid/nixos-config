@@ -3,7 +3,8 @@ import "../config"
 import "../theme"
 
 // One setting: its name on the left, its control (the row's children) in the middle,
-// and a button to put it back to the default while it is set.
+// and a button to put it back to the default while it is set. A row that does not
+// apply (`enabled: false`) is faded and takes no input.
 Item {
     id: root
 
@@ -14,6 +15,7 @@ Item {
 
     width: parent?.width ?? 0
     implicitHeight: 48
+    opacity: root.enabled ? 1 : 0.4
 
     Text {
         id: name
