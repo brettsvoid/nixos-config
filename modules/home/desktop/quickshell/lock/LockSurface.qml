@@ -7,40 +7,44 @@ import "../config"
 import "../services"
 import "../theme"
 
-// One screen of the lock: the wallpaper blurred and dimmed, the time and date, the
-// password field, and media controls while something plays. Every screen shows the same
-// field, and whichever has the keyboard takes the typing. Nothing moves at rest: the
-// content rises in once, and the field shakes only after a wrong password.
+// One screen of the lock: the wallpaper blurred and dimmed (as much as the settings
+// say), the time and date, the password field, and media controls while something
+// plays (unless the settings hide them). Every screen shows the same field, and
+// whichever has the keyboard takes the typing. Nothing moves at rest: the content rises
+// in once, and the field shakes only after a wrong password.
 WlSessionLockSurface {
     id: root
+
+    readonly property bool blurred: Settings.lock.blur > 0
 
     // Opaque from the first frame, before the wallpaper has loaded.
     color: Theme.base
 
-    // Decoded small: it is blurred anyway, and a small image blurs cheaply.
+    // Decoded small when blurred, which blurs cheaply; at the screen's width, and shown
+    // as it is, with no effect pass, when not.
     Image {
         id: wallpaper
         anchors.fill: parent
         source: Wallpaper.path === "" ? "" : "file://" + Wallpaper.path
-        sourceSize.width: 640
+        sourceSize.width: root.blurred ? 640 : root.width
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
-        visible: false
+        visible: !root.blurred
     }
 
     MultiEffect {
         anchors.fill: parent
         source: wallpaper
-        visible: wallpaper.status === Image.Ready
+        visible: root.blurred && wallpaper.status === Image.Ready
         autoPaddingEnabled: false
-        blurEnabled: true
-        blur: 1
+        blurEnabled: root.blurred
+        blur: Settings.lock.blur
         blurMax: 48
     }
 
     Rectangle {
         anchors.fill: parent
-        color: Qt.alpha(Theme.base, 0.5)
+        color: Qt.alpha(Theme.base, Settings.lock.dim)
     }
 
     SystemClock {

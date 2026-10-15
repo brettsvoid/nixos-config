@@ -2,3 +2,4 @@ module lock
 singleton Lock 1.0 Lock.qml
 LockSurface 1.0 LockSurface.qml
 LockMedia 1.0 LockMedia.qml
+Idle 1.0 Idle.qml

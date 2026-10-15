@@ -101,6 +101,9 @@ ShellRoot {
 
     WindowBorders {}
 
+    // Locking and turning the screens off after the settings' idle times.
+    Idle {}
+
     // Only while open, so a closed settings window costs nothing.
     LazyLoader {
         active: Windows.settings

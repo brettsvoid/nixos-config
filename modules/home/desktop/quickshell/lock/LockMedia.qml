@@ -1,11 +1,13 @@
 import QtQuick
 import Quickshell.Services.Mpris
 import "../components"
+import "../config"
 import "../theme"
 
 // The playing track on the lock screen: cover, title and artist, previous / play-pause /
-// next. Shown while something plays; a player paused from here keeps its card, so it can
-// be started again. No position bar, which would have to tick every second.
+// next. Shown while something plays, unless the settings hide it; a player paused from
+// here keeps its card, so it can be started again. No position bar, which would have to
+// tick every second.
 Rectangle {
     id: root
 
@@ -18,7 +20,7 @@ Rectangle {
     }
     Component.onCompleted: root.player = root.playing
 
-    visible: root.player !== null && root.player.playbackState !== MprisPlaybackState.Stopped
+    visible: Settings.lock.media && root.player !== null && root.player.playbackState !== MprisPlaybackState.Stopped
     width: 480
     height: 88
     radius: Theme.cornerExtraLarge

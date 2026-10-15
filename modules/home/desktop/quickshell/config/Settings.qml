@@ -105,6 +105,15 @@ Singleton {
             "osd.position": { default: "bottom", options: ["bottom", "top", "left", "right"] },
             "osd.showInGameMode": { default: true },
 
+            // 0 is a sharp wallpaper, 1 the most blur.
+            "lock.blur": { default: 1, min: 0, max: 1, step: 0.1 },
+            "lock.dim": { default: 0.5, min: 0, max: 0.9, step: 0.05 },
+            "lock.media": { default: true },
+
+            // Minutes without input; 0 is never.
+            "idle.lockMinutes": { default: 0, min: 0, max: 120, step: 1 },
+            "idle.screenOffMinutes": { default: 0, min: 0, max: 120, step: 1 },
+
             // Log out, restart and shut down wait for a second press.
             "session.confirm": { default: false },
             "session.showSleep": { default: false }
@@ -184,6 +193,17 @@ Singleton {
         readonly property real timeout: root.value("osd.timeout")
         readonly property string position: root.value("osd.position")
         readonly property bool showInGameMode: root.value("osd.showInGameMode")
+    }
+
+    readonly property QtObject lock: QtObject {
+        readonly property real blur: root.value("lock.blur")
+        readonly property real dim: root.value("lock.dim")
+        readonly property bool media: root.value("lock.media")
+    }
+
+    readonly property QtObject idle: QtObject {
+        readonly property int lockMinutes: root.value("idle.lockMinutes")
+        readonly property int screenOffMinutes: root.value("idle.screenOffMinutes")
     }
 
     readonly property QtObject session: QtObject {
