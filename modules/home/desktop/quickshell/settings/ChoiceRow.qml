@@ -3,15 +3,20 @@ import "../components"
 import "../config"
 import "../theme"
 
-// A setting with a few named values, as a row of pills; the chosen one is filled.
+// A setting with a few named values, as pills; the chosen one is filled. They wrap onto
+// more lines when they do not fit, and the row grows to hold them.
 SettingRow {
     id: root
 
     // The values in order, each { value, label }.
     property var choices: []
 
-    Row {
+    implicitHeight: Math.max(48, pills.implicitHeight + Theme.spacingMedium * 2)
+
+    Flow {
+        id: pills
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spacingSmall
 

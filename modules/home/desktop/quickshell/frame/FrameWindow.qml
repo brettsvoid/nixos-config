@@ -224,13 +224,20 @@ PanelWindow {
         }
     }
 
-    // Notification pop-ups, from the right end of the bar. They wait while another
-    // drawer is open here: on the portrait screen the launcher would overlap them.
+    // Notification pop-ups, from the corner or edge the settings choose (the top right
+    // unless they say otherwise). They wait while another drawer is open here: on the
+    // portrait screen the launcher would overlap them.
     Drawer {
         id: popupsDrawer
+
+        readonly property var place: Settings.notifications.position.split("-")
+
         anchors.fill: parent
-        edge: "top"
-        align: "end"
+        edge: popupsDrawer.place[0]
+        align: ({
+                "left": "start",
+                "right": "end"
+            })[popupsDrawer.place[1]] ?? "centre"
         inside: root.inside
         open: Notifications.popups.length > 0 && Notifications.screen === root.screenName && !root.drawerOpen
         takesFocus: false
@@ -244,7 +251,7 @@ PanelWindow {
     Drawer {
         id: osdDrawer
         anchors.fill: parent
-        edge: "bottom"
+        edge: Settings.osd.position
         inside: root.inside
         open: Osd.shown && Osd.screen === root.screenName
         takesFocus: false

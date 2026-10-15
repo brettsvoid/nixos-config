@@ -86,6 +86,25 @@ Singleton {
             "launcher.calculatorPrefix": { default: "=" },
             "launcher.actionsPrefix": { default: ">" },
 
+            // Seconds.
+            "notifications.timeout": { default: 5, min: 1, max: 30, step: 1 },
+            "notifications.appTimeout": { default: true },
+            // 0 is no limit.
+            "notifications.maxPopups": { default: 0, min: 0, max: 10, step: 1 },
+            "notifications.position": { default: "top-right", options: ["top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"] },
+            // 0 is no limit, for both.
+            "notifications.historyCount": { default: 0, min: 0, max: 500, step: 10 },
+            "notifications.historyDays": { default: 0, min: 0, max: 90, step: 1 },
+            "notifications.popupBodyLines": { default: 4, min: 1, max: 12, step: 1 },
+
+            // Seconds.
+            "osd.timeout": { default: 1.5, min: 0.5, max: 5, step: 0.5 },
+            "osd.showVolume": { default: true },
+            "osd.showMicrophone": { default: true },
+            "osd.showBrightness": { default: true },
+            "osd.position": { default: "bottom", options: ["bottom", "top", "left", "right"] },
+            "osd.showInGameMode": { default: true },
+
             // Log out, restart and shut down wait for a second press.
             "session.confirm": { default: false },
             "session.showSleep": { default: false }
@@ -148,6 +167,23 @@ Singleton {
         readonly property string clipboardPrefix: root.value("launcher.clipboardPrefix")
         readonly property string calculatorPrefix: root.value("launcher.calculatorPrefix")
         readonly property string actionsPrefix: root.value("launcher.actionsPrefix")
+    }
+
+    readonly property QtObject notifications: QtObject {
+        readonly property int timeout: root.value("notifications.timeout")
+        readonly property bool appTimeout: root.value("notifications.appTimeout")
+        readonly property int maxPopups: root.value("notifications.maxPopups")
+        readonly property string position: root.value("notifications.position")
+        readonly property int historyCount: root.value("notifications.historyCount")
+        readonly property int historyDays: root.value("notifications.historyDays")
+        readonly property int popupBodyLines: root.value("notifications.popupBodyLines")
+    }
+
+    // The kinds are read by name (osd.show<Kind>) with value().
+    readonly property QtObject osd: QtObject {
+        readonly property real timeout: root.value("osd.timeout")
+        readonly property string position: root.value("osd.position")
+        readonly property bool showInGameMode: root.value("osd.showInGameMode")
     }
 
     readonly property QtObject session: QtObject {

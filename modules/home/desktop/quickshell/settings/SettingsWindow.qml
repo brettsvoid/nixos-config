@@ -36,6 +36,11 @@ FloatingWindow {
             component: launcherPage
         },
         {
+            name: "Notifications",
+            icon: 0xF009A, // md-bell
+            component: notificationsPage
+        },
+        {
             name: "Session",
             icon: 0xF0425, // md-power
             component: sessionPage
@@ -227,6 +232,12 @@ FloatingWindow {
         id: launcherPage
 
         LauncherPage {}
+    }
+
+    Component {
+        id: notificationsPage
+
+        NotificationsPage {}
     }
 
     Component {

@@ -4,11 +4,13 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pipewire
+import "../config"
 
 // The on-screen display: what it shows, whether it shows, on which screen, and the
 // levels. Volume and the microphone's mute come from PipeWire, so a change from any
 // source shows it. Brightness comes from the brightness keys (custom-shell:brightness),
-// because the backlight sends no change events.
+// because the backlight sends no change events. The settings choose which kinds show,
+// for how long, and whether it shows in game mode.
 Singleton {
     id: root
 
@@ -31,7 +33,10 @@ Singleton {
     property bool armed: false
 
     function show(kind) {
-        if (!root.armed)
+        if (!root.armed || (GameMode.on && !Settings.osd.showInGameMode))
+            return;
+        // osd.showVolume, osd.showMicrophone and osd.showBrightness.
+        if (!Settings.value("osd.show" + kind[0].toUpperCase() + kind.slice(1)))
             return;
         root.screen = Hyprland.focusedMonitor?.name ?? "";
         root.kind = kind;
@@ -101,7 +106,7 @@ Singleton {
 
     Timer {
         id: hideTimer
-        interval: 1500
+        interval: Settings.osd.timeout * 1000
         onTriggered: root.shown = false
     }
 

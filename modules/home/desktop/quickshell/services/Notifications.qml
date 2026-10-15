@@ -4,14 +4,19 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Notifications
+import "../config"
 
 // The shell's notification server. Every notification goes into the history, which
 // a restart does not empty: dismissing one, Clear all, running one of its actions, or
 // the app withdrawing it (as Caelestia does) takes it out. The history is saved in the
 // shell's state and comes back after a restart, without the actions, as the apps can
-// no longer be reached then, nor withdraw what they sent. A pop-up shows unless do-not-disturb or game mode is on,
-// but critical ones always show. Pop-ups hide after the app's timeout (5 s if it gives
-// none), except critical and resident ones, which wait to be closed.
+// no longer be reached then, nor withdraw what they sent. A pop-up shows unless
+// do-not-disturb or game mode is on, but critical ones always show. Pop-ups hide after
+// the app's timeout, or the settings' when the app gives none or the settings say to
+// ignore it, except critical and resident ones, which wait to be closed.
+//
+// The settings may limit the history by count and by age: the oldest go as if
+// dismissed. They may also limit how many pop-ups show; the oldest of those hide.
 //
 // Only one program can own org.freedesktop.Notifications. If another has it (mako starts
 // on demand when nothing owns it), the server takes over as soon as that one leaves.
@@ -26,8 +31,8 @@ Singleton {
     property string screen: ""
     readonly property bool doNotDisturb: state.doNotDisturb
 
-    // Milliseconds a pop-up stays up when the app does not say; 0 means it stays.
-    readonly property int defaultTimeout: 5000
+    // Milliseconds a pop-up stays up when the app does not say.
+    readonly property int defaultTimeout: Settings.notifications.timeout * 1000
     // Where images that apps send as data are saved (NotificationImages).
     readonly property string imageDirectory: Quickshell.statePath("notification-images")
 
@@ -39,7 +44,23 @@ Singleton {
     function timeoutOf(entry) {
         if (entry.urgency === NotificationUrgency.Critical || entry.resident)
             return 0;
-        return entry.expireTimeout > 0 ? entry.expireTimeout : root.defaultTimeout;
+        return entry.expireTimeout > 0 && Settings.notifications.appTimeout ? entry.expireTimeout : root.defaultTimeout;
+    }
+
+    // Takes out what is past the settings' limits: beyond the newest N, or older than
+    // D days. 0 is no limit.
+    function _trim() {
+        if (!root._loaded)
+            return;
+        const count = Settings.notifications.historyCount;
+        const days = Settings.notifications.historyDays;
+        const since = Date.now() - days * 24 * 60 * 60 * 1000;
+        const old = root.history.filter((e, i) => (count > 0 && i < root.history.length - count) || (days > 0 && e.time < since));
+        if (old.length === 0)
+            return;
+        root._remove(old);
+        for (const entry of old)
+            entry.notification?.dismiss();
     }
 
     function hidePopup(entry) {
@@ -123,6 +144,7 @@ Singleton {
         root.history = restored.concat(root.history);
         root._loaded = true;
         root._relink();
+        root._trim();
         root._save();
     }
 
@@ -133,6 +155,26 @@ Singleton {
 
     // grabToImage cannot make the folder.
     Component.onCompleted: Quickshell.execDetached(["mkdir", "-p", root.imageDirectory])
+
+    // A tighter limit applies at once; ageing is checked hourly.
+    Connections {
+        target: Settings.notifications
+
+        function onHistoryCountChanged() {
+            root._trim();
+        }
+
+        function onHistoryDaysChanged() {
+            root._trim();
+        }
+    }
+
+    Timer {
+        interval: 60 * 60 * 1000
+        running: Settings.notifications.historyDays > 0
+        repeat: true
+        onTriggered: root._trim()
+    }
 
     Component {
         id: entryComponent
@@ -167,11 +209,13 @@ Singleton {
             }
             const entry = root._add(notification);
             root.history = root.history.concat([entry]);
+            root._trim();
             root._save();
             const quiet = root.doNotDisturb || GameMode.on;
             if (!quiet || entry.urgency === NotificationUrgency.Critical) {
                 root.screen = Hyprland.focusedMonitor?.name ?? "";
-                root.popups = [entry].concat(root.popups);
+                const max = Settings.notifications.maxPopups;
+                root.popups = [entry].concat(root.popups).slice(0, max > 0 ? max : undefined);
             }
         }
     }

@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Services.Notifications
+import "../config"
 import "../services"
 import "../theme"
 
@@ -135,7 +136,7 @@ Rectangle {
                 width: parent.width
                 visible: text !== ""
                 wrapMode: Text.Wrap
-                maximumLineCount: root.popup ? 4 : 8
+                maximumLineCount: root.popup ? Settings.notifications.popupBodyLines : 8
                 elide: Text.ElideRight
                 textFormat: Text.StyledText
                 text: root.entry.body

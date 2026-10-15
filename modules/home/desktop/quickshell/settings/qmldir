@@ -16,4 +16,5 @@ TextRow 1.0 TextRow.qml
 BarPage 1.0 BarPage.qml
 DashboardPage 1.0 DashboardPage.qml
 LauncherPage 1.0 LauncherPage.qml
+NotificationsPage 1.0 NotificationsPage.qml
 SessionPage 1.0 SessionPage.qml
