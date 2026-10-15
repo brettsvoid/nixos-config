@@ -89,3 +89,53 @@ all of them.
   41. The wallpaper folder (`~/Pictures/Wallpapers`, written into four files).
   42. Crop or fit (crop).
   43. Change the wallpaper every N minutes (never).
+
+**2026-10-15:** All 43 are built, on worktree branch `worktree-shell-options`. Each
+setting's default is today's behaviour, so nothing changes until you choose otherwise.
+Every key can also be set from Nix (`local.customShell.settings`, issue 30); the keys
+are in `quickshell/config/Settings.qml`'s `schema`.
+
+- **Where they are in the settings window:**
+  - **Appearance:** the wallpaper's folder, fill and timed change.
+  - **Bar** (new): 1 to 13.
+  - **Dashboard** (new): 14 to 21.
+  - **Launcher** (new): 22 to 25.
+  - **Notifications** (new): 27 to 36.
+  - **Session** (new): the lock screen, idle, and the session menu (26, 37 to 40).
+- **Commits:** `2f709d3` qs-test, `f8dd78b` bar, `93817f8` dashboard, `1b5e7e3`
+  launcher and session menu, `b5b3bbe` notifications and OSD, `bbca1d5` lock and idle,
+  `d576e27` wallpaper. Each commit message lists what was checked in qs-test.
+- **Choices made while building:**
+  - The launcher, cheatsheet and dashboard hang from the bar, so they move with it.
+    The session menu and notification history stay on the right.
+  - Auto-hide keeps the bar up while a drawer is open on that screen, so the drawer
+    does not move under the pointer.
+  - The volume maximum is for scrolling over the bar's icon. The volume keys
+    (`wpctl` in `hyprland.nix`) have no maximum, as before.
+  - Confirm covers log out, restart and shut down, not lock or sleep.
+  - Idle locking and screens off pause in game mode, as a game played with a
+    controller sends no Wayland input.
+  - The timed wallpaper change pauses in game mode too, as the new theme costs a
+    matugen run and recoloured apps.
+- **Fixed on the way:** pop-ups' timeouts started again whenever another pop-up came
+  or went (each card was made again). They now keep their own time.
+
+To check on the desktop, which qs-test cannot show (it draws no shaders, has no tray
+apps, PipeWire or real screens):
+
+1. Bar → Edge: try Bottom, Left and Right. The frame should join the bar with curved
+   corners on each edge, and the launcher (Super+R) should come out of the bar. Right
+   click a tray icon on a bottom or side bar; its menu should open beside the icon,
+   on screen.
+2. Bar → Auto-hide on: the windows should move up to the frame. Point at the top edge:
+   the bar should slide over the windows, and go shortly after you leave it.
+3. Bar → Screens: turn one screen off. That screen's top edge should become as thin
+   as the others.
+4. Bar → Workspaces → Per screen on: each bar should show only its own screen's
+   workspaces.
+5. Session → Lock screen: lock (Super+L) with Blur at 30 % and at 100 %, and say which
+   you prefer.
+6. Session → When idle: set Screens off to 1 minute and leave the desktop alone for a
+   minute. The screens should go off, then come on when you move the mouse. Set it
+   back to Never afterwards if you don't want it.
+7. Restart the shell (`toggle-shell restart`). Your settings should still be there.
