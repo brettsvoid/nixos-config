@@ -76,7 +76,19 @@ Singleton {
             "dashboard.fahrenheit": { default: false },
             // Seconds.
             "dashboard.graphSeconds": { default: 60, min: 30, max: 600, step: 30 },
-            "dashboard.sampleInterval": { default: 1, min: 0.5, max: 10, step: 0.5 }
+            "dashboard.sampleInterval": { default: 1, min: 0.5, max: 10, step: 0.5 },
+
+            "launcher.rows": { default: 8, min: 4, max: 16, step: 1 },
+            "launcher.rankByUse": { default: true },
+            // A command, split at spaces; the app's command follows it.
+            "launcher.terminal": { default: "kitty" },
+            "launcher.clipboardPrefix": { default: "cc" },
+            "launcher.calculatorPrefix": { default: "=" },
+            "launcher.actionsPrefix": { default: ">" },
+
+            // Log out, restart and shut down wait for a second press.
+            "session.confirm": { default: false },
+            "session.showSleep": { default: false }
         })
 
     // The values in force.
@@ -127,6 +139,20 @@ Singleton {
         readonly property bool fahrenheit: root.value("dashboard.fahrenheit")
         readonly property int graphSeconds: root.value("dashboard.graphSeconds")
         readonly property real sampleInterval: root.value("dashboard.sampleInterval")
+    }
+
+    readonly property QtObject launcher: QtObject {
+        readonly property int rows: root.value("launcher.rows")
+        readonly property bool rankByUse: root.value("launcher.rankByUse")
+        readonly property string terminal: root.value("launcher.terminal")
+        readonly property string clipboardPrefix: root.value("launcher.clipboardPrefix")
+        readonly property string calculatorPrefix: root.value("launcher.calculatorPrefix")
+        readonly property string actionsPrefix: root.value("launcher.actionsPrefix")
+    }
+
+    readonly property QtObject session: QtObject {
+        readonly property bool confirm: root.value("session.confirm")
+        readonly property bool showSleep: root.value("session.showSleep")
     }
 
     // The user's file: { "appearance": { "textScale": 1.2 } }.

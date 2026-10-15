@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import "../components"
+import "../config"
 import "../services"
 import "../theme"
 import "../components/navigation.js" as Navigation
@@ -11,8 +12,9 @@ import "../components/navigation.js" as Navigation
 // mode without one. A mode provides `prefix`, `placeholder`, `results(query)` and
 // `activate(item)`, and optionally `refresh()`, called when the mode is entered; it is
 // added to `modes`. A result with `hint: true` only informs, and Enter on it does
-// nothing. Up and Down, or Ctrl+P and Ctrl+N, move through the results, and Ctrl+D and
-// Ctrl+U half a page.
+// nothing; one with `confirm: true` asks for a second Enter or click. Up and Down, or
+// Ctrl+P and Ctrl+N, move through the results, and Ctrl+D and Ctrl+U half a page. The
+// settings choose how many rows show.
 FocusScope {
     id: root
 
@@ -20,8 +22,10 @@ FocusScope {
     readonly property var mode: root.modes.find(m => m.prefix !== "" && field.text.startsWith(m.prefix)) ?? appsMode
     readonly property string query: field.text.slice(root.mode.prefix.length).trim()
     readonly property var results: root.mode.results(root.query)
-    readonly property int rows: 8
+    readonly property int rows: Settings.launcher.rows
     readonly property int rowHeight: 48
+    // The title of the result waiting for its second press, or "".
+    property string pending: ""
 
     implicitWidth: 560
     implicitHeight: search.height + Theme.spacingSmall + root.rows * root.rowHeight
@@ -32,6 +36,11 @@ FocusScope {
         const item = root.results[index];
         if (!item || item.hint)
             return;
+        if (item.confirm && root.pending !== item.title) {
+            root.pending = item.title;
+            return;
+        }
+        root.pending = "";
         Drawers.close();
         root.mode.activate(item);
     }
@@ -90,7 +99,10 @@ FocusScope {
             font.pixelSize: Theme.typeBodyLarge
             clip: true
 
-            onTextChanged: list.currentIndex = 0
+            onTextChanged: {
+                list.currentIndex = 0;
+                root.pending = "";
+            }
 
             Keys.onPressed: event => {
                 const step = Navigation.step(event);
@@ -131,6 +143,8 @@ FocusScope {
         model: root.results
         boundsBehavior: Flickable.StopAtBounds
         highlightMoveDuration: 0
+        // Moving on gives up a press waiting for its second.
+        onCurrentIndexChanged: root.pending = ""
 
         delegate: Rectangle {
             id: row
@@ -174,7 +188,7 @@ FocusScope {
                     width: parent.width
                     visible: text !== ""
                     elide: Text.ElideRight
-                    text: row.modelData.subtitle ?? ""
+                    text: row.modelData.title === root.pending ? "Press Enter or click again to confirm" : row.modelData.subtitle ?? ""
                     color: row.current ? Theme.onPrimary : Theme.subtext
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeBodySmall

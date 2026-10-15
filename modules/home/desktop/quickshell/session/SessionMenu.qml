@@ -1,14 +1,16 @@
 import QtQuick
 import Quickshell
+import "../config"
 import "../lock"
 import "../services"
 import "../theme"
 import "../components/navigation.js" as Navigation
 
-// The session drawer's content: lock, log out, restart and shut down, then the shell's
-// settings. Up and Down, or Ctrl+P and Ctrl+N, move between them; Enter or a click runs
-// one. Lock is the shell's own lock screen; log out, restart and shut down go through
-// session-exit, which saves the open apps for the next login.
+// The session drawer's content: lock, sleep (if the settings show it), log out, restart
+// and shut down, then the shell's settings. Up and Down, or Ctrl+P and Ctrl+N, move
+// between them; Enter or a click runs one. Lock is the shell's own lock screen; log
+// out, restart and shut down go through session-exit, which saves the open apps for the
+// next login, and with the settings' confirm on they wait for a second press.
 FocusScope {
     id: root
 
@@ -19,33 +21,51 @@ FocusScope {
             run: () => Lock.lock()
         },
         {
+            icon: 0xF0904, // md-power_sleep
+            label: "Sleep",
+            // Locks first: hypridle locks on logind's request.
+            command: ["systemctl", "suspend"],
+            hidden: !Settings.session.showSleep
+        },
+        {
             icon: 0xF0343, // md-logout
             label: "Log out",
-            command: ["session-exit", "logout"]
+            command: ["session-exit", "logout"],
+            dangerous: true
         },
         {
             icon: 0xF0709, // md-restart
             label: "Restart",
-            command: ["session-exit", "reboot"]
+            command: ["session-exit", "reboot"],
+            dangerous: true
         },
         {
             icon: 0xF0425, // md-power
             label: "Shut down",
-            command: ["session-exit", "poweroff"]
+            command: ["session-exit", "poweroff"],
+            dangerous: true
         },
         {
             icon: 0xF0493, // md-cog
             label: "Settings",
             run: () => Windows.showSettings()
         }
-    ]
+    ].filter(action => !action.hidden)
     property int current: 0
+    // The entry waiting for its second press, or -1. Moving to another gives it up.
+    property int pending: -1
 
     implicitWidth: column.implicitWidth
     implicitHeight: column.implicitHeight
 
+    onCurrentChanged: root.pending = -1
+
     function run(index) {
         const action = root.actions[index];
+        if (action.dangerous && Settings.session.confirm && root.pending !== index) {
+            root.pending = index;
+            return;
+        }
         if (action.run)
             action.run();
         else
@@ -104,7 +124,7 @@ FocusScope {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: button.modelData.label
+                        text: button.index === root.pending ? "Press again" : button.modelData.label
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeBodyLarge
                         color: button.current ? Theme.onPrimary : Theme.text

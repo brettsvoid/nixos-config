@@ -1,17 +1,19 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../config"
 import "fuzzy.js" as Fuzzy
 
-// The launcher's clipboard mode: type "cc" first (as in ambxst). It lists the history
-// cliphist keeps, newest first, filtered by the rest of the query. Choosing an entry
-// puts it back on the clipboard; the last row clears the history. Recording happens
+// The launcher's clipboard mode: type its prefix first ("cc" unless the settings say
+// otherwise, as in ambxst). It lists the history cliphist keeps, newest first,
+// filtered by the rest of the query. Choosing an entry puts it back on the clipboard;
+// the last row clears the history. Recording happens
 // outside the shell (`wl-paste --watch cliphist store`, custom-shell.nix), so copies
 // are kept under any shell; this only reads the list, once each time the mode opens.
 QtObject {
     id: root
 
-    readonly property string prefix: "cc"
+    readonly property string prefix: Settings.launcher.clipboardPrefix
     readonly property string placeholder: "Search clipboard history"
     // { id, text, image } per entry, newest first.
     property var entries: []

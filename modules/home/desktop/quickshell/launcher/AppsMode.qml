@@ -1,17 +1,19 @@
 import QtQuick
 import Quickshell
+import "../config"
 import "../services"
 import "fuzzy.js" as Fuzzy
 
 // The launcher's default mode: installed apps (desktop entries), best match first, with
-// frequently started apps ranked above rarely started ones of the same match quality.
+// frequently started apps ranked above rarely started ones of the same match quality
+// (unless the settings turn that off).
 QtObject {
     id: root
 
     readonly property string prefix: ""
-    readonly property string placeholder: "Search apps, or = to calculate, > for actions, cc for the clipboard"
-    // Apps marked Terminal=true run in this.
-    readonly property var terminal: ["kitty"]
+    readonly property string placeholder: `Search apps, or ${Settings.launcher.calculatorPrefix} to calculate, ${Settings.launcher.actionsPrefix} for actions, ${Settings.launcher.clipboardPrefix} for the clipboard`
+    // Apps marked Terminal=true run in this (the settings' command, split at spaces).
+    readonly property var terminal: Settings.launcher.terminal.trim().split(/\s+/)
 
     function results(query) {
         const apps = DesktopEntries.applications.values.filter(a => !a.noDisplay);
@@ -25,7 +27,7 @@ QtObject {
             }
             scored.push({
                 app: app,
-                rank: match + 4 * Math.log2(1 + AppUsage.count(app.id))
+                rank: match + (Settings.launcher.rankByUse ? 4 * Math.log2(1 + AppUsage.count(app.id)) : 0)
             });
         }
         scored.sort((a, b) => b.rank - a.rank || a.app.name.localeCompare(b.app.name));

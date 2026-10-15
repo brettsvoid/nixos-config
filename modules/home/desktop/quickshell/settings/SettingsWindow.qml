@@ -31,6 +31,16 @@ FloatingWindow {
             component: dashboardPage
         },
         {
+            name: "Launcher",
+            icon: 0xF003B, // md-apps
+            component: launcherPage
+        },
+        {
+            name: "Session",
+            icon: 0xF0425, // md-power
+            component: sessionPage
+        },
+        {
             name: "Audio",
             icon: 0xF057E, // md-volume_high
             component: audioPage
@@ -211,6 +221,18 @@ FloatingWindow {
         id: dashboardPage
 
         DashboardPage {}
+    }
+
+    Component {
+        id: launcherPage
+
+        LauncherPage {}
+    }
+
+    Component {
+        id: sessionPage
+
+        SessionPage {}
     }
 
     Component {

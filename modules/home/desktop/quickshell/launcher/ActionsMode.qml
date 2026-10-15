@@ -1,17 +1,20 @@
 import QtQuick
 import Quickshell
+import "../config"
 import "../lock"
 import "../services"
 import "fuzzy.js" as Fuzzy
 
-// The launcher's actions mode: type ">" first (as in Caelestia). It lists what the
-// shell can do, best match first: the session (as the session menu does it), the
-// shell's windows and drawers, the look, and the toggles, each named for what it will
-// do. The launcher closes before an action runs, so one that opens a drawer keeps it.
+// The launcher's actions mode: type its prefix first (">" unless the settings say
+// otherwise, as in Caelestia). It lists what the shell can do, best match first: the
+// session (as the session menu does it), the shell's windows and drawers, the look,
+// and the toggles, each named for what it will do. The launcher closes before an action
+// runs, so one that opens a drawer keeps it. With the settings' confirm on, log out,
+// restart and shut down wait for a second Enter or click (Launcher.qml).
 QtObject {
     id: root
 
-    readonly property string prefix: ">"
+    readonly property string prefix: Settings.launcher.actionsPrefix
     readonly property string placeholder: "Run an action"
 
     readonly property var actions: {
@@ -25,6 +28,7 @@ QtObject {
                 title: "Log out",
                 subtitle: "Open apps come back at the next login",
                 icon: "system-log-out",
+                dangerous: true,
                 command: ["session-exit", "logout"]
             },
             {
@@ -32,6 +36,7 @@ QtObject {
                 subtitle: "Open apps come back at the next login",
                 icon: "system-reboot",
                 keywords: ["reboot"],
+                dangerous: true,
                 command: ["session-exit", "reboot"]
             },
             {
@@ -39,6 +44,7 @@ QtObject {
                 subtitle: "Open apps come back at the next login",
                 icon: "system-shutdown",
                 keywords: ["power off"],
+                dangerous: true,
                 command: ["session-exit", "poweroff"]
             },
             {
@@ -152,6 +158,7 @@ QtObject {
                     title: s.action.title,
                     subtitle: s.action.subtitle ?? "",
                     icon: s.action.icon,
+                    confirm: Settings.session.confirm && (s.action.dangerous ?? false),
                     action: s.action
                 }));
     }

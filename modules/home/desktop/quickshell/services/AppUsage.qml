@@ -20,6 +20,11 @@ Singleton {
         usage.counts = next;
     }
 
+    // Forgets every count (the settings' Launcher page).
+    function reset() {
+        usage.counts = {};
+    }
+
     FileView {
         path: Quickshell.statePath("app-usage.json")
         // A missing file is the first run: the counts start empty.

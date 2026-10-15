@@ -15,3 +15,5 @@ ChoiceRow 1.0 ChoiceRow.qml
 TextRow 1.0 TextRow.qml
 BarPage 1.0 BarPage.qml
 DashboardPage 1.0 DashboardPage.qml
+LauncherPage 1.0 LauncherPage.qml
+SessionPage 1.0 SessionPage.qml

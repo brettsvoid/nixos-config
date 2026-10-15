@@ -1,16 +1,18 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../config"
 
-// The launcher's calculator mode: type "=" first. qalc (libqalculate, as Caelestia
-// uses) works out the rest of the query, so units, currencies and bases work too:
+// The launcher's calculator mode: type its prefix first ("=" unless the settings say
+// otherwise). qalc (libqalculate, as Caelestia uses) works out the rest of the query,
+// so units, currencies and bases work too:
 // "= 5 km to mi", "= 0x1f to dec". It runs once typing pauses (a run takes about
 // 50 ms), and only in this mode: the launcher gives it the query only while it is the
 // mode. Choosing the result copies it.
 QtObject {
     id: root
 
-    readonly property string prefix: "="
+    readonly property string prefix: Settings.launcher.calculatorPrefix
     readonly property string placeholder: "Calculate"
     // The query, from the launcher while this is the mode, else "".
     property string query: ""
