@@ -16,11 +16,14 @@ Runs the custom shell apart from the desktop and reports what it logged.
               shell's environment, so `qs ipc -p "$QS_CONFIG" call ...` reaches it.
 
 The shell runs in a headless sway (software rendering), so its panel windows are
-created as on the desktop, on its own session bus, with its own state, cache, data
-and runtime folders under $QS_TEST. Commands that would change the desktop (hyprctl,
+created as on the desktop, on its own session bus, with its own config, state, cache,
+data and runtime folders under $QS_TEST. Its settings start at their defaults, in
+$QS_TEST/xdg-config/custom-shell/settings.json; a command can write that file and the
+shell applies it. Commands that would change the desktop (hyprctl,
 generate-theme, game-mode, session-exit, systemctl, loginctl, wl-copy, window-effect,
 toggle-shell) are stubs that log each call to $QS_TEST/calls. A fake Hyprland answers
-queries with empty JSON and sends each line appended to $QS_TEST/events as an event,
+queries with empty JSON, logs each request (dispatches included) to
+$QS_TEST/hyprland.log, and sends each line appended to $QS_TEST/events as an event,
 for example: echo 'configreloaded>>' >>"$QS_TEST/events". The folder is kept.
 EOF
 }
@@ -46,8 +49,12 @@ fi
 QS_TEST=$(mktemp -d "${TMPDIR:-/tmp}/qs-test.XXXXXX")
 QS_CONFIG=$QS_TEST/config
 export QS_TEST QS_CONFIG
-mkdir -p "$QS_TEST/bin" "$QS_TEST/state/custom-shell" "$QS_TEST/cache" "$QS_TEST/data" "$QS_TEST/run"
+mkdir -p "$QS_TEST/bin" "$QS_TEST/state/custom-shell" "$QS_TEST/cache" "$QS_TEST/data" "$QS_TEST/run" \
+  "$QS_TEST/xdg-config/custom-shell"
 chmod 700 "$QS_TEST/run"
+# The user's fontconfig, so the shell finds the same fonts; nothing else of theirs.
+user_config=${XDG_CONFIG_HOME:-$HOME/.config}
+[ -d "$user_config/fontconfig" ] && ln -s "$user_config/fontconfig" "$QS_TEST/xdg-config/fontconfig"
 : >"$QS_TEST/calls"
 : >"$QS_TEST/events"
 
@@ -70,7 +77,7 @@ EOF
 done
 
 export PATH="$QS_TEST/bin:$PATH"
-export XDG_RUNTIME_DIR=$QS_TEST/run XDG_STATE_HOME=$QS_TEST/state
+export XDG_RUNTIME_DIR=$QS_TEST/run XDG_STATE_HOME=$QS_TEST/state XDG_CONFIG_HOME=$QS_TEST/xdg-config
 export XDG_CACHE_HOME=$QS_TEST/cache XDG_DATA_HOME=$QS_TEST/data
 export HYPRLAND_INSTANCE_SIGNATURE=qs-test
 unset DISPLAY WAYLAND_DISPLAY

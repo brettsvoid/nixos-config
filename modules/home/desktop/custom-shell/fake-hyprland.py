@@ -3,8 +3,9 @@
 fake-hyprland.py <socket folder> <events file>
 
 Answers every request on .socket.sock with empty JSON ({} for j/status, [] for the
-rest), and passes each line appended to the events file (for example
-`configreloaded>>`) to every client of .socket2.sock.
+rest) and prints it (qs-test keeps the output in hyprland.log), and passes each line
+appended to the events file (for example `configreloaded>>`) to every client of
+.socket2.sock.
 """
 
 import os
@@ -31,6 +32,7 @@ def answer_requests():
     while True:
         conn, _ = server.accept()
         request = conn.recv(65536).decode(errors="replace")
+        print(request, flush=True)
         conn.sendall(b"{}" if request.endswith("status") else b"[]")
         conn.close()
 
