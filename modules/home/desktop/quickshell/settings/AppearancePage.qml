@@ -4,8 +4,8 @@ import "../dashboard"
 import "../theme"
 
 // The shell's look: font, text size, corners, the frame and the speed of motion, then
-// the wallpaper and its colours (the dashboard's Wallpaper tab, so both show the same
-// state).
+// the wallpaper's folder, fill and timed change, and the wallpaper and its colours (the
+// dashboard's Wallpaper tab, so both show the same state).
 FocusScope {
     id: root
 
@@ -90,6 +90,34 @@ FocusScope {
         Heading {
             text: "Wallpaper and colours"
             topPadding: Theme.spacingLarge
+        }
+
+        // ~ is the home folder.
+        TextRow {
+            label: "Folder"
+            key: "wallpaper.folder"
+            fieldWidth: 360
+        }
+
+        ChoiceRow {
+            label: "Fill"
+            key: "wallpaper.fill"
+            choices: [
+                {
+                    value: "crop",
+                    label: "Fill, cropped"
+                },
+                {
+                    value: "fit",
+                    label: "Fit, whole"
+                }
+            ]
+        }
+
+        SliderRow {
+            label: "Change every"
+            key: "wallpaper.changeMinutes"
+            format: value => value === 0 ? "Never" : value < 60 ? value + " min" : (value / 60).toFixed(value % 60 === 0 ? 0 : 1) + " h"
         }
     }
 

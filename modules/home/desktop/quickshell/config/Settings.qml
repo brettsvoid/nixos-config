@@ -114,6 +114,12 @@ Singleton {
             "idle.lockMinutes": { default: 0, min: 0, max: 120, step: 1 },
             "idle.screenOffMinutes": { default: 0, min: 0, max: 120, step: 1 },
 
+            // ~ is the home folder. generate-theme reads this too, with jq.
+            "wallpaper.folder": { default: "~/Pictures/Wallpapers" },
+            "wallpaper.fill": { default: "crop", options: ["crop", "fit"] },
+            // 0 is never.
+            "wallpaper.changeMinutes": { default: 0, min: 0, max: 240, step: 5 },
+
             // Log out, restart and shut down wait for a second press.
             "session.confirm": { default: false },
             "session.showSleep": { default: false }
@@ -204,6 +210,12 @@ Singleton {
     readonly property QtObject idle: QtObject {
         readonly property int lockMinutes: root.value("idle.lockMinutes")
         readonly property int screenOffMinutes: root.value("idle.screenOffMinutes")
+    }
+
+    readonly property QtObject wallpaper: QtObject {
+        readonly property string folder: root.value("wallpaper.folder")
+        readonly property string fill: root.value("wallpaper.fill")
+        readonly property int changeMinutes: root.value("wallpaper.changeMinutes")
     }
 
     readonly property QtObject session: QtObject {

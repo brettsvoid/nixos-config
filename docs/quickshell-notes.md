@@ -17,6 +17,21 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   the 108-byte socket path limit, so keep test runtime folders short (`/tmp/...`).
 - Quickshell reloads when a file's content changes, not on `touch`. Just after a
   reload, `qs ipc` answers "Not ready to accept queries yet".
+- `qs-test` renders in software (`QT_QUICK_BACKEND=software`), which draws no
+  `ShaderEffect` or `MultiEffect`: the frame, the lock screen's blur and the effect
+  previews do not show in its screenshots. Check those on the desktop.
+- The fake Hyprland has no focused monitor, so drawers, pop-ups and the OSD get no
+  screen: a test has to set `Drawers.screen`, `Notifications.screen` or `Osd.screen`
+  to `HEADLESS-1`. A drawer opened again before it has finished closing keeps its
+  content, so `Component.onCompleted` does not run again; wait about a second.
+- `qs ipc call` reads an argument that starts with `[` as its own list syntax and drops
+  the brackets. Start a JSON list with a space.
+- `wlrctl pointer` makes a new pointer for each call and removes it at once, so a
+  hover never lasts. Hover needs a virtual pointer that stays connected
+  (wlr-virtual-pointer, for example from pywayland).
+- `wtype` loses the first key of each call while the keymap changes; `wtype -s 300`
+  waits first.
+- `GameMode.on` needs the state file to say `on`; an empty file is off.
 
 ## QML and Quickshell gotchas
 
@@ -36,6 +51,20 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
 - Home-manager's files are symlinks: `find` needs `-L` to see them.
 - qalc needs `-t -s 'unicode off'` for plain output (otherwise its minus sign is
   Unicode). It writes its config under `$HOME`.
+- A `Repeater` or `ListView` whose model is a JS array makes every delegate again on
+  each change, so timers in them start again and animations are cut short. Use a
+  `ScriptModel` (`notifications/Popups.qml`), or bind the model to a string key that
+  changes only when the items do (`bar/Workspaces.qml`).
+- Qt 6.11's `Grid` adds a spacing's width at the end when it has more columns than
+  visible items. Use a `GridLayout`, which leaves hidden items out, or exactly as many
+  columns as items (`bar/Tray.qml`).
+- Anchors switched by bindings (`anchors.left: vertical ? undefined : parent.left`)
+  can leave an item where it was. Place it with `x` and `y` instead (`bar/Bar.qml`).
+- An `on<Property>Changed` handler also runs while the object is made, before
+  `Component.onCompleted`. Guard writes that must wait (`dashboard/Dashboard.qml`).
+- An `IdleMonitor` whose `timeout` changes after it is made never reports idle again.
+  Make a new one for each value with an `Instantiator` (`lock/Idle.qml`). The same
+  pattern restarts a `Process` with new arguments (`dashboard/PerformanceTab.qml`).
 
 ## Hyprland and GTK
 
@@ -47,6 +76,9 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   Changing the theme name doesn't make them read it again. libadwaita 1.9 still takes
   its colours from the `@define-color` names there. Light/dark (dconf's
   `color-scheme`) applies to open apps at once.
+- Hyprland's `dpms off` is not undone by input (`misc:mouse_move_enables_dpms` and
+  `misc:key_press_enables_dpms` are off by default, and this config leaves them off).
+  Whatever turned the screens off has to turn them on (`lock/Idle.qml`).
 
 ## Upstream source
 

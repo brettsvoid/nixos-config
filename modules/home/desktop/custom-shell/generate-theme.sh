@@ -1,6 +1,8 @@
 # generate-theme [image] [--scheme X] [--mode light|dark | --light | --dark]: sets the
 # wallpaper and generates the shell's theme from it with matugen. Anything not given
-# comes from the saved choice; with no saved image, the first in ~/Pictures/Wallpapers.
+# comes from the saved choice; with no saved image, the first in the shell's wallpaper
+# folder (its settings' wallpaper.folder, ~/Pictures/Wallpapers unless they say
+# otherwise).
 # The choice is kept in ~/.local/state/custom-shell/wallpaper.json, which the shell
 # watches to show the image; the colours go to ~/.cache/qs-theme/colors.json. Paths are
 # kept as given, so a ~/Pictures/Wallpapers link stays valid across rebuilds where the
@@ -11,7 +13,16 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/custom-shell"
 STATE="$STATE_DIR/wallpaper.json"
 # Where the choice lived before, as a store path that a rebuild leaves stale.
 OLD_STATE="$HOME/.cache/qs-theme/wallpaper.json"
-WALLPAPERS="$HOME/Pictures/Wallpapers"
+# The user's choice in settings.json, else the Nix config's in defaults.json
+# (quickshell/config/Settings.qml), else the default; ~ is the home folder.
+SETTINGS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/custom-shell"
+WALLPAPERS=""
+for f in "$SETTINGS_DIR/settings.json" "$SETTINGS_DIR/defaults.json"; do
+  [ -n "$WALLPAPERS" ] && break
+  WALLPAPERS=$(jq -r '.wallpaper.folder // empty | strings' "$f" 2>/dev/null)
+done
+WALLPAPERS="${WALLPAPERS:-$HOME/Pictures/Wallpapers}"
+WALLPAPERS="${WALLPAPERS/#\~/$HOME}"
 mkdir -p "$STATE_DIR" "$HOME/.cache/qs-theme"
 
 WALLPAPER=""

@@ -2,11 +2,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../config"
 
 // The wallpaper's path, from the state `generate-theme` keeps (custom-shell.nix):
 // ~/.local/state/custom-shell/wallpaper.json, watched, so a change from the command or
 // the picker shows at once. `set()` changes it the same way: the command saves the
-// choice and regenerates the theme, which the Theme singleton watches in turn.
+// choice and regenerates the theme, which the Theme singleton watches in turn. The
+// settings choose the folder images come from, and may change the wallpaper to a
+// random one every N minutes (not in game mode, where the new theme would cost).
 Singleton {
     id: root
 
@@ -16,6 +19,8 @@ Singleton {
     readonly property string scheme: state.scheme
     readonly property string mode: state.mode
     readonly property var schemes: ["scheme-neutral", "scheme-tonal-spot", "scheme-content", "scheme-fidelity", "scheme-expressive", "scheme-fruit-salad", "scheme-monochrome", "scheme-rainbow"]
+    // The settings' folder, with ~ for the home folder, and no slash at the end.
+    readonly property string folder: Settings.wallpaper.folder.replace(/^~(?=\/|$)/, Quickshell.env("HOME")).replace(/(.)\/+$/, "$1")
 
     function set(path) {
         Quickshell.execDetached(["generate-theme", path]);
@@ -27,6 +32,19 @@ Singleton {
 
     function setMode(mode) {
         Quickshell.execDetached(["generate-theme", "--mode", mode]);
+    }
+
+    // An image from the folder other than the one showing. They are links into the
+    // store (home-manager), hence -L.
+    function random() {
+        Quickshell.execDetached(["sh", "-c", "f=$(find -L \"$2\" -maxdepth 1 -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \\) ! -path \"$1\" | shuf -n 1); [ -n \"$f\" ] && exec generate-theme \"$f\"", "sh", root.path, root.folder]);
+    }
+
+    Timer {
+        interval: Settings.wallpaper.changeMinutes * 60 * 1000
+        running: Settings.wallpaper.changeMinutes > 0 && !GameMode.on
+        repeat: true
+        onTriggered: root.random()
     }
 
     FileView {

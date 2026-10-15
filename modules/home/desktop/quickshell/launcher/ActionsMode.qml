@@ -99,9 +99,8 @@ QtObject {
             {
                 title: "Random wallpaper",
                 icon: "media-playlist-shuffle",
-                // The picker's images (dashboard/WallpaperTab.qml), not the one showing. They
-                // are links into the store (home-manager), hence -L.
-                command: ["sh", "-c", "f=$(find -L \"$HOME/Pictures/Wallpapers\" -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' -o -name '*.webp' \\) ! -path \"$1\" | shuf -n 1); [ -n \"$f\" ] && exec generate-theme \"$f\"", "sh", Wallpaper.path]
+                // One of the picker's images, not the one showing.
+                run: () => Wallpaper.random()
             },
             {
                 title: "Light mode",

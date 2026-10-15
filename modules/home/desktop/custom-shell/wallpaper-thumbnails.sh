@@ -1,5 +1,5 @@
 # wallpaper-thumbnails [folder]: thumbnails for the wallpaper picker, made once per
-# image. ~/Pictures/Wallpapers/<name> becomes
+# image. The picker gives the settings' wallpaper folder. <folder>/<name> becomes
 # ~/.cache/custom-shell/wallpaper-thumbnails/<name>.<size in bytes>.jpg, so an image
 # replaced under the same name gets a new one. Written under a temporary name and moved
 # into place, so the picker never shows half a file.

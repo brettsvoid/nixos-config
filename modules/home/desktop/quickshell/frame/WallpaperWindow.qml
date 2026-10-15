@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "../config"
 import "../notifications"
 import "../services"
 import "../theme"
@@ -8,11 +9,14 @@ import "../theme"
 // The wallpaper for one screen, on the background layer: no input, no exclusive zone.
 // A new image is decoded at the screen's size, off the main thread, and fades in over
 // the old one, which is then let go, so at rest only one screen-sized image is held.
+// It fills the screen, cropped, or fits inside it on the theme's background, as the
+// settings say.
 PanelWindow {
     id: root
 
     // Which of the two images is on top.
     property Image front: first
+    readonly property int fill: Settings.wallpaper.fill === "fit" ? Image.PreserveAspectFit : Image.PreserveAspectCrop
 
     function show(path) {
         const incoming = root.front === first ? second : first;
@@ -49,7 +53,7 @@ PanelWindow {
     Image {
         id: first
         anchors.fill: parent
-        fillMode: Image.PreserveAspectCrop
+        fillMode: root.fill
         sourceSize: Qt.size(root.width * root.devicePixelRatio, root.height * root.devicePixelRatio)
         asynchronous: true
         cache: false
@@ -59,7 +63,7 @@ PanelWindow {
     Image {
         id: second
         anchors.fill: parent
-        fillMode: Image.PreserveAspectCrop
+        fillMode: root.fill
         sourceSize: Qt.size(root.width * root.devicePixelRatio, root.height * root.devicePixelRatio)
         asynchronous: true
         cache: false

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQml.Models
 import Qt.labs.folderlistmodel
 import Quickshell
 import Quickshell.Io
@@ -7,12 +8,13 @@ import "../services"
 import "../theme"
 import "../components/navigation.js" as Navigation
 
-// The dashboard's wallpaper tab: the images in ~/Pictures/Wallpapers as a grid, the
-// current one outlined; choosing one sets it, and the theme follows. Above, matugen's
-// light or dark and its scheme variant. Thumbnails come from wallpaper-thumbnails
-// (custom-shell.nix), run once each time the tab opens; it only makes missing ones.
-// Both folders are watched, so a new image, then its thumbnail, show while it is open.
-// The arrow keys move through the grid, and Ctrl+D and Ctrl+U half a page.
+// The dashboard's wallpaper tab: the images in the settings' wallpaper folder
+// (~/Pictures/Wallpapers unless they say otherwise) as a grid, the current one
+// outlined; choosing one sets it, and the theme follows. Above, matugen's light or dark
+// and its scheme variant. Thumbnails come from wallpaper-thumbnails (custom-shell.nix),
+// run each time the tab opens or the folder changes; it only makes missing ones. Both
+// folders are watched, so a new image, then its thumbnail, show while it is open. The
+// arrow keys move through the grid, and Ctrl+D and Ctrl+U half a page.
 FocusScope {
     id: root
 
@@ -26,21 +28,28 @@ FocusScope {
     }
 
     // It says "ready" once the thumbnail folder exists, which is when it can be
-    // watched: on the first run it does not exist before.
-    Process {
-        command: ["wallpaper-thumbnails"]
-        running: true
-        stdout: SplitParser {
-            onRead: line => {
-                if (line === "ready")
-                    thumbs.folder = "file://" + root.thumbnails;
+    // watched: on the first run it does not exist before. A new folder makes a new
+    // Process (the settings' Appearance page shows this tab under the folder field).
+    Instantiator {
+        model: [Wallpaper.folder]
+
+        Process {
+            required property string modelData
+
+            command: ["wallpaper-thumbnails", modelData]
+            running: true
+            stdout: SplitParser {
+                onRead: line => {
+                    if (line === "ready")
+                        thumbs.folder = "file://" + root.thumbnails;
+                }
             }
         }
     }
 
     FolderListModel {
         id: images
-        folder: "file://" + Quickshell.env("HOME") + "/Pictures/Wallpapers"
+        folder: "file://" + Wallpaper.folder
         nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp"]
         caseSensitive: false
         showDirs: false
