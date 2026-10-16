@@ -121,3 +121,27 @@ To check after the rebuild:
 3. Open Thunar (GTK 3) and Loupe (libadwaita). They should use the shell's palette.
 4. Dashboard → Wallpaper: switch to light, then reopen Thunar and Loupe. Firefox should
    switch to light without being reopened. Then switch back to dark.
+
+**2026-10-16:** Steps 1 to 4 checked, all but Firefox:
+
+1. (13 Oct) The border is the theme's, `1f1f1f → d4d4d4 → ffffff`.
+2. On the desktop, with game mode off: just after `hyprctl reload` the border was the
+   config's crimson (`720b12 → e21a28`). The theme's was back by the next reading,
+   162 ms later, and stayed.
+3. and 4. In qs-test's headless sway, with a throwaway home and the session's portals
+   (xdg-desktop-portal with its gtk backend) on the test's bus. The installed
+   `generate-theme` made the theme from the current wallpaper and scheme, dark and then
+   light:
+   - dconf got `adw-gtk3-dark` / `prefer-dark`, then `adw-gtk3` / `prefer-light`. The
+     portal reported the colour scheme as 1 (dark), then 2 (light).
+   - Thunar and Loupe, opened after each, drew with `gtk.css`'s colours. In dark,
+     Thunar's view was `#0e0e0e` and its menu bar was `window_bg_color` (`#131313`);
+     Loupe's header was `headerbar_bg_color` (`#1f1f1f`). In light they were `#ffffff`
+     (`view_bg_color`), `#f9f9f9` and `#eeeeee`.
+   - Loupe draws the space around the image itself, not from `gtk.css`: `#222226` in
+     dark and near-white in light (`src/widgets/image.rs`). Without a portal on the
+     bus it took the dark one in light mode too. With the portal it was light.
+   - Not checked: Firefox's switch without reopening. It needs your session's Firefox.
+
+Left for you: a few days of daily use, logging out and rebooting to check that apps come
+back, and a game's frame pacing in MangoHud.
