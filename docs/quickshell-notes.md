@@ -32,6 +32,19 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
 - `wtype` loses the first key of each call while the keymap changes; `wtype -s 300`
   waits first.
 - `GameMode.on` needs the state file to say `on`; an empty file is off.
+- A real Hyprland can run apart from the desktop, for a plugin or a config: nested in a
+  headless mutter (`mutter --headless --wayland --no-x11 --virtual-monitor 1920x1080`,
+  on its own D-Bus), with Mesa's EGL (`__EGL_VENDOR_LIBRARY_FILENAMES` set to
+  `50_mesa.json`) so both render on the Intel iGPU. sway 1.12 and Weston 16 are too old
+  as parents: Hyprland's Wayland backend asks for `xdg_wm_base` 6 and `wl_compositor` 6.
+  - Its Wayland output never became a monitor there. `hyprctl output create headless`
+    gives one that renders, and windows open on it.
+  - Give it its own `XDG_RUNTIME_DIR`, `HYPRLAND_NO_SD_VARS=1` (or it imports its
+    display and signature into systemd and D-Bus), and a `LIBSEAT_BACKEND` that libseat
+    does not know (or its DRM backend tries the seat and every input device first).
+  - Its exec lines run for real: stub them, or they start the session's apps again.
+- `hyprctl dispatch exec kitty --class x` reads `--class` as its own flag: quote the whole
+  command after `exec`.
 
 ## QML and Quickshell gotchas
 
