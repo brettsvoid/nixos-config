@@ -21,6 +21,11 @@ FloatingWindow {
             component: appearancePage
         },
         {
+            name: "Window effects",
+            icon: 0xF05D8, // md-animation
+            component: effectsPage
+        },
+        {
             name: "Bar",
             icon: 0xF1513, // md-dock_top
             component: barPage
@@ -214,6 +219,12 @@ FloatingWindow {
         id: appearancePage
 
         AppearancePage {}
+    }
+
+    Component {
+        id: effectsPage
+
+        EffectsPage {}
     }
 
     Component {

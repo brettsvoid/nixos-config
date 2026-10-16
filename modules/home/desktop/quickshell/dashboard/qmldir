@@ -9,6 +9,3 @@ UsageBar 1.0 UsageBar.qml
 HistoryGraph 1.0 HistoryGraph.qml
 WallpaperTab 1.0 WallpaperTab.qml
 Visualiser 1.0 Visualiser.qml
-EffectsTab 1.0 EffectsTab.qml
-EffectPreview 1.0 EffectPreview.qml
-SampleWindow 1.0 SampleWindow.qml

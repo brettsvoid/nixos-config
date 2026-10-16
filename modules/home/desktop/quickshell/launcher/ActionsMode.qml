@@ -91,10 +91,7 @@ QtObject {
                 subtitle: "Choose how windows open and close",
                 icon: "preferences-desktop-effects",
                 keywords: ["animation", "dissolve"],
-                run: () => {
-                    Drawers.dashboardTab = "Effects";
-                    Drawers.toggle("dashboard");
-                }
+                run: () => Windows.showSettings("Window effects")
             },
             {
                 title: "Random wallpaper",

@@ -27,11 +27,6 @@ OptionsPage {
     }
 
     SwitchRow {
-        label: "Effects"
-        key: "dashboard.showEffects"
-    }
-
-    SwitchRow {
         label: "Open on last"
         key: "dashboard.rememberTab"
     }

@@ -61,7 +61,6 @@ Singleton {
             "dashboard.showOverview": { default: true },
             "dashboard.showPerformance": { default: true },
             "dashboard.showWallpaper": { default: true },
-            "dashboard.showEffects": { default: true },
             "dashboard.rememberTab": { default: false },
             "dashboard.weekStart": { default: "monday", options: ["monday", "sunday", "saturday"] },
             "dashboard.visualiser": { default: true },

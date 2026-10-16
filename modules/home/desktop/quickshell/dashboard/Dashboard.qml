@@ -22,10 +22,6 @@ FocusScope {
         {
             name: "Wallpaper",
             component: wallpaperTab
-        },
-        {
-            name: "Effects",
-            component: effectsTab
         }
     ]
     // The tab asked for by name (the launcher's Wallpaper action), shown even when the
@@ -162,11 +158,5 @@ FocusScope {
         id: wallpaperTab
 
         WallpaperTab {}
-    }
-
-    Component {
-        id: effectsTab
-
-        EffectsTab {}
     }
 }

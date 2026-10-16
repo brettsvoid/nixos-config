@@ -62,3 +62,33 @@ library (window-dissolve/04), the way the wallpaper picker chooses wallpapers.
   - Open the dashboard and press Tab to reach Effects. Look through a few previews.
   - Choose an open and a close effect, then open and close a window.
   - Choose None for both, and check you see Hyprland's own animations.
+
+**2026-10-13 (later):** Moved to the settings window as the Window effects page
+(`settings/EffectsPage.qml`), and the list became a grid, as the user asked.
+
+- **Why it moved:** an effect is chosen once in a while, not glanced at, and the
+  settings window has room for a grid. The launcher's `>Window effects` action now
+  opens that page. The dashboard no longer has an Effects tab.
+- **The grid:** one tile per effect, labelled with its name. Where two effects share a
+  name (Dissolve, Fade, Glitch, Pixelate), the label also names the collection of the
+  one that is not ours. Each tile loops open, then close, at half speed
+  (`EffectPreview.slowdown`).
+  - Clicking a tile uses it for both opening and closing. The Open and Close chips
+    under a tile choose it for one of the two only. They show on hover, and stay
+    filled while that effect is in use.
+  - Keys: the arrow keys move, Enter chooses for both, O for opening and C for
+    closing, and Ctrl+D and Ctrl+U move half a page.
+- **Checked** with a test copy of the shell in a headless sway on the Intel GPU (not
+  the NVIDIA card that drives the screens), with the real library: the previews
+  animate, and open and close alternate. Clicks on a tile and on a chip, and the
+  keys, ran the right `window-effect` calls. Changing `active.json` updated the
+  chips. No QML warnings.
+- **Left for you,** after a rebuild:
+  - Open Settings → Window effects. Do the half-speed previews and the chips look
+    right in your theme's colours?
+  - Click a tile, then open and close a window. Both should use that effect.
+  - Hover another tile, click its Close chip, and close a window to check it.
+
+**2026-10-16:** Committed after issue 29's settings were merged. The settings window's
+Dashboard page lost its Effects switch (`dashboard.showEffects`), as the tab it hid is
+gone. Window effects sits after Appearance in the settings window's list.

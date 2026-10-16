@@ -18,3 +18,6 @@ DashboardPage 1.0 DashboardPage.qml
 LauncherPage 1.0 LauncherPage.qml
 NotificationsPage 1.0 NotificationsPage.qml
 SessionPage 1.0 SessionPage.qml
+EffectsPage 1.0 EffectsPage.qml
+EffectPreview 1.0 EffectPreview.qml
+SampleWindow 1.0 SampleWindow.qml
