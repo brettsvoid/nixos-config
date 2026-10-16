@@ -133,6 +133,8 @@ in
             "mqtt-explorer"
             # This end of the audio bridge above.
             "sonobus"
+            # nixpkgs' synthesia is Linux-only.
+            "synthesia"
             "vlc"
           ];
         };
