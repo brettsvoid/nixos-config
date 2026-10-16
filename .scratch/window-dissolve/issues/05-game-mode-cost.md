@@ -55,3 +55,38 @@ None - can start immediately.
 (set by `game-mode on`, desktop-game-mode), a kitty window opened in a single frame in a
 60 fps recording of DP-2, with no burn. The dissolve does not play while animations are
 off; only the plugin's per-frame hooks remain to measure.
+
+**2026-10-16:** A script now does the measuring, so your part is only playing:
+`.scratch/window-dissolve/measure-game-cost.sh`. MangoHud logs the same scene with the
+plugin loaded, unloaded, then loaded again, and the script reads Hyprland's CPU time
+over each phase. `--popups` adds two phases in which a small window opens over the game
+every 5 seconds, with the plugin loaded and then unloaded (question 4). It loads the
+plugin again at the end, also after Ctrl+C. It starts and stops MangoHud's logs through
+MangoHud's control socket, now set in `modules/profiles/gaming.nix`
+(`control = "mangohud-%p"`).
+
+To run it, after a rebuild:
+
+1. Start a game fullscreen and stand somewhere quiet.
+2. In a terminal on the other screen, run
+   `bash ~/nixos-config/.scratch/window-dissolve/measure-game-cost.sh --popups fullscreen`.
+   Go back to the game during the 10-second countdown and keep still for about six
+   minutes, until it prints a table.
+3. Do the same with the game windowed or borderless, with `windowed` as the label.
+4. Tell me when they are done. The tables are saved as
+   `~/.local/state/mangohud/dissolve-cost-*.txt`, and I will fill in the criteria from
+   them.
+
+Checked in a nested Hyprland 0.56.2 (in a headless mutter, on the Intel iGPU) with the
+same plugin build and effect files, and vkcube on lavapipe with MangoHud as the game:
+
+- The control socket started and stopped a log per phase, and the table came out with a
+  row per phase.
+- The plugin was unloaded and loaded again three times, and the config was reloaded
+  while it was unloaded. Hyprland stayed up, and the plugin was loaded at the end.
+- The popup is a floating 480x270 kitty at 40,40 that does not take focus.
+- MangoHud logged single frames of over an hour when a popup opened (3,944,260 ms),
+  which wrecked its own summary's averages. The script works from the per-frame log
+  instead and leaves out frames over 10 seconds, counting them in a column.
+
+The test's figures mean nothing for the desktop: lavapipe draws on the CPU.

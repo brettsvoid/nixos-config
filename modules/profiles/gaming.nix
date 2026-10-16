@@ -80,6 +80,9 @@ _: {
           # run, even with the HUD hidden), which otherwise land in $HOME.
           # MangoHud doesn't create the folder, hence the .keep below.
           output_folder = "${config.xdg.stateHome}/mangohud";
+          # A socket per game (@mangohud-<pid>) that starts and stops those logs, for
+          # scripts such as .scratch/window-dissolve/measure-game-cost.sh.
+          control = "mangohud-%p";
         };
       };
       xdg.stateFile."mangohud/.keep".text = "";
