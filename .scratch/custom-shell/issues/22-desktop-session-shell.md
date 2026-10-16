@@ -145,3 +145,10 @@ To check after the rebuild:
 
 Left for you: a few days of daily use, logging out and rebooting to check that apps come
 back, and a game's frame pacing in MangoHud.
+
+**2026-10-17:** Removing Caelestia is ready on local branch `worktree-remove-caelestia`,
+not merged: the module, its input, its binds (Super+Space among them), its forced
+borders and `toggle-shell caelestia`. The Crimson Ronin wallpaper moves to
+`desktop-wallpapers`. Issue 23's branch, `worktree-laptop-shell`, sits on top of it and
+removes the other shells' fallbacks once the laptop runs the custom shell too. Merge
+them when the few days are up.

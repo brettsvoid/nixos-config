@@ -5,8 +5,9 @@ ambxst at 59edec9. The plan is to add them all. Take them one at a time: talk on
 through, write it up as an issue under `issues/`, then note the issue's number here.
 
 Each entry names where Caelestia or ambxst has it. Read their code for ideas only (see
-the PRD's licence decision). Paths are relative to their sources in the Nix store, from
-the flake inputs `caelestia-shell` and `ambxst`.
+the PRD's licence decision). Paths are relative to their sources at those revisions:
+`nix flake prefetch --json github:caelestia-dots/shell/454f46da16ae75cc57f34adf48dea74db0fa5175 | jq -r .storePath`,
+and the same for `github:Axenide/Ambxst/59edec9a0430eb2f679697f4a817a1f44ffcfb8b`.
 
 Not on the list: ambxst's keybind editor and Hyprland page. Those settings are declared
 in Nix (issue 29).
@@ -21,14 +22,13 @@ in Nix (issue 29).
       opens a window info panel that can move, float, pin or kill the window:
       `modules/bar/popouts/ActiveWindow.qml`, `modules/windowinfo/`. ambxst shows the
       title in its notch when nothing plays.
-- [ ] **Workspaces.** Show app icons per workspace and special workspaces, and switch
-      workspace by scrolling. Caelestia: `modules/bar/components/workspaces/`. ambxst:
-      `modules/bar/workspaces/`.
+- [ ] **Workspaces.** Show app icons per workspace and special workspaces. (Switching
+      by scrolling came with issue 29.) Caelestia:
+      `modules/bar/components/workspaces/`. ambxst: `modules/bar/workspaces/`.
 - [ ] **More bar entries.** An OS logo that opens the launcher, a power button, a
       microphone icon, the keyboard layout, and caps and num lock. Caelestia:
       `modules/bar/components/`.
-- [ ] **Bar options.** These are the position, auto-hide, and hiding the bar on chosen
-      screens. ambxst: `config/defaults/bar.js`. They overlap with issue 29.
+- [ ] Bar options (position, auto-hide, chosen screens): issue 29.
 
 ## Launcher
 
