@@ -165,6 +165,7 @@ in
                 apps-spotify
                 apps-godot
                 apps-fonts
+                apps-worktrunk
                 apps-claude-code
                 apps-comfyui
                 apps-keymapp

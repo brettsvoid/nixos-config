@@ -151,6 +151,7 @@ in
                 apps-cursor
                 apps-spotify
                 apps-fonts
+                apps-worktrunk
                 apps-claude-code
                 profile-base
                 profile-code

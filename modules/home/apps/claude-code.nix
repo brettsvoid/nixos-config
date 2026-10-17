@@ -36,9 +36,9 @@
 
       jq = lib.getExe pkgs.jq;
 
-      # Both Macs import apps-worktrunk; the NixOS hosts do not. The status
-      # line and the worktrunk plugin below both call `wt`.
-      hasWorktrunk = pkgs.stdenv.isDarwin;
+      # Whether this host imports apps-worktrunk. The status line and the
+      # worktrunk plugin below both call `wt`.
+      hasWorktrunk = lib.any (p: lib.getName p == "worktrunk") config.home.packages;
 
       # ─── status line without worktrunk ─────────────────────────────────
       # The model and context-gauge cells of worktrunk's status line, e.g.
