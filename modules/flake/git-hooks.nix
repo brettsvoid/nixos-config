@@ -33,10 +33,14 @@
 
           # ─── Nix lint (blocking) ──────────────────────────────────────
           # Not on the generated hardware/*.nix. statix checks the whole tree
-          # on any .nix change; deadnix only the changed files.
+          # on any .nix change; deadnix only the changed files. .claude/* holds
+          # worktrees of other branches, which their own commits check.
           statix = {
             enable = true;
-            settings.ignore = [ "hardware/*" ];
+            settings.ignore = [
+              "hardware/*"
+              ".claude/*"
+            ];
           };
           deadnix = {
             enable = true;
