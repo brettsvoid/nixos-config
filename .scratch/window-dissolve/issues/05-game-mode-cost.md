@@ -90,3 +90,31 @@ same plugin build and effect files, and vkcube on lavapipe with MangoHud as the 
   instead and leaves out frames over 10 seconds, counting them in a column.
 
 The test's figures mean nothing for the desktop: lavapipe draws on the CPU.
+
+**2026-10-17:** MangoHud's control socket doesn't work with a Proton game. With The Crust
+it listened but never accepted a connection. In MangoHud's source, each Vulkan instance
+tries to listen on `mangohud-<pid>`, only the first in a process gets it, and an instance
+answers it only while it presents frames. Proton games make several instances. The
+`control` setting is gone from `modules/profiles/gaming.nix`.
+
+The script now waits for the log that Left Shift+F2 (MangoHud's log key) starts, keeps
+that one log for the whole run, and splits it into phases by its `elapsed` column. A
+notification says when it is done; Left Shift+F2 then stops the log.
+
+Before the change, the 2026-10-17 run measured nothing: it waited on the socket for 47
+minutes. During that wait, at 22:59:38, both monitors disconnected and reconnected, with
+The Crust holding 8.85 GB of the 3080 Ti's 12 GB and the Godot editor 1.2 GB. The driver
+ran out of video memory, and the custom shell crashed in NVIDIA's Vulkan driver. Steam's
+web helper crashed in its GL library. The script had not loaded or unloaded the plugin,
+or opened any windows, since 22:12.
+
+**2026-10-18:** Parked: the runs with a game took too much of your time. Unloading the
+plugin in game mode without measuring was turned down, as a change made without knowing
+the cost. Two ways to pick this up later:
+
+- Unattended, no game: vkmark under MangoHud on the 3080 Ti, fullscreen and windowed,
+  with the plugin loaded and unloaded, while you are away. It measures the plugin's
+  overhead, not a real game's.
+- With a game: start it fullscreen, run the script, press Left Shift+F2 in the game, and
+  keep still for about six minutes. The Shift+F2 version of the script has not run on a
+  game yet.
