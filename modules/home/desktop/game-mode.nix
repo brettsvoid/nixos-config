@@ -8,6 +8,12 @@
 # `gamemoderun`: in Steam, set its launch options to `gamemoderun %command%`, which
 # also covers games started from the rofi game library.
 #
+# Turned on by hand, it also holds a GameMode request (`gamemoded -r`) until it is
+# turned off, so a game started without gamemoderun still gets GameMode's CPU side.
+# The hold starts after the state is written, so GameMode's own auto-on finds game
+# mode on already and does nothing. auto-on takes no hold: one would keep GameMode
+# active after the game, and its auto-off would never run.
+#
 # Off restores the values saved when it went on, not `hyprctl reload`: a reload also
 # drops binds other programs added at runtime (Caelestia adds some) and re-applies the
 # monitor rules.
@@ -49,6 +55,8 @@ in
         SAVED="$DIR/game-mode.saved"
         # Present while game mode is on because a game started it (auto-on).
         AUTO="$DIR/game-mode.auto"
+        # The pid of the GameMode request held while game mode is on by hand.
+        HOLD="$DIR/game-mode.hold"
         OPTIONS="animations:enabled decoration:shadow:enabled decoration:blur:enabled general:gaps_in general:gaps_out general:border_size decoration:rounding general:allow_tearing"
 
         status() {
@@ -58,6 +66,23 @@ in
         write_state() {
           echo "$1" > "$STATE.tmp"
           mv "$STATE.tmp" "$STATE"
+        }
+
+        hold() {
+          [ -e "$HOLD" ] && return 0
+          command -v gamemoded >/dev/null || return 0
+          setsid gamemoded -r >/dev/null 2>&1 &
+          echo $! > "$HOLD"
+        }
+
+        # SIGINT ends the request at once; GameMode only notices a killed one later.
+        release() {
+          [ -e "$HOLD" ] || return 0
+          pid=$(cat "$HOLD")
+          if [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = gamemoded ]; then
+            kill -INT "$pid" || true
+          fi
+          rm -f "$HOLD"
         }
 
         notify() {
@@ -81,6 +106,7 @@ in
         }
 
         off() {
+          release
           [ "$(status)" = off ] && return 0
           if [ -s "$SAVED" ]; then
             hyprctl --batch "$(paste -sd ';' "$SAVED")" >/dev/null
@@ -94,11 +120,11 @@ in
 
         case "''${1:-status}" in
           # By hand: whatever a game started, the user now decides.
-          on) rm -f "$AUTO"; on ;;
+          on) rm -f "$AUTO"; on; hold ;;
           off) rm -f "$AUTO"; off ;;
           toggle)
             rm -f "$AUTO"
-            if [ "$(status)" = on ]; then off; else on; fi
+            if [ "$(status)" = on ]; then off; else on; hold; fi
             ;;
           # From GameMode's start and end scripts.
           auto-on)

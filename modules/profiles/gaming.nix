@@ -2,7 +2,7 @@
 # home-manager half is a no-op elsewhere.
 _: {
   flake.modules.nixos.profile-gaming =
-    { pkgs, ... }:
+    { pkgs, flake, ... }:
     {
       programs.steam = {
         enable = true;
@@ -10,6 +10,10 @@ _: {
         dedicatedServer.openFirewall = true;
       };
       programs.gamemode.enable = true;
+      # GameMode's polkit rule lets only this group switch the CPU governor and
+      # its other root helpers. Without it, pkexec refuses them and GameMode
+      # changes nothing but the game's priority.
+      users.users.${flake.lib.username}.extraGroups = [ "gamemode" ];
 
       # Recent Proton (GE-Proton10-10, for one) syncs Windows threads
       # through /dev/ntsync when it exists, else fsync, and Fluorine (Nolvus)
