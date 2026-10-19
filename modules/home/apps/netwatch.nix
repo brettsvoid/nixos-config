@@ -14,6 +14,11 @@
 # The agent's 4 Hz suits multi-second outages, not latency: below ~10 Hz a
 # periodic stall aliases into a false slow cycle. `netwatch --burst 30`
 # (50 Hz) is for that; see burst() in netwatch/netwatch.py.
+#
+# It also writes rekeys.csv: every Wi-Fi group-key update, and how many times
+# the access point had to send the new key. After about nine tries it drops
+# the client (IEEE reason 16), and the near-misses before that are otherwise
+# only in the kernel log, which keeps about a day.
 _: {
   flake.modules.homeManager.apps-netwatch =
     {
@@ -87,9 +92,9 @@ _: {
         # ProcessType Interactive, not Background: launchd throttles
         # Background jobs, and this one times round trips.
         #
-        # No PATH needed: route, ifconfig, ipconfig and scutil live in /sbin
-        # or /usr/sbin, on launchd's default PATH, and terminal-notifier is
-        # called by absolute path.
+        # No PATH needed: route, ifconfig, ipconfig, scutil and sysctl live in
+        # /sbin or /usr/sbin, on launchd's default PATH, and log and
+        # terminal-notifier are called by absolute path.
         launchd.agents.netwatch = {
           enable = true;
           config = {

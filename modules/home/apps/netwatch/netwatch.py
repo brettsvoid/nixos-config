@@ -16,6 +16,11 @@ the same time separates "the router/mains died" from "the radio stalled".
 It also watches for the reports macOS writes when configd, which owns routes,
 DNS and interface state, hangs or crashes, and raises a notification.
 
+And it records every Wi-Fi group-key update: how many times the access point
+had to send the new key before the Mac's answer got through, and whether it
+gave up and disconnected the Mac (IEEE reason 16). The kernel log has the
+detail, but only for about a day.
+
 No privileges needed: Darwin allows unprivileged ICMP through
 SOCK_DGRAM/IPPROTO_ICMP, provided we compute the checksum ourselves.
 """
@@ -334,6 +339,224 @@ class ConfigdWatch:
         self._save()
 
 
+# --------------------------------------------------------------- rekeys
+
+
+LOG = "/usr/bin/log"
+REKEY_POLL_S = 300.0
+# The kernel log keeps about a day, so a first run takes whatever is there.
+REKEY_BACKFILL_S = 24 * 3600.0
+# The driver logs AWDL state and transmit counts every ~5 s, so this much
+# before a rekey is enough to find them.
+REKEY_CONTEXT_S = 30.0
+# Resends come ~50 ms, ~100 ms, then ~1 s apart, and the access point gives
+# up after about nine, so a message this close to the last is the same rekey.
+REKEY_GAP_S = 15.0
+# A rekey is written only once its last message is this old, so a sweep never
+# splits one that is still in progress or not yet flushed to the log.
+REKEY_SETTLE_S = 60.0
+# The mini's firmware logs some messages twice, under 7 ms apart. The quickest
+# resend seen is 46 ms, so a closer pair is one message.
+RESEND_MIN_MS = 20.0
+# Every join and roam ends in a key exchange that the driver logs the same
+# way. One this soon after the link comes up is that, not a rekey.
+JOIN_WINDOW_S = 5.0
+
+REKEY_PREDICATE = (
+    'process == "kernel" AND ('
+    'eventMessage CONTAINS "handleSupplicantEvent" OR '
+    'eventMessage CONTAINS "handleDeauthDisassoc@" OR '
+    'eventMessage CONTAINS "NET_MANAGER_EVENT_LINK_UP" OR '
+    'eventMessage CONTAINS "ROAM_MANAGER_EVENT_ROAM_DONE" OR '
+    'eventMessage CONTAINS "LQM-WiFi: BE :" OR '
+    'eventMessage CONTAINS "LQM-WiFi:AWDL State")'
+)
+
+REKEY_COLUMNS = [
+    "start",
+    "messages",
+    "gaps_ms",
+    "outcome",
+    "awdl",
+    "tx_be_5s",
+    "uptime_h",
+]
+
+
+def boot_time():
+    out = subprocess.run(
+        ["sysctl", "-n", "kern.boottime"], capture_output=True, text=True
+    ).stdout
+    m = re.search(r"sec = (\d+)", out)
+    return int(m.group(1)) if m else None
+
+
+def parse_rekeys(lines, boot=None):
+    """Group-key updates in `log show` output, oldest first.
+
+    Each is its CSV row plus "start" and "last", the times of its first and
+    final messages, so the caller can tell whether it has finished.
+
+    The driver logs one WLC_SUP_KEYED line per key message it handles. It
+    reports the Mac's side only: whether the answer it sends ever reaches the
+    access point, no Mac log says.
+    """
+    keyed, ups, kicks, awdl, tx = [], [], [], [], []
+    for line in lines:
+        try:
+            t = datetime.strptime(line[:31], "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
+        except ValueError:
+            continue  # the column header
+        if "handleSupplicantEvent" in line:
+            if "WLC_SUP_KEYED" in line:
+                m = re.search(r"reason = (\d+)", line)
+                keyed.append((t, int(m.group(1)) if m else None))
+        elif "handleDeauthDisassoc@" in line:
+            m = re.search(r"IEEE reason = (\d+)", line)
+            kicks.append((t, m.group(1) if m else "?"))
+        elif "_EVENT_LINK_UP" in line or "_EVENT_ROAM_DONE" in line:
+            ups.append(t)
+        elif "AWDL State" in line:
+            m = re.search(r"AWDL State #\d+ (.+?\(\d+\))", line)
+            if m:
+                awdl.append((t, m.group(1)))
+        else:
+            m = re.search(r"LQM-WiFi: BE : Count: (\d+)", line)
+            if m:
+                tx.append((t, m.group(1)))
+
+    rekeys, cur = [], None
+    for t, reason in keyed:
+        if any(0 <= t - up <= JOIN_WINDOW_S for up in ups):
+            continue
+        if cur is None or cur["ended"] or t - cur["last"] > REKEY_GAP_S:
+            cur = {"start": t, "last": t, "times": [], "ended": False}
+            rekeys.append(cur)
+        cur["last"] = t
+        # Reason 14, "received FC_DEAUTH": the access point has given up, and
+        # what follows belongs to the rejoin.
+        if reason == 14:
+            cur["ended"] = True
+        else:
+            cur["times"].append(t)
+
+    out = []
+    for r in rekeys:
+        times = r["times"]
+        if not times:
+            continue
+        gaps = [(b - a) * 1000.0 for a, b in zip(times, times[1:])]
+        kick = [k for tk, k in kicks if r["start"] <= tk <= r["last"] + 5.0]
+        state = [
+            s for ta, s in awdl if r["start"] - REKEY_CONTEXT_S <= ta <= r["start"]
+        ]
+        # A count line covers the 5 s that end with it.
+        sent = [n for tt, n in tx if r["start"] <= tt <= r["start"] + 10.0]
+        out.append(
+            {
+                "start": r["start"],
+                "last": r["last"],
+                "row": [
+                    datetime.fromtimestamp(times[0]).isoformat(timespec="milliseconds"),
+                    1 + sum(1 for g in gaps if g >= RESEND_MIN_MS),
+                    " ".join("%.0f" % g for g in gaps),
+                    "deauth %s" % kick[0] if kick else "ok",
+                    state[-1] if state else "-",
+                    sent[0] if sent else "",
+                    "%.1f" % ((times[0] - boot) / 3600.0)
+                    if boot and times[0] > boot
+                    else "",
+                ],
+            }
+        )
+    return out
+
+
+class RekeyWatch:
+    """Record every Wi-Fi group-key update and how many tries it took.
+
+    The access point replaces its group key on a timer and sends each client
+    the new key, which the client must answer. When no answer gets through it
+    resends, and after about nine tries it disconnects the client with IEEE
+    reason 16. Most failures are near-misses that a resend fixes, and only
+    the kernel log shows those, for about a day.
+
+    It polls `log show` rather than following `log stream`, so a restart or
+    a sleep loses nothing: each sweep starts where the last one stopped, and
+    that point is kept on disk.
+    """
+
+    def __init__(self, outdir, say):
+        self.say = say
+        self.path = os.path.join(outdir, "rekeys.csv")
+        self.state = os.path.join(outdir, "rekeys-seen")
+        self.boot = boot_time()
+        try:
+            with open(self.state) as f:
+                self.cursor = float(f.read())
+        except (OSError, ValueError):
+            self.cursor = time.time() - REKEY_BACKFILL_S
+
+    def _save(self):
+        with open(self.state, "w") as f:
+            f.write("%.6f\n" % self.cursor)
+
+    def check(self):
+        now = time.time()
+        since = max(self.cursor, now - REKEY_BACKFILL_S) - REKEY_CONTEXT_S
+        try:
+            out = subprocess.run(
+                [
+                    LOG,
+                    "show",
+                    # Whole seconds: `log show` rejects a fractional start.
+                    "--start",
+                    datetime.fromtimestamp(since).strftime("%Y-%m-%d %H:%M:%S"),
+                    "--predicate",
+                    REKEY_PREDICATE,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return
+        settled = now - REKEY_SETTLE_S
+        cursor, done = settled, []
+        for r in parse_rekeys(out.splitlines(), self.boot):
+            if r["start"] < self.cursor:
+                continue  # an earlier sweep wrote it
+            if r["last"] > settled:
+                cursor = r["start"]  # may still be going; the next sweep has it
+                break
+            done.append(r)
+        if done:
+            with open_csv(self.path, REKEY_COLUMNS) as f:
+                csv.writer(f).writerows(r["row"] for r in done)
+            for r in done:
+                self._announce(r, now)
+        self.cursor = cursor
+        self._save()
+
+    def _announce(self, r, now):
+        start, messages, _, outcome, awdl = r["row"][:5]
+        if messages == 1 and outcome == "ok":
+            return  # the usual case; the CSV has it
+        self.say(
+            "\033[36m%s  REKEY  %d messages  %s  awdl=%s\033[0m"
+            % (start[11:19], messages, outcome, awdl),
+            always=True,
+        )
+        # A disconnect from the last few minutes is news; a backfilled one is
+        # history.
+        if outcome != "ok" and now - r["start"] < 15 * 60:
+            notify(
+                "netwatch: Wi-Fi dropped",
+                "%s: the access point sent the new group key %d times, then "
+                "gave up (%s)." % (start[11:19], messages, outcome),
+            )
+
+
 # --------------------------------------------------------------- watcher
 
 
@@ -364,6 +587,31 @@ def classify(target, concurrent, n_targets):
     return "partial"  # upstream of whatever still answered
 
 
+def open_csv(path, columns):
+    """Open a CSV for appending, moving aside a file written to another schema.
+
+    Appending wider rows to a narrower file produces a CSV that every reader
+    mis-parses, so an old file is preserved under its own name rather than
+    corrupted or silently deleted.
+    """
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        with open(path, newline="") as f:
+            header = next(csv.reader(f), [])
+        if header != columns:
+            legacy = path.replace(".csv", ".v1.csv")
+            os.rename(path, legacy)
+            sys.stderr.write(
+                "netwatch: old %s moved to %s\n" % (os.path.basename(path), legacy)
+            )
+    f = open(path, "a", newline="")
+    if f.tell() == 0:
+        csv.writer(f).writerow(columns)
+        # Flush now, or the header sits in the buffer until the first row and
+        # a SIGKILL loses it.
+        f.flush()
+    return f
+
+
 class Watcher:
     def __init__(
         self, targets, outdir, interval, timeout, trip, iface, quiet, retain, reports_dir
@@ -381,34 +629,13 @@ class Watcher:
         os.makedirs(outdir, exist_ok=True)
         self.day = None
         self.sf = self.sw = None
-        self.ef = self._open_events(os.path.join(outdir, "events.csv"))
+        self.ef = open_csv(os.path.join(outdir, "events.csv"), EVENT_COLUMNS)
         self.ew = csv.writer(self.ef)
-        if self.ef.tell() == 0:
-            self.ew.writerow(EVENT_COLUMNS)
-            # Flush now, or the header sits in the buffer until the first
-            # outage and a SIGKILL loses it.
-            self.ef.flush()
         self._roll()
         self.configd = ConfigdWatch(outdir, reports_dir, self._say)
+        self.rekeys = RekeyWatch(outdir, self._say)
 
     # ---------------- files
-
-    @staticmethod
-    def _open_events(path):
-        """Open events.csv, moving aside any file written to the old schema.
-
-        Appending wider rows to a narrower file produces a CSV that every
-        reader mis-parses, so an old file is preserved under its own name
-        rather than corrupted or silently deleted.
-        """
-        if os.path.exists(path) and os.path.getsize(path) > 0:
-            with open(path, newline="") as f:
-                header = next(csv.reader(f), [])
-            if header != EVENT_COLUMNS:
-                legacy = path.replace(".csv", ".v1.csv")
-                os.rename(path, legacy)
-                sys.stderr.write("netwatch: old events.csv moved to %s\n" % legacy)
-        return open(path, "a", newline="")
 
     def _roll(self):
         """One samples file per day (about 15 MB), pruned beyond retention."""
@@ -576,6 +803,13 @@ class Watcher:
         while not self.stop.wait(CONFIGD_POLL_S):
             self.configd.check()
 
+    def _watch_rekeys(self):
+        # Its own thread too: a sweep waits on `log show`, which takes about a
+        # second, and the backfill on a first run much longer.
+        self.rekeys.check()
+        while not self.stop.wait(REKEY_POLL_S):
+            self.rekeys.check()
+
     def run(self):
         probers = [
             threading.Thread(target=self._run_target, args=(n, p), daemon=True)
@@ -583,7 +817,8 @@ class Watcher:
         ]
         agg = threading.Thread(target=self._aggregate, daemon=True)
         cfg = threading.Thread(target=self._watch_configd, daemon=True)
-        for t in probers + [agg, cfg]:
+        rek = threading.Thread(target=self._watch_rekeys, daemon=True)
+        for t in probers + [agg, cfg, rek]:
             t.start()
         signal.signal(signal.SIGINT, lambda *_: self.stop.set())
         signal.signal(signal.SIGTERM, lambda *_: self.stop.set())
@@ -771,6 +1006,43 @@ def coverage(outdir):
               % lost)
 
 
+def report_rekeys(outdir):
+    rows = _load(outdir, "rekeys.csv")
+    if not rows:
+        return
+    resent = [r for r in rows if int(r["messages"]) > 1]
+    dropped = [r for r in rows if r["outcome"] != "ok"]
+    print("\n%d Wi-Fi group-key updates since %s"
+          % (len(rows), datetime.fromisoformat(rows[0]["start"]).strftime("%d %b %H:%M")))
+    print("  %d needed the key sent more than once (%.0f%%), %d ended in a disconnect"
+          % (len(resent), 100.0 * len(resent) / len(rows), len(dropped)))
+    for r in dropped[-5:]:
+        print("    %s  %s messages  %s"
+              % (r["start"][:16].replace("T", " "), r["messages"], r["outcome"]))
+
+    by_awdl = defaultdict(list)
+    for r in rows:
+        by_awdl[r["awdl"]].append(r)
+    if len(by_awdl) > 1:
+        print("  by AWDL state at the time:")
+        for state, rs in sorted(by_awdl.items()):
+            n = sum(1 for r in rs if int(r["messages"]) > 1)
+            print("    %-20s %4d updates, %3.0f%% resent"
+                  % (state, len(rs), 100.0 * n / len(rs)))
+
+    # Gaps that span a sleep are multiples of the period, or longer.
+    starts = [datetime.fromisoformat(r["start"]) for r in rows]
+    periods = sorted(g for g in ((b - a).total_seconds() for a, b in zip(starts, starts[1:]))
+                     if g < 6000)
+    if periods:
+        period = timedelta(seconds=periods[len(periods) // 2])
+        due = starts[-1] + period
+        while due < datetime.now():
+            due += period
+        print("  the access point rekeys every ~%.0f s; next due about %s"
+              % (period.total_seconds(), due.strftime("%H:%M")))
+
+
 def report(outdir, stall_ms):
     coverage(outdir)
     events = _load(outdir, "events.csv")
@@ -823,6 +1095,8 @@ def report(outdir, stall_ms):
             hours[datetime.fromisoformat(r["start"]).hour] += 1
         for h in range(24):
             print("  %02d:00 %s %d" % (h, "#" * hours.get(h, 0), hours.get(h, 0)))
+
+    report_rekeys(outdir)
 
     rows = [r for r in _load(outdir, "samples-*.csv") if r["target"] == "air" and r["max_ms"]]
     if not rows:
