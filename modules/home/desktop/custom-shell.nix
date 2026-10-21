@@ -78,11 +78,14 @@ in
       ];
 
       # Qt loads shaders as .qsb, so each one under quickshell/shaders is compiled
-      # here and by qs-dev. A shader that does not compile fails the build.
+      # here and by qs-dev. A shader that does not compile fails the build. Qt's
+      # OpenGL renderer gets an OpenGL ES 3.2 context on NVIDIA under Wayland, and the
+      # only ES variant --qt6 bakes (100 es) has no array constructors, which the frame
+      # shader uses: so 300 es, and 330 for a desktop OpenGL context.
       compileShaders = dir: ''
         for shader in "${dir}"/shaders/*.frag "${dir}"/shaders/*.vert; do
           [ -e "$shader" ] || continue
-          ${pkgs.qt6.qtshadertools}/bin/qsb --qt6 -o "$shader.qsb" "$shader" || exit 1
+          ${pkgs.qt6.qtshadertools}/bin/qsb --glsl "300 es,330" -o "$shader.qsb" "$shader" || exit 1
         done
       '';
 
@@ -94,10 +97,13 @@ in
 
       # The environment the shell runs in, for toggle-shell and qs-dev. MangoHud is on
       # for the whole session (profile-gaming), and its Vulkan layer loads into the
-      # shell too, where its NVIDIA thread kept about 28% of a core busy.
+      # shell too, where its NVIDIA thread kept about 28% of a core busy. OpenGL, not
+      # Vulkan: Qt's Vulkan renderer costs far more VRAM per screen-sized window, and
+      # the shell has two on each screen. On 2560x1440 and 1080x1920 the shell held
+      # 560 MiB on Vulkan and 242 MiB on OpenGL (nvidia-smi, 22 Oct 2026).
       qsEnv = ''
         qs_env() {
-          export QSG_RHI_BACKEND=vulkan
+          export QSG_RHI_BACKEND=opengl
           ${iconThemeEnv}
           export DISABLE_MANGOHUD=1
         }
