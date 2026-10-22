@@ -76,10 +76,13 @@ Singleton {
         description: "Show the brightness level"
         // Not restarted on each key repeat, so holding the key still updates it about
         // ten times a second.
-        onPressed: {
-            if (!brightnessDelay.running)
-                brightnessDelay.start();
-        }
+        onPressed: root.showBrightness()
+    }
+
+    // Also `custom-shell osd show brightness`.
+    function showBrightness() {
+        if (!brightnessDelay.running)
+            brightnessDelay.start();
     }
 
     Timer {

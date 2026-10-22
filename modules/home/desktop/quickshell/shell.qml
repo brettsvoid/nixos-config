@@ -11,6 +11,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import "frame"
+import "ipc"
 import "lock"
 import "services"
 import "settings"
@@ -98,6 +99,9 @@ ShellRoot {
         description: "Lock the session"
         onPressed: Lock.lock()
     }
+
+    // `custom-shell` and `qs ipc call` (ipc/Ipc.qml).
+    Ipc {}
 
     WindowBorders {}
 

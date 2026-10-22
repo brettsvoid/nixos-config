@@ -14,6 +14,7 @@ import "fuzzy.js" as Fuzzy
 QtObject {
     id: root
 
+    readonly property string name: "actions"
     readonly property string prefix: Settings.launcher.actionsPrefix
     readonly property string placeholder: "Run an action"
 

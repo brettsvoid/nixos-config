@@ -9,9 +9,9 @@ import "../components/navigation.js" as Navigation
 
 // The launcher drawer's content: a search field over a list of results. What the list
 // shows depends on the mode, picked by the prefix the query starts with; apps are the
-// mode without one. A mode provides `prefix`, `placeholder`, `results(query)` and
-// `activate(item)`, and optionally `refresh()`, called when the mode is entered; it is
-// added to `modes`. A result with `hint: true` only informs, and Enter on it does
+// mode without one. A mode provides `name`, `prefix`, `placeholder`, `results(query)`
+// and `activate(item)`, and optionally `refresh()`, called when the mode is entered; it
+// is added to `modes`. A result with `hint: true` only informs, and Enter on it does
 // nothing; one with `confirm: true` asks for a second Enter or click. Up and Down, or
 // Ctrl+P and Ctrl+N, move through the results, and Ctrl+D and Ctrl+U half a page. The
 // settings choose how many rows show.
@@ -45,7 +45,26 @@ FocusScope {
         root.mode.activate(item);
     }
 
+    // Types the prefix of the mode asked for in Drawers.launcherMode (apps has none), as
+    // the drawer opens or while it is open.
+    function showMode() {
+        const mode = root.modes.find(m => m.name === Drawers.launcherMode);
+        Drawers.launcherMode = "";
+        if (mode)
+            field.text = mode.prefix;
+    }
+
     onModeChanged: root.mode.refresh?.()
+    Component.onCompleted: root.showMode()
+
+    Connections {
+        target: Drawers
+
+        function onLauncherModeChanged() {
+            if (Drawers.launcherMode !== "")
+                root.showMode();
+        }
+    }
 
     AppsMode {
         id: appsMode

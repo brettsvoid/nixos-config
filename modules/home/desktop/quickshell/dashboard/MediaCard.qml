@@ -1,7 +1,7 @@
 import QtQuick
-import Quickshell.Services.Mpris
 import "../components"
 import "../config"
+import "../services"
 import "../theme"
 
 // The active media player (the one playing, else the first): cover, title and artist,
@@ -11,10 +11,7 @@ import "../theme"
 Rectangle {
     id: root
 
-    readonly property var player: {
-        const players = Mpris.players.values;
-        return players.find(p => p.isPlaying) ?? players[0] ?? null;
-    }
+    readonly property var player: Players.active
     readonly property real progress: root.player && root.player.length > 0 ? Math.min(1, root.player.position / root.player.length) : 0
 
     function time(seconds) {

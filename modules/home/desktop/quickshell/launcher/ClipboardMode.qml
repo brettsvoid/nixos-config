@@ -13,6 +13,7 @@ import "fuzzy.js" as Fuzzy
 QtObject {
     id: root
 
+    readonly property string name: "clipboard"
     readonly property string prefix: Settings.launcher.clipboardPrefix
     readonly property string placeholder: "Search clipboard history"
     // { id, text, image } per entry, newest first.

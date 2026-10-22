@@ -121,6 +121,8 @@ in
         };
 
       custom-shell-or = script "custom-shell-or" [ pkgs.jq ] "";
+      # Drives the running shell over Quickshell's IPC (quickshell/ipc/Ipc.qml).
+      custom-shell = script "custom-shell" [ ] "qs=${qsPkg}/bin/qs\n";
       lock-recover = script "lock-recover" [
         pkgs.coreutils
         pkgs.jq
@@ -274,6 +276,7 @@ in
           qs-dev
           qs-test
           generate-theme
+          custom-shell
           custom-shell-or
           lock-recover
           shell-stats

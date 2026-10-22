@@ -12,6 +12,7 @@ import "../config"
 QtObject {
     id: root
 
+    readonly property string name: "calculator"
     readonly property string prefix: Settings.launcher.calculatorPrefix
     readonly property string placeholder: "Calculate"
     // The query, from the launcher while this is the mode, else "".

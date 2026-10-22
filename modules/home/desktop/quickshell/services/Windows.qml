@@ -11,6 +11,9 @@ Singleton {
     property bool settings: false
     // The page the settings window shows, by name (settings/SettingsWindow.qml).
     property string settingsPage: ""
+    // Its pages' names, as SettingsWindow gives them, for the commands that open it on
+    // one.
+    readonly property var settingsPages: ["Appearance", "Window effects", "Bar", "Dashboard", "Launcher", "Notifications", "Session", "Audio", "Network", "Bluetooth"]
 
     // Opens the settings window, on `page` if given. Already open, it is brought
     // forward: Hyprland focuses a new window, but not one asked for again.

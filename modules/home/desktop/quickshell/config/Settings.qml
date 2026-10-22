@@ -277,10 +277,11 @@ Singleton {
         return root._valid(key, root._lookup(root.user, key)) !== undefined;
     }
 
+    // Whether the value was valid, and so applied.
     function set(key, value) {
         const checked = root._valid(key, value);
         if (checked === undefined)
-            return;
+            return false;
         const user = JSON.parse(JSON.stringify(root.user));
         const parts = key.split(".");
         let node = user;
@@ -292,6 +293,7 @@ Singleton {
         node[parts[parts.length - 1]] = checked;
         root.user = user;
         root._save();
+        return true;
     }
 
     function reset(key) {

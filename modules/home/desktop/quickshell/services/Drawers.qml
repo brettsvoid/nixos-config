@@ -16,19 +16,35 @@ Singleton {
     property string dashboardTab: ""
     // The tab it last showed, for the setting that reopens it there.
     property string lastDashboardTab: ""
+    // The launcher's mode to open in, by name (launcher/Launcher.qml); it clears it.
+    property string launcherMode: ""
+
+    // Every drawer that can be opened by name, as FrameWindow makes them.
+    readonly property var names: ["session", "launcher", "cheatsheet", "notifications", "dashboard"]
+    // The launcher's modes and the dashboard's tabs, by the names their content gives
+    // them (Launcher.qml, Dashboard.qml), for the commands that open them there.
+    readonly property var launcherModes: ["apps", "clipboard", "calculator", "actions"]
+    readonly property var dashboardTabs: ["Overview", "Performance", "Wallpaper"]
 
     function isOpen(name, screenName) {
         return root.open === name && root.screen === screenName;
     }
 
+    function focusedScreen() {
+        return Hyprland.focusedMonitor?.name ?? "";
+    }
+
+    function openOn(name, screenName) {
+        root.screen = screenName;
+        root.open = name;
+    }
+
     function toggle(name) {
-        const focused = Hyprland.focusedMonitor?.name ?? "";
-        if (root.isOpen(name, focused)) {
+        const focused = root.focusedScreen();
+        if (root.isOpen(name, focused))
             root.close();
-        } else {
-            root.screen = focused;
-            root.open = name;
-        }
+        else
+            root.openOn(name, focused);
     }
 
     function close() {

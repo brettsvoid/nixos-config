@@ -72,7 +72,8 @@ function group(bind) {
         return "Screenshots";
     switch (bind.dispatcher) {
     case "exec":
-        return "Apps";
+        // `custom-shell <target> <function> ...` drives the shell (not custom-shell-or).
+        return bind.arg === "custom-shell" || bind.arg.startsWith("custom-shell ") ? "Shell" : "Apps";
     case "global":
         return "Shell";
     case "killactive":

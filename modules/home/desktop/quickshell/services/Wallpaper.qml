@@ -21,6 +21,8 @@ Singleton {
     readonly property var schemes: ["scheme-neutral", "scheme-tonal-spot", "scheme-content", "scheme-fidelity", "scheme-expressive", "scheme-fruit-salad", "scheme-monochrome", "scheme-rainbow"]
     // The settings' folder, with ~ for the home folder, and no slash at the end.
     readonly property string folder: Settings.wallpaper.folder.replace(/^~(?=\/|$)/, Quickshell.env("HOME")).replace(/(.)\/+$/, "$1")
+    // Set while isFile() reads a path that is not a file.
+    property bool probeFailed: false
 
     function set(path) {
         Quickshell.execDetached(["generate-theme", path]);
@@ -32,6 +34,26 @@ Singleton {
 
     function setMode(mode) {
         Quickshell.execDetached(["generate-theme", "--mode", mode]);
+    }
+
+    // Whether `path` is an existing file, which generate-theme needs: it takes the
+    // folder's first image for anything else. A full path: the shell's own working
+    // folder is no use to a caller. FileView reports a folder or a missing file as a
+    // failed load (`loaded` is true for a folder), and is let go of straight after.
+    function isFile(path) {
+        if (!path.startsWith("/"))
+            return false;
+        root.probeFailed = false;
+        probe.path = path;
+        probe.waitForJob();
+        probe.path = "";
+        return !root.probeFailed;
+    }
+
+    FileView {
+        id: probe
+        printErrors: false
+        onLoadFailed: root.probeFailed = true
     }
 
     // An image from the folder other than the one showing. They are links into the

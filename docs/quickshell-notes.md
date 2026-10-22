@@ -48,6 +48,16 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
 
 ## QML and Quickshell gotchas
 
+- `qs ipc call` reads the function name `show` as its own subcommand (`osd show` fails
+  with "argument was not expected"): write `qs ipc call -- osd show volume`. It prints
+  its own refusals (unknown target or function, a wrong argument count or type) on
+  stdout and exits 0, and only a missing instance exits non-zero; the `custom-shell`
+  command turns them into exit 1.
+- `qs ipc -c custom-shell` finds the instance by the config path as it was started, not
+  through a link, so under `qs-test` use `qs ipc -p "$QS_CONFIG"`.
+- `FileView.loaded` only means the path exists, so it is true for a folder. A read that
+  fails gives `loadFailed` (`FileViewError.NotAFile` for a folder), also from
+  `waitForJob()` (`Wallpaper.isFile`).
 - `transient` is a reserved word in QML: name the property something else
   (`NotificationEntry.isTransient`).
 - A `JsonAdapter` list property is not a JS array: `Array.isArray` is false. Use

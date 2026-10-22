@@ -10,6 +10,7 @@ import "fuzzy.js" as Fuzzy
 QtObject {
     id: root
 
+    readonly property string name: "apps"
     readonly property string prefix: ""
     readonly property string placeholder: `Search apps, or ${Settings.launcher.calculatorPrefix} to calculate, ${Settings.launcher.actionsPrefix} for actions, ${Settings.launcher.clipboardPrefix} for the clipboard`
     // Apps marked Terminal=true run in this (the settings' command, split at spaces).

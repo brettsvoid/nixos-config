@@ -24,8 +24,9 @@ FocusScope {
             component: wallpaperTab
         }
     ]
-    // The tab asked for by name (the launcher's Wallpaper action), shown even when the
-    // settings hide it.
+    // The tab asked for by name (the launcher's Wallpaper action, `custom-shell drawers
+    // dashboard`), shown even when the settings hide it. Drawers.dashboardTabs lists the
+    // names.
     property string asked: ""
     // The tabs shown; with none, Overview.
     readonly property var tabs: {
@@ -57,6 +58,19 @@ FocusScope {
         root.current = Math.max(0, root.tabs.findIndex(tab => tab.name === name));
         root.opened = true;
         Drawers.lastDashboardTab = root.shownTab.name;
+    }
+
+    // Asked for another tab while it is open (services/Drawers.qml).
+    Connections {
+        target: Drawers
+
+        function onDashboardTabChanged() {
+            if (Drawers.dashboardTab === "")
+                return;
+            root.asked = Drawers.dashboardTab;
+            Drawers.dashboardTab = "";
+            root.current = Math.max(0, root.tabs.findIndex(tab => tab.name === root.asked));
+        }
     }
 
     Row {

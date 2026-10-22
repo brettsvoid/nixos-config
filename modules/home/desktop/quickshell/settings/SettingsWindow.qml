@@ -13,7 +13,8 @@ import "../components/navigation.js" as Navigation
 FloatingWindow {
     id: root
 
-    // A new page is an entry here and a Component below.
+    // A new page is an entry here and a Component below, and a name in
+    // Windows.settingsPages.
     readonly property var pages: [
         {
             name: "Appearance",
