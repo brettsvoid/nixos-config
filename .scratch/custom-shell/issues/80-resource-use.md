@@ -122,3 +122,23 @@ CPU is % of one core.
   instead of 2%, and about 160 MiB more RAM.
 - Not checked: how the Steam UI feels with `-cef-disable-gpu`, and the in-game
   overlay with it.
+
+### 22 Oct 2026: Steam's VRAM over 3 min in the tray
+
+The user chose "close Steam's window to the tray in game mode" if it frees VRAM a
+minute after closing. It does not. Steam had been up 8 min, with its window opened once:
+
+| | VRAM |
+|---|---|
+| Window open | 348 MiB |
+| Tray, 10–50 s | 317 MiB |
+| Tray, 60–180 s | swings between 302 and 460 MiB |
+
+Started with `-silent` and never opened, Steam held 108 MiB in the tray. Once its
+window has been open, closing it does not give that back, so game mode does not close
+Steam. The left options are leaving Steam alone or `-cef-disable-gpu` (above).
+
+Still to check: the VRAM swings in the tray suggest the web helper is still working.
+Measure its SM% in the tray over a minute or more, a minute after closing, with no game
+about to start. A `pgrep -f SteamLaunch` guard typed inline matches its own command
+line; use `pgrep -f '[S]teamLaunch'`.
