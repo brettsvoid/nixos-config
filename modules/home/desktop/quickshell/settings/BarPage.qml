@@ -16,7 +16,6 @@ OptionsPage {
     }
 
     ChoiceRow {
-        label: "Edge"
         key: "bar.edge"
         choices: [
             {
@@ -39,14 +38,12 @@ OptionsPage {
     }
 
     SwitchRow {
-        label: "Auto-hide"
         key: "bar.autoHide"
     }
 
     // A pill per screen, filled where the bar shows. Hiding names the screen by its
     // description, so the choice stays with the screen whichever port it is on.
     SettingRow {
-        label: "Screens"
         key: "bar.hiddenScreens"
 
         Row {
@@ -81,17 +78,14 @@ OptionsPage {
 
     // The lock screen's clock follows this too.
     SwitchRow {
-        label: "12-hour"
         key: "clock.twelveHour"
     }
 
     SwitchRow {
-        label: "Seconds"
         key: "bar.clockSeconds"
     }
 
     SwitchRow {
-        label: "Date"
         key: "bar.clockDate"
     }
 
@@ -100,24 +94,20 @@ OptionsPage {
     }
 
     SwitchRow {
-        label: "Per screen"
         key: "bar.workspacesPerMonitor"
     }
 
     SliderRow {
-        label: "How many"
         key: "bar.workspaceCount"
         enabled: !Settings.valueOn(Windows.settingsScreen, "bar.workspacesPerMonitor")
     }
 
     SwitchRow {
-        label: "Empty ones"
         key: "bar.showEmptyWorkspaces"
         enabled: !Settings.valueOn(Windows.settingsScreen, "bar.workspacesPerMonitor")
     }
 
     SwitchRow {
-        label: "Scroll to switch"
         key: "bar.scrollWorkspaces"
     }
 
@@ -126,27 +116,22 @@ OptionsPage {
     }
 
     SwitchRow {
-        label: "Tray"
         key: "bar.showTray"
     }
 
     SwitchRow {
-        label: "Bluetooth"
         key: "bar.showBluetooth"
     }
 
     SwitchRow {
-        label: "Network"
         key: "bar.showNetwork"
     }
 
     SwitchRow {
-        label: "Volume"
         key: "bar.showAudio"
     }
 
     SwitchRow {
-        label: "Battery"
         key: "bar.showBattery"
     }
 
@@ -155,18 +140,15 @@ OptionsPage {
     }
 
     SwitchRow {
-        label: "Percentage"
         key: "bar.volumeLabel"
     }
 
     SliderRow {
-        label: "Scroll step"
         key: "bar.volumeStep"
         format: value => value + " %"
     }
 
     SliderRow {
-        label: "Scroll up to"
         key: "bar.volumeMax"
         format: value => value + " %"
     }
@@ -176,36 +158,30 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Work"
         key: "pomodoro.workMinutes"
         format: value => value + " min"
     }
 
     SliderRow {
-        label: "Break"
         key: "pomodoro.breakMinutes"
         format: value => value + " min"
     }
 
     SliderRow {
-        label: "Long break"
         key: "pomodoro.longBreakMinutes"
         format: value => value + " min"
     }
 
     SliderRow {
-        label: "Long break every"
         key: "pomodoro.longBreakEvery"
         format: value => value === 0 ? "Never" : String(value)
     }
 
     SwitchRow {
-        label: "Auto-start"
         key: "pomodoro.autoStart"
     }
 
     SwitchRow {
-        label: "Sound"
         key: "pomodoro.sound"
     }
 }

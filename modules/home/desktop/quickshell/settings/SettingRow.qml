@@ -2,6 +2,7 @@ import QtQuick
 import "../config"
 import "../services"
 import "../theme"
+import "index.js" as Index
 
 // One setting: its name on the left, its control (the row's children) in the middle,
 // and a button to put it back to the default while it is set. A row that does not
@@ -14,9 +15,10 @@ import "../theme"
 Item {
     id: root
 
-    property string label
-    // Its key in config/Settings.qml.
+    // Its key in config/Settings.qml, or for a row that is not a setting, its name in
+    // index.js. The label is written there too, so the search and the row agree.
     property string key
+    readonly property string label: Index.label(root.key)
     default property alias control: holder.data
 
     readonly property bool perScreen: Settings.schema[root.key]?.perScreen ?? false
@@ -28,6 +30,39 @@ Item {
     width: parent?.width ?? 0
     implicitHeight: Math.max(48, names.implicitHeight + Theme.spacingSmall * 2)
     opacity: root.enabled && !root.shared ? 1 : 0.4
+
+    // The row's background lights up once, to show where a search result is.
+    function flash() {
+        flashing.restart();
+    }
+
+    Rectangle {
+        id: highlight
+        anchors.fill: parent
+        radius: Theme.cornerMedium
+        color: Theme.primary
+        opacity: 0
+        visible: flashing.running
+    }
+
+    SequentialAnimation {
+        id: flashing
+
+        NumberAnimation {
+            target: highlight
+            property: "opacity"
+            to: 0.3
+            duration: 100
+        }
+
+        NumberAnimation {
+            target: highlight
+            property: "opacity"
+            to: 0
+            duration: 900
+            easing.type: Easing.OutQuad
+        }
+    }
 
     Column {
         id: names

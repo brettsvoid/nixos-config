@@ -15,18 +15,16 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Rows"
         key: "launcher.rows"
     }
 
     SwitchRow {
-        label: "Rank by use"
         key: "launcher.rankByUse"
     }
 
     // Not a setting: forgets how often each app was started.
     SettingRow {
-        label: "Use so far"
+        key: "launcher.useSoFar"
 
         Pill {
             readonly property int apps: Object.keys(AppUsage.counts).length
@@ -47,7 +45,6 @@ OptionsPage {
     // The app's command goes after it, so a terminal that needs a separator (for
     // example `foot --` or `wezterm start --`) takes it here.
     TextRow {
-        label: "Terminal"
         key: "launcher.terminal"
     }
 
@@ -56,19 +53,16 @@ OptionsPage {
     }
 
     TextRow {
-        label: "Clipboard"
         key: "launcher.clipboardPrefix"
         fieldWidth: 120
     }
 
     TextRow {
-        label: "Calculator"
         key: "launcher.calculatorPrefix"
         fieldWidth: 120
     }
 
     TextRow {
-        label: "Actions"
         key: "launcher.actionsPrefix"
         fieldWidth: 120
     }

@@ -36,7 +36,8 @@ Singleton {
     // kept within min..max and rounded to `step`. A string must not be empty, and must
     // be one of `options` where there are some. A list (a default of []) must hold only
     // strings. Anything else must have the default's type. A value that fails gives the
-    // default. `perScreen` lets a screen have its own value.
+    // default. `perScreen` lets a screen have its own value. A key also needs an entry in
+    // settings/index.js, for the settings window's search (shell.qml checks at start).
     readonly property var schema: ({
             "appearance.fontFamily": { default: "FiraCode Nerd Font" },
             "appearance.textScale": { default: 1, min: 0.8, max: 1.5, step: 0.05 },

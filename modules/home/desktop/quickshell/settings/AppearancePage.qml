@@ -3,6 +3,7 @@ import "../config"
 import "../dashboard"
 import "../services"
 import "../theme"
+import "index.js" as Index
 
 // The shell's look: font, text size, corners, the frame and the speed of motion, then
 // the wallpaper's folder, fill and timed change, and the wallpaper and its colours (the
@@ -11,6 +12,11 @@ FocusScope {
     id: root
 
     property bool pickingFont: false
+
+    // Lights up the row with `key` (a search result). The rows all fit, so none scrolls.
+    function reveal(key) {
+        Index.rowFor(rows.children, key)?.flash();
+    }
 
     component Heading: Text {
         color: Theme.subtext
@@ -32,7 +38,6 @@ FocusScope {
         }
 
         SettingRow {
-            label: "Font"
             key: "appearance.fontFamily"
 
             Rectangle {
@@ -65,25 +70,21 @@ FocusScope {
         }
 
         SliderRow {
-            label: "Text size"
             key: "appearance.textScale"
             format: value => Math.round(value * 100) + "%"
         }
 
         SliderRow {
-            label: "Corner rounding"
             key: "appearance.cornerScale"
             format: value => Math.round(value * 100) + "%"
         }
 
         SliderRow {
-            label: "Frame thickness"
             key: "appearance.frameThickness"
             format: value => value + " px"
         }
 
         SliderRow {
-            label: "Animation speed"
             key: "appearance.animationSpeed"
             format: value => value.toFixed(1) + "×"
         }
@@ -95,13 +96,11 @@ FocusScope {
 
         // ~ is the home folder.
         TextRow {
-            label: "Folder"
             key: "wallpaper.folder"
             fieldWidth: 360
         }
 
         ChoiceRow {
-            label: "Fill"
             key: "wallpaper.fill"
             choices: [
                 {
@@ -116,7 +115,6 @@ FocusScope {
         }
 
         SliderRow {
-            label: "Change every"
             key: "wallpaper.changeMinutes"
             format: value => value === 0 ? "Never" : value < 60 ? value + " min" : (value / 60).toFixed(value % 60 === 0 ? 0 : 1) + " h"
         }

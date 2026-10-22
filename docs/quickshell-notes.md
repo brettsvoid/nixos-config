@@ -35,7 +35,14 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   a window was lost; after 1 s it landed. sway's own `seat - cursor press` did nothing
   there.
 - `wtype` loses the first key of each call while the keymap changes; `wtype -s 300`
-  waits first.
+  waits first. With it, typing into a field works (`wtype -s 300 "wifi"`), as do
+  Escape and Return (`-k Escape`) and chords (`-M ctrl -k f -m ctrl`), each in its own
+  call. Every call also bounces the window's keyboard focus (Qt logs "Ignoring
+  unexpected wl_keyboard.leave"), so `activeFocus` flickers: keep UI state in a property
+  that a key sets, not in `activeFocus`, or a test sees it flip.
+- `qs-test --check` (and so the build) also fails on the shell's own `console.warn` and
+  `console.error`, logged as `WARN qml:` with no file name. `shell.qml` uses this to
+  check that every setting has a search entry.
 - `GameMode.on` needs the state file to say `on`; an empty file is off.
 - A real Hyprland can run apart from the desktop, for a plugin or a config: nested in a
   headless mutter (`mutter --headless --wayland --no-x11 --virtual-monitor 1920x1080`,

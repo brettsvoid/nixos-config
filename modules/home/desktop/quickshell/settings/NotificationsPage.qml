@@ -11,7 +11,6 @@ OptionsPage {
     }
 
     ChoiceRow {
-        label: "Where"
         key: "notifications.position"
         choices: [
             {
@@ -42,25 +41,21 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Timeout"
         key: "notifications.timeout"
         format: value => value + " s"
     }
 
     // Off: every pop-up takes the timeout above (critical and resident ones still wait).
     SwitchRow {
-        label: "App's timeout"
         key: "notifications.appTimeout"
     }
 
     SliderRow {
-        label: "At most"
         key: "notifications.maxPopups"
         format: value => value === 0 ? "No limit" : value
     }
 
     SliderRow {
-        label: "Body lines"
         key: "notifications.popupBodyLines"
     }
 
@@ -69,13 +64,11 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Keep the last"
         key: "notifications.historyCount"
         format: value => value === 0 ? "All" : value
     }
 
     SliderRow {
-        label: "Keep for"
         key: "notifications.historyDays"
         format: value => value === 0 ? "Ever" : value === 1 ? "1 day" : value + " days"
     }
@@ -85,7 +78,6 @@ OptionsPage {
     }
 
     ChoiceRow {
-        label: "Where"
         key: "osd.position"
         choices: [
             {
@@ -108,28 +100,23 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Stays for"
         key: "osd.timeout"
         format: value => value + " s"
     }
 
     SwitchRow {
-        label: "Volume"
         key: "osd.showVolume"
     }
 
     SwitchRow {
-        label: "Microphone"
         key: "osd.showMicrophone"
     }
 
     SwitchRow {
-        label: "Brightness"
         key: "osd.showBrightness"
     }
 
     SwitchRow {
-        label: "In game mode"
         key: "osd.showInGameMode"
     }
 }

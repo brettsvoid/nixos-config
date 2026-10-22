@@ -158,9 +158,10 @@ stop
 trap - EXIT
 
 # The shell's messages without colour codes; a QML error or warning names its file as
-# @path/File.qml[line:column].
+# @path/File.qml[line:column]. The shell's own console.warn and console.error (a check
+# in shell.qml) log as "WARN qml:" and "ERROR qml:", with no file.
 sed 's/\x1b\[[0-9;]*m//g' "$QS_TEST/shell.log" >"$QS_TEST/shell.txt"
-qml_problems=$(grep -E 'Failed to load configuration|@[^ ]+\.qml\[' "$QS_TEST/shell.txt")
+qml_problems=$(grep -E 'Failed to load configuration|@[^ ]+\.qml\[|(WARN|ERROR) qml:' "$QS_TEST/shell.txt")
 
 echo "== qs-test: $QS_TEST"
 if $loaded; then echo "The shell loaded."; else echo "The shell did not load."; fi
@@ -169,7 +170,7 @@ if [ -n "$qml_problems" ]; then
   echo "$qml_problems"
 fi
 echo "== Other warnings and errors (shell.txt has everything)"
-grep -E 'WARN|ERROR' "$QS_TEST/shell.txt" | grep -vE '@[^ ]+\.qml\[' | sort | uniq -c | sort -rn | head -n 20
+grep -E 'WARN|ERROR' "$QS_TEST/shell.txt" | grep -vE '@[^ ]+\.qml\[|(WARN|ERROR) qml:' | sort | uniq -c | sort -rn | head -n 20
 echo "== Stubbed calls (calls)"
 cat "$QS_TEST/calls"
 

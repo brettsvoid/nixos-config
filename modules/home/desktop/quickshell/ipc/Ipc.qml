@@ -135,6 +135,12 @@ Scope {
             return "";
         }
 
+        // Opens it with `text` typed in the search field, so it lists the matches.
+        function search(text: string): string {
+            Windows.searchSettings(text);
+            return "";
+        }
+
         function close(): void {
             Windows.settings = false;
         }

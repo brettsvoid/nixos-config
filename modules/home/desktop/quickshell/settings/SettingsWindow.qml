@@ -5,17 +5,24 @@ import "../config"
 import "../services"
 import "../theme"
 import "../components/navigation.js" as Navigation
+import "index.js" as Index
 
 // The settings window: a normal window, which a window rule floats and centres
 // (custom-shell.nix, matched on the title). The pages are listed on the left and only
-// the one showing is loaded. Escape closes it; Ctrl+Tab moves to the next page, and
-// Ctrl+D and Ctrl+U scroll it half a page. The whole window exists only while open
-// (shell.qml), so nothing here runs otherwise.
+// the one showing is loaded. Escape clears the search, then closes it; Ctrl+Tab moves
+// to the next page, and Ctrl+D and Ctrl+U scroll it half a page. The whole window
+// exists only while open (shell.qml), so nothing here runs otherwise.
+//
+// The search field sits above the pages (Ctrl+F or `/` takes the focus). While it has
+// the focus and text, the matches (index.js) replace the page, which is not loaded
+// meanwhile; choosing one loads its page and reveals the row. The text stays, so Ctrl+F
+// and Down reach the next match.
 FloatingWindow {
     id: root
 
     // A new page is an entry here and a Component below, and a name in
-    // Windows.settingsPages.
+    // Windows.settingsPages; its rows (or, for a page of devices, the page itself) need
+    // entries in index.js.
     readonly property var pages: [
         {
             name: "Appearance",
@@ -70,8 +77,38 @@ FloatingWindow {
     ]
     readonly property int current: Math.max(0, root.pages.findIndex(page => page.name === Windows.settingsPage))
 
+    // The matches for what is typed, and whether they show instead of the page.
+    readonly property var matches: Index.search(search.text)
+    // Set by using the field (focus or typing), cleared by showing a page.
+    property bool searching: false
+    readonly property bool listing: root.searching && search.text !== ""
+    // The row to reveal once its page has loaded.
+    property string revealKey: ""
+
+    // Back to the page, with the keys going to it rather than the search field.
+    function showPage() {
+        root.searching = false;
+        page.forceActiveFocus();
+    }
+
     function show(index) {
         Windows.settingsPage = root.pages[index].name;
+        root.showPage();
+    }
+
+    function open(entry) {
+        root.revealKey = entry.key;
+        Windows.settingsPage = entry.page;
+        root.showPage();
+    }
+
+    // Takes the search that Windows.searchSettings left, if there is one.
+    function takeSearch() {
+        if (Windows.pendingSearch === null)
+            return;
+        search.text = Windows.pendingSearch;
+        Windows.pendingSearch = null;
+        search.focusAll();
     }
 
     title: "Shell settings"
@@ -83,14 +120,34 @@ FloatingWindow {
     // Closed by the compositor (Super+Q): unload it, so the next open starts afresh.
     onClosed: Windows.settings = false
 
+    Component.onCompleted: root.takeSearch()
+
+    Connections {
+        target: Windows
+
+        function onSearchRequested() {
+            root.takeSearch();
+        }
+    }
+
     FocusScope {
         anchors.fill: parent
         focus: true
 
-        Keys.onEscapePressed: Windows.settings = false
+        Keys.onEscapePressed: {
+            if (search.text !== "") {
+                search.text = "";
+                root.showPage();
+            } else {
+                Windows.settings = false;
+            }
+        }
         Keys.onPressed: event => {
             const half = Navigation.halfPage(event);
-            if (event.key === Qt.Key_Tab && event.modifiers & Qt.ControlModifier) {
+            if ((event.key === Qt.Key_F && event.modifiers & Qt.ControlModifier) || event.text === "/") {
+                search.focusAll();
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Tab && event.modifiers & Qt.ControlModifier) {
                 root.show((root.current + 1) % root.pages.length);
                 event.accepted = true;
             } else if (event.key === Qt.Key_Backtab && event.modifiers & Qt.ControlModifier) {
@@ -125,6 +182,24 @@ FloatingWindow {
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeTitleLarge
                     font.bold: true
+                }
+
+                SearchField {
+                    id: search
+                    width: parent.width
+
+                    onFocusedChanged: if (focused)
+                        root.searching = true
+
+                    onStep: direction => results.step(direction)
+                    onHalfPage: direction => root.listing ? results.halfPage(direction) : page.item?.halfPage?.(direction)
+                    onChosen: results.chooseCurrent()
+                }
+
+                // A little room before the pages.
+                Item {
+                    width: 1
+                    height: Theme.spacingSmall
                 }
 
                 Repeater {
@@ -217,7 +292,7 @@ FloatingWindow {
             anchors.right: parent.right
             anchors.margins: Theme.spacingExtraLarge
             anchors.bottomMargin: 0
-            visible: Windows.screenPages.includes(root.pages[root.current].name)
+            visible: !root.listing && Windows.screenPages.includes(root.pages[root.current].name)
             spacing: Theme.spacingMedium
 
             Flow {
@@ -274,7 +349,28 @@ FloatingWindow {
             anchors.right: parent.right
             anchors.margins: Theme.spacingExtraLarge
             focus: true
+            active: !root.listing
             sourceComponent: root.pages[root.current].component
+
+            // The row is placed once the page has laid out.
+            onLoaded: Qt.callLater(() => {
+                if (root.revealKey !== "")
+                    page.item?.reveal?.(root.revealKey);
+                root.revealKey = "";
+            })
+        }
+
+        SearchResults {
+            id: results
+            anchors.top: warning.visible ? warning.bottom : parent.top
+            anchors.bottom: parent.bottom
+            anchors.left: sidebar.right
+            anchors.right: parent.right
+            anchors.margins: Theme.spacingExtraLarge
+            visible: root.listing
+            results: root.matches
+
+            onChosen: entry => root.open(entry)
         }
     }
 

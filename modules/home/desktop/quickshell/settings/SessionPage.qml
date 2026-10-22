@@ -12,19 +12,16 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Blur"
         key: "lock.blur"
         format: value => value === 0 ? "Off" : Math.round(value * 100) + "%"
     }
 
     SliderRow {
-        label: "Dim"
         key: "lock.dim"
         format: value => Math.round(value * 100) + "%"
     }
 
     SwitchRow {
-        label: "Media"
         key: "lock.media"
     }
 
@@ -33,13 +30,11 @@ OptionsPage {
     }
 
     SliderRow {
-        label: "Lock after"
         key: "idle.lockMinutes"
         format: value => value === 0 ? "Never" : value + " min"
     }
 
     SliderRow {
-        label: "Screens off"
         key: "idle.screenOffMinutes"
         format: value => value === 0 ? "Never" : value + " min"
     }
@@ -50,12 +45,10 @@ OptionsPage {
 
     // Log out, restart and shut down, here and in the launcher's actions.
     SwitchRow {
-        label: "Confirm"
         key: "session.confirm"
     }
 
     SwitchRow {
-        label: "Sleep"
         key: "session.showSleep"
     }
 }

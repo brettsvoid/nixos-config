@@ -1,6 +1,7 @@
 import QtQuick
 import "../components"
 import "../theme"
+import "index.js" as Index
 
 // A page of setting rows that scrolls when they do not fit. Its children go in one
 // column.
@@ -12,6 +13,16 @@ FocusScope {
     // Ctrl+D and Ctrl+U, from the settings window.
     function halfPage(direction) {
         scrollBar.halfPage(direction, false);
+    }
+
+    // Scrolls the row with `key` to the middle and lights it up (a search result).
+    function reveal(key) {
+        column.forceLayout();
+        const row = Index.rowFor(column.children, key);
+        if (!row)
+            return;
+        page.contentY = Math.max(0, Math.min(page.contentHeight - page.height, row.y + row.height / 2 - page.height / 2));
+        row.flash();
     }
 
     Flickable {

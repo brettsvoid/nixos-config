@@ -27,6 +27,12 @@ Singleton {
         return root.screenPages.includes(page) && offered ? root.pickedScreen : "";
     }
 
+    // A search sent to the settings window (searchSettings), until the window takes it:
+    // null when there is none.
+    property var pendingSearch: null
+    // For a window that is already open; one opened by the search finds it waiting.
+    signal searchRequested
+
     // Opens the settings window, on `page` if given. Already open, it is brought
     // forward: Hyprland focuses a new window, but not one asked for again.
     function showSettings(page) {
@@ -35,5 +41,12 @@ Singleton {
         if (root.settings)
             Hyprland.dispatch("focuswindow title:^(Shell settings)$");
         root.settings = true;
+    }
+
+    // Opens the settings window with `text` in its search field.
+    function searchSettings(text) {
+        root.pendingSearch = text;
+        root.showSettings();
+        root.searchRequested();
     }
 }

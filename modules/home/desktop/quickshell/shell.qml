@@ -10,11 +10,13 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import "config"
 import "frame"
 import "ipc"
 import "lock"
 import "services"
 import "settings"
+import "settings/index.js" as SettingsIndex
 import "theme"
 
 ShellRoot {
@@ -26,6 +28,10 @@ ShellRoot {
         Lock.locked;
         // Take up a saved pomodoro session, so its phase end is armed.
         Pomodoro.phase;
+        // The settings window's search has to find every setting (settings/index.js).
+        const unindexed = SettingsIndex.missing(Object.keys(Settings.schema));
+        if (unindexed.length > 0)
+            console.warn("settings/index.js has no entry for " + unindexed.join(", "));
     }
 
     // Hyprland's workspacev2 event does not name the monitor, so Quickshell gives the
