@@ -83,10 +83,8 @@ open leads; check it again when the shell changes.
 
 ## Questions for you
 
-1. Should game mode reach beyond the shell and Hyprland? Steam's web helpers alone hold
-   ~260 MiB of VRAM. Options: (a) leave other apps alone; (b) measure what Steam with
-   its GPU rendering off (`-cef-disable-gpu`) costs and frees, then decide; (c) let
-   game mode close or restart named apps (which ones?).
+1. ~~Should game mode reach beyond the shell and Hyprland?~~ Answered 22 Oct: (b),
+   measure Steam first. Measured (Comments); what to do with Steam is open.
 2. Is a short delay acceptable when game mode goes off (about 120 ms a window if the
    shell unmaps its windows), if it frees a useful amount of VRAM?
 
@@ -95,3 +93,32 @@ open leads; check it again when the shell changes.
 None
 
 ## Comments
+
+### 22 Oct 2026: Steam
+
+Measured with `.scratch/custom-shell/measure-steam.sh`: every process under Steam's
+`steam.sh`, over 30 s, with no download or shader pre-compile running. "Window open"
+means on workspace 5, out of sight. "Tray" means closed to the tray; Hyprland ignores
+minimise, so this is Steam's minimised state.
+
+| Steam | State | VRAM | GPU (SM) | CPU | RAM (PSS) |
+|---|---|---|---|---|---|
+| Up since login (~34 h) | window open | 310 MiB | 0% | 1% | 1660 MiB |
+| Up since login | tray, 10 s after closing | 252 MiB | 0% | 1% | 1661 MiB |
+| Fresh start | tray | 108 MiB | 0% | 4% | 1276 MiB |
+| Fresh start | window open | 377 MiB | 0% | 2% | 1384 MiB |
+| Fresh, `-cef-disable-gpu` | tray | 70 MiB | 0% | 4% | 1305 MiB |
+| Fresh, `-cef-disable-gpu` | window open | 70 MiB | 0% | 17% | 1548 MiB |
+
+CPU is % of one core.
+
+- Steam does no GPU work in any of these states. It only holds VRAM, and nearly all
+  of it is the web helper's GPU process.
+- Closing to the tray frees part of it. It freed 150 MiB once during a download
+  (279 to 129 MiB) and 58 MiB once with Steam up for a day (measured 10 s after
+  closing). How much is let go, and when, varies.
+- `-cef-disable-gpu` keeps Steam at 70 MiB whatever the window does. The GPU process
+  stays, at 9 MiB. The cost: with the window open, even out of sight, 17% of a core
+  instead of 2%, and about 160 MiB more RAM.
+- Not checked: how the Steam UI feels with `-cef-disable-gpu`, and the in-game
+  overlay with it.
