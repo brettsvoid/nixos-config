@@ -305,6 +305,29 @@ Scope {
         }
     }
 
+    // The pomodoro timer (services/Pomodoro.qml). `start` runs a paused or waiting phase
+    // too, `pause` does nothing unless it runs, and `skip` and `stop` nothing without a
+    // session.
+    IpcHandler {
+        target: "pomodoro"
+
+        function start(): void {
+            Pomodoro.start();
+        }
+
+        function pause(): void {
+            Pomodoro.pause();
+        }
+
+        function skip(): void {
+            Pomodoro.skip();
+        }
+
+        function stop(): void {
+            Pomodoro.stop();
+        }
+    }
+
     // `qs ipc call` needs `--` before the function name `show` (docs/quickshell-notes.md);
     // `custom-shell` adds it.
     IpcHandler {

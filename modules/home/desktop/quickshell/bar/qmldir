@@ -2,6 +2,7 @@ module bar
 Bar 1.0 Bar.qml
 Workspaces 1.0 Workspaces.qml
 Clock 1.0 Clock.qml
+PomodoroStatus 1.0 PomodoroStatus.qml
 BatteryStatus 1.0 BatteryStatus.qml
 StatusIcon 1.0 StatusIcon.qml
 AudioStatus 1.0 AudioStatus.qml

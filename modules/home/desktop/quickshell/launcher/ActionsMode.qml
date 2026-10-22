@@ -126,6 +126,36 @@ QtObject {
                 run: () => Notifications.setDoNotDisturb(!Notifications.doNotDisturb)
             }
         ];
+        // Only what applies: start (or carry on) when it does not run, pause when it does,
+        // skip and stop while a session exists.
+        if (!Pomodoro.running)
+            list.push({
+                title: "Start pomodoro",
+                subtitle: Pomodoro.paused ? "Carry on" : "",
+                icon: "chronometer-start",
+                keywords: ["timer", "work", "resume"],
+                run: () => Pomodoro.start()
+            });
+        if (Pomodoro.running)
+            list.push({
+                title: "Pause pomodoro",
+                icon: "chronometer-pause",
+                keywords: ["timer"],
+                run: () => Pomodoro.pause()
+            });
+        if (Pomodoro.active)
+            list.push({
+                title: "Skip to the next phase",
+                subtitle: "Of the pomodoro",
+                icon: "media-skip-forward",
+                keywords: ["timer", "pomodoro", "break"],
+                run: () => Pomodoro.skip()
+            }, {
+                title: "Stop pomodoro",
+                icon: "media-playback-stop",
+                keywords: ["timer"],
+                run: () => Pomodoro.stop()
+            });
         // "scheme-tonal-spot" is "Colour scheme: tonal spot".
         for (const scheme of Wallpaper.schemes)
             list.push({

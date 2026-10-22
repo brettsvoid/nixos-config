@@ -4,8 +4,8 @@ import "../components"
 import "../config"
 import "../theme"
 
-// The bar: where it sits and when it shows, the clock, the workspaces and the status
-// icons.
+// The bar: where it sits and when it shows, the clock, the workspaces, the status
+// icons and the pomodoro timer.
 OptionsPage {
     id: root
 
@@ -166,5 +166,43 @@ OptionsPage {
         label: "Scroll up to"
         key: "bar.volumeMax"
         format: value => value + " %"
+    }
+
+    PageHeading {
+        text: "Pomodoro"
+    }
+
+    SliderRow {
+        label: "Work"
+        key: "pomodoro.workMinutes"
+        format: value => value + " min"
+    }
+
+    SliderRow {
+        label: "Break"
+        key: "pomodoro.breakMinutes"
+        format: value => value + " min"
+    }
+
+    SliderRow {
+        label: "Long break"
+        key: "pomodoro.longBreakMinutes"
+        format: value => value + " min"
+    }
+
+    SliderRow {
+        label: "Long break every"
+        key: "pomodoro.longBreakEvery"
+        format: value => value === 0 ? "Never" : String(value)
+    }
+
+    SwitchRow {
+        label: "Auto-start"
+        key: "pomodoro.autoStart"
+    }
+
+    SwitchRow {
+        label: "Sound"
+        key: "pomodoro.sound"
     }
 }

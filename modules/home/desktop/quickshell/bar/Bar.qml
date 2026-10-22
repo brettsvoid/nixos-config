@@ -22,7 +22,16 @@ Item {
     }
 
     Clock {
+        id: clock
         anchors.centerIn: parent
+        vertical: root.vertical
+    }
+
+    // Beside the clock, after it.
+    PomodoroStatus {
+        x: root.vertical ? (root.width - width) / 2 : clock.x + clock.width + Theme.spacingLarge
+        y: root.vertical ? clock.y + clock.height + Theme.spacingLarge : (root.height - height) / 2
+        visible: available
         vertical: root.vertical
     }
 

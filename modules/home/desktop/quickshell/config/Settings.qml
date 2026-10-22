@@ -58,6 +58,16 @@ Singleton {
             "bar.volumeStep": { default: 5, min: 1, max: 20, step: 1 },
             "bar.volumeMax": { default: 100, min: 100, max: 150, step: 5 },
 
+            // Minutes.
+            "pomodoro.workMinutes": { default: 25, min: 1, max: 90, step: 1 },
+            "pomodoro.breakMinutes": { default: 5, min: 1, max: 30, step: 1 },
+            "pomodoro.longBreakMinutes": { default: 15, min: 1, max: 60, step: 1 },
+            // Work sessions between long breaks; 0 is never.
+            "pomodoro.longBreakEvery": { default: 4, min: 0, max: 8, step: 1 },
+            // The next phase starts by itself, without a click.
+            "pomodoro.autoStart": { default: false },
+            "pomodoro.sound": { default: true },
+
             "dashboard.showOverview": { default: true },
             "dashboard.showPerformance": { default: true },
             "dashboard.showWallpaper": { default: true },
@@ -154,6 +164,15 @@ Singleton {
         readonly property bool volumeLabel: root.value("bar.volumeLabel")
         readonly property int volumeStep: root.value("bar.volumeStep")
         readonly property int volumeMax: root.value("bar.volumeMax")
+    }
+
+    readonly property QtObject pomodoro: QtObject {
+        readonly property int workMinutes: root.value("pomodoro.workMinutes")
+        readonly property int breakMinutes: root.value("pomodoro.breakMinutes")
+        readonly property int longBreakMinutes: root.value("pomodoro.longBreakMinutes")
+        readonly property int longBreakEvery: root.value("pomodoro.longBreakEvery")
+        readonly property bool autoStart: root.value("pomodoro.autoStart")
+        readonly property bool sound: root.value("pomodoro.sound")
     }
 
     // The tabs are read by name (dashboard.show<Name>) with value().

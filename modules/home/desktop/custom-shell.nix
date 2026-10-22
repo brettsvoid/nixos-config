@@ -95,6 +95,10 @@ in
         config.gtk.iconTheme != null
       ) "export QS_ICON_THEME=${lib.escapeShellArg config.gtk.iconTheme.name}";
 
+      # The pomodoro's phase-end sound (services/Pomodoro.qml), played with pw-play. By
+      # store path, so the sound theme is always installed with the shell.
+      alarmSound = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga";
+
       # The environment the shell runs in, for toggle-shell and qs-dev. MangoHud is on
       # for the whole session (profile-gaming), and its Vulkan layer loads into the
       # shell too, where its NVIDIA thread kept about 28% of a core busy. OpenGL, not
@@ -105,6 +109,7 @@ in
         qs_env() {
           export QSG_RHI_BACKEND=opengl
           ${iconThemeEnv}
+          export CUSTOM_SHELL_ALARM_SOUND=${alarmSound}
           export DISABLE_MANGOHUD=1
         }
       '';
@@ -160,6 +165,7 @@ in
             sway=${pkgs.sway-unwrapped}/bin/sway
             dbus_config=${pkgs.dbus}/share/dbus-1/session.conf
             fake_hyprland=${./custom-shell/fake-hyprland.py}
+            alarm_sound=${alarmSound}
             default_config="$HOME/${repoDir}/modules/home/desktop/quickshell"
             compile_shaders() {
               ${compileShaders "$1"}

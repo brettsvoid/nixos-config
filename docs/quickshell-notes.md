@@ -58,6 +58,12 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
 - `FileView.loaded` only means the path exists, so it is true for a folder. A read that
   fails gives `loadFailed` (`FileViewError.NotAFile` for a folder), also from
   `waitForJob()` (`Wallpaper.isFile`).
+- Setting several `JsonAdapter` properties one after another loses values:
+  `onAdapterUpdated: writeAdapter()` starts a write for the first, and the second's write
+  waits for it and then reads the first's file back over the properties, so the property
+  just set reads its old value. That pattern suits one property set at a time. For
+  several, keep the live state in plain properties and save them as one `var`
+  (`services/Pomodoro.qml`).
 - `transient` is a reserved word in QML: name the property something else
   (`NotificationEntry.isTransient`).
 - A `JsonAdapter` list property is not a JS array: `Array.isArray` is false. Use

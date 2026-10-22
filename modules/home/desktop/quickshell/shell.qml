@@ -24,6 +24,8 @@ ShellRoot {
         DesktopEntries.applications;
         // Set the lock up now, so the first lock does not wait for it.
         Lock.locked;
+        // Take up a saved pomodoro session, so its phase end is armed.
+        Pomodoro.phase;
     }
 
     // Hyprland's workspacev2 event does not name the monitor, so Quickshell gives the
