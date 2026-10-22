@@ -1,6 +1,6 @@
 # Per-monitor settings
 
-Status: ready-for-agent
+Status: ready-for-human
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -64,11 +64,11 @@ Cost: bindings only; no process or timer.
 
 - [ ] On DP-2 only, the bar goes left and the wallpaper fits; DP-1 does not change. Both
       survive a restart.
-- [ ] A screen value from Nix shows as that screen's in the window, and a reset there
+- [x] A screen value from Nix shows as that screen's in the window, and a reset there
       returns to it.
-- [ ] Values for a screen that is not connected are kept, and its pill can clear them.
-- [ ] A shared key under `screens` is ignored, and the shell loads without warnings.
-- [ ] Without a `screens` section nothing changes. Costs nothing in game mode.
+- [x] Values for a screen that is not connected are kept, and its pill can clear them.
+- [x] A shared key under `screens` is ignored, and the shell loads without warnings.
+- [x] Without a `screens` section nothing changes. Costs nothing in game mode.
 
 ## Blocked by
 
@@ -77,3 +77,86 @@ Cost: bindings only; no process or timer.
 ## Comments
 
 **2026-10-19:** All seven choices approved as proposed, on the review page.
+
+**2026-10-23:** Built as approved (commit `custom-shell: per-monitor settings, under
+screens in the same files`). Status is ready-for-human: everything was checked headless
+with `qs-test`, not yet on the desktop's own DP-2. The first criterion stays unticked
+until then.
+
+How it works: `settings.json` and `local.customShell.settings` take a `screens` section,
+for example `{"screens": {"Dell Inc. Dell AW2518H #ASO0Wsxq3xLd": {"bar": {"edge":
+"left"}}}}`. A connector name (`DP-2`) works as the key too. In Nix:
+
+```nix
+home-manager.users.brett.local.customShell.settings.screens."Dell Inc. Dell AW2518H #ASO0Wsxq3xLd".bar.edge = "left";
+```
+
+From the command line: `custom-shell settings setOn DP-2 bar.edge '"left"'`, `getOn DP-2
+bar.edge`, `resetOn DP-2 bar.edge`. A screen can be named by connector or description;
+the value is stored under the description.
+
+Checked, with two headless outputs whose fake Hyprland gave them the desktop's real
+descriptions (`qs-test -s 2 -m monitors.json`, new in this commit):
+
+- DP-2 only: `setOn "Dell Inc. Dell AW2518H #ASO0Wsxq3xLd" bar.edge '"left"'` and
+  `setOn HEADLESS-2 wallpaper.fill '"fit"'` both wrote under the description.
+  `getOn HEADLESS-2` then gave `"left"` and `"fit"`; `getOn HEADLESS-1` and the shared
+  `get` gave `"top"` and `"crop"`. Screenshots (the Dell output turned to portrait): a
+  left bar with the vertical clock and a letterboxed wallpaper on it, and no change on
+  the other output. After the shell was killed and started again, the same values and
+  the same screenshots, and no QML warning in its log.
+- Nix: with `defaults.json` holding `bar.edge` `right` for the Dell and `settings.json`
+  `bottom`, clicking the Dell's pill (virtual pointer) showed Edge on Bottom with a
+  reset button. The reset left `right` filled with no reset button; `getOn` gave
+  `"right"` and the file kept only the Dell's other key.
+- Not connected: `Old Screen ABC 123` with `launcher.rows` 12 and `bar.clockDate` false
+  got a pill. All screens showed "Differs on Old Screen ABC 123" on Rows and Date.
+  Picking it showed "Not connected." and Rows at 12, with Rank by use faded. "Forget its
+  settings" removed it from the file and its pill went; `getOn` then refused it as an
+  unknown screen. Clicking "Differs on HEADLESS-2" picked that screen.
+- Shared keys under `screens` (`appearance.textScale` 1.5, `frameThickness` 20,
+  `clock.twelveHour`, `bar.volumeStep`) changed no pixel on either output (`compare
+  -metric AE`: 0). A screen with only shared keys got no pill. `getOn` refuses them: `error:
+  appearance.textScale is the same on every screen`. `qs-test --check` passes with them.
+- No `screens` section: this commit's shell and the one before, side by side with no
+  settings, gave screenshots with 0 differing pixels on both outputs, and the same
+  warnings (none from QML). Resources, one run each: RSS 235.8 MB at rest against 234.2
+  before, 216.6 MB in game mode against 215.8; 0 CPU ticks in 10 s, at rest and in game
+  mode, for both. Nothing new runs: bindings only.
+- Also: the Screens pills under Bar hide the Dell by writing its description to
+  `bar.hiddenScreens`, and a second click removes it. `launcher.rows` 4 on one screen gave
+  a shorter launcher there than on the other. With `notifications.position` bottom-left
+  and `osd.position` top on the focused screen only, the pop-up and the OSD showed there.
+- `nix develop -c pre-commit run --all-files` passes. brett-desktop's and
+  brett-msi-laptop's homes build (`qs-test --check` included).
+
+Beyond the approved text, and why:
+
+- `resetOn` beside `getOn` and `setOn`, so a screen value set from the command line can
+  be removed from it.
+- `setOn` and `getOn` refuse a screen that is neither connected nor stored, and a shared
+  setting, with an `error:` line, as the other IPC functions do.
+- The window's pills show the connector and the model Qt reports; a screen that is not
+  connected shows the name it is stored under.
+- On Appearance, the wallpaper picker below the rows fades too while a screen is picked,
+  as it sets one wallpaper for all (choice 7).
+- "Forget its settings" shows only for a screen that is not connected. It removes the
+  user's values; Nix's stay, and keep its pill.
+
+For later issues: a new per-screen setting is `perScreen: true` in the schema and a
+property on `config/ScreenSettings.qml`; the window picks it up from the schema. The bar
+entries of issues 38 to 40 should go there.
+
+Still to check, on the desktop after the rebuild:
+
+1. `custom-shell settings setOn DP-2 bar.edge '"left"'` and `custom-shell settings setOn
+   DP-2 wallpaper.fill '"fit"'`. The Dell's bar goes to the left and its wallpaper shows
+   whole; the Odyssey does not change. `toggle-shell restart`: both stay.
+2. `cat ~/.config/custom-shell/settings.json`: the values are under `"Dell Inc. Dell
+   AW2518H #ASO0Wsxq3xLd"`. If the key is `DP-2` instead, Hyprland's description did not
+   reach the shell; say so.
+3. Settings, Bar: the pills read `DP-1 · Odyssey G5` and `DP-2 · Dell AW2518H` (or what
+   Qt calls them). Pick DP-2, reset Edge and Fill (Appearance); the bar returns to the top.
+4. Question: keep these values on DP-2, or set them in `brett-desktop.nix` instead?
+
+When 1 and 2 hold, tick the first criterion and set the status to done.
