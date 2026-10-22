@@ -1,6 +1,6 @@
 # Shell IPC
 
-Status: ready-for-agent
+Status: ready-for-human
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -70,10 +70,10 @@ Cost: the IPC socket is idle until called. Nothing in game mode.
 ## Acceptance criteria
 
 - [ ] `custom-shell` lists the targets; each call does what its shortcut or action does.
-- [ ] A bad name prints an `error:` line, and the wrapper exits 1.
-- [ ] `custom-shell settings set bar.hiddenScreens '["DP-2"]'` works.
-- [ ] `custom-shell drawers dashboard performance` opens Performance, or changes to it.
-- [ ] `qs-test -- qs ipc -p "$QS_CONFIG" call drawers openOn launcher HEADLESS-1` opens
+- [x] A bad name prints an `error:` line, and the wrapper exits 1.
+- [x] `custom-shell settings set bar.hiddenScreens '["DP-2"]'` works.
+- [x] `custom-shell drawers dashboard performance` opens Performance, or changes to it.
+- [x] `qs-test -- qs ipc -p "$QS_CONFIG" call drawers openOn launcher HEADLESS-1` opens
       the launcher headless.
 - [ ] Every keybind works as before. Costs nothing at rest or in game mode.
 
@@ -84,3 +84,89 @@ Cost: the IPC socket is idle until called. Nothing in game mode.
 ## Comments
 
 **2026-10-19:** All six choices approved as proposed, on the review page.
+
+**2026-10-22:** Built as approved (commit `custom-shell: IPC, and a custom-shell command
+to call it`). Status is ready-for-human: the wrapper and the keybinds have not met the
+running desktop shell, which needs the rebuild first.
+
+Checked headless with `qs-test`, with the wrapper pointed at the test shell by path
+(`qs ipc -c custom-shell` finds an instance by the path it started from, so it cannot
+see qs-test's shell; `qs list -c custom-shell` and `qs ipc -c custom-shell show` do reach
+the live one, which has no targets yet):
+
+- Bad names and values print `error: ...` and exit 1:
+  `custom-shell drawers toggle nope` gives `error: unknown drawer "nope" (session,
+  launcher, cheatsheet, notifications, dashboard)`; `settings set bar.edge '"middle"'`
+  gives `error: bar.edge takes one of top, bottom, left, right`; an unknown setting,
+  screen, dashboard tab, launcher mode, settings page, mode, scheme and OSD kind are
+  refused the same way; `wallpaper set` refuses a folder, a missing file and a relative
+  path.
+- `custom-shell settings set bar.hiddenScreens '["DP-2"]'` exits 0, `settings get` gives
+  `["DP-2"]` and the test's `settings.json` holds it. `reset` removes it again.
+- `qs-test -- qs ipc -p "$QS_CONFIG" call drawers openOn launcher HEADLESS-1` exits 0
+  and `drawers current` then gives `launcher`.
+- `drawers dashboard performance`: with the dashboard closed it opens on Performance, and
+  open it changes tab (logged `Overview`, `Performance`, `Wallpaper` in one run). A
+  tab the settings hide is shown too. `drawers launcher clipboard|calculator|actions|apps`
+  opens the launcher in that mode or changes it while open. `settings open "window
+  effects"` opened the settings window on that page, `open Audio` changed it, `open ""`
+  left it. These used a copy of the shell whose `Drawers.focusedScreen()` returns
+  HEADLESS-1, because qs-test's fake Hyprland has no focused monitor.
+- Every other target: `lock lock` then `isLocked` gave `true` (headless sway);
+  `notifications setDnd true`, `toggleDnd`, `getDnd`, and `count` after a `notify-send`
+  gave 1 and after `clear` 0; `media` against a silent mpv with mpv-mpris: `playPause`
+  paused and resumed it and `current` gave `{"player":"mpv","playing":false,"title":
+  "Test tone",...}`; `wallpaper set`, `random`, `theme setMode|toggleMode|setScheme` and
+  `gameMode set|toggle` ran the stubs (`generate-theme ...`, `game-mode on|toggle` in
+  the calls log); `osd show volume` showed the OSD (logged in a copy).
+- The cheatsheet's grouping (`binds.js`, run with node): `exec, custom-shell drawers ...`
+  and bare `custom-shell` go under Shell; `custom-shell-or ...` and `kitty` stay under
+  Apps.
+- At rest: RSS of the headless shell was 183.0 MB with the change and 182.9 MB without,
+  16 threads each, 0 or 1 CPU tick in 5 s. Nothing runs in game mode: no timer or
+  process was added.
+- `nix develop -c pre-commit run --all-files` passes and brett-desktop's home builds
+  (`qs-test --check` included).
+
+Two things found, both in `docs/quickshell-notes.md`: `qs ipc call osd show volume`
+fails because `show` is read as the sibling subcommand (the wrapper calls with `--`),
+and `qs ipc call` prints its own refusals (unknown target, wrong argument count) on
+stdout and exits 0, so the wrapper also treats those as errors.
+
+Beyond the approved text, and why:
+
+- `wallpaper set` takes a full path only (the shell's own working folder would resolve
+  a relative one).
+- `theme setScheme` takes the name with or without `scheme-`, as `getScheme` gives it.
+- Functions that take only a bool (`setDnd`, `gameMode set`) still return a string, as
+  choice 2 says for any value; a bad bool is qs's own error ("Unable to parse
+  argument"), which the wrapper also exits 1 on. qs reads only `true`, `false` or an
+  integer, so `off` is refused.
+- Settings take JSON, so a string needs its quotes: `settings set bar.edge '"left"'`.
+- `Players.active` (`services/Players.qml`) holds the media card's rule, so the card and
+  the `media` target share it. Issue 50 plans a singleton of that name and can grow
+  this one.
+- The first `media` call after the shell starts finds no player until something has
+  read MPRIS (the dashboard or lock screen), because Quickshell reads the players on
+  first use. Reading them at start would add a D-Bus watch at rest, so it is left lazy.
+
+Still to check, on the desktop after the rebuild (the shell restarts by itself):
+
+1. `custom-shell` lists nine targets: `drawers`, `settings`, `lock`, `notifications`,
+   `media`, `wallpaper`, `theme`, `gameMode`, `osd`.
+2. `custom-shell drawers toggle dashboard` opens the dashboard on the focused screen and
+   a second run closes it. With it closed, `custom-shell drawers dashboard performance`
+   opens it on Performance; run it again with `wallpaper` while it is open and the tab
+   changes. `custom-shell drawers launcher actions` opens the launcher with `>` typed.
+3. `custom-shell drawers toggle nope; echo $?` prints the `error:` line and 1.
+4. `custom-shell settings set bar.hiddenScreens '["DP-2"]'` hides the bar on DP-2 (use a
+   screen name from `hyprctl monitors`); `custom-shell settings reset bar.hiddenScreens`
+   brings it back.
+5. The keybinds as before: Super+R, Super+/, Super+D, Super+N, Super+Escape, Super+I, and
+   the brightness keys on the laptop (they show the OSD).
+6. `custom-shell theme toggleMode` switches light and dark, as the launcher's actions do;
+   `custom-shell osd show volume` shows the volume OSD.
+7. Not checked at all: `gameMode`, `wallpaper set` and `lock lock` for real. Say if you
+   want those run on the desktop; `lock lock` needs your password.
+
+When 1 to 5 hold, set the status to done.
