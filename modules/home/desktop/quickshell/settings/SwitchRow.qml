@@ -9,7 +9,7 @@ SettingRow {
     Switch {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        checked: Settings.value(root.key)
-        onToggled: checked => Settings.set(root.key, checked)
+        checked: Settings.valueOn(root.screen, root.key)
+        onToggled: checked => Settings.set(root.key, checked, root.screen)
     }
 }

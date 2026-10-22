@@ -256,7 +256,8 @@ in
       # the user has chosen otherwise in the settings window, whose choices stay in
       # ~/.config/custom-shell/settings.json; resetting a setting there returns it to
       # the value here. A value the shell does not know, or of the wrong type, is
-      # ignored.
+      # ignored. `screens` holds values for one screen, by its description or connector,
+      # for the settings marked perScreen.
       options.local.customShell.settings = lib.mkOption {
         inherit (pkgs.formats.json { }) type;
         default = { };
@@ -266,6 +267,7 @@ in
             textScale = 1.1;
             frameThickness = 6;
           };
+          screens."Dell Inc. Dell AW2518H #ASO0Wsxq3xLd".bar.edge = "left";
         };
         description = "The shell's settings by the same keys as its settings file, as starting values the settings window can override.";
       };

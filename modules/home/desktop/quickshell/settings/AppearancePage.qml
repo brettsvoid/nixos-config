@@ -1,6 +1,7 @@
 import QtQuick
 import "../config"
 import "../dashboard"
+import "../services"
 import "../theme"
 
 // The shell's look: font, text size, corners, the frame and the speed of motion, then
@@ -121,12 +122,15 @@ FocusScope {
         }
     }
 
+    // The same on every screen, so faded while one is picked, as the shared rows are.
     WallpaperTab {
         anchors.top: rows.bottom
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         focus: !root.pickingFont
+        enabled: Windows.settingsScreen === ""
+        opacity: enabled ? 1 : 0.4
     }
 
     // Over the page while open, so the list has room.

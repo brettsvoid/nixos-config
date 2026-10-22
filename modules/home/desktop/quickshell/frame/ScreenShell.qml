@@ -45,12 +45,17 @@ Scope {
         }
     }
 
+    // The per-screen settings in force here, for the windows below.
+    readonly property ScreenSettings settings: ScreenSettings {
+        screen: root.modelData.name
+    }
+
     // The bar's edge keeps the bar's depth free, unless the bar hides itself or this
     // screen has none: windows then reach the frame, and a raised bar covers them.
     function reserved(edge) {
         if (GameMode.on)
             return 0;
-        const bar = edge === Settings.bar.edge && !Settings.bar.autoHide && !Settings.bar.hiddenScreens.includes(root.modelData.name);
+        const bar = edge === root.settings.bar.edge && !root.settings.bar.autoHide && root.settings.hasBar;
         return bar ? Theme.barHeight : Theme.frameThickness;
     }
 
@@ -80,10 +85,12 @@ Scope {
 
     WallpaperWindow {
         screen: root.modelData
+        settings: root.settings
     }
 
     FrameWindow {
         screen: root.modelData
+        settings: root.settings
         reveal: root.reveal
     }
 }

@@ -1,9 +1,10 @@
 """A stand-in for Hyprland's two IPC sockets, for qs-test.
 
-fake-hyprland.py <socket folder> <events file>
+fake-hyprland.py <socket folder> <events file> <monitors file>
 
 Answers every request on .socket.sock with empty JSON ({} for j/status, [] for the
-rest) and prints it (qs-test keeps the output in hyprland.log), and passes each line
+rest; j/monitors with the monitors file, `hyprctl monitors -j`'s shape, while it exists)
+and prints it (qs-test keeps the output in hyprland.log), and passes each line
 appended to the events file (for example `configreloaded>>`) to every client of
 .socket2.sock.
 """
@@ -14,7 +15,7 @@ import sys
 import threading
 import time
 
-folder, events_path = sys.argv[1], sys.argv[2]
+folder, events_path, monitors_path = sys.argv[1], sys.argv[2], sys.argv[3]
 os.makedirs(folder, exist_ok=True)
 clients = []
 lock = threading.Lock()
@@ -33,7 +34,11 @@ def answer_requests():
         conn, _ = server.accept()
         request = conn.recv(65536).decode(errors="replace")
         print(request, flush=True)
-        conn.sendall(b"{}" if request.endswith("status") else b"[]")
+        if request.endswith("monitors") and os.path.exists(monitors_path):
+            with open(monitors_path, "rb") as monitors:
+                conn.sendall(monitors.read())
+        else:
+            conn.sendall(b"{}" if request.endswith("status") else b"[]")
         conn.close()
 
 

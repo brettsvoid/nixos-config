@@ -5,12 +5,14 @@ import "../theme"
 
 // The bar's content, laid out along the frame's bar band: workspaces at the start, the
 // clock in the middle, the tray and status icons at the end. On a side edge
-// (`vertical`) they run from top to bottom. The settings choose which status icons show.
+// (`vertical`) they run from top to bottom. The screen's settings choose which status
+// icons show.
 Item {
     id: root
 
     required property var screen
-    property bool vertical: false
+    required property ScreenSettings settings
+    readonly property bool vertical: root.settings.bar.vertical
 
     // Placed by x and y rather than anchors: anchors swapped by bindings, as the bar
     // moves between a side and the top, left items where they had been.
@@ -18,6 +20,7 @@ Item {
         x: root.vertical ? (root.width - width) / 2 : Theme.barPadding
         y: root.vertical ? Theme.barPadding : (root.height - height) / 2
         screen: root.screen
+        settings: root.settings
         vertical: root.vertical
     }
 
@@ -25,6 +28,8 @@ Item {
         id: clock
         anchors.centerIn: parent
         vertical: root.vertical
+        showSeconds: root.settings.bar.clockSeconds
+        showDate: root.settings.bar.clockDate
     }
 
     // Beside the clock, after it.
@@ -47,31 +52,33 @@ Item {
 
         Tray {
             Layout.alignment: Qt.AlignCenter
-            visible: Settings.bar.showTray && hasItems
+            visible: root.settings.bar.showTray && hasItems
             vertical: root.vertical
+            edge: root.settings.bar.edge
         }
 
         BluetoothStatus {
             Layout.alignment: Qt.AlignCenter
-            visible: Settings.bar.showBluetooth && available
+            visible: root.settings.bar.showBluetooth && available
             vertical: root.vertical
         }
 
         NetworkStatus {
             Layout.alignment: Qt.AlignCenter
-            visible: Settings.bar.showNetwork && available
+            visible: root.settings.bar.showNetwork && available
             vertical: root.vertical
         }
 
         AudioStatus {
             Layout.alignment: Qt.AlignCenter
-            visible: Settings.bar.showAudio && available
+            visible: root.settings.bar.showAudio && available
             vertical: root.vertical
+            showLabel: root.settings.bar.volumeLabel
         }
 
         BatteryStatus {
             Layout.alignment: Qt.AlignCenter
-            visible: Settings.bar.showBattery && available
+            visible: root.settings.bar.showBattery && available
             vertical: root.vertical
         }
     }

@@ -1,10 +1,16 @@
 import QtQuick
 import "../config"
+import "../services"
 import "../theme"
 
 // One setting: its name on the left, its control (the row's children) in the middle,
 // and a button to put it back to the default while it is set. A row that does not
 // apply (`enabled: false`) is faded and takes no input.
+//
+// With a screen picked above the page (Windows.settingsScreen), a per-screen setting's
+// row edits that screen, and its reset drops the screen's own value; any other row is
+// faded and takes no input, as it is the same on every screen. With every screen, a
+// per-screen row names the screens where it differs, and a click picks one.
 Item {
     id: root
 
@@ -13,28 +19,59 @@ Item {
     property string key
     default property alias control: holder.data
 
-    width: parent?.width ?? 0
-    implicitHeight: 48
-    opacity: root.enabled ? 1 : 0.4
+    readonly property bool perScreen: Settings.schema[root.key]?.perScreen ?? false
+    // The screen the control reads and writes, or "" for every screen.
+    readonly property string screen: root.perScreen ? Windows.settingsScreen : ""
+    readonly property bool shared: Windows.settingsScreen !== "" && !root.perScreen
+    readonly property var differsOn: root.perScreen && Windows.settingsScreen === "" ? Settings.screensWithOwn(root.key) : []
 
-    Text {
-        id: name
+    width: parent?.width ?? 0
+    implicitHeight: Math.max(48, names.implicitHeight + Theme.spacingSmall * 2)
+    opacity: root.enabled && !root.shared ? 1 : 0.4
+
+    Column {
+        id: names
         anchors.verticalCenter: parent.verticalCenter
         // Room for the longest name, at any text size.
         width: Theme.typeBodyLarge * 11
-        text: root.label
-        color: Theme.text
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.typeBodyLarge
+
+        Text {
+            width: parent.width
+            text: root.label
+            color: Theme.text
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.typeBodyLarge
+        }
+
+        Text {
+            width: parent.width
+            visible: root.differsOn.length > 0
+            wrapMode: Text.Wrap
+            textFormat: Text.StyledText
+            text: "Differs on " + root.differsOn.map(name => {
+                const shown = name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                return `<a href="${encodeURIComponent(name)}">${shown}</a>`;
+            }).join(", ")
+            color: Theme.subtext
+            linkColor: Theme.primary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.typeBodySmall
+            onLinkActivated: link => Windows.pickedScreen = decodeURIComponent(link)
+
+            HoverHandler {
+                cursorShape: parent.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
+            }
+        }
     }
 
     Item {
         id: holder
-        anchors.left: name.right
+        anchors.left: names.right
         anchors.right: reset.left
         anchors.rightMargin: Theme.spacingMedium
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        enabled: !root.shared
     }
 
     Rectangle {
@@ -44,7 +81,8 @@ Item {
         width: 32
         height: width
         radius: width / 2
-        visible: Settings.isSet(root.key)
+        visible: Settings.isSet(root.key, root.screen)
+        enabled: !root.shared
         color: area.containsMouse ? Theme.surfaceContainerHigh : Theme.surfaceContainer
 
         Text {
@@ -60,7 +98,7 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: Settings.reset(root.key)
+            onClicked: Settings.reset(root.key, root.screen)
         }
     }
 }

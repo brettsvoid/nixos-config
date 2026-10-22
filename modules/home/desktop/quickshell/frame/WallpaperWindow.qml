@@ -14,9 +14,10 @@ import "../theme"
 PanelWindow {
     id: root
 
+    required property ScreenSettings settings
     // Which of the two images is on top.
     property Image front: first
-    readonly property int fill: Settings.wallpaper.fill === "fit" ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+    readonly property int fill: root.settings.wallpaper.fill === "fit" ? Image.PreserveAspectFit : Image.PreserveAspectCrop
 
     function show(path) {
         const incoming = root.front === first ? second : first;

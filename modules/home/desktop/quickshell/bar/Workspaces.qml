@@ -4,13 +4,14 @@ import Quickshell.Hyprland
 import "../config"
 import "../theme"
 
-// The workspaces as pills, the active one longer. Click one to go there. The settings
-// choose which show: workspaces 1 to N, with or without the empty ones, or only those on
+// The workspaces as pills, the active one longer. Click one to go there. The screen's
+// settings choose which show: workspaces 1 to N, with or without the empty ones, or only those on
 // this screen; and whether scrolling over them moves to the next or previous one shown.
 Item {
     id: root
 
     required property var screen
+    required property ScreenSettings settings
     property bool vertical: false
 
     readonly property var monitor: Hyprland.monitorFor(screen)
@@ -21,11 +22,11 @@ Item {
     // and close. Special workspaces have negative ids.
     readonly property var shown: {
         const existing = Hyprland.workspaces.values.filter(w => w.id > 0);
-        if (Settings.bar.workspacesPerMonitor)
+        if (root.settings.bar.workspacesPerMonitor)
             return existing.filter(w => w.monitor === root.monitor).map(w => w.id).sort((a, b) => a - b);
         const ids = [];
-        for (let id = 1; id <= Settings.bar.workspaceCount; ++id) {
-            if (Settings.bar.showEmptyWorkspaces || id === root.activeWorkspaceId || existing.some(w => w.id === id && w.toplevels.values.length > 0))
+        for (let id = 1; id <= root.settings.bar.workspaceCount; ++id) {
+            if (root.settings.bar.showEmptyWorkspaces || id === root.activeWorkspaceId || existing.some(w => w.id === id && w.toplevels.values.length > 0))
                 ids.push(id);
         }
         return ids;

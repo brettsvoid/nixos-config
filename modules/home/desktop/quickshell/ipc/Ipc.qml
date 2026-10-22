@@ -29,6 +29,18 @@ Scope {
         return Object.prototype.hasOwnProperty.call(Settings.schema, key);
     }
 
+    // Why `key` cannot be read or set on `screen`, or "".
+    function refuseOnScreen(screen, key) {
+        if (!root.isSetting(key))
+            return `error: unknown setting "${key}"`;
+        if (!Settings.schema[key].perScreen)
+            return `error: ${key} is the same on every screen`;
+        const known = Settings.screens.map(s => s.name);
+        if (!known.some(name => Settings.namesOf(name).includes(screen)))
+            return root.unknown("screen", screen, known);
+        return "";
+    }
+
     // What a setting takes, for the error that refuses a value.
     function takes(spec) {
         if (spec.options)
@@ -150,6 +162,34 @@ Scope {
             if (!root.isSetting(key))
                 return `error: unknown setting "${key}"`;
             Settings.reset(key);
+            return "";
+        }
+
+        // The same for one screen, named by connector or description (`hyprctl
+        // monitors`), or as stored for one not connected.
+        function getOn(screen: string, key: string): string {
+            return root.refuseOnScreen(screen, key) || JSON.stringify(Settings.valueOn(screen, key));
+        }
+
+        function setOn(screen: string, key: string, json: string): string {
+            const refusal = root.refuseOnScreen(screen, key);
+            if (refusal)
+                return refusal;
+            let value;
+            try {
+                value = JSON.parse(json);
+            } catch (e) {
+                return `error: not JSON: ${json}`;
+            }
+            return Settings.set(key, value, screen) ? "" : `error: ${key} takes ${root.takes(Settings.schema[key])}`;
+        }
+
+        // Back to the shared value, or Nix's for the screen.
+        function resetOn(screen: string, key: string): string {
+            const refusal = root.refuseOnScreen(screen, key);
+            if (refusal)
+                return refusal;
+            Settings.reset(key, screen);
             return "";
         }
     }

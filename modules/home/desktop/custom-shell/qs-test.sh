@@ -4,12 +4,16 @@
 
 usage() {
   cat <<'EOF'
-Usage: qs-test [-c config] [-t seconds] [--check] [-- command...]
+Usage: qs-test [-c config] [-t seconds] [-s screens] [-m monitors] [--check] [-- command...]
 
 Runs the custom shell apart from the desktop and reports what it logged.
 
   -c config   The shell's folder (default: the repo's modules/home/desktop/quickshell).
   -t seconds  How long the shell runs when no command is given (default 5).
+  -s screens  How many outputs sway makes: HEADLESS-1, HEADLESS-2... (default 1).
+  -m monitors A file in `hyprctl monitors -j`'s shape, for the fake Hyprland to answer
+              with, for example to give the outputs descriptions. A command can also
+              write $QS_TEST/monitors.json and send `configreloaded>>`.
   --check     Exit 1 if the shell did not load or logged a QML error or warning.
   -- command  Run this once the shell has loaded, then stop it. The command sees
               QS_TEST (the test folder) and QS_CONFIG (the shell's folder) and the
@@ -22,7 +26,7 @@ $QS_TEST/xdg-config/custom-shell/settings.json; a command can write that file an
 shell applies it. Commands that would change the desktop (hyprctl,
 generate-theme, game-mode, session-exit, systemctl, loginctl, wl-copy, window-effect,
 pw-play, toggle-shell) are stubs that log each call to $QS_TEST/calls. A fake Hyprland answers
-queries with empty JSON, logs each request (dispatches included) to
+queries with empty JSON (monitors with -m's file), logs each request (dispatches included) to
 $QS_TEST/hyprland.log, and sends each line appended to $QS_TEST/events as an event,
 for example: echo 'configreloaded>>' >>"$QS_TEST/events". The folder is kept.
 EOF
@@ -30,11 +34,15 @@ EOF
 
 config=$default_config
 seconds=5
+screens=1
+monitors=
 check=false
 while [ $# -gt 0 ]; do
   case "$1" in
     -c) config=$2; shift 2 ;;
     -t) seconds=$2; shift 2 ;;
+    -s) screens=$2; shift 2 ;;
+    -m) monitors=$2; shift 2 ;;
     --check) check=true; shift ;;
     -h | --help) usage; exit 0 ;;
     --) shift; break ;;
@@ -57,6 +65,7 @@ user_config=${XDG_CONFIG_HOME:-$HOME/.config}
 [ -d "$user_config/fontconfig" ] && ln -s "$user_config/fontconfig" "$QS_TEST/xdg-config/fontconfig"
 : >"$QS_TEST/calls"
 : >"$QS_TEST/events"
+[ -n "$monitors" ] && cp "$monitors" "$QS_TEST/monitors.json"
 
 # The shell as the rebuild installs it, shaders compiled.
 cp -r "$config" "$QS_CONFIG"
@@ -91,7 +100,7 @@ stop() {
 trap stop EXIT
 
 python3 -I "$fake_hyprland" "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE" "$QS_TEST/events" \
-  >"$QS_TEST/hyprland.log" 2>&1 &
+  "$QS_TEST/monitors.json" >"$QS_TEST/hyprland.log" 2>&1 &
 pids+=($!)
 
 # The package's own session config: the build sandbox has no /etc/dbus-1.
@@ -100,8 +109,11 @@ dbus-daemon --config-file="$dbus_config" --nofork --nopidfile --address="$DBUS_S
   >"$QS_TEST/dbus.log" 2>&1 &
 pids+=($!)
 
-printf 'output HEADLESS-1 resolution 1920x1080\n' >"$QS_TEST/sway.conf"
-WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
+: >"$QS_TEST/sway.conf"
+for i in $(seq "$screens"); do
+  printf 'output HEADLESS-%s resolution 1920x1080\n' "$i" >>"$QS_TEST/sway.conf"
+done
+WLR_BACKENDS=headless WLR_HEADLESS_OUTPUTS=$screens WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
   "$sway" -c "$QS_TEST/sway.conf" >"$QS_TEST/sway.log" 2>&1 &
 pids+=($!)
 for _ in $(seq 100); do

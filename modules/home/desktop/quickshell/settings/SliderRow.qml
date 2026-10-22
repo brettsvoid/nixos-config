@@ -20,8 +20,8 @@ SettingRow {
         from: root.spec.min
         to: root.spec.max
         stepSize: root.spec.step
-        value: Settings.value(root.key)
-        onMoved: value => Settings.set(root.key, value)
+        value: Settings.valueOn(root.screen, root.key)
+        onMoved: value => Settings.set(root.key, value, root.screen)
     }
 
     Text {
@@ -30,7 +30,7 @@ SettingRow {
         anchors.verticalCenter: parent.verticalCenter
         width: 64
         horizontalAlignment: Text.AlignRight
-        text: root.format(Settings.value(root.key))
+        text: root.format(Settings.valueOn(root.screen, root.key))
         color: Theme.subtext
         font.family: Theme.fontFamily
         font.pixelSize: Theme.typeBodyMedium

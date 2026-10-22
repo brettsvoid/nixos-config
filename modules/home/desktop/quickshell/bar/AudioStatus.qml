@@ -13,6 +13,8 @@ StatusIcon {
     readonly property real volume: root.sink?.audio?.volume ?? 0
     readonly property bool muted: root.sink?.audio?.muted ?? false
     readonly property bool available: root.sink !== null
+    // The percentage beside the icon.
+    property bool showLabel: true
 
     glyph: {
         if (root.muted)
@@ -23,9 +25,9 @@ StatusIcon {
             return 0xF0580; // md-volume_medium
         return 0xF057F; // md-volume_low
     }
-    label: Settings.bar.volumeLabel ? Math.round(root.volume * 100) + "%" : ""
+    label: root.showLabel ? Math.round(root.volume * 100) + "%" : ""
     widestGlyph: String.fromCodePoint(0xF075F)
-    widestLabel: Settings.bar.volumeLabel ? "100%" : ""
+    widestLabel: root.showLabel ? "100%" : ""
     color: root.muted ? Theme.subtext : Theme.barText
 
     // The sink's volume and mute are only kept up to date while something tracks it.

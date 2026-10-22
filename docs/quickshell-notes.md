@@ -24,11 +24,16 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   screen: a test has to set `Drawers.screen`, `Notifications.screen` or `Osd.screen`
   to `HEADLESS-1`. A drawer opened again before it has finished closing keeps its
   content, so `Component.onCompleted` does not run again; wait about a second.
+- Per-screen settings are keyed by Hyprland's description of a screen, and the fake
+  Hyprland reports no monitors. `qs-test -s 2 -m monitors.json` gives two outputs and
+  answers with that file (`hyprctl monitors -j`'s shape), so they have descriptions.
 - `qs ipc call` reads an argument that starts with `[` as its own list syntax and drops
   the brackets. Start a JSON list with a space.
 - `wlrctl pointer` makes a new pointer for each call and removes it at once, so a
   hover never lasts. Hover needs a virtual pointer that stays connected
-  (wlr-virtual-pointer, for example from pywayland).
+  (wlr-virtual-pointer, for example from pywayland). A click 0.4 s after the move into
+  a window was lost; after 1 s it landed. sway's own `seat - cursor press` did nothing
+  there.
 - `wtype` loses the first key of each call while the keymap changes; `wtype -s 300`
   waits first.
 - `GameMode.on` needs the state file to say `on`; an empty file is off.

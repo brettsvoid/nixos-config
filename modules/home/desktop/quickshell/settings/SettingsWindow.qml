@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import "../components"
 import "../config"
 import "../services"
 import "../theme"
@@ -204,9 +205,70 @@ FloatingWindow {
             }
         }
 
+        // On a page with per-screen settings: which screen its rows edit, all of them or
+        // one. A screen that is not connected is offered while it has values of its own.
+        Column {
+            id: screens
+
+            readonly property var picked: Settings.screens.find(s => s.name === Windows.settingsScreen)
+
+            anchors.top: warning.visible ? warning.bottom : parent.top
+            anchors.left: sidebar.right
+            anchors.right: parent.right
+            anchors.margins: Theme.spacingExtraLarge
+            anchors.bottomMargin: 0
+            visible: Windows.screenPages.includes(root.pages[root.current].name)
+            spacing: Theme.spacingMedium
+
+            Flow {
+                width: parent.width
+                spacing: Theme.spacingSmall
+
+                Pill {
+                    text: "All screens"
+                    active: Windows.settingsScreen === ""
+                    onClicked: Windows.pickedScreen = ""
+                }
+
+                Repeater {
+                    model: Settings.screens
+
+                    Pill {
+                        required property var modelData
+
+                        text: modelData.model ? `${modelData.name} · ${modelData.model}` : modelData.name
+                        active: Windows.settingsScreen === modelData.name
+                        onClicked: Windows.pickedScreen = modelData.name
+                    }
+                }
+            }
+
+            Flow {
+                width: parent.width
+                visible: screens.picked !== undefined
+                spacing: Theme.spacingMedium
+
+                Text {
+                    // A pill's height, to line up with the one beside it.
+                    height: 32
+                    verticalAlignment: Text.AlignVCenter
+                    text: (screens.picked?.connected ? "" : "Not connected. ") + "Faded settings are the same on every screen."
+                    color: Theme.subtext
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.typeBodyMedium
+                }
+
+                Pill {
+                    visible: !(screens.picked?.connected ?? true) && Settings.hasChoicesOn(Windows.settingsScreen)
+                    text: "Forget its settings"
+                    onClicked: Settings.forgetScreen(Windows.settingsScreen)
+                }
+            }
+        }
+
         Loader {
             id: page
-            anchors.top: warning.visible ? warning.bottom : parent.top
+            anchors.top: screens.visible ? screens.bottom : warning.visible ? warning.bottom : parent.top
             anchors.bottom: parent.bottom
             anchors.left: sidebar.right
             anchors.right: parent.right

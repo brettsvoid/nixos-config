@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import "../components"
-import "../config"
 import "../services"
 import "../theme"
 import "../components/navigation.js" as Navigation
@@ -13,8 +12,7 @@ import "../components/navigation.js" as Navigation
 // and `activate(item)`, and optionally `refresh()`, called when the mode is entered; it
 // is added to `modes`. A result with `hint: true` only informs, and Enter on it does
 // nothing; one with `confirm: true` asks for a second Enter or click. Up and Down, or
-// Ctrl+P and Ctrl+N, move through the results, and Ctrl+D and Ctrl+U half a page. The
-// settings choose how many rows show.
+// Ctrl+P and Ctrl+N, move through the results, and Ctrl+D and Ctrl+U half a page.
 FocusScope {
     id: root
 
@@ -22,7 +20,8 @@ FocusScope {
     readonly property var mode: root.modes.find(m => m.prefix !== "" && field.text.startsWith(m.prefix)) ?? appsMode
     readonly property string query: field.text.slice(root.mode.prefix.length).trim()
     readonly property var results: root.mode.results(root.query)
-    readonly property int rows: Settings.launcher.rows
+    // How many rows show: the screen's launcher.rows, from FrameWindow.
+    required property int rows
     readonly property int rowHeight: 48
     // The title of the result waiting for its second press, or "".
     property string pending: ""

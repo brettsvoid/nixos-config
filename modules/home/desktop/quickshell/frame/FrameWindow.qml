@@ -24,16 +24,18 @@ PanelWindow {
     // 1 shows the frame in full; towards 0 its thickness, rounding and bar shrink to
     // nothing. ScreenShell animates it for fullscreen and game mode.
     property real reveal: 1
+    // This screen's settings, from ScreenShell.
+    required property ScreenSettings settings
 
     readonly property string screenName: root.screen?.name ?? ""
     // The edge the bar is on, and whether this screen has one.
-    readonly property string barEdge: Settings.bar.edge
-    readonly property bool barHere: !Settings.bar.hiddenScreens.includes(root.screenName)
+    readonly property string barEdge: root.settings.bar.edge
+    readonly property bool barHere: root.settings.hasBar
     // An auto-hidden bar is a band as thin as the rest of the frame until the pointer
     // reaches it. It then grows over the windows, and goes again shortly after the
     // pointer leaves. It stays while a drawer is open here, so the drawers hanging from
     // it do not move.
-    readonly property bool barRaised: root.barHere && (!Settings.bar.autoHide || barHover.hovered || hideDelay.running || root.drawerOpen)
+    readonly property bool barRaised: root.barHere && (!root.settings.bar.autoHide || barHover.hovered || hideDelay.running || root.drawerOpen)
     property real barReveal: root.barRaised ? 1 : 0
 
     Behavior on barReveal {
@@ -150,8 +152,8 @@ PanelWindow {
             {
                 x: root.barEdge === "right" ? root.width - root.barSize : -Theme.frameFillet,
                 y: root.barEdge === "bottom" ? root.height - root.barSize : -Theme.frameFillet,
-                width: Settings.bar.vertical ? root.barSize + Theme.frameFillet : root.width + Theme.frameFillet * 2,
-                height: Settings.bar.vertical ? root.height + Theme.frameFillet * 2 : root.barSize + Theme.frameFillet,
+                width: root.settings.bar.vertical ? root.barSize + Theme.frameFillet : root.width + Theme.frameFillet * 2,
+                height: root.settings.bar.vertical ? root.height + Theme.frameFillet * 2 : root.barSize + Theme.frameFillet,
                 radius: 0
             },
             sessionDrawer.shape,
@@ -187,7 +189,9 @@ PanelWindow {
         inside: root.inside
         open: Drawers.isOpen("launcher", root.screenName)
         content: Component {
-            Launcher {}
+            Launcher {
+                rows: root.settings.launcher.rows
+            }
         }
     }
 
@@ -230,7 +234,7 @@ PanelWindow {
     Drawer {
         id: popupsDrawer
 
-        readonly property var place: Settings.notifications.position.split("-")
+        readonly property var place: root.settings.notifications.position.split("-")
 
         anchors.fill: parent
         edge: popupsDrawer.place[0]
@@ -242,7 +246,9 @@ PanelWindow {
         open: Notifications.popups.length > 0 && Notifications.screen === root.screenName && !root.drawerOpen
         takesFocus: false
         content: Component {
-            Popups {}
+            Popups {
+                fromBottom: popupsDrawer.place[0] === "bottom"
+            }
         }
     }
 
@@ -251,7 +257,7 @@ PanelWindow {
     Drawer {
         id: osdDrawer
         anchors.fill: parent
-        edge: Settings.osd.position
+        edge: root.settings.osd.position
         inside: root.inside
         open: Osd.shown && Osd.screen === root.screenName
         takesFocus: false
@@ -265,13 +271,13 @@ PanelWindow {
     Bar {
         x: root.barEdge === "left" ? root.barSize - Theme.barHeight : root.barEdge === "right" ? root.width - root.barSize : 0
         y: root.barEdge === "top" ? root.barSize - Theme.barHeight : root.barEdge === "bottom" ? root.height - root.barSize : 0
-        width: Settings.bar.vertical ? Theme.barHeight : root.width
-        height: Settings.bar.vertical ? root.height : Theme.barHeight
+        width: root.settings.bar.vertical ? Theme.barHeight : root.width
+        height: root.settings.bar.vertical ? root.height : Theme.barHeight
         opacity: root.reveal * root.barReveal
         // Hidden, its clock and icons no longer ask for redraws.
         visible: opacity > 0
         screen: root.screen
-        vertical: Settings.bar.vertical
+        settings: root.settings
     }
 
     // The frame's band along the bar's edge, where the pointer raises an auto-hidden
@@ -279,12 +285,12 @@ PanelWindow {
     Item {
         x: root.barEdge === "right" ? root.width - root.barSize : 0
         y: root.barEdge === "bottom" ? root.height - root.barSize : 0
-        width: Settings.bar.vertical ? root.barSize : root.width
-        height: Settings.bar.vertical ? root.height : root.barSize
+        width: root.settings.bar.vertical ? root.barSize : root.width
+        height: root.settings.bar.vertical ? root.height : root.barSize
 
         HoverHandler {
             id: barHover
-            enabled: root.barHere && Settings.bar.autoHide
+            enabled: root.barHere && root.settings.bar.autoHide
             onHoveredChanged: {
                 if (!barHover.hovered)
                     hideDelay.restart();

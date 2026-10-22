@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import "../components"
 import "../config"
+import "../services"
 import "../theme"
 
 // The bar: where it sits and when it shows, the clock, the workspaces, the status
@@ -42,7 +43,8 @@ OptionsPage {
         key: "bar.autoHide"
     }
 
-    // A pill per screen, filled where the bar shows.
+    // A pill per screen, filled where the bar shows. Hiding names the screen by its
+    // description, so the choice stays with the screen whichever port it is on.
     SettingRow {
         label: "Screens"
         key: "bar.hiddenScreens"
@@ -57,14 +59,15 @@ OptionsPage {
 
                 Pill {
                     required property var modelData
-                    readonly property bool shown: !Settings.bar.hiddenScreens.includes(modelData.name)
+                    readonly property var names: Settings.namesOf(modelData.name)
+                    readonly property bool shown: !Settings.bar.hiddenScreens.some(name => names.includes(name))
 
                     text: modelData.name
                     active: shown
                     onClicked: {
-                        const hidden = Settings.bar.hiddenScreens.filter(name => name !== modelData.name);
+                        const hidden = Settings.bar.hiddenScreens.filter(name => !names.includes(name));
                         if (shown)
-                            hidden.push(modelData.name);
+                            hidden.push(names[0]);
                         Settings.set("bar.hiddenScreens", hidden);
                     }
                 }
@@ -104,13 +107,13 @@ OptionsPage {
     SliderRow {
         label: "How many"
         key: "bar.workspaceCount"
-        enabled: !Settings.bar.workspacesPerMonitor
+        enabled: !Settings.valueOn(Windows.settingsScreen, "bar.workspacesPerMonitor")
     }
 
     SwitchRow {
         label: "Empty ones"
         key: "bar.showEmptyWorkspaces"
-        enabled: !Settings.bar.workspacesPerMonitor
+        enabled: !Settings.valueOn(Windows.settingsScreen, "bar.workspacesPerMonitor")
     }
 
     SwitchRow {

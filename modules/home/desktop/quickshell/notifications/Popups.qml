@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import "../config"
 import "../services"
 import "../theme"
 
@@ -8,6 +7,11 @@ import "../theme"
 // screen edge they come from (at the top, or at the bottom when the settings put them
 // there).
 Column {
+    id: root
+
+    // Whether they come from the bottom: the screen's notifications.position.
+    required property bool fromBottom
+
     spacing: Theme.spacingSmall
 
     Repeater {
@@ -15,7 +19,7 @@ Column {
         // go. A plain array would make every card again on each change, which started
         // each card's timeout again.
         model: ScriptModel {
-            values: Settings.notifications.position.startsWith("bottom") ? Notifications.popups.slice().reverse() : Notifications.popups
+            values: root.fromBottom ? Notifications.popups.slice().reverse() : Notifications.popups
         }
 
         NotificationCard {

@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 
 // The shell's preferences, from three layers: each one's default in `schema`, then the
@@ -10,6 +11,13 @@ import Quickshell.Io
 // user changed, so resetting a setting returns it to the Nix value or the default.
 // home-manager does not manage it, so the window can write it. A rebuild that changes a
 // Nix value applies at once, unless the user has chosen that setting.
+//
+// A setting marked `perScreen` can also differ from screen to screen, under `screens` in
+// either file: { "screens": { "<screen>": { "bar": { "edge": "left" } } } }. A screen is
+// named by Hyprland's description of it, from its EDID (as the window writes it), or by
+// its connector (DP-2). On a screen, the most specific value wins: the user's for that
+// screen, Nix's for that screen, then the shared values as above. A setting that is not
+// per screen is ignored there. ScreenSettings holds one screen's values in force.
 //
 // A change applies at once: `set()` updates the value in memory and saves shortly
 // after, and the file is watched, so a hand edit applies too. A file that is not valid
@@ -28,7 +36,7 @@ Singleton {
     // kept within min..max and rounded to `step`. A string must not be empty, and must
     // be one of `options` where there are some. A list (a default of []) must hold only
     // strings. Anything else must have the default's type. A value that fails gives the
-    // default.
+    // default. `perScreen` lets a screen have its own value.
     readonly property var schema: ({
             "appearance.fontFamily": { default: "FiraCode Nerd Font" },
             "appearance.textScale": { default: 1, min: 0.8, max: 1.5, step: 0.05 },
@@ -38,22 +46,23 @@ Singleton {
 
             "clock.twelveHour": { default: false },
 
-            "bar.edge": { default: "top", options: ["top", "bottom", "left", "right"] },
-            "bar.autoHide": { default: false },
-            // Screens by name (`hyprctl monitors`), so a screen plugged in later has one.
+            "bar.edge": { perScreen: true, default: "top", options: ["top", "bottom", "left", "right"] },
+            "bar.autoHide": { perScreen: true, default: false },
+            // Screens by description or connector (`hyprctl monitors`), so a screen
+            // plugged in later has one.
             "bar.hiddenScreens": { default: [] },
-            "bar.clockSeconds": { default: false },
-            "bar.clockDate": { default: true },
-            "bar.workspaceCount": { default: 10, min: 1, max: 20, step: 1 },
-            "bar.showEmptyWorkspaces": { default: true },
-            "bar.workspacesPerMonitor": { default: false },
+            "bar.clockSeconds": { perScreen: true, default: false },
+            "bar.clockDate": { perScreen: true, default: true },
+            "bar.workspaceCount": { perScreen: true, default: 10, min: 1, max: 20, step: 1 },
+            "bar.showEmptyWorkspaces": { perScreen: true, default: true },
+            "bar.workspacesPerMonitor": { perScreen: true, default: false },
             "bar.scrollWorkspaces": { default: false },
-            "bar.showTray": { default: true },
-            "bar.showBluetooth": { default: true },
-            "bar.showNetwork": { default: true },
-            "bar.showAudio": { default: true },
-            "bar.showBattery": { default: true },
-            "bar.volumeLabel": { default: true },
+            "bar.showTray": { perScreen: true, default: true },
+            "bar.showBluetooth": { perScreen: true, default: true },
+            "bar.showNetwork": { perScreen: true, default: true },
+            "bar.showAudio": { perScreen: true, default: true },
+            "bar.showBattery": { perScreen: true, default: true },
+            "bar.volumeLabel": { perScreen: true, default: true },
             // Percent.
             "bar.volumeStep": { default: 5, min: 1, max: 20, step: 1 },
             "bar.volumeMax": { default: 100, min: 100, max: 150, step: 5 },
@@ -87,7 +96,7 @@ Singleton {
             "dashboard.graphSeconds": { default: 60, min: 30, max: 600, step: 30 },
             "dashboard.sampleInterval": { default: 1, min: 0.5, max: 10, step: 0.5 },
 
-            "launcher.rows": { default: 8, min: 4, max: 16, step: 1 },
+            "launcher.rows": { perScreen: true, default: 8, min: 4, max: 16, step: 1 },
             "launcher.rankByUse": { default: true },
             // A command, split at spaces; the app's command follows it.
             "launcher.terminal": { default: "kitty" },
@@ -100,7 +109,7 @@ Singleton {
             "notifications.appTimeout": { default: true },
             // 0 is no limit.
             "notifications.maxPopups": { default: 0, min: 0, max: 10, step: 1 },
-            "notifications.position": { default: "top-right", options: ["top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"] },
+            "notifications.position": { perScreen: true, default: "top-right", options: ["top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"] },
             // 0 is no limit, for both.
             "notifications.historyCount": { default: 0, min: 0, max: 500, step: 10 },
             "notifications.historyDays": { default: 0, min: 0, max: 90, step: 1 },
@@ -111,7 +120,7 @@ Singleton {
             "osd.showVolume": { default: true },
             "osd.showMicrophone": { default: true },
             "osd.showBrightness": { default: true },
-            "osd.position": { default: "bottom", options: ["bottom", "top", "left", "right"] },
+            "osd.position": { perScreen: true, default: "bottom", options: ["bottom", "top", "left", "right"] },
             "osd.showInGameMode": { default: true },
 
             // 0 is a sharp wallpaper, 1 the most blur.
@@ -125,7 +134,7 @@ Singleton {
 
             // ~ is the home folder. generate-theme reads this too, with jq.
             "wallpaper.folder": { default: "~/Pictures/Wallpapers" },
-            "wallpaper.fill": { default: "crop", options: ["crop", "fit"] },
+            "wallpaper.fill": { perScreen: true, default: "crop", options: ["crop", "fit"] },
             // 0 is never.
             "wallpaper.changeMinutes": { default: 0, min: 0, max: 240, step: 5 },
 
@@ -134,7 +143,7 @@ Singleton {
             "session.showSleep": { default: false }
         })
 
-    // The values in force.
+    // The shared values in force. The per-screen ones are in ScreenSettings.
     readonly property string fontFamily: root.value("appearance.fontFamily")
     readonly property real textScale: root.value("appearance.textScale")
     readonly property real cornerScale: root.value("appearance.cornerScale")
@@ -146,22 +155,8 @@ Singleton {
     }
 
     readonly property QtObject bar: QtObject {
-        readonly property string edge: root.value("bar.edge")
-        readonly property bool vertical: edge === "left" || edge === "right"
-        readonly property bool autoHide: root.value("bar.autoHide")
         readonly property var hiddenScreens: root.value("bar.hiddenScreens")
-        readonly property bool clockSeconds: root.value("bar.clockSeconds")
-        readonly property bool clockDate: root.value("bar.clockDate")
-        readonly property int workspaceCount: root.value("bar.workspaceCount")
-        readonly property bool showEmptyWorkspaces: root.value("bar.showEmptyWorkspaces")
-        readonly property bool workspacesPerMonitor: root.value("bar.workspacesPerMonitor")
         readonly property bool scrollWorkspaces: root.value("bar.scrollWorkspaces")
-        readonly property bool showTray: root.value("bar.showTray")
-        readonly property bool showBluetooth: root.value("bar.showBluetooth")
-        readonly property bool showNetwork: root.value("bar.showNetwork")
-        readonly property bool showAudio: root.value("bar.showAudio")
-        readonly property bool showBattery: root.value("bar.showBattery")
-        readonly property bool volumeLabel: root.value("bar.volumeLabel")
         readonly property int volumeStep: root.value("bar.volumeStep")
         readonly property int volumeMax: root.value("bar.volumeMax")
     }
@@ -194,7 +189,6 @@ Singleton {
     }
 
     readonly property QtObject launcher: QtObject {
-        readonly property int rows: root.value("launcher.rows")
         readonly property bool rankByUse: root.value("launcher.rankByUse")
         readonly property string terminal: root.value("launcher.terminal")
         readonly property string clipboardPrefix: root.value("launcher.clipboardPrefix")
@@ -206,7 +200,6 @@ Singleton {
         readonly property int timeout: root.value("notifications.timeout")
         readonly property bool appTimeout: root.value("notifications.appTimeout")
         readonly property int maxPopups: root.value("notifications.maxPopups")
-        readonly property string position: root.value("notifications.position")
         readonly property int historyCount: root.value("notifications.historyCount")
         readonly property int historyDays: root.value("notifications.historyDays")
         readonly property int popupBodyLines: root.value("notifications.popupBodyLines")
@@ -215,7 +208,6 @@ Singleton {
     // The kinds are read by name (osd.show<Kind>) with value().
     readonly property QtObject osd: QtObject {
         readonly property real timeout: root.value("osd.timeout")
-        readonly property string position: root.value("osd.position")
         readonly property bool showInGameMode: root.value("osd.showInGameMode")
     }
 
@@ -232,7 +224,6 @@ Singleton {
 
     readonly property QtObject wallpaper: QtObject {
         readonly property string folder: root.value("wallpaper.folder")
-        readonly property string fill: root.value("wallpaper.fill")
         readonly property int changeMinutes: root.value("wallpaper.changeMinutes")
     }
 
@@ -283,6 +274,7 @@ Singleton {
         return value;
     }
 
+    // The shared value in force.
     function value(key) {
         const chosen = root._valid(key, root._lookup(root.user, key));
         if (chosen !== undefined)
@@ -291,18 +283,92 @@ Singleton {
         return fromNix !== undefined ? fromNix : root.schema[key].default;
     }
 
-    // Whether the user has chosen this one, so the window can offer to reset it.
-    function isSet(key) {
+    // The value in force on `screen` (any name namesOf() knows); for "", or a setting
+    // that is not per screen, the shared one.
+    function valueOn(screen, key) {
+        const own = screen ? root._own(screen, key, [root.user, root.nix]) : undefined;
+        return own !== undefined ? own : root.value(key);
+    }
+
+    // Hyprland's description of the screen on `connector`, or "" until it is known.
+    function _description(connector) {
+        return Hyprland.monitors.values.find(m => m.name === connector)?.description ?? "";
+    }
+
+    // The names `screen` goes by under `screens`, the one to write first: for a
+    // connected screen, named either way, its description and its connector; for one
+    // that is not connected, only the name given.
+    function namesOf(screen) {
+        const output = Quickshell.screens.find(s => s.name === screen || root._description(s.name) === screen);
+        if (!output)
+            return [screen];
+        const description = root._description(output.name);
+        return description === "" ? [output.name] : [description, output.name];
+    }
+
+    // The screen's own value in these files, under any of its names, or undefined.
+    function _own(screen, key, files) {
+        if (!root.schema[key]?.perScreen)
+            return undefined;
+        const names = root.namesOf(screen);
+        for (const file of files) {
+            for (const name of names) {
+                const own = root._valid(key, root._lookup(file.screens?.[name], key));
+                if (own !== undefined)
+                    return own;
+            }
+        }
+        return undefined;
+    }
+
+    readonly property var _perScreenKeys: Object.keys(root.schema).filter(key => root.schema[key].perScreen)
+
+    // The screens the window offers, each { name, model, connected }: those connected,
+    // by connector, then those that are not but have values of their own, by the name
+    // they are stored under.
+    readonly property var screens: {
+        const connected = Quickshell.screens.map(s => ({
+                    name: s.name,
+                    model: s.model,
+                    connected: true
+                }));
+        const taken = connected.reduce((names, s) => names.concat(root.namesOf(s.name)), []);
+        const stored = [root.user, root.nix].reduce((names, file) => names.concat(file.screens !== null && typeof file.screens === "object" ? Object.keys(file.screens) : []), []);
+        const others = stored.filter((name, i) => stored.indexOf(name) === i && !taken.includes(name) && root._perScreenKeys.some(key => root._own(name, key, [root.user, root.nix]) !== undefined));
+        return connected.concat(others.map(name => ({
+                        name: name,
+                        model: "",
+                        connected: false
+                    })));
+    }
+
+    // The screens, by name as in `screens`, where `key` has a value of their own.
+    function screensWithOwn(key) {
+        return root.screens.filter(s => root._own(s.name, key, [root.user, root.nix]) !== undefined).map(s => s.name);
+    }
+
+    // Whether the user has chosen this one, for every screen or for `screen`, so the
+    // window can offer to reset it.
+    function isSet(key, screen) {
+        if (screen)
+            return root._own(screen, key, [root.user]) !== undefined;
         return root._valid(key, root._lookup(root.user, key)) !== undefined;
     }
 
-    // Whether the value was valid, and so applied.
-    function set(key, value) {
+    // Whether the user has chosen any value for `screen` alone.
+    function hasChoicesOn(screen) {
+        return root._perScreenKeys.some(key => root.isSet(key, screen));
+    }
+
+    // Whether the value was valid, and so applied: for every screen, or for `screen`
+    // where the setting is per screen.
+    function set(key, value, screen) {
         const checked = root._valid(key, value);
-        if (checked === undefined)
+        if (checked === undefined || (screen && !root.schema[key].perScreen))
             return false;
         const user = JSON.parse(JSON.stringify(root.user));
-        const parts = key.split(".");
+        // A screen's name may hold dots, so the path is a list.
+        const parts = (screen ? ["screens", root.namesOf(screen)[0]] : []).concat(key.split("."));
         let node = user;
         for (const part of parts.slice(0, -1)) {
             if (node[part] === null || typeof node[part] !== "object")
@@ -315,20 +381,42 @@ Singleton {
         return true;
     }
 
-    function reset(key) {
-        if (root._lookup(root.user, key) === undefined)
-            return;
-        const user = JSON.parse(JSON.stringify(root.user));
+    // Back to the value underneath: Nix's or the default for every screen, or for
+    // `screen` the shared one (or Nix's for that screen).
+    function reset(key, screen) {
         const parts = key.split(".");
-        const parents = [user];
-        for (const part of parts.slice(0, -1))
-            parents.push(parents[parents.length - 1][part]);
-        delete parents[parents.length - 1][parts[parts.length - 1]];
-        // Drop the sections left empty.
-        for (let i = parts.length - 2; i >= 0; --i) {
-            if (Object.keys(parents[i + 1]).length === 0)
-                delete parents[i][parts[i]];
+        root._remove(screen ? root.namesOf(screen).map(name => ["screens", name].concat(parts)) : [parts]);
+    }
+
+    // Drops all the user's values for `screen`, as for one no longer connected.
+    function forgetScreen(screen) {
+        root._remove(root.namesOf(screen).map(name => ["screens", name]));
+    }
+
+    // Removes each path from the user's file, and the sections that leaves empty.
+    function _remove(paths) {
+        const user = JSON.parse(JSON.stringify(root.user));
+        let changed = false;
+        for (const parts of paths) {
+            const parents = [user];
+            for (const part of parts.slice(0, -1)) {
+                const node = parents[parents.length - 1][part];
+                if (node === null || typeof node !== "object")
+                    break;
+                parents.push(node);
+            }
+            const last = parts[parts.length - 1];
+            if (parents.length < parts.length || !(last in parents[parents.length - 1]))
+                continue;
+            delete parents[parents.length - 1][last];
+            for (let i = parts.length - 2; i >= 0; --i) {
+                if (Object.keys(parents[i + 1]).length === 0)
+                    delete parents[i][parts[i]];
+            }
+            changed = true;
         }
+        if (!changed)
+            return;
         root.user = user;
         root._save();
     }

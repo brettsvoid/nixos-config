@@ -27,7 +27,7 @@ SettingRow {
             anchors.rightMargin: Theme.spacingLarge
             verticalAlignment: TextInput.AlignVCenter
             clip: true
-            text: Settings.value(root.key)
+            text: Settings.valueOn(root.screen, root.key)
             color: Theme.text
             selectionColor: Theme.primary
             selectedTextColor: Theme.onPrimary
@@ -36,17 +36,17 @@ SettingRow {
 
             function save() {
                 const value = field.text.trim();
-                if (value !== "" && value !== Settings.value(root.key))
-                    Settings.set(root.key, value);
+                if (value !== "" && value !== Settings.valueOn(root.screen, root.key))
+                    Settings.set(root.key, value, root.screen);
                 // Back to a binding, so a reset or a hand edit shows.
-                field.text = Qt.binding(() => Settings.value(root.key));
+                field.text = Qt.binding(() => Settings.valueOn(root.screen, root.key));
             }
 
             onEditingFinished: field.save()
             Keys.onEscapePressed: event => {
                 // The first Escape gives up the edit; the next closes the window.
-                if (field.text !== Settings.value(root.key)) {
-                    field.text = Qt.binding(() => Settings.value(root.key));
+                if (field.text !== Settings.valueOn(root.screen, root.key)) {
+                    field.text = Qt.binding(() => Settings.valueOn(root.screen, root.key));
                     event.accepted = true;
                 } else {
                     event.accepted = false;

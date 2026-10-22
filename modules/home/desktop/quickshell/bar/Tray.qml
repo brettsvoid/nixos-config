@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.SystemTray
 import Quickshell.Widgets
-import "../config"
 import "../theme"
 
 // Apps' tray icons. Left click activates the app (or opens its menu, when that is all it
@@ -13,6 +12,8 @@ Grid {
     id: root
 
     property bool vertical: false
+    // The bar's edge, which the menus open away from.
+    property string edge: "top"
     readonly property bool hasItems: repeater.count > 0
 
     // One column, or one row. Exactly as many columns as icons: with more, Grid adds a
@@ -38,7 +39,7 @@ Grid {
                     return;
                 const gap = Theme.spacingSmall;
                 let at;
-                switch (Settings.bar.edge) {
+                switch (root.edge) {
                 case "bottom":
                     at = entry.mapToItem(null, 0, -gap);
                     break;

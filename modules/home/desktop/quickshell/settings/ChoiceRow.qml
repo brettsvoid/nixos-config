@@ -27,8 +27,8 @@ SettingRow {
                 required property var modelData
 
                 text: modelData.label
-                active: Settings.value(root.key) === modelData.value
-                onClicked: Settings.set(root.key, modelData.value)
+                active: Settings.valueOn(root.screen, root.key) === modelData.value
+                onClicked: Settings.set(root.key, modelData.value, root.screen)
             }
         }
     }

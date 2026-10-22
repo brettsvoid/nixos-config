@@ -4,15 +4,18 @@ import Quickshell
 import "../config"
 import "../theme"
 
-// The time, and the date after a divider. The settings choose 12- or 24-hour time,
-// seconds and the date. On a side bar (`vertical`) each part of the time takes its own
-// line, and the date shortens to the day and its number.
+// The time, and the date after a divider. The settings choose 12- or 24-hour time, and
+// the screen's settings whether seconds and the date show. On a side bar (`vertical`)
+// each part of the time takes its own line, and the date shortens to the day and its
+// number.
 Item {
     id: root
 
     property bool vertical: false
+    property bool showSeconds: false
+    property bool showDate: true
 
-    readonly property string timeFormat: (Settings.clock.twelveHour ? "h:mm" : "hh:mm") + (Settings.bar.clockSeconds ? ":ss" : "") + (Settings.clock.twelveHour ? " AP" : "")
+    readonly property string timeFormat: (Settings.clock.twelveHour ? "h:mm" : "hh:mm") + (root.showSeconds ? ":ss" : "") + (Settings.clock.twelveHour ? " AP" : "")
     readonly property string time: Qt.formatDateTime(clock.date, root.timeFormat)
 
     implicitWidth: layout.implicitWidth
@@ -22,7 +25,7 @@ Item {
     // is hidden (game mode, fullscreen), so it asks for no redraws then.
     SystemClock {
         id: clock
-        precision: Settings.bar.clockSeconds ? SystemClock.Seconds : SystemClock.Minutes
+        precision: root.showSeconds ? SystemClock.Seconds : SystemClock.Minutes
         enabled: root.visible
     }
 
@@ -49,13 +52,13 @@ Item {
             Layout.alignment: Qt.AlignCenter
             Layout.preferredWidth: root.vertical ? 16 : 1
             Layout.preferredHeight: root.vertical ? 1 : 16
-            visible: Settings.bar.clockDate
+            visible: root.showDate
             color: Theme.surfaceBright
         }
 
         Text {
             Layout.alignment: Qt.AlignCenter
-            visible: Settings.bar.clockDate
+            visible: root.showDate
             text: Qt.formatDateTime(clock.date, root.vertical ? "ddd\nd" : "ddd, MMM d")
             horizontalAlignment: Text.AlignHCenter
             color: Theme.subtext
