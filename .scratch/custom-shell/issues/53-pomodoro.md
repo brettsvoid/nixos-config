@@ -1,6 +1,6 @@
 # Pomodoro timer
 
-Status: ready-for-human
+Status: ready-for-agent
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -64,3 +64,7 @@ ideas only).
 ## Blocked by
 
 - None. The IPC target waits on .scratch/custom-shell/issues/34-ipc.md.
+
+## Comments
+
+**2026-10-19:** All nine choices approved as proposed, on the review page.

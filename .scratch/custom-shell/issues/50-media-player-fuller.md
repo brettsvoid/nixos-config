@@ -67,3 +67,7 @@ so a silent mpv can test them.
 ## Blocked by
 
 - None.
+
+## Comments
+
+**2026-10-19:** Choice 3 agreed on the review page. No verdict on the issue yet.

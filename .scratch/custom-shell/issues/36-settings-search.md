@@ -1,6 +1,6 @@
 # Searching the settings window
 
-Status: ready-for-human
+Status: ready-for-agent
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -61,3 +61,7 @@ per key press over about 75 entries.
 ## Blocked by
 
 - None
+
+## Comments
+
+**2026-10-19:** All five choices approved as proposed, on the review page.

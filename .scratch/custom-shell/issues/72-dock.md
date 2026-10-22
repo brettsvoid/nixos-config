@@ -66,3 +66,7 @@ launcher's way of starting an app (`launcher/AppsMode.qml`, which also counts th
 ## Blocked by
 
 - .scratch/custom-shell/issues/47-per-app-actions.md (for the launcher's "Pin to dock")
+
+## Comments
+
+**2026-10-19:** Choice 1 agreed on the review page. No verdict on the issue yet.

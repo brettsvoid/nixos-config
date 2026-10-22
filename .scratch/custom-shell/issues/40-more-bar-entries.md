@@ -1,6 +1,6 @@
 # More bar entries
 
-Status: ready-for-human
+Status: ready-for-agent
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -67,3 +67,7 @@ microphone reads PipeWire's nodes, as the volume icon does.
 ## Blocked by
 
 - None
+
+## Comments
+
+**2026-10-19:** All six choices approved as proposed, on the review page.

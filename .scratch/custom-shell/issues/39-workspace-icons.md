@@ -63,3 +63,7 @@ timer. In game mode and fullscreen the bar is hidden: nothing.
 ## Blocked by
 
 - None
+
+## Comments
+
+**2026-10-19:** Not now, from the review page. The choices were not reviewed.

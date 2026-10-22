@@ -1,6 +1,6 @@
 # Per-monitor settings
 
-Status: ready-for-human
+Status: ready-for-agent
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -73,3 +73,7 @@ Cost: bindings only; no process or timer.
 ## Blocked by
 
 - None
+
+## Comments
+
+**2026-10-19:** All seven choices approved as proposed, on the review page.

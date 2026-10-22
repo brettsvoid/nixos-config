@@ -1,6 +1,6 @@
 # Active window title in the bar
 
-Status: ready-for-human
+Status: ready-for-agent
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -63,3 +63,7 @@ per panel opening. In game mode and fullscreen the bar is hidden: nothing.
 ## Blocked by
 
 - .scratch/custom-shell/issues/37-bar-popouts.md
+
+## Comments
+
+**2026-10-19:** All four choices approved as proposed, on the review page. The window panel (choice 3) still waits on issue 37, so the title in the bar and the settings can be built first.
