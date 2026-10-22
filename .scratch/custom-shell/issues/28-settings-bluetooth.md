@@ -43,9 +43,9 @@ after that.
   - The page shows only named devices nearby; unnamed ones are mostly beacons.
   - A device paired here is then trusted and connected.
   - The shell runs no BlueZ agent. A device that asks for a PIN or a passkey
-    confirmation will not pair here; use `bluetoothctl` with `agent on` for those. Most
-    headsets, mice and controllers need neither. If yours fails to pair, that is the
-    likely reason, and running an agent in the shell would be a new issue.
+    confirmation will not pair here; use `bluetoothctl` with `agent on` for those. Some
+    controllers need a confirmation (see the comment of 22 Oct). If yours fails to
+    pair, that is the likely reason. Issue 81 adds an agent to the shell.
   - The adapter's Pairable flag is off here. BlueZ says it affects only pairing that
     other devices start, not pairing from this machine.
 - **Results:**
@@ -57,3 +57,9 @@ after that.
   - Discovery has to wait until the adapter's `state` is Enabled. Started as soon as
     `enabled` turned true, BlueZ refused it ("Resource Not Ready").
   - The adapter was left powered, as found.
+
+**2026-10-22:** An Xbox Wireless Controller (`045E:0B13`, Bluetooth Low Energy) did not
+pair from the page. bluetoothd logged "No agent available for request type 2" and
+"device_confirm_passkey: Operation not permitted", so the controller needs a passkey
+confirmation. The note above that most controllers need none was wrong for it. Pair it
+with `bluetoothctl` for now. Issue 81 adds an agent to the shell.

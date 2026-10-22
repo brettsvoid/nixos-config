@@ -9,8 +9,8 @@ import "../theme"
 // itself, and connected.
 //
 // BlueZ asks an agent for a PIN or a passkey confirmation, and the shell does not run
-// one, so devices that need either do not pair here (use `bluetoothctl`). Most headsets,
-// mice and controllers need neither.
+// one, so devices that need either do not pair here (use `bluetoothctl`). Some
+// controllers need a confirmation: an Xbox Wireless Controller does.
 FocusScope {
     id: root
 
