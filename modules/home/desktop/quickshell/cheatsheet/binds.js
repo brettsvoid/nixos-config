@@ -101,9 +101,15 @@ function group(bind) {
     }
 }
 
+// Binds that only tell the shell something, with no keys of their own to show: the lock
+// keys' (services/LockKeys.qml).
+function hidden(bind) {
+    return bind.dispatcher === "global" && bind.arg === "custom-shell:lockkeys";
+}
+
 // Rows sorted by group, keeping the config's order within each.
 function rows(binds) {
-    const out = binds.map((bind, i) => ({
+    const out = binds.filter(bind => !hidden(bind)).map((bind, i) => ({
                 keys: modifiers(bind.modmask).concat([keyName(bind.key)]),
                 description: bind.description || describe(bind),
                 group: group(bind),

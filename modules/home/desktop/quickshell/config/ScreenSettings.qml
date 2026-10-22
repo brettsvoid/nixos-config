@@ -23,11 +23,15 @@ QtObject {
         readonly property int workspaceCount: Settings.valueOn(root.screen, "bar.workspaceCount")
         readonly property bool showEmptyWorkspaces: Settings.valueOn(root.screen, "bar.showEmptyWorkspaces")
         readonly property bool workspacesPerMonitor: Settings.valueOn(root.screen, "bar.workspacesPerMonitor")
+        readonly property bool showLogo: Settings.valueOn(root.screen, "bar.showLogo")
+        readonly property bool showLockKeys: Settings.valueOn(root.screen, "bar.showLockKeys")
         readonly property bool showTray: Settings.valueOn(root.screen, "bar.showTray")
         readonly property bool showBluetooth: Settings.valueOn(root.screen, "bar.showBluetooth")
         readonly property bool showNetwork: Settings.valueOn(root.screen, "bar.showNetwork")
+        readonly property bool showMicrophone: Settings.valueOn(root.screen, "bar.showMicrophone")
         readonly property bool showAudio: Settings.valueOn(root.screen, "bar.showAudio")
         readonly property bool showBattery: Settings.valueOn(root.screen, "bar.showBattery")
+        readonly property bool showPower: Settings.valueOn(root.screen, "bar.showPower")
         readonly property bool volumeLabel: Settings.valueOn(root.screen, "bar.volumeLabel")
     }
 

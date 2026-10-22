@@ -44,6 +44,23 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   `console.error`, logged as `WARN qml:` with no file name. `shell.qml` uses this to
   check that every setting has a search entry.
 - `GameMode.on` needs the state file to say `on`; an empty file is off.
+- `GameMode.loaded` is false until the state file has been read: `on` starts false, so
+  code that must not run in game mode waits for `loaded` (`services/LockKeys.qml`).
+- Testing PipeWire: `qs-test`'s runtime folder has no PipeWire, and Quickshell only looks
+  for a server that starts later when `QS_PIPEWIRE_IMMEDIATE_RECONNECT=1` is set. A private
+  server (`pipewire` with `PIPEWIRE_CONFIG_DIR` and `XDG_RUNTIME_DIR` set to the test
+  folder) needs a metadata object named `default` (`{ factory = metadata args = {
+  metadata.name = default } }` in `context.objects`) before `pw-metadata -n default 0
+  default.audio.source ...` gives Quickshell a default node. With no session manager,
+  adapter nodes and streams make no ports until `adapter.auto-port-config = { mode = dsp
+  monitor = false position = preserve }` is in their properties (a `pw-record -P` JSON
+  argument for a stream), and `pw-link` then links them. A `support.null-audio-sink` with
+  `media.class = Audio/Source` is the default source Quickshell sees (`PwNodeType.AudioSource`).
+- A recording shows in Quickshell's link groups as a source device (`type ===
+  PwNodeType.AudioSource`) linked to a stream with type `PwNodeType.AudioInStream`, state
+  `PwLinkState.Active` once the link is tracked with a `PwObjectTracker`. Captures of a
+  sink's monitor (the visualiser) link from the sink node instead. `PwNodeLinkTracker`
+  returns from its whole update on a link to a monitor stream, so it is not used.
 - A real Hyprland can run apart from the desktop, for a plugin or a config: nested in a
   headless mutter (`mutter --headless --wayland --no-x11 --virtual-monitor 1920x1080`,
   on its own D-Bus), with Mesa's EGL (`__EGL_VENDOR_LIBRARY_FILENAMES` set to
@@ -57,6 +74,12 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   - Its exec lines run for real: stub them, or they start the session's apps again.
 - `hyprctl dispatch exec kitty --class x` reads `--class` as its own flag: quote the whole
   command after `exec`.
+- A virtual keyboard (wtype, `zwp_virtual_keyboard_v1`) does not toggle Caps Lock or Num Lock
+  in Hyprland's state: the client has to send `modifiers` with the lock bit itself. A
+  `wtype` keyboard is also gone again before a `hyprctl devices -j` that follows its key.
+  A persistent client that sends the key and then the modifiers drives the real chain: a
+  `global` bind's shortcut is pressed and released with the key, also with Shift or Num
+  Lock on, and `devices -j` then shows `capsLock` and `numLock` per keyboard.
 
 ## QML and Quickshell gotchas
 

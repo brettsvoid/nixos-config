@@ -11,6 +11,8 @@ Singleton {
     id: root
 
     property bool on: false
+    // Whether the state has been read, so `on` is no longer a guess at start.
+    property bool loaded: false
 
     onOnChanged: {
         if (root.on)
@@ -24,7 +26,13 @@ Singleton {
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: root.on = file.text().trim() === "on"
-        onLoadFailed: root.on = false
+        onLoaded: {
+            root.on = file.text().trim() === "on";
+            root.loaded = true;
+        }
+        onLoadFailed: {
+            root.on = false;
+            root.loaded = true;
+        }
     }
 }

@@ -8,4 +8,5 @@ singleton GameMode 1.0 GameMode.qml
 singleton Windows 1.0 Windows.qml
 singleton Players 1.0 Players.qml
 singleton Pomodoro 1.0 Pomodoro.qml
+singleton LockKeys 1.0 LockKeys.qml
 NotificationEntry 1.0 NotificationEntry.qml

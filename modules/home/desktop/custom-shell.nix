@@ -357,6 +357,14 @@ in
             ", XF86MonBrightnessUp, Show the brightness level (custom shell), global, custom-shell:brightness"
             ", XF86MonBrightnessDown, Show the brightness level (custom shell), global, custom-shell:brightness"
           ];
+          # Hyprland sends no event when a lock key changes. These tell the shell the key
+          # came up (a global bind's shortcut is released with it), so it reads the state.
+          # Locked, so they work on the lock screen; not consuming, so apps still get the
+          # key; ignoring modifiers, so Caps Lock and Num Lock themselves do not stop a match.
+          bindlni = [
+            ", Caps_Lock, global, custom-shell:lockkeys"
+            ", Num_Lock, global, custom-shell:lockkeys"
+          ];
         };
 
         # Lock before the machine sleeps. On suspend logind asks the session to lock:

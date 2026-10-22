@@ -7,13 +7,15 @@ import "../theme"
 // The time, and the date after a divider. The settings choose 12- or 24-hour time, and
 // the screen's settings whether seconds and the date show. On a side bar (`vertical`)
 // each part of the time takes its own line, and the date shortens to the day and its
-// number.
+// number. A click on it signals `clicked`.
 Item {
     id: root
 
     property bool vertical: false
     property bool showSeconds: false
     property bool showDate: true
+
+    signal clicked
 
     readonly property string timeFormat: (Settings.clock.twelveHour ? "h:mm" : "hh:mm") + (root.showSeconds ? ":ss" : "") + (Settings.clock.twelveHour ? " AP" : "")
     readonly property string time: Qt.formatDateTime(clock.date, root.timeFormat)
@@ -27,6 +29,12 @@ Item {
         id: clock
         precision: root.showSeconds ? SystemClock.Seconds : SystemClock.Minutes
         enabled: root.visible
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.clicked()
     }
 
     // A GridLayout, not a Grid, which leaves room for a hidden date (see Bar.qml).

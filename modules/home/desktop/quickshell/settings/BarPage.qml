@@ -116,6 +116,14 @@ OptionsPage {
     }
 
     SwitchRow {
+        key: "bar.showLogo"
+    }
+
+    SwitchRow {
+        key: "bar.showLockKeys"
+    }
+
+    SwitchRow {
         key: "bar.showTray"
     }
 
@@ -128,11 +136,19 @@ OptionsPage {
     }
 
     SwitchRow {
+        key: "bar.showMicrophone"
+    }
+
+    SwitchRow {
         key: "bar.showAudio"
     }
 
     SwitchRow {
         key: "bar.showBattery"
+    }
+
+    SwitchRow {
+        key: "bar.showPower"
     }
 
     PageHeading {

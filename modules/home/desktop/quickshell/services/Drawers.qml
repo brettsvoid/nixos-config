@@ -39,12 +39,14 @@ Singleton {
         root.open = name;
     }
 
-    function toggle(name) {
-        const focused = root.focusedScreen();
-        if (root.isOpen(name, focused))
+    // On the focused monitor, or on `screenName`: a click in a screen's bar opens the
+    // drawer there.
+    function toggle(name, screenName) {
+        const target = screenName ?? root.focusedScreen();
+        if (root.isOpen(name, target))
             root.close();
         else
-            root.openOn(name, focused);
+            root.openOn(name, target);
     }
 
     function close() {
