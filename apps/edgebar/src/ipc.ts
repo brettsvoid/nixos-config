@@ -102,6 +102,7 @@ export interface CpuSample {
 
 export interface CpuStat extends CpuSample {
   total: number;
+  mem: number; // used fraction of RAM, 0..1, sampled with the CPU
   topProc: string;
   topProcPct: number; // percent of one core, so >100 for a threaded process
   topPid: number; // 0 before the first process walk lands
@@ -239,6 +240,9 @@ export interface Commands {
   set_toggle: { args: { id: ToggleId; on: boolean }; result: ToggleState };
   calendar_events: { args: { from: string; to: string }; result: CalendarEvents };
   notification_history: { args: NoArgs; result: NotificationHistory };
+  // macOS's store is read-only to edgebar, so these hide entries in edgebar only.
+  notification_dismiss: { args: { ids: string[] }; result: void };
+  notification_clear: { args: NoArgs; result: void };
   assistant_send: { args: { prompt: string }; result: string }; // the turn id
   assistant_cancel: { args: NoArgs; result: void };
   assistant_reset: { args: NoArgs; result: void };
