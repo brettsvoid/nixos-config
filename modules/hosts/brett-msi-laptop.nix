@@ -146,6 +146,7 @@ in
                 desktop-screenshots
                 nvim
                 apps-firefox
+                apps-google-chrome
                 apps-git
                 apps-ssh
                 apps-cursor

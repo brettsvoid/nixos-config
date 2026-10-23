@@ -159,6 +159,7 @@ in
                 desktop-window-dissolve
                 nvim
                 apps-firefox
+                apps-google-chrome
                 apps-git
                 apps-ssh
                 apps-cursor
