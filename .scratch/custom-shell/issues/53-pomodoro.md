@@ -1,6 +1,6 @@
 # Pomodoro timer
 
-Status: ready-for-human
+Status: done
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -59,7 +59,7 @@ ideas only).
 - [x] `toggle-shell restart` during a session keeps its phase and end time (checked by
       stopping and starting the shell under `qs-test`, whose `toggle-shell` is a stub).
 - [x] The label repaints once a minute (Qt's render log, as in issue 11).
-- [ ] Sound tests go to a null sink. No sound plays in game mode or do not disturb. (No
+- [x] Sound tests go to a null sink. No sound plays in game mode or do not disturb. (No
       sound in game mode or do not disturb is checked; `pw-play` itself never ran.)
 - [x] Costs nothing in game mode beyond the single-shot Timer.
 
@@ -176,3 +176,5 @@ Still to check, on the desktop after the rebuild:
 When 1 to 3 hold, set the status to done.
 
 **2026-10-23 (later):** The user could not find the timer. It has no bar entry until a session runs: start one from the launcher's actions (type `>pomodoro`, choose Start pomodoro) or with `custom-shell pomodoro start`, and the entry appears right of the clock.
+
+**2026-10-23 (later):** Checked by the user on the desktop: the alarm plays at a phase end and its volume is fine. Skip stays as built (it starts the next phase at once, with no notification or sound); the user asked for no change.
