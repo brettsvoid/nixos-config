@@ -160,6 +160,7 @@ in
                 nvim
                 apps-firefox
                 apps-google-chrome
+                apps-blender
                 apps-git
                 apps-ssh
                 apps-cursor

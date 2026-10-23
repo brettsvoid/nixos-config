@@ -5,7 +5,12 @@
 # `brew bundle` on the mini (see modules/hosts/brett-mac-mini.nix).
 #
 # Preferences live outside the store, in
-# ~/Library/Application Support/Blender/<major.minor>.
+# ~/Library/Application Support/Blender/<major.minor> (~/.config/blender on
+# Linux).
+#
+# On Linux this is the build without CUDA (nixpkgs' cudaSupport is off), so
+# Cycles renders on the CPU only. cache.nixos.org has no CUDA build, so
+# turning it on means compiling Blender locally.
 _: {
   flake.modules.homeManager.apps-blender =
     { pkgs, ... }:
