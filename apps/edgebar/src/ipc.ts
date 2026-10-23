@@ -68,7 +68,9 @@ export interface MediaState {
   title: string;
   artist: string;
   album: string;
-  art: string; // cover data URL at player size, or ""
+  // Changes when the cover does, "" when there is none. Fetch the image once per
+  // key with media_art, so a position update doesn't resend it.
+  artKey: string;
   position: number; // seconds, as of when Rust published it
   duration: number; // seconds, 0 when unknown
   playing: boolean;
@@ -228,6 +230,7 @@ export interface Commands {
   precompute_palettes: { args: NoArgs; result: void };
   notch_state: { args: NoArgs; result: NotchItem | null };
   media_state: { args: NoArgs; result: MediaState | null };
+  media_art: { args: { key: string }; result: string }; // cover data URL, "" if gone
   media_toggle: { args: NoArgs; result: void };
   media_next: { args: NoArgs; result: void };
   media_previous: { args: NoArgs; result: void };
