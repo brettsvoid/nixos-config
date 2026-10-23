@@ -4,8 +4,8 @@ import "../config"
 import "../services"
 import "../theme"
 
-// The bar's content, laid out along the frame's bar band: the logo and workspaces at the
-// start, the clock in the middle, the lock keys, tray and status icons and the power
+// The bar's content, laid out along the frame's bar band: the logo, workspaces and active
+// window's title at the start, the clock in the middle, the lock keys, tray and status icons and the power
 // button at the end. On a side edge (`vertical`) they run from top to bottom. The
 // screen's settings choose which of the icons show.
 Item {
@@ -37,6 +37,16 @@ Item {
 
         Workspaces {
             Layout.alignment: Qt.AlignCenter
+            screen: root.screen
+            settings: root.settings
+            vertical: root.vertical
+        }
+
+        // Up to the clock, less a gap; elides beyond that.
+        WindowTitle {
+            id: windowTitle
+            Layout.alignment: Qt.AlignCenter
+            Layout.maximumWidth: root.vertical ? Number.POSITIVE_INFINITY : Math.max(0, clock.x - Theme.spacingLarge - startItems.x - windowTitle.x)
             screen: root.screen
             settings: root.settings
             vertical: root.vertical

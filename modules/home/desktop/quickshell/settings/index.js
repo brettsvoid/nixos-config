@@ -37,6 +37,7 @@ const entries = [
     { key: "bar.workspaceCount", page: "Bar", heading: "Workspaces", label: "How many", keywords: ["number", "amount", "desktops"] },
     { key: "bar.showEmptyWorkspaces", page: "Bar", heading: "Workspaces", label: "Empty ones", keywords: ["unused", "hide", "show"] },
     { key: "bar.scrollWorkspaces", page: "Bar", heading: "Workspaces", label: "Scroll to switch", keywords: ["mouse wheel", "change", "desktops"] },
+    { key: "bar.showWindowTitle", page: "Bar", heading: "Active window", label: "Icon and title", keywords: ["active window", "focused", "app", "application", "name", "icon", "program"] },
     { key: "bar.showLogo", page: "Bar", heading: "Status icons", label: "OS logo", keywords: ["nixos", "snowflake", "launcher", "start", "menu", "icon"] },
     { key: "bar.showLockKeys", page: "Bar", heading: "Status icons", label: "Caps and Num Lock", keywords: ["caps lock", "num lock", "keyboard", "capital", "numpad", "indicator", "icon"] },
     { key: "bar.showTray", page: "Bar", heading: "Status icons", label: "Tray", keywords: ["system tray", "indicators", "applets", "icons"] },

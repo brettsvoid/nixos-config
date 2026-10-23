@@ -23,6 +23,7 @@ QtObject {
         readonly property int workspaceCount: Settings.valueOn(root.screen, "bar.workspaceCount")
         readonly property bool showEmptyWorkspaces: Settings.valueOn(root.screen, "bar.showEmptyWorkspaces")
         readonly property bool workspacesPerMonitor: Settings.valueOn(root.screen, "bar.workspacesPerMonitor")
+        readonly property bool showWindowTitle: Settings.valueOn(root.screen, "bar.showWindowTitle")
         readonly property bool showLogo: Settings.valueOn(root.screen, "bar.showLogo")
         readonly property bool showLockKeys: Settings.valueOn(root.screen, "bar.showLockKeys")
         readonly property bool showTray: Settings.valueOn(root.screen, "bar.showTray")

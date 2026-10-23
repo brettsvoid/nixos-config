@@ -72,6 +72,11 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
     display and signature into systemd and D-Bus), and a `LIBSEAT_BACKEND` that libseat
     does not know (or its DRM backend tries the seat and every input device first).
   - Its exec lines run for real: stub them, or they start the session's apps again.
+- A second headless output in the nested Hyprland (`hyprctl output create headless` again)
+  takes `hyprctl keyword monitor <name>,1920x1080,0x0,1,transform,1` for a 1080x1920 one; a
+  rule that changes the mode itself (`1080x1920@60`) was ignored. Test windows: `kitty
+  --class x -e sh -c '...'` reading titles from a fifo and printing `\033]2;<title>\007`
+  changes the title live, but not with `--title`, which fixes it.
 - `hyprctl dispatch exec kitty --class x` reads `--class` as its own flag: quote the whole
   command after `exec`.
 - A virtual keyboard (wtype, `zwp_virtual_keyboard_v1`) does not toggle Caps Lock or Num Lock
@@ -129,6 +134,12 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
 - An `IdleMonitor` whose `timeout` changes after it is made never reports idle again.
   Make a new one for each value with an `Instantiator` (`lock/Idle.qml`). The same
   pattern restarts a `Process` with new arguments (`dashboard/PerformanceTab.qml`).
+- Quickshell's `Hyprland.activeToplevel` ignores `activewindowv2` with an empty address
+  (focus on an empty workspace, by `connection.cpp`), so it keeps the old window until
+  another takes focus or that one closes. A `HyprlandToplevel`'s `wayland` handle, and so
+  `appId`, arrives after the toplevel itself. A binding that kept a window because its
+  `workspace` still matched held a closed one (null) afterwards, as nothing changed again:
+  check membership in `workspace.toplevels.values` (`services/ActiveWindows.qml`).
 
 ## Hyprland and GTK
 

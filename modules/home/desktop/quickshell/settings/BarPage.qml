@@ -112,6 +112,14 @@ OptionsPage {
     }
 
     PageHeading {
+        text: "Active window"
+    }
+
+    SwitchRow {
+        key: "bar.showWindowTitle"
+    }
+
+    PageHeading {
         text: "Status icons"
     }
 

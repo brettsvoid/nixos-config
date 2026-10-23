@@ -58,6 +58,7 @@ Singleton {
             "bar.showEmptyWorkspaces": { perScreen: true, default: true },
             "bar.workspacesPerMonitor": { perScreen: true, default: false },
             "bar.scrollWorkspaces": { default: false },
+            "bar.showWindowTitle": { perScreen: true, default: true },
             "bar.showLogo": { perScreen: true, default: true },
             "bar.showLockKeys": { perScreen: true, default: true },
             "bar.showTray": { perScreen: true, default: true },
