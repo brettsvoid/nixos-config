@@ -62,4 +62,4 @@ colours do not suit a scheme).
 
 ## Blocked by
 
-- None
+- .scratch/custom-shell/issues/83-theme-compare-tool.md (judge the schemes with it; parked until then, 2026-10-23)
