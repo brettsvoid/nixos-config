@@ -139,7 +139,7 @@ export interface Wallpaper {
   kind: string; // lower-case file extension: "png", "jpg", "heic"…
 }
 
-export type ToggleId = "wifi" | "bluetooth" | "focus" | "nightShift" | "airdrop";
+export type ToggleId = "wifi" | "bluetooth" | "focus" | "nightShift" | "caffeine";
 
 // One quick toggle. `available: false` means macOS gives edgebar no way to
 // read or set it; `detail` then says why, and the button opens the matching
