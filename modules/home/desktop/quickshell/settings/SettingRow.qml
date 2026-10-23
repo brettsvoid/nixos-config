@@ -31,9 +31,9 @@ Item {
     implicitHeight: Math.max(48, names.implicitHeight + Theme.spacingSmall * 2)
     opacity: root.enabled && !root.shared ? 1 : 0.4
 
-    // The row is outlined and pulses twice, to show where a search result is. The
-    // outline sets it apart from a hover's fill, which looks the same on a theme whose
-    // primary colour is near the text's.
+    // The row pulses twice, to show where a search result is. The highlight reaches
+    // past the row's left edge, so the label is not flush with it; OptionsPage leaves
+    // that room unclipped.
     function flash() {
         flashing.restart();
     }
@@ -41,10 +41,9 @@ Item {
     Rectangle {
         id: highlight
         anchors.fill: parent
+        anchors.leftMargin: -Theme.spacingMedium
         radius: Theme.cornerMedium
-        color: Qt.alpha(Theme.primary, 0.2)
-        border.color: Theme.primary
-        border.width: 2
+        color: Qt.alpha(Theme.primary, 0.3)
         opacity: 0
         visible: flashing.running
     }

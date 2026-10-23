@@ -28,7 +28,7 @@ StatusIcon {
     label: root.showLabel ? Math.round(root.volume * 100) + "%" : ""
     widestGlyph: String.fromCodePoint(0xF075F)
     widestLabel: root.showLabel ? "100%" : ""
-    color: root.muted ? Theme.subtext : Theme.barText
+    color: root.muted ? Qt.alpha(Theme.barText, 0.5) : Theme.barText
 
     // The sink's volume and mute are only kept up to date while something tracks it.
     PwObjectTracker {

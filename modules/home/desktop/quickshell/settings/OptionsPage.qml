@@ -29,16 +29,21 @@ FocusScope {
         id: page
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        // Starts left of the rows by a margin that it gives back, so a search result's
+        // highlight (SettingRow.flash) can reach past a row's left edge unclipped.
         anchors.left: parent.left
+        anchors.leftMargin: -Theme.spacingMedium
         anchors.right: scrollBar.left
         anchors.rightMargin: Theme.spacingSmall
+        leftMargin: Theme.spacingMedium
+        flickableDirection: Flickable.VerticalFlick
         contentHeight: column.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
         Column {
             id: column
-            width: parent.width
+            width: parent.width - Theme.spacingMedium
         }
     }
 

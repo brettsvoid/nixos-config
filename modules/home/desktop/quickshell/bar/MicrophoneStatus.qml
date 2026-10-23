@@ -23,7 +23,7 @@ StatusIcon {
     readonly property bool recording: root.captures.some(g => g.state === PwLinkState.Active)
 
     glyph: root.muted ? 0xF036D : 0xF036C // md-microphone_off, md-microphone
-    color: root.muted ? Theme.subtext : root.recording ? Theme.error : Theme.barText
+    color: root.muted ? Qt.alpha(Theme.barText, 0.5) : root.recording ? Theme.error : Theme.barText
 
     // The source's mute and volume, and the links' state, are only kept up to date
     // while something tracks them.
