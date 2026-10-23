@@ -141,6 +141,24 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   `workspace` still matched held a closed one (null) afterwards, as nothing changed again:
   check membership in `workspace.toplevels.values` (`services/ActiveWindows.qml`).
 
+## Theme colours
+
+The colours come from matugen (`quickshell/matugen/colors.json`, read by
+`theme/Theme.qml`). Some of them cannot carry a meaning on their own;
+`.scratch/custom-shell/theme-contrast.py` prints them for every scheme without touching
+the live theme.
+
+- `Theme.subtext` (`on_surface`) is the same colour as `Theme.text` (`on_background`) in
+  every scheme and mode: a "dimmed" state drawn in it does not show. Dim with opacity
+  (`Qt.alpha(Theme.barText, 0.5)`, as the muted bar icons do).
+- In dark mode `Theme.primary` is barely lighter than the text (WCAG contrast 1.2 to
+  1.3). It shows only by hue, and `scheme-monochrome`, `scheme-content` and
+  `scheme-fidelity` have little: monochrome's primary is white beside `#e2e2e2` text. A
+  state shown only by turning text or an icon the primary colour is lost there. A fill
+  or highlight in the primary colour still shows against the background.
+- `Theme.error` keeps its red in every scheme, so it suits a warning or a recording
+  light.
+
 ## Hyprland and GTK
 
 - Hyprland reloads its whole config when any file it sources changes (an inotify
