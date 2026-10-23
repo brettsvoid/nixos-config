@@ -70,6 +70,11 @@ open leads; check it again when the shell changes.
    before deciding anything.
 7. If the media player widget comes back (media-player.nix, no host imports it now), it
    still sets `QSG_RHI_BACKEND=vulkan`.
+8. Parked (23 Oct, left alone for now): Steam with `-cef-disable-gpu` holds 70 MiB of
+   VRAM, against 108–460 MiB without it. The cost is ~17% of a core while its window
+   is open, even out of sight, and ~160 MiB more RAM. Before using it, check how the
+   Steam UI and the in-game overlay feel, and the web helper's SM% in the tray
+   (Comments, 22 Oct).
 
 ## Acceptance criteria
 
@@ -84,7 +89,8 @@ open leads; check it again when the shell changes.
 ## Questions for you
 
 1. ~~Should game mode reach beyond the shell and Hyprland?~~ Answered 22 Oct: (b),
-   measure Steam first. Measured (Comments); what to do with Steam is open.
+   measure Steam first. Measured (Comments). 23 Oct: leave Steam alone for now; the
+   flag is lead 8.
 2. Is a short delay acceptable when game mode goes off (about 120 ms a window if the
    shell unmaps its windows), if it frees a useful amount of VRAM?
 
