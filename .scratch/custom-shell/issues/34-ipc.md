@@ -1,6 +1,6 @@
 # Shell IPC
 
-Status: ready-for-human
+Status: done
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -69,13 +69,13 @@ Cost: the IPC socket is idle until called. Nothing in game mode.
 
 ## Acceptance criteria
 
-- [ ] `custom-shell` lists the targets; each call does what its shortcut or action does.
+- [x] `custom-shell` lists the targets; each call does what its shortcut or action does.
 - [x] A bad name prints an `error:` line, and the wrapper exits 1.
 - [x] `custom-shell settings set bar.hiddenScreens '["DP-2"]'` works.
 - [x] `custom-shell drawers dashboard performance` opens Performance, or changes to it.
 - [x] `qs-test -- qs ipc -p "$QS_CONFIG" call drawers openOn launcher HEADLESS-1` opens
       the launcher headless.
-- [ ] Every keybind works as before. Costs nothing at rest or in game mode.
+- [x] Every keybind works as before. Costs nothing at rest or in game mode.
 
 ## Blocked by
 
@@ -172,3 +172,5 @@ Still to check, on the desktop after the rebuild (the shell restarts by itself):
 When 1 to 5 hold, set the status to done.
 
 **2026-10-23 (later):** Checked by the user on the desktop: `custom-shell` lists the targets. It lists ten, this issue's nine plus issue 53's `pomodoro`. The keybinds were not reported on yet.
+
+**2026-10-23 (later still):** Checked by the user on the desktop: every keybind works. With the target list checked earlier, all criteria hold.

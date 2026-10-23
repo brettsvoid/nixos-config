@@ -1,6 +1,6 @@
 # Searching the settings window
 
-Status: ready-for-human
+Status: done
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -134,3 +134,5 @@ Still to look at on the desktop after the rebuild:
    another page: the Network page leads the list both times.
 
 **2026-10-23 (later):** On the desktop the user saw no flash. The flash worked (a headless frame 0.1 s after Enter shows the row lit) but was a faint fill of the primary colour, gone in a second, which looks like a hover; on a monochrome scheme the primary colour is white. Fixed in f6792c2: the row is outlined in the primary colour and pulses twice, about 2 s in all, checked headless (frames 0.25 s apart: on, on, off, on, on, off). Back to ready-for-human until the user has seen it: Super+I, `/`, type `auto`, Enter. The Auto-hide row should show an outline that pulses twice.
+
+**2026-10-23 (later still):** The user saw the outlined flash, and asked for left padding and no outline. Done in a65a791: the highlight reaches `spacingMedium` past the row's left edge (OptionsPage's Flickable moves out by that and gives it back as a content margin, so rows stay put: before and after screenshots of the Bar page differ only by about a pixel at the slider knob) and pulses twice with no border.

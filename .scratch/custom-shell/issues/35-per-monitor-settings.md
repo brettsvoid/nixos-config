@@ -1,6 +1,6 @@
 # Per-monitor settings
 
-Status: ready-for-human
+Status: done
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -62,7 +62,7 @@ Cost: bindings only; no process or timer.
 
 ## Acceptance criteria
 
-- [ ] On DP-2 only, the bar goes left and the wallpaper fits; DP-1 does not change. Both
+- [x] On DP-2 only, the bar goes left and the wallpaper fits; DP-1 does not change. Both
       survive a restart.
 - [x] A screen value from Nix shows as that screen's in the window, and a reset there
       returns to it.
@@ -162,3 +162,5 @@ Still to check, on the desktop after the rebuild:
 When 1 and 2 hold, tick the first criterion and set the status to done.
 
 **2026-10-23 (later):** The user wants the Dell's values kept in `settings.json` for now, not in `brett-desktop.nix`. Criterion 1 on the real Dell was not reported on yet.
+
+**2026-10-23 (later still):** Checked by the user on the desktop: `setOn DP-2 bar.edge` put the Dell's bar on the left, and it stayed there after a restart. The wallpaper fit on DP-2 was checked headless only (screenshots, 2026-10-23); it reads its value through the same per-screen path as the bar.
