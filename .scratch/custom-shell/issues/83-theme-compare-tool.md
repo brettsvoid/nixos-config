@@ -1,7 +1,7 @@
 # A tool to compare themes in one view
 
 Status: ready-for-human
-Type: HITL (what the view should show is the user's call)
+Type: HITL (the lab's look and the open questions are the user's call)
 
 ## Parent
 
@@ -24,30 +24,57 @@ What exists to build on:
   no `ShaderEffect` or `MultiEffect`, so the frame, the lock screen's blur and the effect
   previews are missing (`docs/quickshell-notes.md`).
 
-## Two ways to do it (to settle before building)
+## The user's answers (2026-10-23)
 
-1. **A gallery of screenshots.** A script runs `qs-test` once per scheme, mode and
-   wallpaper with that theme's colours, opens the parts to compare (bar, each drawer,
-   the settings window, notifications, the OSD) and writes one page or contact sheet.
-   Uses the real shell, so nothing drifts; no shaders; a full run takes minutes.
-2. **A theme lab inside the shell.** A window (a settings page, or `custom-shell theme
-   lab`) that draws the real components side by side, each under its own palette, live
-   on the GPU. Needs `Theme` to be swappable per subtree instead of one singleton, which
-   touches every component that reads it.
+1. **What it covers:** "literally everything related to UI for the shell." Every surface
+   under `quickshell/`: the bar, the frame, the dashboard, the launcher, the cheatsheet,
+   notifications, the OSD, the session menu, the lock screen, the settings window, and the
+   shared components in `components/`.
+2. **Compare across:** schemes, light and dark, and wallpapers, all three.
+3. **Static or interactive:** both. Hover and click in it, and also a static picture of
+   each state.
+4. **Contrast numbers:** yes, beside each theme (from `theme-contrast.py`).
 
-A first prototype of either would show which is worth it.
+## Plan (from the answers)
 
-## Questions for the user
+Both approaches, since the user wants both kinds of view:
 
-1. What does "every aspect" cover? The bar, drawers, settings window, notifications,
-   OSD, lock screen, GTK and terminal colours, window borders?
-2. Compare across what: schemes, light and dark, wallpapers, or all three at once?
-3. Is a static picture enough (gallery), or do you want to hover and click in it (lab)?
-4. Should it also print the numbers from `theme-contrast.py` beside each theme?
+1. **Theme lab (interactive).** An on-demand window (`custom-shell theme lab`) that draws
+   the real components, each panel under its own palette, live on the GPU, so shaders
+   and hover and click work. Pickers choose the scheme, mode and wallpaper for each panel;
+   the panel shows the theme's contrast numbers. Loaded by a `Loader` and unloaded when
+   closed, so it costs nothing otherwise (issue 80, lean shell).
+   - Needs `Theme` swappable per subtree. Today `theme/Theme.qml` is a singleton, read by
+     61 QML files. One way: components read colours from an attached or inherited
+     palette object that falls back to the singleton, so the live shell does not change.
+     Settle this in a prototype on one or two components before touching the rest.
+   - Palettes come from matugen `--dry-run`, as in `theme-contrast.py`, so the live theme
+     and `~/.cache/qs-theme` are untouched.
+2. **State gallery (static).** A script runs `qs-test` per scheme, mode and wallpaper,
+   puts each surface in each of its states (open, hover, selected, muted, recording,
+   error, empty, and so on) and writes one page of screenshots with the contrast numbers
+   beside each theme. No shaders in software rendering: the frame, the lock blur and the
+   effect previews are missing, and the page says so. The lab covers those.
+
+16 themes per wallpaper (8 schemes by 2 modes) is too many to show whole shells side by
+side at once; the lab shows a chosen few, the gallery shows them all.
+
+## Still to ask
+
+- Do GTK apps, terminal colours and window borders count as "UI for the shell"? They are
+  themed from the same matugen run but are not drawn by Quickshell. Out unless the user
+  says so.
+- Which wallpapers to compare: a folder, or a list in the settings?
+- Should the gallery list every state by hand, or should each surface declare its
+  states so the script finds them (fewer to forget, but more code in each surface)?
 
 ## Acceptance criteria
 
-- [ ] One view shows the chosen parts of the shell under each chosen theme.
+- [ ] The lab shows any surface under any chosen themes side by side, with hover, click
+      and shaders working, and the contrast numbers for each theme.
+- [ ] The gallery shows every surface in each of its states under every scheme, mode and
+      wallpaper, with the contrast numbers.
+- [ ] With the lab closed, the shell uses no more memory than before.
 - [ ] Building it changes nothing in the live theme, settings or session.
 - [ ] Adding a scheme or a wallpaper to the comparison needs no code change.
 
