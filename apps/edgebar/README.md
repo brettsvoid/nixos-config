@@ -75,6 +75,22 @@ Both are Nix-rendered, not committed live files:
   (`modules/home/darwin/edgebar/matugen`) generates it and pings edgebar's
   `theme.sock` to re-theme live.
 
+What the user changes in the app goes in a third file, because `config.json` is
+a read-only store symlink. `~/.config/edgebar/settings.json` holds only the keys
+the user changed, and only edgebar writes it, atomically. The running config is
+the bundled `config.default.json`, then `config.json`, then this file, merged key
+by key (`src-tauri/src/settings.rs`). Defaults live only in
+`config.default.json`. An override must sit at a path that file has and have the
+type it has there (an empty object such as `notch.workspaces` takes any keys). A
+bad override is left out and listed in the snapshot's `error`. A file that is not
+valid JSON is ignored whole and never written over. `src/settings.ts` is the
+WebView's typed accessor (`current`, `set`, `reset`, `onChange`).
+
+`set_setting` changes the running bar without a restart: the theme when colours,
+appearance, geometry or `notch.idle` change, the native frame and bar windows
+when geometry changes, and the notch rules when `notch.workspaces` or
+`notch.transientMs` change. Setting the same value again does nothing.
+
 The ink drawn on the pills (`colors.base`) is contrast-checked against the pill.
 If the role map's ink falls under 4.5:1 (WCAG AA), edgebar uses the palette
 colour that contrasts most instead, or plain black or white if no palette colour

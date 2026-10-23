@@ -41,7 +41,7 @@ const DEFAULT_TRANSIENT_MS: u64 = 1600;
 /// The `notch` block of config.json. Absent means all defaults: the idle
 /// handle, the media readout and no workspace rules.
 // Serialize rides along because the whole `Config` is serializable.
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NotchConfig {
     /// Per-workspace rules keyed by AeroSpace workspace name. `"*"` is the
@@ -55,7 +55,7 @@ pub struct NotchConfig {
 }
 
 /// Where a workspace's context line comes from.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "source", rename_all = "camelCase")]
 pub enum Rule {
     /// The title of that workspace's focused window, app name beneath it.
@@ -151,7 +151,8 @@ struct Slots {
 /// Managed state: the published slots plus the config the providers read.
 pub struct NotchState {
     slots: Mutex<Slots>,
-    config: NotchConfig,
+    /// Replaced when a setting changes the rules or the flash hold.
+    config: Mutex<NotchConfig>,
     /// Workspace the rules are currently resolved against, and when its
     /// `everyMs` command last ran.
     current: Mutex<(String, Option<Instant>)>,
@@ -165,11 +166,17 @@ impl NotchState {
     pub fn new(config: NotchConfig) -> Self {
         Self {
             slots: Mutex::new(Slots::default()),
-            config,
+            config: Mutex::new(config),
             current: Mutex::new((String::new(), None)),
             art: Mutex::new(HashMap::new()),
             media_bundle: Mutex::new(String::new()),
         }
+    }
+
+    /// Swap in new rules and flash hold. The caller re-runs the focused
+    /// workspace's rule (`refresh_workspace`) when the rules changed.
+    pub fn set_config(&self, config: NotchConfig) {
+        *self.config.lock().unwrap() = config;
     }
 }
 
@@ -217,7 +224,12 @@ pub fn flash(app: &tauri::AppHandle, glyph: &str, primary: String, progress: Opt
 
     let (gen, hold) = {
         let state = app.state::<NotchState>();
-        let hold = state.config.transient_ms.unwrap_or(DEFAULT_TRANSIENT_MS);
+        let hold = state
+            .config
+            .lock()
+            .unwrap()
+            .transient_ms
+            .unwrap_or(DEFAULT_TRANSIENT_MS);
         let mut s = state.slots.lock().unwrap();
         s.transient = Some(item);
         s.transient_gen += 1;
@@ -279,11 +291,11 @@ pub fn refresh_workspace(app: &tauri::AppHandle) {
 
     let rule = {
         let state = app.state::<NotchState>();
-        state
-            .config
+        let config = state.config.lock().unwrap();
+        config
             .workspaces
             .get(&ws)
-            .or_else(|| state.config.workspaces.get("*"))
+            .or_else(|| config.workspaces.get("*"))
             .cloned()
     };
 
@@ -399,11 +411,11 @@ pub fn install_rule_ticker(app: tauri::AppHandle) {
         let due = {
             let state = app.state::<NotchState>();
             let cur = state.current.lock().unwrap();
-            let every = match state
-                .config
+            let config = state.config.lock().unwrap();
+            let every = match config
                 .workspaces
                 .get(&cur.0)
-                .or_else(|| state.config.workspaces.get("*"))
+                .or_else(|| config.workspaces.get("*"))
             {
                 Some(Rule::Command {
                     every_ms: Some(ms), ..
