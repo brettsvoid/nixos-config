@@ -15,6 +15,10 @@ use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 /// Dynamic content for the collapsed notch (media / per-workspace / OSD).
 mod notch;
 
+/// Debug-only socket that drives and snapshots the live bar.
+#[cfg(all(debug_assertions, target_os = "macos"))]
+mod devtools;
+
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
 /// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
 /// (persisted to `~/.config/edgebar/appearance`).
@@ -2898,7 +2902,9 @@ pub fn run() {
             precompute_palettes,
             notch::notch_state,
             notch::media_toggle,
-            notch::media_seek
+            notch::media_seek,
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            devtools::dev_result
         ])
         .setup(|app| {
             let config = load_config();
@@ -3041,6 +3047,9 @@ pub fn run() {
             notch::install_rule_ticker(app.handle().clone());
             let seed = app.handle().clone();
             std::thread::spawn(move || notch::refresh_workspace(&seed));
+
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            devtools::start(app);
 
             Ok(())
         })
