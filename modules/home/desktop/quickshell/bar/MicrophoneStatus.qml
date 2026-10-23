@@ -4,7 +4,7 @@ import "../config"
 import "../theme"
 
 // The default microphone. The icon follows its mute from any source, and shows in the
-// accent colour while an app records. A click toggles mute, and scrolling changes the
+// error colour while an app records. A click toggles mute, and scrolling changes the
 // input volume, by the settings' step and up to 100 %. Muted wins over recording: an app
 // that is attached hears nothing.
 StatusIcon {
@@ -23,7 +23,7 @@ StatusIcon {
     readonly property bool recording: root.captures.some(g => g.state === PwLinkState.Active)
 
     glyph: root.muted ? 0xF036D : 0xF036C // md-microphone_off, md-microphone
-    color: root.muted ? Theme.subtext : root.recording ? Theme.primary : Theme.barText
+    color: root.muted ? Theme.subtext : root.recording ? Theme.error : Theme.barText
 
     // The source's mute and volume, and the links' state, are only kept up to date
     // while something tracks them.

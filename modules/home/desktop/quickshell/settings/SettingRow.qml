@@ -31,7 +31,9 @@ Item {
     implicitHeight: Math.max(48, names.implicitHeight + Theme.spacingSmall * 2)
     opacity: root.enabled && !root.shared ? 1 : 0.4
 
-    // The row's background lights up once, to show where a search result is.
+    // The row is outlined and pulses twice, to show where a search result is. The
+    // outline sets it apart from a hover's fill, which looks the same on a theme whose
+    // primary colour is near the text's.
     function flash() {
         flashing.restart();
     }
@@ -40,7 +42,9 @@ Item {
         id: highlight
         anchors.fill: parent
         radius: Theme.cornerMedium
-        color: Theme.primary
+        color: Qt.alpha(Theme.primary, 0.2)
+        border.color: Theme.primary
+        border.width: 2
         opacity: 0
         visible: flashing.running
     }
@@ -48,18 +52,24 @@ Item {
     SequentialAnimation {
         id: flashing
 
+        loops: 2
+
         NumberAnimation {
             target: highlight
             property: "opacity"
-            to: 0.3
-            duration: 100
+            to: 1
+            duration: 150
+        }
+
+        PauseAnimation {
+            duration: 450
         }
 
         NumberAnimation {
             target: highlight
             property: "opacity"
             to: 0
-            duration: 900
+            duration: 400
             easing.type: Easing.OutQuad
         }
     }
