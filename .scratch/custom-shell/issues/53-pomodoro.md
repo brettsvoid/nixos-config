@@ -174,3 +174,5 @@ Still to check, on the desktop after the rebuild:
    click like a phase that ended by itself?
 
 When 1 to 3 hold, set the status to done.
+
+**2026-10-23 (later):** The user could not find the timer. It has no bar entry until a session runs: start one from the launcher's actions (type `>pomodoro`, choose Start pomodoro) or with `custom-shell pomodoro start`, and the entry appears right of the clock.

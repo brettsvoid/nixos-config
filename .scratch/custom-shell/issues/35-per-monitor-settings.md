@@ -160,3 +160,5 @@ Still to check, on the desktop after the rebuild:
 4. Question: keep these values on DP-2, or set them in `brett-desktop.nix` instead?
 
 When 1 and 2 hold, tick the first criterion and set the status to done.
+
+**2026-10-23 (later):** The user wants the Dell's values kept in `settings.json` for now, not in `brett-desktop.nix`. Criterion 1 on the real Dell was not reported on yet.

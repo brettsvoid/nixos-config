@@ -155,3 +155,5 @@ Still to check on the desktop after the rebuild:
 6. Question: logo and power in plain bar colour, as built, or in the accent colour?
 
 When 1 to 4 hold, set the status to done.
+
+**2026-10-23 (later):** Checked by the user on the desktop: a click mutes the microphone and the icon shows it crossed out. While `pw-record` ran, the icon did not visibly change. Cause: the theme's primary colour was `#ffffff` (a monochrome scheme) and the bar text `#e2e2e2`. Detection was right: a separate Quickshell probe on the real PipeWire saw the group from the headset to `pw-record` as `active`. Fixed in f6792c2, against choice 3's wording: a recording microphone takes the theme's error colour, as a recording light is red. To check: run `pw-record /dev/null` in a terminal and stop it with Ctrl+C; the mic icon should be red while it runs. To mute from a terminal: `wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle`.

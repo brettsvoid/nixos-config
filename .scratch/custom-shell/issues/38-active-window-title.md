@@ -118,3 +118,5 @@ To check on the desktop, after a rebuild:
 3. Open a page with a very long title on the Dell: does it end in an ellipsis with a
    gap before the clock?
 4. Settings, Bar, Active window: does the switch hide it on the screen picked only?
+
+**2026-10-23 (later):** Checked by the user on the desktop: works as described (the title follows the focused window on each screen and elides before the clock). The window panel still waits on issue 37.

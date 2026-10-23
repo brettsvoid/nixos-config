@@ -1,6 +1,6 @@
 # Searching the settings window
 
-Status: done
+Status: ready-for-human
 Type: AFK (once the choices are approved)
 
 ## Parent
@@ -132,3 +132,5 @@ Still to look at on the desktop after the rebuild:
    30 % opacity for 1 s)?
 2. `custom-shell settings search wifi` with the window closed, then again with it open on
    another page: the Network page leads the list both times.
+
+**2026-10-23 (later):** On the desktop the user saw no flash. The flash worked (a headless frame 0.1 s after Enter shows the row lit) but was a faint fill of the primary colour, gone in a second, which looks like a hover; on a monochrome scheme the primary colour is white. Fixed in f6792c2: the row is outlined in the primary colour and pulses twice, about 2 s in all, checked headless (frames 0.25 s apart: on, on, off, on, on, off). Back to ready-for-human until the user has seen it: Super+I, `/`, type `auto`, Enter. The Auto-hide row should show an outline that pulses twice.

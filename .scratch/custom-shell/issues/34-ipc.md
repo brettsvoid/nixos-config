@@ -170,3 +170,5 @@ Still to check, on the desktop after the rebuild (the shell restarts by itself):
    want those run on the desktop; `lock lock` needs your password.
 
 When 1 to 5 hold, set the status to done.
+
+**2026-10-23 (later):** Checked by the user on the desktop: `custom-shell` lists the targets. It lists ten, this issue's nine plus issue 53's `pomodoro`. The keybinds were not reported on yet.
