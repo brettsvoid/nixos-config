@@ -119,6 +119,8 @@ struct ResolvedConfig {
     /// entirely in the WebView (a clock ticks, and that shouldn't cost an event
     /// stream), so it travels with the config rather than the `notch` event.
     notch_idle: String,
+    /// The workspace dots, in order, for the Settings rules editor.
+    workspace_names: &'static [&'static str],
 }
 
 fn resolve_colors(
@@ -412,6 +414,7 @@ impl ThemeState {
             scheme: persisted_scheme(),
             ink,
             notch_idle: self.notch_idle.clone(),
+            workspace_names: &WS_ORDER,
         }
     }
 }

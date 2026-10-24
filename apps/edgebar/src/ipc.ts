@@ -35,6 +35,7 @@ export interface Config {
   scheme: string;
   ink: InkInfo;
   notchIdle: string;
+  workspaceNames: string[];
 }
 
 export interface InkInfo {
