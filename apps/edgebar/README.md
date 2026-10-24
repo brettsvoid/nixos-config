@@ -88,6 +88,24 @@ the same check, with WCAG's 3:1 floor for graphical indicators. matugen's accent
 often matches the pill's tone: in dark mode it is about 1:1 on the pill in every
 scheme, so there the ring always takes the surface colour, as the ink does.
 
+### Wallpaper folder, OLED and Tint
+
+Three keys in `config.default.json`, changeable as settings:
+
+- `wallpaper.folder` — where the wallpapers view looks (`~` allowed). Images one
+  subfolder down are listed too, each tagged with its subfolder and file type.
+- `oled` — in the dark scheme the palette's surface becomes `#000000`, and every
+  role built on it follows. The light scheme is unchanged. (It sits at the top
+  level, not under `appearance`, because `appearance` is already a string.)
+- `wallpaper.tint` — repaints the desktop picture in the theme's colours, after
+  ambxst's `palette.frag`. The palette still comes from the original picture;
+  the repainted copy is a PNG in `~/.cache/edgebar/tinted/` with a `.src` file
+  naming its original. The copy is rebuilt when the scheme, appearance or OLED
+  changes, and the original goes back on the desktop when tint is turned off.
+  HEIC pictures are not tinted. To stop the launchd watcher theming from the
+  copy, edgebar touches `~/.cache/edgebar/.inapp-change` before each desktop
+  change, and `generate-edgebar-theme` maps a copy back to its original.
+
 `modules/home/darwin/edgebar.nix` owns deployment; edit config/palette there and
 rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for edgebar's
 design spec.

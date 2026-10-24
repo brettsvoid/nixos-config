@@ -48,5 +48,10 @@
     "barHeight": 64,
     "windowHeight": 64,
     "topOffsetPx": 1
+  },
+  "oled": false,
+  "wallpaper": {
+    "folder": "~/Pictures/Wallpapers",
+    "tint": false
   }
 }
