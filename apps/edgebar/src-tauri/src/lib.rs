@@ -43,6 +43,9 @@ mod devtools;
 /// read and change them.
 mod settings;
 
+/// The Settings view's checklist of what edgebar needs from this Mac.
+mod setup;
+
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
 /// `Light`/`Dark` pin it. The `appearance` setting, so the user's choice lives
 /// in settings.json like any other.
@@ -1550,7 +1553,7 @@ fn launcher_action(action: String) {
 /// the privacy lists that grant what a toggle or the notification history
 /// needs. The ids are the panes' extension bundle ids and the anchors their
 /// `revealElementKeyName`s (SecurityPrivacyExtension.appex TCCServiceList.plist).
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum SettingsPane {
     Wifi,
@@ -1560,6 +1563,9 @@ enum SettingsPane {
     Displays,
     FullDiskAccess,
     PrivacyBluetooth,
+    PrivacyAutomation,
+    /// Not a pane: the Shortcuts app, where the Focus toggle's Shortcut is made.
+    Shortcuts,
 }
 
 impl SettingsPane {
@@ -1575,18 +1581,28 @@ impl SettingsPane {
             Self::PrivacyBluetooth => {
                 "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Bluetooth"
             }
+            // Automation has no anchor of its own in TCCServiceList.plist; this
+            // is the name the older Security pane used.
+            Self::PrivacyAutomation => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"
+            }
+            Self::Shortcuts => "shortcuts://",
         }
     }
 }
 
-/// Open one of `SettingsPane`'s panes; any other name fails to deserialise.
-#[tauri::command]
-fn open_settings_pane(pane: SettingsPane) -> Result<(), String> {
+fn open_pane(pane: SettingsPane) -> Result<(), String> {
     std::process::Command::new("/usr/bin/open")
         .arg(pane.url())
         .spawn()
         .map(drop)
         .map_err(|e| e.to_string())
+}
+
+/// Open one of `SettingsPane`'s panes; any other name fails to deserialise.
+#[tauri::command]
+fn open_settings_pane(pane: SettingsPane) -> Result<(), String> {
+    open_pane(pane)
 }
 
 // ───────────────────────── theme / wallpaper picker ─────────────────
@@ -1862,6 +1878,30 @@ async fn pick_wallpaper_file() -> Option<String> {
     } else {
         Some(path)
     }
+}
+
+/// Open a Finder folder picker for the wallpaper folder and return the choice,
+/// `~/…` when it is under the home folder, or None on cancel. osascript owns
+/// the dialog, as with `pick_wallpaper_file`.
+#[tauri::command]
+async fn pick_folder() -> Option<String> {
+    let path = tauri::async_runtime::spawn_blocking(|| {
+        run_osa("POSIX path of (choose folder with prompt \"Choose the wallpaper folder\")")
+    })
+    .await
+    .ok()
+    .flatten()?;
+    let path = path.trim_end_matches('/');
+    if path.is_empty() {
+        return None;
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    Some(match path.strip_prefix(home.as_str()) {
+        Some(rest) if !home.is_empty() && (rest.is_empty() || rest.starts_with('/')) => {
+            format!("~{rest}")
+        }
+        _ => path.to_string(),
+    })
 }
 
 /// Set the matugen scheme: re-theme the current wallpaper with it now, and
@@ -2844,6 +2884,7 @@ pub fn run() {
             current_wallpaper,
             set_wallpaper,
             pick_wallpaper_file,
+            pick_folder,
             set_scheme,
             precompute_palettes,
             notch::notch_state,
@@ -2855,6 +2896,10 @@ pub fn run() {
             notch::media_seek,
             settings::get_settings,
             settings::set_setting,
+            settings::settings_files,
+            settings::open_settings_file,
+            setup::setup_status,
+            setup::setup_run,
             notifications::notification_history,
             notifications::notification_dismiss,
             notifications::notification_clear,
@@ -2922,6 +2967,7 @@ pub fn run() {
             app.manage(notch::NotchState::new(config.notch));
             app.manage(toggles::Toggles::new(config.toggles));
             app.manage(assistant::AssistantState::default());
+            app.manage(setup::Setup::default());
 
             // Per-display chrome, rebuilt on every display-config change.
             #[cfg(target_os = "macos")]

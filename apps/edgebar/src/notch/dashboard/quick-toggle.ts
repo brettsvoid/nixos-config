@@ -61,6 +61,8 @@ const PANE_NAMES: Record<SettingsPane, string> = {
   displays: "Displays settings",
   fullDiskAccess: "Full Disk Access",
   privacyBluetooth: "Bluetooth privacy",
+  privacyAutomation: "Automation privacy",
+  shortcuts: "Shortcuts",
 };
 
 // The pane that fixes what a toggle's detail reports. toggles.rs words these

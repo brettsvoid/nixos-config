@@ -31,7 +31,7 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 const BLUETOOTH_TIMEOUT: Duration = Duration::from_secs(3);
 const BLUETOOTH_PERMISSION: &str = "Needs Bluetooth permission for kitty";
 
-const ASSERTIONS: &str = "Library/DoNotDisturb/DB/Assertions.json";
+pub const ASSERTIONS: &str = "Library/DoNotDisturb/DB/Assertions.json";
 const MODE_CONFIGURATIONS: &str = "Library/DoNotDisturb/DB/ModeConfigurations.json";
 
 /// The `toggles` block of config.json.
@@ -233,7 +233,7 @@ impl Toggles {
     }
 
     /// Whether a Shortcut called `name` exists, or None if `shortcuts list` failed.
-    fn has_shortcut(&self, name: &str) -> Option<bool> {
+    pub fn has_shortcut(&self, name: &str) -> Option<bool> {
         let mut cache = self.shortcuts.lock().unwrap();
         let fresh = cache
             .as_ref()
@@ -342,6 +342,30 @@ fn write_bluetooth(_: &Toggles, on: bool) -> Result<(), String> {
     });
     rx.recv_timeout(BLUETOOTH_TIMEOUT)
         .unwrap_or_else(|_| Err(BLUETOOTH_PERMISSION.into()))
+}
+
+/// What macOS has decided about Bluetooth for the app edgebar's permissions
+/// belong to (kitty today). Switching Bluetooth needs `Granted`; `NotAsked`
+/// means the first switch will ask.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BluetoothPermission {
+    NotAsked,
+    Restricted,
+    Denied,
+    Granted,
+}
+
+/// Read with CoreBluetooth's `CBManager.authorization`, a preflight that never
+/// asks (tccd logs it as `preflight=yes`). None when CoreBluetooth can't say.
+pub fn bluetooth_permission() -> Option<BluetoothPermission> {
+    // CBManagerAuthorization's raw values.
+    match sys::bluetooth_authorization()? {
+        0 => Some(BluetoothPermission::NotAsked),
+        1 => Some(BluetoothPermission::Restricted),
+        2 => Some(BluetoothPermission::Denied),
+        3 => Some(BluetoothPermission::Granted),
+        _ => None,
+    }
 }
 
 // ───────────────────────── Focus ────────────────────────────────────
@@ -620,6 +644,23 @@ mod sys {
         Ok(())
     }
 
+    /// `+[CBManager authorization]`, loading CoreBluetooth on first use.
+    pub fn bluetooth_authorization() -> Option<isize> {
+        static LOADED: OnceLock<bool> = OnceLock::new();
+        let loaded = *LOADED.get_or_init(|| {
+            open(c"/System/Library/Frameworks/CoreBluetooth.framework/CoreBluetooth").is_some()
+        });
+        if !loaded {
+            return None;
+        }
+        let class = AnyClass::get(c"CBManager")?;
+        let sel = sel!(authorization);
+        // SAFETY: NSObject's class-side respondsToSelector:, then the documented
+        // class property (macOS 10.15+), which returns an NSInteger.
+        let responds: bool = unsafe { msg_send![class, respondsToSelector: sel] };
+        responds.then(|| unsafe { msg_send![class, authorization] })
+    }
+
     fn blue_light_client() -> Option<Retained<AnyObject>> {
         static LOADED: OnceLock<bool> = OnceLock::new();
         let loaded = *LOADED.get_or_init(|| {
@@ -689,6 +730,9 @@ mod sys {
         None
     }
     pub fn bluetooth_power() -> Option<u64> {
+        None
+    }
+    pub fn bluetooth_authorization() -> Option<isize> {
         None
     }
     pub fn set_bluetooth_power(_: bool) -> Result<(), String> {

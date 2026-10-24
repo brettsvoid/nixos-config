@@ -170,7 +170,9 @@ export type SettingsPane =
   | "focus"
   | "displays" // Night Shift lives here
   | "fullDiskAccess"
-  | "privacyBluetooth";
+  | "privacyBluetooth"
+  | "privacyAutomation"
+  | "shortcuts"; // not a pane: opens the Shortcuts app
 
 // Whether edgebar may read macOS's notification history. "off" means the
 // `notifications.history` setting is off, so Rust never opened the store.
@@ -209,6 +211,29 @@ export interface SettingsSnapshot {
   error: string | null;
 }
 
+// One row of the Settings view's Setup checklist (setup.rs). `action` is the
+// label of the button that runs `setup_run` for it, null when edgebar can do
+// nothing about it.
+export interface SetupItem {
+  id: string;
+  label: string;
+  state: "ready" | "missing" | "unknown";
+  detail: string;
+  action: string | null;
+}
+
+// Where one of the settings layers lives, for the Settings view's About.
+export interface SettingsLayer {
+  name: string;
+  path: string;
+  detail: string;
+}
+
+export interface SettingsFiles {
+  version: string;
+  layers: SettingsLayer[]; // bundled defaults, the Nix config.json, settings.json
+}
+
 type NoArgs = Record<string, never>;
 
 export interface Commands {
@@ -241,6 +266,8 @@ export interface Commands {
   current_wallpaper: { args: NoArgs; result: string };
   set_wallpaper: { args: { path: string }; result: void };
   pick_wallpaper_file: { args: NoArgs; result: string | null };
+  // The wallpaper folder, `~/…` under the home folder; null on cancel.
+  pick_folder: { args: NoArgs; result: string | null };
   set_scheme: { args: { scheme: string }; result: void };
   precompute_palettes: { args: NoArgs; result: void };
   notch_state: { args: NoArgs; result: NotchItem | null };
@@ -268,6 +295,12 @@ export interface Commands {
   get_settings: { args: NoArgs; result: SettingsSnapshot };
   // `value: null` drops the override, so the key falls back to config.json.
   set_setting: { args: { key: string; value: unknown }; result: SettingsSnapshot };
+  settings_files: { args: NoArgs; result: SettingsFiles };
+  // Opens settings.json in the default text editor, creating it as {} first.
+  open_settings_file: { args: NoArgs; result: void };
+  setup_status: { args: NoArgs; result: SetupItem[] };
+  // Runs that row's action, then answers with every row probed again.
+  setup_run: { args: { id: string }; result: SetupItem[] };
 }
 
 export interface Events {

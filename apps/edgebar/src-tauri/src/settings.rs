@@ -523,6 +523,96 @@ pub async fn set_setting(
         .map_err(|e| e.to_string())?
 }
 
+/// One layer, for the Settings view's About section (`SettingsLayer` in ipc.ts).
+#[derive(Serialize)]
+pub struct Layer {
+    name: &'static str,
+    path: String,
+    detail: String,
+}
+
+#[derive(Serialize)]
+pub struct Files {
+    version: String,
+    layers: Vec<Layer>,
+}
+
+/// `~/…` for a path under the home folder.
+fn tilde(path: &Path) -> String {
+    let shown = path.display().to_string();
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() && shown.starts_with(&home) => {
+            format!("~{}", &shown[home.len()..])
+        }
+        _ => shown,
+    }
+}
+
+/// edgebar's version and where each of the three layers lives.
+#[tauri::command]
+pub fn settings_files(app: tauri::AppHandle) -> Files {
+    let dir = dir();
+    let nix = dir.as_deref().map(|d| d.join(NIX_FILE));
+    let user = dir.as_deref().map(|d| d.join(USER_FILE));
+    let overrides = {
+        let store = app.state::<Store>();
+        let applied = store.applied.lock().unwrap();
+        leaves(&bundled(), &applied.snapshot.user).len()
+    };
+    let nix_detail = if nix.as_deref().is_some_and(Path::exists) {
+        "Rendered by modules/home/darwin/edgebar.nix; read-only.".to_string()
+    } else {
+        "Missing: edgebar runs on its defaults until the Nix config is built.".to_string()
+    };
+    let user_detail = match (user.as_deref().is_some_and(Path::exists), overrides) {
+        (false, _) => "Not created yet: no setting has been changed.".to_string(),
+        (true, 1) => "1 changed setting. Only edgebar writes it.".to_string(),
+        (true, n) => format!("{n} changed settings. Only edgebar writes it."),
+    };
+    let shown = |p: Option<PathBuf>| p.map(|p| tilde(&p)).unwrap_or_default();
+    Files {
+        version: app.package_info().version.to_string(),
+        layers: vec![
+            Layer {
+                name: "Defaults",
+                path: "Built into edgebar".to_string(),
+                detail: "From apps/edgebar/src-tauri/config.default.json, which also lists every setting."
+                    .to_string(),
+            },
+            Layer {
+                name: "Nix config",
+                path: shown(nix),
+                detail: nix_detail,
+            },
+            Layer {
+                name: "Your settings",
+                path: shown(user),
+                detail: user_detail,
+            },
+        ],
+    }
+}
+
+/// Open settings.json in the default text editor, creating it as `{}` first if
+/// it doesn't exist (a missing file and `{}` mean the same).
+#[tauri::command]
+pub fn open_settings_file(app: tauri::AppHandle) -> Result<(), String> {
+    let file = dir().ok_or("HOME is not set")?.join(USER_FILE);
+    {
+        let store = app.state::<Store>();
+        let _writer = store.writer.lock().unwrap();
+        if !file.exists() {
+            write_atomic(&file, &empty())?;
+        }
+    }
+    std::process::Command::new("/usr/bin/open")
+        .arg("-t")
+        .arg(&file)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("cannot open {}: {e}", file.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

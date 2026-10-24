@@ -171,7 +171,7 @@ fn name_from_bundle_id(bundle_id: &str) -> String {
 // ───────────────────────── reading the store ────────────────────────
 
 /// The store's directory.
-fn store_dir() -> Option<PathBuf> {
+pub fn store_dir() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
     Some(Path::new(&home).join("Library/Group Containers/group.com.apple.usernoted/db2"))
 }

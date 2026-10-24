@@ -295,7 +295,7 @@ fn is_executable(path: &Path) -> bool {
 /// Finds the CLI. A command with a slash is taken as a path. A bare name is
 /// looked up on PATH, then in `~/.local/bin`, where the native installer puts
 /// `claude` and a launchd-started app's PATH rarely reaches.
-fn resolve_command(
+pub fn resolve_command(
     command: &str,
     path_var: Option<&std::ffi::OsStr>,
     home: Option<&Path>,
