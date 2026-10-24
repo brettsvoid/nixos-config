@@ -160,8 +160,6 @@ pub struct NotchState {
     /// Workspace the rules are currently resolved against, and when its
     /// `everyMs` command last ran.
     current: Mutex<(String, Option<Instant>)>,
-    /// Cover art data URLs, keyed by the player's artwork URL.
-    art: Mutex<HashMap<String, String>>,
     covers: Mutex<CoverCache>,
     /// Bundle id currently owning the media slot — where transport commands go.
     media_bundle: Mutex<String>,
@@ -173,7 +171,6 @@ impl NotchState {
             slots: Mutex::new(Slots::default()),
             config: Mutex::new(config),
             current: Mutex::new((String::new(), None)),
-            art: Mutex::new(HashMap::new()),
             covers: Mutex::new(CoverCache::default()),
             media_bundle: Mutex::new(String::new()),
         }
@@ -544,9 +541,7 @@ pub fn media_state(app: tauri::AppHandle) -> Option<MediaState> {
     s.media.as_ref().map(|m| m.state.clone())
 }
 
-const ART_HOST: &str = "https://i.scdn.co/image/";
-/// Cover art cache cap, so a long listening session can't grow it unbounded.
-const ART_CACHE_MAX: usize = 32;
+const ALLOWED_ART_PREFIX: &str = "https://i.scdn.co/image/";
 
 /// Poll for the app currently writing to an output device and describe it.
 pub fn install_media_watcher(app: tauri::AppHandle) {
@@ -657,6 +652,17 @@ fn current_bundle(app: &tauri::AppHandle) -> String {
 
 const FIELD_SEP: char = '\u{1f}';
 
+/// The AppleScript expression behind each field `parse_track` reads, in order.
+const TRACK_FIELDS: [&str; 7] = [
+    "(player state as text)",
+    "t",
+    "a",
+    "al",
+    "(player position as text)",
+    "(d as text)",
+    "k",
+];
+
 /// Ask a scriptable player for the current track. Guarded by `is running` so
 /// the query never launches the app. Needs Automation permission for that app;
 /// if denied this returns None and the readout falls back to the CoreAudio one.
@@ -668,6 +674,8 @@ fn track_metadata(bundle_id: &str) -> Option<Track> {
 
 fn metadata_script(player: &Player) -> String {
     let (name, cover_key) = (player.name, player.cover_key);
+    let sep = FIELD_SEP as u32;
+    let fields = TRACK_FIELDS.join(" & s & ");
     format!(
         r#"if application "{name}" is running then
              tell application "{name}"
@@ -683,38 +691,31 @@ fn metadata_script(player: &Player) -> String {
                try
                  set k to ({cover_key}) as text
                end try
-               set s to (ASCII character 31)
-               return (player state as text) & s & t & s & a & s & al & s & (player position as text) & s & (d as text) & s & k
+               set s to (ASCII character {sep})
+               return {fields}
              end tell
            end if"#
     )
 }
 
 fn parse_track(player: &Player, out: &str) -> Option<Track> {
-    let mut fields = out.split(FIELD_SEP);
-    let state = fields.next()?;
-    if state.is_empty() {
+    let mut parts = out.split(FIELD_SEP).map(str::trim);
+    let fields: [&str; TRACK_FIELDS.len()] =
+        std::array::from_fn(|_| parts.next().unwrap_or_default());
+    let [state, title, artist, album, position, duration, cover_key] = fields;
+    if state.is_empty() || title.is_empty() {
         return None;
     }
-    let mut next = || fields.next().unwrap_or_default().trim();
-    let title = next().to_string();
-    let artist = next().to_string();
-    let album = next().to_string();
-    let position = next().parse().unwrap_or(0.0);
-    let duration = next()
+    let duration = duration
         .parse::<f64>()
         .map(|d| if player.duration_ms { d / 1000.0 } else { d })
         .unwrap_or(0.0);
-    let cover_key = next();
-    if title.is_empty() {
-        return None;
-    }
     Some(Track {
-        title,
-        artist,
-        album,
+        title: title.to_string(),
+        artist: artist.to_string(),
+        album: album.to_string(),
         playing: state == "playing",
-        position,
+        position: position.parse().unwrap_or(0.0),
         duration,
         cover_key: if parse_cover_key(cover_key).is_some() {
             cover_key.to_string()
@@ -776,8 +777,10 @@ fn seek_command(player: &Player, fraction: f64) -> String {
 
 const COVER_PX: u32 = 300;
 const COVER_CACHE_MAX: usize = 8;
-const COVER_ID_640: &str = "ab67616d0000b273";
-const COVER_ID_300: &str = "ab67616d00001e02";
+/// Spotify image ids that name the 640, 300 and 64 px sizes of one cover.
+const SPOTIFY_640: &str = "ab67616d0000b273";
+const SPOTIFY_300: &str = "ab67616d00001e02";
+const SPOTIFY_64: &str = "ab67616d00004851";
 
 #[derive(Debug, PartialEq)]
 enum CoverSource<'a> {
@@ -786,7 +789,7 @@ enum CoverSource<'a> {
 }
 
 fn parse_cover_key(key: &str) -> Option<CoverSource<'_>> {
-    if let Some(id) = key.strip_prefix(ART_HOST) {
+    if let Some(id) = key.strip_prefix(ALLOWED_ART_PREFIX) {
         return (!id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric()))
             .then_some(CoverSource::Spotify(key));
     }
@@ -823,39 +826,60 @@ pub async fn media_art(app: tauri::AppHandle, key: String) -> String {
         .unwrap_or_default()
 }
 
+/// The player view's cover, 300 px for either player.
 fn cover(app: &tauri::AppHandle, key: &str) -> String {
-    let Some(source) = parse_cover_key(key) else {
-        return String::new();
-    };
-    let state = app.state::<NotchState>();
-    let held = state.covers.lock().unwrap().get(key).map(str::to_string);
-    if let Some(url) = held {
-        return url;
+    match parse_cover_key(key) {
+        Some(CoverSource::Spotify(url)) => {
+            cached_cover(app, sized_spotify_url(url, SPOTIFY_300), || {
+                spotify_image(url, SPOTIFY_300)
+            })
+        }
+        Some(CoverSource::Music(id)) => cached_cover(app, key.to_string(), || music_cover(id)),
+        None => String::new(),
     }
-    let bytes = match source {
-        CoverSource::Spotify(url) => spotify_cover(url),
-        CoverSource::Music(id) => music_cover(id),
-    };
-    let Some(bytes) = bytes else {
+}
+
+/// The notch's backdrop: Spotify's 64 px cover, which is plenty there and far
+/// smaller over IPC.
+fn artwork(app: &tauri::AppHandle, key: &str) -> String {
+    match parse_cover_key(key) {
+        Some(CoverSource::Spotify(url)) => {
+            cached_cover(app, sized_spotify_url(url, SPOTIFY_64), || {
+                spotify_image(url, SPOTIFY_64)
+            })
+        }
+        _ => String::new(),
+    }
+}
+
+/// A JPEG cover as a `data:` URL, so the page stays offline.
+fn cached_cover(
+    app: &tauri::AppHandle,
+    key: String,
+    fetch: impl FnOnce() -> Option<Vec<u8>>,
+) -> String {
+    let state = app.state::<NotchState>();
+    if let Some(url) = state.covers.lock().unwrap().get(&key) {
+        return url.to_string();
+    }
+    let Some(bytes) = fetch() else {
         return String::new();
     };
     let url = format!("data:image/jpeg;base64,{}", crate::base64_encode(&bytes));
-    state
-        .covers
-        .lock()
-        .unwrap()
-        .insert(key.to_string(), url.clone());
+    state.covers.lock().unwrap().insert(key, url.clone());
     url
 }
 
-fn spotify_cover_url(url: &str) -> String {
-    url.replace(COVER_ID_640, COVER_ID_300)
+fn sized_spotify_url(url: &str, size_id: &str) -> String {
+    url.replace(SPOTIFY_640, size_id)
 }
 
-fn spotify_cover(url: &str) -> Option<Vec<u8>> {
-    let small = spotify_cover_url(url);
-    let original = (small != url).then_some(url);
-    std::iter::once(small.as_str())
+/// The size id is a convention, not a contract, so the URL as the player gave
+/// it is the fallback.
+fn spotify_image(url: &str, size_id: &str) -> Option<Vec<u8>> {
+    let sized = sized_spotify_url(url, size_id);
+    let original = (sized != url).then_some(url);
+    std::iter::once(sized.as_str())
         .chain(original)
         .find_map(|u| {
             std::process::Command::new("/usr/bin/curl")
@@ -919,50 +943,6 @@ fn music_cover_script(id: &str, path: &str) -> String {
              return "failed"
            end try"#
     )
-}
-
-/// Fetch cover art and hand it to the WebView as a `data:` URL, so the page
-/// stays offline. Cached by URL.
-fn artwork(app: &tauri::AppHandle, url: &str) -> String {
-    if !url.starts_with(ART_HOST) {
-        return String::new();
-    }
-    {
-        let state = app.state::<NotchState>();
-        let cache = state.art.lock().unwrap();
-        if let Some(hit) = cache.get(url) {
-            return hit.clone();
-        }
-    }
-    // Spotify encodes the size in the image id: `…0000b273…` is 640px,
-    // `…00004851…` 64px, which is plenty for the backdrop and far smaller over
-    // IPC. Convention, not contract, so the original URL is the fallback.
-    let small = url.replace("ab67616d0000b273", "ab67616d00004851");
-    let out = [small.as_str(), url]
-        .into_iter()
-        .find_map(|u| {
-            std::process::Command::new("/bin/sh")
-                .arg("-c")
-                .arg(format!("curl -sfL --max-time 3 '{u}' | base64"))
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).replace('\n', ""))
-                .filter(|b64| !b64.is_empty())
-        })
-        .map(|b64| format!("data:image/jpeg;base64,{b64}"))
-        .unwrap_or_default();
-    if !out.is_empty() {
-        let state = app.state::<NotchState>();
-        let mut cache = state.art.lock().unwrap();
-        // A full cache is dropped wholesale: a miss costs one curl, so LRU
-        // bookkeeping isn't worth it.
-        if cache.len() >= ART_CACHE_MAX {
-            cache.clear();
-        }
-        cache.insert(url.to_string(), out.clone());
-    }
-    out
 }
 
 /// CoreAudio's per-process audio objects: who is writing to an output device.
@@ -1165,13 +1145,17 @@ mod tests {
     }
 
     #[test]
-    fn spotify_640_url_becomes_the_300_url() {
+    fn a_spotify_640_url_is_resized_by_its_image_id() {
         assert_eq!(
-            spotify_cover_url(COVER_640),
+            sized_spotify_url(COVER_640, SPOTIFY_300),
             "https://i.scdn.co/image/ab67616d00001e0221e3ac688cf52673a7d501a0"
         );
+        assert_eq!(
+            sized_spotify_url(COVER_640, SPOTIFY_64),
+            "https://i.scdn.co/image/ab67616d0000485121e3ac688cf52673a7d501a0"
+        );
         let other = "https://i.scdn.co/image/ab6761610000e5eb21e3ac";
-        assert_eq!(spotify_cover_url(other), other);
+        assert_eq!(sized_spotify_url(other, SPOTIFY_300), other);
     }
 
     #[test]
@@ -1346,7 +1330,7 @@ mod tests {
                 continue;
             };
             let started = Instant::now();
-            let bytes = spotify_cover(url).expect("a 300 px cover");
+            let bytes = spotify_image(url, SPOTIFY_300).expect("a 300 px cover");
             let took = started.elapsed();
             let file = temp("spotify-300.jpg");
             std::fs::write(&file, &bytes).unwrap();
