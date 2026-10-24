@@ -95,21 +95,23 @@ export interface CpuSample {
 
 export interface CpuStat extends CpuSample {
   total: number;
-  mem: number;
+  memUsedFraction: number;
   topProc: string;
   topProcPct: number;
-  topPid: number;
+  topPid: number | null;
 }
 
 export interface CpuSnapshot {
+  capacity: number;
   history: CpuSample[];
   latest: CpuStat;
 }
 
 export interface MetricsHistory {
   intervalMs: number;
+  capacitySecs: number;
   cpu: CpuSample[];
-  mem: number[];
+  memUsedFraction: number[];
 }
 
 export interface Volume {

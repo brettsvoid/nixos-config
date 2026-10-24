@@ -95,7 +95,7 @@ export const resourceChart: Widget = (root) => {
   function seed(h: MetricsHistory) {
     intervalMs = h.intervalMs || intervalMs;
     series.cpu = h.cpu.map((s) => clamp01(s.sys + s.user)).slice(-capacity());
-    series.mem = h.mem.map(clamp01).slice(-capacity());
+    series.mem = h.memUsedFraction.map(clamp01).slice(-capacity());
   }
 
   function push(cpu: number, mem: number) {
@@ -211,7 +211,7 @@ export const resourceChart: Widget = (root) => {
         showLatest();
         paint();
         const un = await on("cpu", (stat) => {
-          push(stat.total, stat.mem);
+          push(stat.total, stat.memUsedFraction);
           showLatest();
           paint();
         });

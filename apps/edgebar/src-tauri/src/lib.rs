@@ -2672,6 +2672,7 @@ pub(crate) fn listen(name: &str) -> Option<std::os::unix::net::UnixListener> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(metrics::MetricsState::default())
         .invoke_handler(tauri::generate_handler![
             aerospace_workspaces,
             aerospace_focus,

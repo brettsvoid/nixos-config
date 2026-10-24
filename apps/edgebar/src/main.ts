@@ -522,7 +522,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
 
   function renderCpu(stat: CpuStat) {
     cpuNameEl.textContent = stat.topProc || "—";
-    cpuPidEl.textContent = stat.topPid ? String(stat.topPid) : "";
+    cpuPidEl.textContent = stat.topPid === null ? "" : String(stat.topPid);
     cpuTopEl.title = stat.topProc
       ? `${stat.topProc} (pid ${stat.topPid}) — ${Math.round(stat.topProcPct)}% of one core`
       : "";

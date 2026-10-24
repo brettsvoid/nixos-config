@@ -27,14 +27,16 @@ pub struct Metrics {
 /// after the notch had been shut for an hour would be that hour's average, and
 /// a second sampler wouldn't agree with the bar's pill anyway.
 #[cfg(target_os = "macos")]
-fn cpu_percent(app: &tauri::AppHandle, _sys: &mut sysinfo::System) -> f32 {
+fn cpu_percent(app: &tauri::AppHandle) -> f32 {
     app.state::<MetricsState>().latest.lock().unwrap().total * 100.0
 }
 
 /// `host_statistics` is macOS-only, so the sampler never runs elsewhere — fall
 /// back to sysinfo's own aggregate there.
 #[cfg(not(target_os = "macos"))]
-fn cpu_percent(_app: &tauri::AppHandle, sys: &mut sysinfo::System) -> f32 {
+fn cpu_percent(app: &tauri::AppHandle) -> f32 {
+    let state = app.state::<AppState>();
+    let mut sys = state.sys.lock().unwrap();
     sys.refresh_cpu_usage();
     sys.global_cpu_usage()
 }
@@ -68,9 +70,9 @@ fn sample_metrics(sys: &mut sysinfo::System, cpu: f32) -> Metrics {
 #[tauri::command]
 pub async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
     tauri::async_runtime::spawn_blocking(move || {
+        let cpu = cpu_percent(&app);
         let state = app.state::<AppState>();
         let mut sys = state.sys.lock().unwrap();
-        let cpu = cpu_percent(&app, &mut sys);
         sample_metrics(&mut sys, cpu)
     })
     .await
@@ -78,8 +80,11 @@ pub async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
 }
 
 const SAMPLE_PERIOD: Duration = Duration::from_secs(2);
+/// Columns in the bar's CPU graph.
 const CPU_HISTORY: usize = 108;
-const HISTORY_LEN: usize = 300;
+/// How far back the Performance view's chart can reach.
+const HISTORY_SPAN: Duration = Duration::from_secs(10 * 60);
+const HISTORY_LEN: usize = (HISTORY_SPAN.as_secs() / SAMPLE_PERIOD.as_secs()) as usize;
 /// Ticks between top-process lookups. A tick's `host_statistics` read is ~11µs,
 /// but naming the hungriest process walks every PID (~13ms with 600
 /// processes), and the name changes far more slowly than the graph.
@@ -101,16 +106,18 @@ pub struct CpuStat {
     sys: f32,
     user: f32,
     total: f32,
-    mem: f32,
+    mem_used_fraction: f32,
     top_proc: String,
     top_proc_pct: f32,
-    /// 0 when no process has been sampled yet — the bar hides the pid then.
-    top_pid: u32,
+    /// None until the first process walk.
+    top_pid: Option<u32>,
 }
 
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CpuSnapshot {
+    /// How many samples `history` holds once full: the bar graph's columns.
+    capacity: usize,
     history: Vec<CpuSample>,
     latest: CpuStat,
 }
@@ -119,14 +126,16 @@ pub struct CpuSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct MetricsHistory {
     interval_ms: u64,
+    /// How many seconds the history holds once full.
+    capacity_secs: u64,
     cpu: Vec<CpuSample>,
-    mem: Vec<f32>,
+    mem_used_fraction: Vec<f32>,
 }
 
 #[derive(Clone, Copy, Default)]
 struct Point {
     cpu: CpuSample,
-    mem: f32,
+    mem_used_fraction: f32,
 }
 
 #[derive(Default)]
@@ -148,14 +157,17 @@ impl History {
     fn series(&self) -> MetricsHistory {
         MetricsHistory {
             interval_ms: SAMPLE_PERIOD.as_millis() as u64,
+            capacity_secs: HISTORY_SPAN.as_secs(),
             cpu: self.0.iter().map(|p| p.cpu).collect(),
-            mem: self.0.iter().map(|p| p.mem).collect(),
+            mem_used_fraction: self.0.iter().map(|p| p.mem_used_fraction).collect(),
         }
     }
 }
 
+/// Managed from the builder, so a bar that loads before setup finishes can
+/// still ask for it.
 #[derive(Default)]
-struct MetricsState {
+pub struct MetricsState {
     history: Mutex<History>,
     latest: Mutex<CpuStat>,
 }
@@ -169,7 +181,11 @@ impl MetricsState {
     fn snapshot(&self) -> CpuSnapshot {
         let history = self.history.lock().unwrap().cpu_tail(CPU_HISTORY);
         let latest = self.latest.lock().unwrap().clone();
-        CpuSnapshot { history, latest }
+        CpuSnapshot {
+            capacity: CPU_HISTORY,
+            history,
+            latest,
+        }
     }
 }
 
@@ -216,6 +232,13 @@ fn trim_proc_name(name: &str) -> &str {
     name.strip_prefix("com.apple.").unwrap_or(name)
 }
 
+#[derive(Default)]
+struct TopProcess {
+    name: String,
+    cpu_pct: f32,
+    pid: Option<u32>,
+}
+
 #[cfg(target_os = "macos")]
 struct Sampler {
     host: libc::host_t,
@@ -225,7 +248,7 @@ struct Sampler {
     sys: sysinfo::System,
     proc_cpu: sysinfo::ProcessRefreshKind,
     prev: Option<[u32; libc::CPU_STATE_MAX as usize]>,
-    top: (String, f32, u32),
+    top: TopProcess,
     tick: u32,
 }
 
@@ -298,35 +321,36 @@ impl Sampler {
                 .processes()
                 .values()
                 .max_by(|a, b| a.cpu_usage().total_cmp(&b.cpu_usage()))
-                .map(|p| {
-                    let name = p.name().to_string_lossy();
-                    (
-                        trim_proc_name(&name).to_string(),
-                        p.cpu_usage(),
-                        p.pid().as_u32(),
-                    )
+                .map(|p| TopProcess {
+                    name: trim_proc_name(&p.name().to_string_lossy()).to_string(),
+                    cpu_pct: p.cpu_usage(),
+                    pid: Some(p.pid().as_u32()),
                 })
                 .unwrap_or_default();
         }
         self.tick = self.tick.wrapping_add(1);
 
-        let mem = self.read_mem();
+        let mem_used_fraction = self.read_mem();
         let stat = CpuStat {
             sys: cpu.sys,
             user: cpu.user,
             total: cpu.sys + cpu.user,
-            mem,
-            top_proc: self.top.0.clone(),
-            top_proc_pct: self.top.1,
-            top_pid: self.top.2,
+            mem_used_fraction,
+            top_proc: self.top.name.clone(),
+            top_proc_pct: self.top.cpu_pct,
+            top_pid: self.top.pid,
         };
-        Some((Point { cpu, mem }, stat))
+        Some((
+            Point {
+                cpu,
+                mem_used_fraction,
+            },
+            stat,
+        ))
     }
 }
 
 pub fn install(app: tauri::AppHandle) {
-    app.manage(MetricsState::default());
-
     #[cfg(target_os = "macos")]
     std::thread::spawn(move || {
         let mut sampler = Sampler::new();
@@ -352,7 +376,7 @@ mod tests {
                 sys: i as f32,
                 user: 0.0,
             },
-            mem: i as f32,
+            mem_used_fraction: i as f32,
         }
     }
 
@@ -380,11 +404,11 @@ mod tests {
         }
         let series = state.history.lock().unwrap().series();
         assert_eq!(series.cpu.len(), 300);
-        assert_eq!(series.mem.len(), 300);
+        assert_eq!(series.mem_used_fraction.len(), 300);
         assert_eq!(series.cpu[0].sys, 5.0);
-        assert_eq!(series.mem[0], 5.0);
+        assert_eq!(series.mem_used_fraction[0], 5.0);
         assert_eq!(series.cpu[299].sys, 304.0);
-        assert_eq!(series.mem[299], 304.0);
+        assert_eq!(series.mem_used_fraction[299], 304.0);
     }
 
     #[test]
@@ -392,7 +416,7 @@ mod tests {
         let state = MetricsState::default();
         for i in 0..305 {
             let stat = CpuStat {
-                mem: i as f32,
+                mem_used_fraction: i as f32,
                 ..CpuStat::default()
             };
             state.record(point(i), stat);
@@ -401,7 +425,7 @@ mod tests {
         assert_eq!(snapshot.history.len(), 108);
         assert_eq!(snapshot.history[0].sys, 197.0);
         assert_eq!(snapshot.history[107].sys, 304.0);
-        assert_eq!(snapshot.latest.mem, 304.0);
+        assert_eq!(snapshot.latest.mem_used_fraction, 304.0);
     }
 
     #[test]
@@ -422,21 +446,22 @@ mod tests {
                 sys: 0.25,
                 user: 0.5,
             },
-            mem: 0.5,
+            mem_used_fraction: 0.5,
         });
         history.push(Point {
             cpu: CpuSample {
                 sys: 0.125,
                 user: 0.25,
             },
-            mem: 0.75,
+            mem_used_fraction: 0.75,
         });
         assert_eq!(
             serde_json::to_value(history.series()).unwrap(),
             json!({
                 "intervalMs": 2000,
+                "capacitySecs": 600,
                 "cpu": [{"sys": 0.25, "user": 0.5}, {"sys": 0.125, "user": 0.25}],
-                "mem": [0.5, 0.75],
+                "memUsedFraction": [0.5, 0.75],
             })
         );
     }
@@ -447,10 +472,10 @@ mod tests {
             sys: 0.25,
             user: 0.5,
             total: 0.75,
-            mem: 0.5,
+            mem_used_fraction: 0.5,
             top_proc: "kernel_task".into(),
             top_proc_pct: 12.5,
-            top_pid: 0,
+            top_pid: Some(0),
         };
         assert_eq!(
             serde_json::to_value(stat).unwrap(),
@@ -458,12 +483,22 @@ mod tests {
                 "sys": 0.25,
                 "user": 0.5,
                 "total": 0.75,
-                "mem": 0.5,
+                "memUsedFraction": 0.5,
                 "topProc": "kernel_task",
                 "topProcPct": 12.5,
                 "topPid": 0,
             })
         );
+        assert_eq!(
+            serde_json::to_value(CpuStat::default()).unwrap()["topPid"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn the_bar_snapshot_says_how_many_columns_it_holds() {
+        let snapshot = serde_json::to_value(MetricsState::default().snapshot()).unwrap();
+        assert_eq!(snapshot["capacity"], json!(108));
     }
 
     #[cfg(target_os = "macos")]
@@ -508,21 +543,24 @@ mod tests {
         let series = state.history.lock().unwrap().series();
         let snapshot = state.snapshot();
         let (mem_min, mem_max) = series
-            .mem
+            .mem_used_fraction
             .iter()
             .fold((f32::MAX, f32::MIN), |(lo, hi), m| (lo.min(*m), hi.max(*m)));
         println!(
             "history: {} cpu / {} mem entries, intervalMs {}, bar snapshot {} columns",
             series.cpu.len(),
-            series.mem.len(),
+            series.mem_used_fraction.len(),
             series.interval_ms,
             snapshot.history.len()
         );
         println!(
-            "mem fraction over the run: {mem_min:.4}..{mem_max:.4}; latest event mem {:.4}, cpu total {:.3}, top {} (pid {})",
-            snapshot.latest.mem, snapshot.latest.total, snapshot.latest.top_proc, snapshot.latest.top_pid
+            "mem fraction over the run: {mem_min:.4}..{mem_max:.4}; latest event mem {:.4}, cpu total {:.3}, top {} (pid {:?})",
+            snapshot.latest.mem_used_fraction, snapshot.latest.total, snapshot.latest.top_proc, snapshot.latest.top_pid
         );
-        assert!(series.mem.iter().all(|m| *m > 0.0 && *m < 1.0));
+        assert!(series
+            .mem_used_fraction
+            .iter()
+            .all(|m| *m > 0.0 && *m < 1.0));
         assert_eq!(series.cpu.len(), 12);
 
         let chart = sampler.read_mem();
