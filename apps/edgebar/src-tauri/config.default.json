@@ -39,6 +39,10 @@
     "transientMs": 1600,
     "workspaces": {}
   },
+  "assistant": {
+    "command": "claude",
+    "model": "haiku"
+  },
   "geometry": {
     "innerRadius": 20,
     "lineThickness": 4,

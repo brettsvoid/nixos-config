@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 
+/// The Assistant tab's chat, through the Claude Code CLI.
+mod assistant;
+
 /// Dynamic content for the collapsed notch (media / per-workspace / OSD).
 mod notch;
 
@@ -99,6 +102,9 @@ struct Config {
     /// Per-workspace notch rules + the idle fallback. See `notch.rs`.
     #[serde(default)]
     notch: notch::NotchConfig,
+    /// The Assistant tab's CLI and model. See `assistant.rs`.
+    #[serde(default)]
+    assistant: assistant::AssistantConfig,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colours resolved
@@ -2903,6 +2909,9 @@ pub fn run() {
             notch::notch_state,
             notch::media_toggle,
             notch::media_seek,
+            assistant::assistant_send,
+            assistant::assistant_cancel,
+            assistant::assistant_reset,
             #[cfg(all(debug_assertions, target_os = "macos"))]
             devtools::dev_result
         ])
@@ -2950,6 +2959,7 @@ pub fn run() {
             // The notch store, managed before the workspace socket below, which
             // publishes into it.
             app.manage(notch::NotchState::new(config.notch));
+            app.manage(assistant::AssistantState::default());
 
             // Per-display chrome, rebuilt on every display-config change.
             #[cfg(target_os = "macos")]
