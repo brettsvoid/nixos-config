@@ -776,7 +776,8 @@ mod tests {
     #[test]
     fn a_turn_streams_the_stub_reply_and_passes_prompt_args_and_cwd_through() {
         let scratch = Scratch::new("stream");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!(
                 r#"printf '%s\n' "$@" > args.txt
@@ -815,13 +816,14 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     fn init_reaches_the_caller_before_the_reply_does() {
         let scratch = Scratch::new("init");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!("printf '%s\\n' '{INIT}' '{TEXT_1}' '{RESULT_OK}'"),
         );
         let turn = Turn::new(SessionFlag::New("n".into()));
         let mut seen = Vec::new();
-        let outcome = run_cli(&config_for(&stub), &scratch.path(), &turn, "hi", |line| {
+        let outcome = run_cli(&config_for(&stub), scratch.path(), &turn, "hi", |line| {
             seen.push(match line {
                 Line::Init => "init".to_string(),
                 Line::Delta(t) => format!("delta:{t}"),
@@ -836,12 +838,13 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     fn a_login_failure_on_stdout_beats_the_exit_code() {
         let scratch = Scratch::new("login");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!("cat > /dev/null\nprintf '%s\\n' '{RESULT_NOT_LOGGED_IN}'\nexit 1"),
         );
         let turn = Turn::new(SessionFlag::New("n".into()));
-        let (outcome, deltas) = collect(&config_for(&stub), &scratch.path(), &turn, "hi");
+        let (outcome, deltas) = collect(&config_for(&stub), scratch.path(), &turn, "hi");
         assert_eq!(outcome, Outcome::Failed(Failure::NotLoggedIn));
         assert!(deltas.is_empty());
     }
@@ -849,12 +852,13 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     fn a_crash_with_no_result_reports_stderr() {
         let scratch = Scratch::new("crash");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             "cat > /dev/null\necho 'segfault, probably' >&2\nexit 3",
         );
         let turn = Turn::new(SessionFlag::New("n".into()));
-        let (outcome, _) = collect(&config_for(&stub), &scratch.path(), &turn, "hi");
+        let (outcome, _) = collect(&config_for(&stub), scratch.path(), &turn, "hi");
         assert_eq!(
             outcome,
             Outcome::Failed(Failure::Cli("segfault, probably".into()))
@@ -869,7 +873,7 @@ printf '%s\n' '{RESULT_OK}'"#
             model: "m".into(),
         };
         let turn = Turn::new(SessionFlag::New("n".into()));
-        let (outcome, _) = collect(&config, &scratch.path(), &turn, "hi");
+        let (outcome, _) = collect(&config, scratch.path(), &turn, "hi");
         assert_eq!(
             outcome,
             Outcome::Failed(Failure::CliMissing("no-such-claude-binary".into()))
@@ -880,7 +884,8 @@ printf '%s\n' '{RESULT_OK}'"#
     fn cancelling_from_another_thread_kills_the_process_and_ends_the_turn() {
         let scratch = Scratch::new("cancel");
         // `exec` so the sleep is the process we kill, not a child of a shell.
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!("printf '%s\\n' '{INIT}' '{TEXT_1}'\nexec sleep 30"),
         );
@@ -894,7 +899,7 @@ printf '%s\n' '{RESULT_OK}'"#
             })
         };
         let started = Instant::now();
-        let outcome = run_cli(&config_for(&stub), &scratch.path(), &turn, "hi", |line| {
+        let outcome = run_cli(&config_for(&stub), scratch.path(), &turn, "hi", |line| {
             if matches!(line, Line::Delta(_)) {
                 let _ = replied_tx.send(());
             }
@@ -914,7 +919,7 @@ printf '%s\n' '{RESULT_OK}'"#
         let stub = script(&scratch, "claude", "touch ran.txt\nexec sleep 30");
         let turn = Turn::new(SessionFlag::New("n".into()));
         turn.cancel();
-        let (outcome, _) = collect(&config_for(&stub), &scratch.path(), &turn, "hi");
+        let (outcome, _) = collect(&config_for(&stub), scratch.path(), &turn, "hi");
         assert_eq!(outcome, Outcome::Cancelled);
         assert!(!scratch.path().join("ran.txt").exists());
     }
@@ -926,7 +931,8 @@ printf '%s\n' '{RESULT_OK}'"#
         let home = scratch.path().join("home");
         std::fs::create_dir_all(&on_path).unwrap();
         std::fs::create_dir_all(home.join(".local/bin")).unwrap();
-        let path_var = std::env::join_paths([scratch.path().join("empty"), on_path.clone()]).unwrap();
+        let path_var =
+            std::env::join_paths([scratch.path().join("empty"), on_path.clone()]).unwrap();
 
         let local = home.join(".local/bin/claude");
         std::fs::write(&local, "#!/bin/sh\n").unwrap();
@@ -978,7 +984,8 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     fn turns_reach_the_webview_as_deltas_then_done_and_the_second_resumes_the_first() {
         let scratch = Scratch::new("events");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!(
                 "cat > /dev/null\nprintf '%s\\n' \"$@\" >> args.log\necho --- >> args.log\nprintf '%s\\n' '{INIT}' '{TEXT_1}' '{TEXT_3}' '{RESULT_OK}'"
@@ -990,9 +997,9 @@ printf '%s\n' '{RESULT_OK}'"#
         let state = app.state::<AssistantState>();
 
         let first = lock(&state.conversation).begin_turn();
-        run_turn(app.handle(), &first, "one", &config, &scratch.path());
+        run_turn(app.handle(), &first, "one", &config, scratch.path());
         let second = lock(&state.conversation).begin_turn();
-        run_turn(app.handle(), &second, "two", &config, &scratch.path());
+        run_turn(app.handle(), &second, "two", &config, scratch.path());
 
         let expected: Vec<serde_json::Value> = [&first, &second]
             .iter()
@@ -1023,14 +1030,21 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     fn a_failed_turn_ends_with_one_error_event_in_words_for_the_panel() {
         let scratch = Scratch::new("error-event");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!("cat > /dev/null\nprintf '%s\\n' '{RESULT_NOT_LOGGED_IN}'\nexit 1"),
         );
         let app = mock_app();
         let events = record(&app);
         let turn = lock(&app.state::<AssistantState>().conversation).begin_turn();
-        run_turn(app.handle(), &turn, "hi", &config_for(&stub), &scratch.path());
+        run_turn(
+            app.handle(),
+            &turn,
+            "hi",
+            &config_for(&stub),
+            scratch.path(),
+        );
         assert_eq!(
             *lock(&events),
             vec![serde_json::json!({
@@ -1044,7 +1058,8 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     fn a_cancelled_turn_still_ends_with_done_and_a_reset_forgets_the_session() {
         let scratch = Scratch::new("cancel-event");
-        let stub = script(&scratch, 
+        let stub = script(
+            &scratch,
             "claude",
             &format!("printf '%s\\n' '{INIT}' '{TEXT_1}'\nexec sleep 30"),
         );
@@ -1057,7 +1072,7 @@ printf '%s\n' '{RESULT_OK}'"#
 
         let handle = app.handle().clone();
         std::thread::scope(|scope| {
-            let runner = scope.spawn(|| run_turn(&handle, &turn, "hi", &config, &scratch.path()));
+            let runner = scope.spawn(|| run_turn(&handle, &turn, "hi", &config, scratch.path()));
             while lock(&events).is_empty() {
                 std::thread::sleep(Duration::from_millis(20));
             }

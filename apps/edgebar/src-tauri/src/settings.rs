@@ -672,7 +672,7 @@ mod tests {
                 "notch": {"transientMs": 900, "workspaces": {"2": {"source": "focusedWindow"}}}
             }"#,
         );
-        let loaded = load(Some(&dir.path()));
+        let loaded = load(Some(dir.path()));
         assert_eq!(
             loaded.snapshot.user,
             json!({
@@ -710,7 +710,7 @@ mod tests {
     fn an_unparseable_file_is_ignored_whole_and_reported() {
         let dir = Scratch::new("unparseable");
         dir.write(USER_FILE, "{\"geometry\": {\"frameRadius\": 40,");
-        let loaded = load(Some(&dir.path()));
+        let loaded = load(Some(dir.path()));
         assert_eq!(loaded.snapshot.user, json!({}));
         assert_eq!(loaded.snapshot.effective, bundled());
         assert_eq!(
@@ -723,9 +723,9 @@ mod tests {
     #[test]
     fn a_missing_or_blank_file_is_no_overrides() {
         let dir = Scratch::new("blank");
-        assert_eq!(load(Some(&dir.path())).snapshot.error, None);
+        assert_eq!(load(Some(dir.path())).snapshot.error, None);
         dir.write(USER_FILE, "  \n");
-        let loaded = load(Some(&dir.path()));
+        let loaded = load(Some(dir.path()));
         assert_eq!(loaded.snapshot.error, None);
         assert_eq!(loaded.snapshot.user, json!({}));
         assert_eq!(load(None).snapshot.effective, bundled());
@@ -735,7 +735,7 @@ mod tests {
     fn a_config_json_that_no_longer_fits_is_ignored() {
         let dir = Scratch::new("badnix");
         dir.write(NIX_FILE, r#"{"geometry": {"frameRadius": "tall"}}"#);
-        let loaded = load(Some(&dir.path()));
+        let loaded = load(Some(dir.path()));
         assert_eq!(loaded.snapshot.effective, bundled());
         assert_eq!(loaded.snapshot.error, None);
     }
@@ -744,18 +744,18 @@ mod tests {
     fn set_writes_the_file_and_reset_removes_the_override() {
         let dir = Scratch::new("roundtrip");
         assert_eq!(
-            write_override(&dir.path(), "geometry.frameThickness", json!(6)),
+            write_override(dir.path(), "geometry.frameThickness", json!(6)),
             Ok(true)
         );
         assert_eq!(user_file(&dir), json!({"geometry": {"frameThickness": 6}}));
-        assert_eq!(load(Some(&dir.path())).config.geometry.frame_thickness, 6.0);
+        assert_eq!(load(Some(dir.path())).config.geometry.frame_thickness, 6.0);
 
         assert_eq!(
-            write_override(&dir.path(), "geometry.frameThickness", Value::Null),
+            write_override(dir.path(), "geometry.frameThickness", Value::Null),
             Ok(true)
         );
         assert_eq!(user_file(&dir), json!({}));
-        assert_eq!(load(Some(&dir.path())).config.geometry.frame_thickness, 8.0);
+        assert_eq!(load(Some(dir.path())).config.geometry.frame_thickness, 8.0);
         assert!(!dir.path().join("settings.json.tmp").exists());
     }
 
@@ -763,17 +763,17 @@ mod tests {
     fn setting_the_same_value_twice_changes_nothing_the_second_time() {
         let dir = Scratch::new("idempotent");
         assert_eq!(
-            write_override(&dir.path(), "notch.idle", json!("clock")),
+            write_override(dir.path(), "notch.idle", json!("clock")),
             Ok(true)
         );
         let first = dir.read(USER_FILE);
         assert_eq!(
-            write_override(&dir.path(), "notch.idle", json!("clock")),
+            write_override(dir.path(), "notch.idle", json!("clock")),
             Ok(false)
         );
         assert_eq!(dir.read(USER_FILE), first);
         assert_eq!(
-            write_override(&dir.path(), "geometry.frameRadius", Value::Null),
+            write_override(dir.path(), "geometry.frameRadius", Value::Null),
             Ok(false)
         );
     }
@@ -808,7 +808,7 @@ mod tests {
                 "`geometry..x` is not a dotted setting key",
             ),
         ] {
-            assert_eq!(write_override(&dir.path(), key, value), Err(why.to_string()));
+            assert_eq!(write_override(dir.path(), key, value), Err(why.to_string()));
         }
         assert!(!dir.path().join(USER_FILE).exists());
     }
@@ -818,7 +818,7 @@ mod tests {
         let dir = Scratch::new("refuses");
         dir.write(USER_FILE, "{oops");
         assert_eq!(
-            write_override(&dir.path(), "geometry.frameThickness", json!(6)),
+            write_override(dir.path(), "geometry.frameThickness", json!(6)),
             Err("settings.json is not valid JSON: key must be a string at line 1 column 2; it was left as it is, fix or delete it first".to_string())
         );
         assert_eq!(dir.read(USER_FILE), "{oops");
@@ -829,14 +829,14 @@ mod tests {
         let dir = Scratch::new("keeps");
         dir.write(USER_FILE, r#"{"bogus": 1}"#);
         assert_eq!(
-            write_override(&dir.path(), "geometry.frameThickness", json!(6)),
+            write_override(dir.path(), "geometry.frameThickness", json!(6)),
             Ok(true)
         );
         assert_eq!(
             user_file(&dir),
             json!({"bogus": 1, "geometry": {"frameThickness": 6}})
         );
-        assert_eq!(write_override(&dir.path(), "bogus", Value::Null), Ok(true));
+        assert_eq!(write_override(dir.path(), "bogus", Value::Null), Ok(true));
         assert_eq!(user_file(&dir), json!({"geometry": {"frameThickness": 6}}));
     }
 
@@ -859,19 +859,19 @@ mod tests {
     fn the_legacy_appearance_file_becomes_an_override_once() {
         let dir = Scratch::new("legacy-dark");
         dir.write(LEGACY_APPEARANCE_FILE, "dark\n");
-        assert_eq!(import_legacy_appearance(&dir.path()), Ok(()));
+        assert_eq!(import_legacy_appearance(dir.path()), Ok(()));
         assert_eq!(user_file(&dir), json!({"appearance": "dark"}));
         assert!(!dir.path().join(LEGACY_APPEARANCE_FILE).exists());
-        assert_eq!(import_legacy_appearance(&dir.path()), Ok(()));
+        assert_eq!(import_legacy_appearance(dir.path()), Ok(()));
         assert_eq!(user_file(&dir), json!({"appearance": "dark"}));
-        assert!(load(Some(&dir.path())).config.appearance == Appearance::Dark);
+        assert!(load(Some(dir.path())).config.appearance == Appearance::Dark);
     }
 
     #[test]
     fn a_legacy_mode_equal_to_the_layers_below_writes_no_settings_file() {
         let dir = Scratch::new("legacy-auto");
         dir.write(LEGACY_APPEARANCE_FILE, "auto");
-        assert_eq!(import_legacy_appearance(&dir.path()), Ok(()));
+        assert_eq!(import_legacy_appearance(dir.path()), Ok(()));
         assert!(!dir.path().join(USER_FILE).exists());
         assert!(!dir.path().join(LEGACY_APPEARANCE_FILE).exists());
     }
@@ -881,10 +881,10 @@ mod tests {
         let dir = Scratch::new("legacy-wins");
         dir.write(USER_FILE, r#"{"appearance": "dark", "oled": true}"#);
         dir.write(LEGACY_APPEARANCE_FILE, "auto");
-        assert_eq!(import_legacy_appearance(&dir.path()), Ok(()));
+        assert_eq!(import_legacy_appearance(dir.path()), Ok(()));
         assert_eq!(user_file(&dir), json!({"oled": true}));
         dir.write(LEGACY_APPEARANCE_FILE, "light");
-        assert_eq!(import_legacy_appearance(&dir.path()), Ok(()));
+        assert_eq!(import_legacy_appearance(dir.path()), Ok(()));
         assert_eq!(
             user_file(&dir),
             json!({"oled": true, "appearance": "light"})
@@ -895,7 +895,7 @@ mod tests {
     fn a_legacy_file_without_a_mode_is_dropped() {
         let dir = Scratch::new("legacy-junk");
         dir.write(LEGACY_APPEARANCE_FILE, "purple");
-        assert_eq!(import_legacy_appearance(&dir.path()), Ok(()));
+        assert_eq!(import_legacy_appearance(dir.path()), Ok(()));
         assert!(!dir.path().join(USER_FILE).exists());
         assert!(!dir.path().join(LEGACY_APPEARANCE_FILE).exists());
     }
@@ -905,7 +905,7 @@ mod tests {
         let dir = Scratch::new("legacy-blocked");
         dir.write(USER_FILE, "{oops");
         dir.write(LEGACY_APPEARANCE_FILE, "dark");
-        assert!(import_legacy_appearance(&dir.path()).is_err());
+        assert!(import_legacy_appearance(dir.path()).is_err());
         assert_eq!(dir.read(USER_FILE), "{oops");
         assert_eq!(dir.read(LEGACY_APPEARANCE_FILE), "dark");
     }
