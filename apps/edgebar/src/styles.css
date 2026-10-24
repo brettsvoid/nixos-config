@@ -835,7 +835,7 @@ body {
 }
 .ws.has-icon.active::before {
   width: 32px;
-  background: color-mix(in srgb, var(--primary) 25%, var(--surface));
+  background: var(--primary);
 }
 .ws.has-icon:not(.active):hover::before {
   background: var(--surface-container);
