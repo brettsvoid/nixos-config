@@ -12,6 +12,7 @@ let
   geom = config.flake.lib.barGeometry;
   wp = config.flake.lib.wallpaper;
   defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
+  schemes = lib.importJSON ../../../apps/edgebar/src/schemes.json;
   rendered = defaults // {
     geometry = defaults.geometry // {
       inherit (geom) barHeight frameThickness;
@@ -143,6 +144,7 @@ in
       select-scheme = pkgs.writeShellApplication {
         name = "select-scheme";
         runtimeInputs = [ generate-edgebar-theme ];
+        runtimeEnv.SCHEMES = lib.concatStringsSep " " schemes;
         text = builtins.readFile ./edgebar/select-scheme.sh;
       };
       # Seeds the persisted scheme choice for this machine. Same
@@ -170,7 +172,7 @@ in
         example = "scheme-expressive";
         description = ''
           matugen scheme this machine derives its edgebar palette with — see
-          the list in edgebar/select-scheme.sh. Written to
+          the list in apps/edgebar/src/schemes.json. Written to
           ~/.config/edgebar/scheme on the first activation that declares it,
           and again whenever this value changes, never on an unchanged
           rebuild.

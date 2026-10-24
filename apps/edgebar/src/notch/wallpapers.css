@@ -166,35 +166,9 @@
   height: 14px;
 }
 
-.wp-select {
-  position: relative;
-  display: flex;
-  flex: none;
-}
-.wp-select > .icon {
-  position: absolute;
-  top: 50%;
-  right: var(--space-4);
-  translate: 0 -50%;
-  pointer-events: none;
-}
-.scheme-select {
-  -webkit-appearance: none;
-  appearance: none;
+.theme-bar .scheme-picker > select {
   min-width: 132px;
-  height: var(--control-h);
-  padding: 0 calc(var(--space-4) + 20px) 0 var(--space-6);
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
   font-size: var(--font-sm);
-  text-transform: capitalize;
-  cursor: pointer;
-}
-.scheme-select:hover {
-  background: var(--surface-container-high);
 }
 
 .ink-toggle {

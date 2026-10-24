@@ -3,26 +3,14 @@ import { call, on, type Config, type InkInfo, type Wallpaper } from "../ipc";
 import { lucide } from "../icons";
 import { keyboardField } from "../keyboard";
 import { current, onChange, set as setSetting } from "../settings";
+import { schemePicker } from "./scheme-picker";
 import type { NotchView } from "./view";
-
-export const SCHEMES = [
-  "scheme-tonal-spot",
-  "scheme-vibrant",
-  "scheme-expressive",
-  "scheme-content",
-  "scheme-fidelity",
-  "scheme-neutral",
-  "scheme-monochrome",
-  "scheme-rainbow",
-  "scheme-fruit-salad",
-] as const;
 
 const TINT_PATIENCE_MS = 20000;
 
 const ICON = {
   search: lucide('<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>'),
   clear: lucide('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
-  chevron: lucide('<path d="m6 9 6 6 6-6"/>'),
   check: lucide('<path d="M20 6 9 17l-5-5"/>'),
   oled: lucide('<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12z"/>'),
   tint: lucide(
@@ -57,8 +45,6 @@ const TEMPLATE =
   `<label class="wp-search"><span class="icon">${ICON.search}</span>` +
   '<input class="wp-query" type="text" placeholder="Search wallpapers…" spellcheck="false" autocomplete="off">' +
   `<button class="wp-clear" type="button" aria-label="Clear the search" hidden>${ICON.clear}</button></label>` +
-  '<span class="wp-select"><select class="scheme-select" id="scheme-select" title="matugen scheme"></select>' +
-  `<span class="icon">${ICON.chevron}</span></span>` +
   '<div class="theme-toggle ink-toggle" role="group" aria-label="Ink">' +
   '<span class="ink-label">Ink</span>' +
   '<button class="ink-opt" id="ink-auto">Auto</button>' +
@@ -105,7 +91,10 @@ export const wallpapersView: NotchView = {
     const clear = root.querySelector<HTMLButtonElement>(".wp-clear")!;
     const oledBtn = root.querySelector<HTMLButtonElement>('.wp-switch[data-k="oled"]')!;
     const tintBtn = root.querySelector<HTMLButtonElement>('.wp-switch[data-k="tint"]')!;
-    const schemeSelect = root.querySelector<HTMLSelectElement>("#scheme-select")!;
+    const scheme = schemePicker();
+    const schemeSelect = scheme.select;
+    schemeSelect.title = "matugen scheme";
+    root.querySelector(".wp-search")!.after(scheme.el);
     const modeButtons = [...root.querySelectorAll<HTMLElement>(".theme-opt")];
     const inkAuto = root.querySelector<HTMLElement>("#ink-auto")!;
     const inkCustom = root.querySelector<HTMLElement>("#ink-custom")!;
@@ -301,12 +290,6 @@ export const wallpapersView: NotchView = {
       });
     });
 
-    for (const s of SCHEMES) {
-      const o = document.createElement("option");
-      o.value = s;
-      o.textContent = s.replace("scheme-", "").replace(/-/g, " ");
-      schemeSelect.appendChild(o);
-    }
     schemeSelect.addEventListener("change", () => {
       retint();
       call("set_scheme", { scheme: schemeSelect.value });

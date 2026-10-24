@@ -319,32 +319,14 @@
   width: 176px;
 }
 
-.st-select {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: none;
-}
-.st-select select {
-  -webkit-appearance: none;
-  appearance: none;
+.st-row .scheme-picker > select {
   width: 168px;
   height: 28px;
-  padding: 0 28px 0 var(--space-6);
-  border: none;
-  border-radius: 999px;
   background: var(--surface-container-high);
-  color: var(--on-surface);
-  font: inherit;
   font-size: var(--font-xs);
-  text-transform: capitalize;
-  cursor: pointer;
 }
-.st-select .icon {
-  position: absolute;
-  right: var(--space-4);
+.st-row .scheme-picker > .icon {
   font-size: var(--font-sm);
-  pointer-events: none;
 }
 
 .st-stack {
