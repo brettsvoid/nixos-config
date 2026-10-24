@@ -53,7 +53,7 @@ const TEMPLATE =
   `<button class="pill browse-btn" id="browse-btn"><span class="icon">${ICON.folder}</span><span>Browse…</span></button>` +
   "</div>" +
   '<div class="wp-filters" hidden></div>' +
-  '<div class="filmstrip scroll-y" id="filmstrip"></div>' +
+  '<div class="wp-grid scroll-y"></div>' +
   `<div class="wp-empty" hidden><span class="icon">${ICON.empty}</span><span class="wp-empty-text"></span></div>`;
 
 interface Chip {
@@ -83,7 +83,7 @@ export const wallpapersView: NotchView = {
   size: { w: 624, h: 352 },
   mount(root) {
     root.innerHTML = TEMPLATE;
-    const filmstrip = root.querySelector<HTMLElement>("#filmstrip")!;
+    const grid = root.querySelector<HTMLElement>(".wp-grid")!;
     const filtersEl = root.querySelector<HTMLElement>(".wp-filters")!;
     const emptyEl = root.querySelector<HTMLElement>(".wp-empty")!;
     const emptyText = emptyEl.querySelector<HTMLElement>(".wp-empty-text")!;
@@ -122,7 +122,7 @@ export const wallpapersView: NotchView = {
       }
       clear.hidden = !query.value;
       const q = query.value.trim();
-      filmstrip.hidden = shown === 0;
+      grid.hidden = shown === 0;
       emptyEl.hidden = shown > 0;
       emptyText.textContent =
         all.length === 0
@@ -164,7 +164,7 @@ export const wallpapersView: NotchView = {
       all = list;
       chips = chipsFor(list);
       thumbs.clear();
-      filmstrip.replaceChildren(
+      grid.replaceChildren(
         ...list.map((w) => {
           const b = document.createElement("button");
           b.className = "thumb";

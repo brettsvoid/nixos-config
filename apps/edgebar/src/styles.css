@@ -26,6 +26,7 @@
   --seg-gap: 16px;
 
   --fillet: 16px;
+  --fillet-feather: 0.5px;
   --radius-drawer: 28px;
   --drawer-pad: 16px;
   --shadow-drawer: 0 0 6.5px rgb(0 0 0 / 0.6);
@@ -270,7 +271,7 @@ body {
   mask-image: radial-gradient(
     circle at 0 100%,
     transparent var(--r),
-    #000 calc(var(--r) + 0.5px)
+    #000 calc(var(--r) + var(--fillet-feather))
   );
 }
 .drawer::after {
@@ -278,7 +279,7 @@ body {
   mask-image: radial-gradient(
     circle at 100% 100%,
     transparent var(--r),
-    #000 calc(var(--r) + 0.5px)
+    #000 calc(var(--r) + var(--fillet-feather))
   );
 }
 .drawer-body {
@@ -301,7 +302,7 @@ body {
   mask-image: radial-gradient(
     circle at 100% 100%,
     transparent var(--fillet),
-    #000 calc(var(--fillet) + 0.5px)
+    #000 calc(var(--fillet) + var(--fillet-feather))
   );
 }
 .drawer.start > .drawer-body {

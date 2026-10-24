@@ -239,7 +239,7 @@
   opacity: 1;
 }
 
-.filmstrip {
+.wp-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   grid-auto-rows: max-content;

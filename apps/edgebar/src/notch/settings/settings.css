@@ -216,7 +216,7 @@
   align-items: center;
   gap: var(--space-1);
   flex: none;
-  height: 28px;
+  height: var(--control-h);
   padding: var(--space-1);
   border-radius: 999px;
   background: var(--surface-container-high);
@@ -264,7 +264,7 @@
   align-items: center;
   flex: none;
   width: 168px;
-  height: 28px;
+  height: var(--control-h);
   padding: 0 var(--space-6);
   border-radius: 999px;
   background: var(--surface-container-high);
@@ -309,7 +309,6 @@
 
 .st-row .scheme-picker > select {
   width: 168px;
-  height: 28px;
   background: var(--surface-container-high);
   font-size: var(--font-xs);
 }
@@ -327,7 +326,6 @@
 
 .st-btn {
   flex: none;
-  height: 28px;
   padding: 0 var(--space-6);
   background: var(--surface-container-high);
   white-space: nowrap;
@@ -339,8 +337,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
   border: none;
   border-radius: 50%;
