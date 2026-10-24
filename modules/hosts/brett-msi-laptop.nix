@@ -30,6 +30,7 @@ in
             fan-control
             greetd
             openssh
+            tailscale
             hyprland
             apps-claude-code
             profile-base

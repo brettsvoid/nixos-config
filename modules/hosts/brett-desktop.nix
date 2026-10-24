@@ -38,6 +38,7 @@ in
           nvidia
           greetd
           openssh
+          tailscale
           syncthing
           hyprland
           apps-claude-code
