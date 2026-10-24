@@ -173,11 +173,12 @@ export interface NotificationHistory {
   items: NotificationEntry[];
 }
 
-export interface AssistantChunk {
-  turn: string;
-  kind: "delta" | "done" | "error";
-  text: string;
-}
+export type AssistantChunk = { turn: string } & (
+  | { kind: "delta"; text: string }
+  | { kind: "done" }
+  | { kind: "cancelled" }
+  | { kind: "error"; message: string }
+);
 
 export interface SettingsSnapshot {
   effective: Record<string, unknown>;
@@ -247,7 +248,7 @@ export interface Commands {
   notification_history: { args: NoArgs; result: NotificationHistory };
   notification_hide: { args: { ids: string[] }; result: void };
   notification_hide_all: { args: NoArgs; result: void };
-  assistant_send: { args: { prompt: string }; result: string };
+  assistant_send: { args: { turn: string; prompt: string }; result: void };
   assistant_cancel: { args: NoArgs; result: void };
   assistant_reset: { args: NoArgs; result: void };
   assistant_open_link: { args: { url: string }; result: void };

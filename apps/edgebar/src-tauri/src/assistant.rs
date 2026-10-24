@@ -9,6 +9,11 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 const SYSTEM_PROMPT: &str = "You are answering in a small chat panel inside a macOS menu bar. \
 Keep replies short. Light Markdown is fine (bold, lists, inline code and fenced code blocks).";
 
+/// What the Claude CLI prints when it has no login, and when `--resume`
+/// names a session it no longer stores.
+const CLI_NOT_LOGGED_IN: &str = "Not logged in";
+const CLI_NO_CONVERSATION: &str = "No conversation found";
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssistantConfig {
@@ -26,9 +31,9 @@ enum Failure {
 
 impl Failure {
     fn classify(text: &str) -> Failure {
-        if text.contains("Not logged in") {
+        if text.contains(CLI_NOT_LOGGED_IN) {
             Failure::NotLoggedIn
-        } else if text.contains("No conversation found") {
+        } else if text.contains(CLI_NO_CONVERSATION) {
             Failure::SessionGone
         } else {
             Failure::Cli(text.trim().to_string())
@@ -55,7 +60,7 @@ impl Failure {
 
 #[derive(Debug, PartialEq)]
 enum Line {
-    Init,
+    SessionSaved,
     Delta(String),
     Done,
     Failed(Failure),
@@ -71,7 +76,7 @@ fn parse_line(line: &str) -> Line {
         return Line::Other;
     };
     match str_at(&value, "type") {
-        Some("system") if str_at(&value, "subtype") == Some("init") => Line::Init,
+        Some("system") if str_at(&value, "subtype") == Some("init") => Line::SessionSaved,
         Some("stream_event") => {
             let event = &value["event"];
             let delta = &event["delta"];
@@ -130,9 +135,9 @@ struct Turn {
 }
 
 impl Turn {
-    fn new(session: SessionFlag) -> Turn {
+    fn new(id: String, session: SessionFlag) -> Turn {
         Turn {
-            id: uuid::Uuid::new_v4().to_string(),
+            id,
             session,
             cancelled: AtomicBool::new(false),
             child: Mutex::new(None),
@@ -173,13 +178,13 @@ struct Conversation {
 }
 
 impl Conversation {
-    fn begin_turn(&mut self) -> Arc<Turn> {
+    fn begin_turn(&mut self, id: String) -> Arc<Turn> {
         self.cancel();
         let session = match &self.session {
             Session::Fresh => SessionFlag::New(uuid::Uuid::new_v4().to_string()),
             Session::Started(id) => SessionFlag::Resume(id.clone()),
         };
-        let turn = Arc::new(Turn::new(session));
+        let turn = Arc::new(Turn::new(id, session));
         self.running = Some(turn.clone());
         turn
     }
@@ -220,7 +225,9 @@ impl Conversation {
 #[derive(Default)]
 pub struct AssistantState {
     conversation: Mutex<Conversation>,
-    slot: Mutex<()>,
+    /// Held while a CLI process runs, so a new turn's CLI waits for the one it
+    /// cancelled to exit.
+    cli: Mutex<()>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -352,9 +359,12 @@ fn run_cli(
     let stderr = child.stderr.take();
     turn.attach(child);
 
-    if let Some(mut stdin) = stdin {
-        let _ = stdin.write_all(prompt.as_bytes());
-    }
+    let prompt = prompt.to_owned();
+    let stdin_writer = std::thread::spawn(move || {
+        if let Some(mut stdin) = stdin {
+            let _ = stdin.write_all(prompt.as_bytes());
+        }
+    });
     let stderr_reader = std::thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut stderr) = stderr {
@@ -375,42 +385,43 @@ fn run_cli(
             match line {
                 Line::Done => verdict = Some(Ok(())),
                 Line::Failed(failure) => verdict = Some(Err(failure)),
-                Line::Init | Line::Delta(_) | Line::Other => {}
+                Line::SessionSaved | Line::Delta(_) | Line::Other => {}
             }
         }
     }
     let exited_cleanly = turn.reap();
+    let _ = stdin_writer.join();
     let stderr = stderr_reader.join().unwrap_or_default();
     settle(turn.is_cancelled(), verdict, exited_cleanly, &stderr)
 }
 
-#[derive(Clone, Copy, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum ChunkKind {
-    Delta,
+#[derive(Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum Chunk {
+    Delta { text: String },
     Done,
-    Error,
+    Cancelled,
+    Error { message: String },
 }
 
 #[derive(Clone, Serialize)]
-struct AssistantChunk {
-    turn: String,
-    kind: ChunkKind,
-    text: String,
+struct AssistantChunk<'a> {
+    turn: &'a str,
+    #[serde(flatten)]
+    chunk: Chunk,
 }
 
-fn emit_chunk<R: Runtime>(app: &AppHandle<R>, turn: &Turn, kind: ChunkKind, text: String) {
+fn emit_chunk<R: Runtime>(app: &AppHandle<R>, turn: &Turn, chunk: Chunk) {
     let _ = app.emit(
         "assistant",
         AssistantChunk {
-            turn: turn.id.clone(),
-            kind,
-            text,
+            turn: &turn.id,
+            chunk,
         },
     );
 }
 
-fn cache_dir() -> PathBuf {
+fn cli_workdir() -> PathBuf {
     match crate::settings::cache_dir() {
         Some(dir) => dir.join("assistant"),
         None => std::env::temp_dir().join("edgebar-assistant"),
@@ -425,11 +436,11 @@ fn run_turn<R: Runtime>(
     cwd: &Path,
 ) {
     let state = app.state::<AssistantState>();
-    let _slot = lock(&state.slot);
+    let _cli = lock(&state.cli);
     let outcome = run_cli(config, cwd, turn, prompt, |line| match line {
-        Line::Init => lock(&state.conversation).established(turn),
+        Line::SessionSaved => lock(&state.conversation).established(turn),
         Line::Delta(text) if !turn.is_cancelled() => {
-            emit_chunk(app, turn, ChunkKind::Delta, text.clone());
+            emit_chunk(app, turn, Chunk::Delta { text: text.clone() });
         }
         _ => {}
     });
@@ -440,23 +451,23 @@ fn run_turn<R: Runtime>(
             conversation.lost(turn);
         }
     }
-    match outcome {
-        Outcome::Done | Outcome::Cancelled => {
-            emit_chunk(app, turn, ChunkKind::Done, String::new());
-        }
-        Outcome::Failed(failure) => emit_chunk(app, turn, ChunkKind::Error, failure.message()),
-    }
+    let chunk = match outcome {
+        Outcome::Done => Chunk::Done,
+        Outcome::Cancelled => Chunk::Cancelled,
+        Outcome::Failed(failure) => Chunk::Error {
+            message: failure.message(),
+        },
+    };
+    emit_chunk(app, turn, chunk);
 }
 
 #[tauri::command]
-pub async fn assistant_send<R: Runtime>(app: AppHandle<R>, prompt: String) -> String {
-    let turn = lock(&app.state::<AssistantState>().conversation).begin_turn();
-    let id = turn.id.clone();
+pub async fn assistant_send<R: Runtime>(app: AppHandle<R>, turn: String, prompt: String) {
+    let turn = lock(&app.state::<AssistantState>().conversation).begin_turn(turn);
     tauri::async_runtime::spawn_blocking(move || {
         let config = crate::settings::current(&app).assistant;
-        run_turn(&app, &turn, &prompt, &config, &cache_dir());
+        run_turn(&app, &turn, &prompt, &config, &cli_workdir());
     });
-    id
 }
 
 #[tauri::command]
@@ -488,6 +499,10 @@ mod tests {
     use crate::scratch::Scratch;
     use std::os::unix::fs::PermissionsExt;
     use std::time::{Duration, Instant};
+
+    fn turn_id() -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
 
     const INIT: &str = r#"{"type":"system","subtype":"init","session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62","mcp_servers":[],"model":"claude-haiku-5-5","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.309","output_style":"default"}"#;
     const STATUS: &str = r#"{"type":"system","subtype":"status","status":"requesting","session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62","uuid":"4d4d0510-4956-4571-a87d-5b866ed82211"}"#;
@@ -526,7 +541,7 @@ mod tests {
         assert_eq!(
             parsed,
             vec![
-                Line::Init,
+                Line::SessionSaved,
                 Line::Other,
                 Line::Other,
                 Line::Other,
@@ -618,20 +633,20 @@ mod tests {
     #[test]
     fn the_first_turn_creates_a_session_and_later_ones_resume_it() {
         let mut conversation = Conversation::default();
-        let first = conversation.begin_turn();
+        let first = conversation.begin_turn(turn_id());
         let SessionFlag::New(id) = first.session.clone() else {
             panic!("a fresh conversation must create a session");
         };
         conversation.established(&first);
         conversation.finished(&first);
 
-        let second = conversation.begin_turn();
+        let second = conversation.begin_turn(turn_id());
         assert_eq!(second.session, SessionFlag::Resume(id.clone()));
         assert_ne!(second.id, first.id);
         conversation.finished(&second);
 
         conversation.reset();
-        let third = conversation.begin_turn();
+        let third = conversation.begin_turn(turn_id());
         let SessionFlag::New(new_id) = third.session.clone() else {
             panic!("a reset conversation must create a session");
         };
@@ -641,9 +656,9 @@ mod tests {
     #[test]
     fn a_turn_that_never_reached_init_leaves_the_conversation_fresh() {
         let mut conversation = Conversation::default();
-        let first = conversation.begin_turn();
+        let first = conversation.begin_turn(turn_id());
         conversation.finished(&first);
-        let retry = conversation.begin_turn();
+        let retry = conversation.begin_turn(turn_id());
         assert!(matches!(retry.session, SessionFlag::New(_)));
         assert_ne!(retry.session, first.session);
     }
@@ -651,13 +666,13 @@ mod tests {
     #[test]
     fn sending_cancels_the_running_turn_and_a_cancelled_turn_cannot_establish() {
         let mut conversation = Conversation::default();
-        let first = conversation.begin_turn();
-        let second = conversation.begin_turn();
+        let first = conversation.begin_turn(turn_id());
+        let second = conversation.begin_turn(turn_id());
         assert!(first.is_cancelled());
         assert!(!second.is_cancelled());
 
         conversation.established(&first);
-        let third = conversation.begin_turn();
+        let third = conversation.begin_turn(turn_id());
         assert!(matches!(third.session, SessionFlag::New(_)));
         assert_ne!(third.session, first.session);
     }
@@ -665,12 +680,12 @@ mod tests {
     #[test]
     fn reset_cancels_and_a_stale_init_after_it_is_ignored() {
         let mut conversation = Conversation::default();
-        let turn = conversation.begin_turn();
+        let turn = conversation.begin_turn(turn_id());
         conversation.reset();
         assert!(turn.is_cancelled());
         conversation.established(&turn);
         assert!(matches!(
-            conversation.begin_turn().session,
+            conversation.begin_turn(turn_id()).session,
             SessionFlag::New(_)
         ));
     }
@@ -678,15 +693,15 @@ mod tests {
     #[test]
     fn a_vanished_session_sends_the_next_turn_to_a_new_one() {
         let mut conversation = Conversation::default();
-        let first = conversation.begin_turn();
+        let first = conversation.begin_turn(turn_id());
         conversation.established(&first);
         conversation.finished(&first);
-        let resumed = conversation.begin_turn();
+        let resumed = conversation.begin_turn(turn_id());
         assert!(matches!(resumed.session, SessionFlag::Resume(_)));
         conversation.lost(&resumed);
         conversation.finished(&resumed);
         assert!(matches!(
-            conversation.begin_turn().session,
+            conversation.begin_turn(turn_id()).session,
             SessionFlag::New(_)
         ));
     }
@@ -695,7 +710,7 @@ mod tests {
     fn cancel_is_idempotent() {
         let mut conversation = Conversation::default();
         conversation.cancel();
-        let turn = conversation.begin_turn();
+        let turn = conversation.begin_turn(turn_id());
         conversation.cancel();
         conversation.cancel();
         assert!(turn.is_cancelled());
@@ -786,7 +801,7 @@ printf '%s\n' '{RESULT_OK}'"#
             ),
         );
         let cwd = scratch.path().join("work");
-        let turn = Turn::new(SessionFlag::Resume("sess-1".into()));
+        let turn = Turn::new("turn".into(), SessionFlag::Resume("sess-1".into()));
         let (outcome, deltas) =
             collect(&config_for(&stub), &cwd, &turn, "- not a flag\nsecond line");
 
@@ -816,11 +831,11 @@ printf '%s\n' '{RESULT_OK}'"#
             "claude",
             &format!("printf '%s\\n' '{INIT}' '{TEXT_1}' '{RESULT_OK}'"),
         );
-        let turn = Turn::new(SessionFlag::New("n".into()));
+        let turn = Turn::new("turn".into(), SessionFlag::New("n".into()));
         let mut seen = Vec::new();
         let outcome = run_cli(&config_for(&stub), scratch.path(), &turn, "hi", |line| {
             seen.push(match line {
-                Line::Init => "init".to_string(),
+                Line::SessionSaved => "init".to_string(),
                 Line::Delta(t) => format!("delta:{t}"),
                 Line::Done => "done".to_string(),
                 other => format!("{other:?}"),
@@ -838,7 +853,7 @@ printf '%s\n' '{RESULT_OK}'"#
             "claude",
             &format!("cat > /dev/null\nprintf '%s\\n' '{RESULT_NOT_LOGGED_IN}'\nexit 1"),
         );
-        let turn = Turn::new(SessionFlag::New("n".into()));
+        let turn = Turn::new("turn".into(), SessionFlag::New("n".into()));
         let (outcome, deltas) = collect(&config_for(&stub), scratch.path(), &turn, "hi");
         assert_eq!(outcome, Outcome::Failed(Failure::NotLoggedIn));
         assert!(deltas.is_empty());
@@ -852,7 +867,7 @@ printf '%s\n' '{RESULT_OK}'"#
             "claude",
             "cat > /dev/null\necho 'segfault, probably' >&2\nexit 3",
         );
-        let turn = Turn::new(SessionFlag::New("n".into()));
+        let turn = Turn::new("turn".into(), SessionFlag::New("n".into()));
         let (outcome, _) = collect(&config_for(&stub), scratch.path(), &turn, "hi");
         assert_eq!(
             outcome,
@@ -867,7 +882,7 @@ printf '%s\n' '{RESULT_OK}'"#
             command: "no-such-claude-binary".into(),
             model: "m".into(),
         };
-        let turn = Turn::new(SessionFlag::New("n".into()));
+        let turn = Turn::new("turn".into(), SessionFlag::New("n".into()));
         let (outcome, _) = collect(&config, scratch.path(), &turn, "hi");
         assert_eq!(
             outcome,
@@ -884,7 +899,7 @@ printf '%s\n' '{RESULT_OK}'"#
             "claude",
             &format!("printf '%s\\n' '{INIT}' '{TEXT_1}'\nexec sleep 30"),
         );
-        let turn = Arc::new(Turn::new(SessionFlag::New("n".into())));
+        let turn = Arc::new(Turn::new("turn".into(), SessionFlag::New("n".into())));
         let (replied_tx, replied_rx) = std::sync::mpsc::channel();
         let canceller = {
             let turn = turn.clone();
@@ -912,7 +927,7 @@ printf '%s\n' '{RESULT_OK}'"#
     fn a_turn_cancelled_before_it_starts_spawns_nothing() {
         let scratch = Scratch::new("early-cancel");
         let stub = script(&scratch, "claude", "touch ran.txt\nexec sleep 30");
-        let turn = Turn::new(SessionFlag::New("n".into()));
+        let turn = Turn::new("turn".into(), SessionFlag::New("n".into()));
         turn.cancel();
         let (outcome, _) = collect(&config_for(&stub), scratch.path(), &turn, "hi");
         assert_eq!(outcome, Outcome::Cancelled);
@@ -991,9 +1006,9 @@ printf '%s\n' '{RESULT_OK}'"#
         let events = record(&app);
         let state = app.state::<AssistantState>();
 
-        let first = lock(&state.conversation).begin_turn();
+        let first = lock(&state.conversation).begin_turn(turn_id());
         run_turn(app.handle(), &first, "one", &config, scratch.path());
-        let second = lock(&state.conversation).begin_turn();
+        let second = lock(&state.conversation).begin_turn(turn_id());
         run_turn(app.handle(), &second, "two", &config, scratch.path());
 
         let expected: Vec<serde_json::Value> = [&first, &second]
@@ -1002,7 +1017,7 @@ printf '%s\n' '{RESULT_OK}'"#
                 [
                     serde_json::json!({"turn": turn.id, "kind": "delta", "text": "Got it:"}),
                     serde_json::json!({"turn": turn.id, "kind": "delta", "text": "teapot**."}),
-                    serde_json::json!({"turn": turn.id, "kind": "done", "text": ""}),
+                    serde_json::json!({"turn": turn.id, "kind": "done"}),
                 ]
             })
             .collect();
@@ -1032,7 +1047,7 @@ printf '%s\n' '{RESULT_OK}'"#
         );
         let app = mock_app();
         let events = record(&app);
-        let turn = lock(&app.state::<AssistantState>().conversation).begin_turn();
+        let turn = lock(&app.state::<AssistantState>().conversation).begin_turn(turn_id());
         run_turn(
             app.handle(),
             &turn,
@@ -1045,13 +1060,13 @@ printf '%s\n' '{RESULT_OK}'"#
             vec![serde_json::json!({
                 "turn": turn.id,
                 "kind": "error",
-                "text": "Claude Code is not logged in. Run claude in a terminal and sign in with /login."
+                "message": "Claude Code is not logged in. Run claude in a terminal and sign in with /login."
             })]
         );
     }
 
     #[test]
-    fn a_cancelled_turn_still_ends_with_done_and_a_reset_forgets_the_session() {
+    fn a_cancelled_turn_ends_with_cancelled_and_a_reset_forgets_the_session() {
         let scratch = Scratch::new("cancel-event");
         let stub = script(
             &scratch,
@@ -1062,7 +1077,7 @@ printf '%s\n' '{RESULT_OK}'"#
         let app = mock_app();
         let events = record(&app);
         let state = app.state::<AssistantState>();
-        let turn = lock(&state.conversation).begin_turn();
+        let turn = lock(&state.conversation).begin_turn(turn_id());
         let session = turn.session.clone();
 
         let handle = app.handle().clone();
@@ -1078,18 +1093,18 @@ printf '%s\n' '{RESULT_OK}'"#
             *lock(&events),
             vec![
                 serde_json::json!({"turn": turn.id, "kind": "delta", "text": "Got it:"}),
-                serde_json::json!({"turn": turn.id, "kind": "done", "text": ""}),
+                serde_json::json!({"turn": turn.id, "kind": "cancelled"}),
             ]
         );
 
         let SessionFlag::New(id) = session else {
             panic!("the first turn must create a session");
         };
-        let resumed = lock(&state.conversation).begin_turn();
+        let resumed = lock(&state.conversation).begin_turn(turn_id());
         assert_eq!(resumed.session, SessionFlag::Resume(id.clone()));
         tauri::async_runtime::block_on(assistant_reset(handle.clone()));
         assert!(resumed.is_cancelled());
-        let fresh = lock(&state.conversation).begin_turn();
+        let fresh = lock(&state.conversation).begin_turn(turn_id());
         assert!(matches!(&fresh.session, SessionFlag::New(new) if *new != id));
     }
 
@@ -1104,13 +1119,13 @@ printf '%s\n' '{RESULT_OK}'"#
         let session = uuid::Uuid::new_v4().to_string();
 
         let ask = |flag: SessionFlag, prompt: &str| {
-            let turn = Turn::new(flag);
+            let turn = Turn::new("turn".into(), flag);
             let started = Instant::now();
             let mut first_delta = None;
             let mut established = false;
             let mut reply = String::new();
             let outcome = run_cli(&config, cwd, &turn, prompt, |line| match line {
-                Line::Init => established = true,
+                Line::SessionSaved => established = true,
                 Line::Delta(text) => {
                     first_delta.get_or_insert(started.elapsed());
                     reply.push_str(text);
@@ -1142,7 +1157,7 @@ printf '%s\n' '{RESULT_OK}'"#
             "the second reply forgot the word: {second:?}"
         );
 
-        let long = Turn::new(SessionFlag::Resume(session.clone()));
+        let long = Turn::new("turn".into(), SessionFlag::Resume(session.clone()));
         let started = Instant::now();
         let outcome = run_cli(
             &config,

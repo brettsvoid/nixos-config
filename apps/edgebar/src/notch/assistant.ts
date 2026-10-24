@@ -37,7 +37,7 @@ const TEMPLATE =
   '<button class="as-send" type="button" hidden></button></div>';
 
 type ReplyState =
-  | { kind: "running"; stopping: boolean }
+  | { kind: "running" }
   | { kind: "done"; stopped: boolean }
   | { kind: "error"; message: string };
 
@@ -48,10 +48,11 @@ interface Reply {
   el: HTMLElement;
 }
 
-type Phase =
-  | { kind: "idle" }
-  | { kind: "sending"; reply: Reply; early: AssistantChunk[] }
-  | { kind: "live"; turn: string; reply: Reply };
+type Phase = { kind: "idle" } | { kind: "live"; turn: string; reply: Reply };
+
+const newTurnId = () =>
+  Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16).padStart(8, "0"))
+    .join("");
 
 const modelName = (id: string) => (MODELS.includes(id) ? id[0].toUpperCase() + id.slice(1) : id);
 
@@ -161,10 +162,6 @@ export const assistantView: NotchView = {
     }
 
     function receive(chunk: AssistantChunk) {
-      if (phase.kind === "sending") {
-        phase.early.push(chunk);
-        return;
-      }
       if (phase.kind !== "live" || chunk.turn !== phase.turn) return;
       const reply = phase.reply;
       switch (chunk.kind) {
@@ -173,16 +170,16 @@ export const assistantView: NotchView = {
           paint(reply);
           return;
         case "done":
-          settle(reply, {
-            kind: "done",
-            stopped: reply.state.kind === "running" && reply.state.stopping,
-          });
+          settle(reply, { kind: "done", stopped: false });
+          return;
+        case "cancelled":
+          settle(reply, { kind: "done", stopped: true });
           return;
         case "error":
-          settle(reply, { kind: "error", message: chunk.text });
+          settle(reply, { kind: "error", message: chunk.message });
           return;
         default: {
-          const unknown: never = chunk.kind;
+          const unknown: never = chunk;
           return unknown;
         }
       }
@@ -190,29 +187,16 @@ export const assistantView: NotchView = {
 
     function startTurn(reply: Reply) {
       reply.text = "";
-      reply.state = { kind: "running", stopping: false };
-      phase = { kind: "sending", reply, early: [] };
+      reply.state = { kind: "running" };
+      const turn = newTurnId();
+      phase = { kind: "live", turn, reply };
       paint(reply);
       showControls();
-      call("assistant_send", { prompt: reply.prompt }).then(
-        (turn) => {
-          if (phase.kind !== "sending" || phase.reply !== reply) {
-            if (phase.kind === "idle") call("assistant_reset").catch(() => {});
-            return;
-          }
-          const { early } = phase;
-          phase = { kind: "live", turn, reply };
-          if (reply.state.kind === "running" && reply.state.stopping) {
-            call("assistant_cancel").catch(() => {});
-          }
-          for (const chunk of early) if (chunk.turn === turn) receive(chunk);
-        },
-        (err) => {
-          if (phase.kind === "sending" && phase.reply === reply) {
-            settle(reply, { kind: "error", message: String(err) });
-          }
-        },
-      );
+      call("assistant_send", { turn, prompt: reply.prompt }).catch((err) => {
+        if (phase.kind === "live" && phase.turn === turn) {
+          settle(reply, { kind: "error", message: String(err) });
+        }
+      });
     }
 
     function send() {
@@ -224,7 +208,7 @@ export const assistantView: NotchView = {
       const reply: Reply = {
         prompt,
         text: "",
-        state: { kind: "running", stopping: false },
+        state: { kind: "running" },
         el: bubble("as-claude"),
       };
       log.append(bubble("as-user", prompt), reply.el);
@@ -233,9 +217,6 @@ export const assistantView: NotchView = {
     }
 
     function stop() {
-      if (phase.kind === "idle") return;
-      const { reply } = phase;
-      if (reply.state.kind === "running") reply.state = { kind: "running", stopping: true };
       if (phase.kind === "live") call("assistant_cancel").catch(() => {});
     }
 
