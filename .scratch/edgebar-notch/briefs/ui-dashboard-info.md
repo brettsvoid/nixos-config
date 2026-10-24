@@ -47,7 +47,11 @@ open (one timer to the next midnight, not a poll).
   needs Full Disk Access to read macOS's notification history, with a button that opens
   that Privacy pane. `"unavailable"`: say macOS's history store wasn't found.
 - Read on `show`, then every 15 s while the dashboard shows; stop on `hide`.
+- Opt-in: a setting `notifications.history` (default false in config.default.json) gates
+  every read. Off, the column says macOS notification history can show here and offers to
+  turn it on (it reads macOS's notification store, which needs Full Disk Access). Never
+  turn it on yourself: Brett decides, and an agent must not view his real notifications.
+  Prove the on state with literal data only.
 
-Proof: snap the real column (real notifications are personal: crop the snapshot to the
-header and one group and describe structure only, never the text), and render the empty,
-denied and grouped states with literal data through eval.
+Proof: snap the real column in its default off state, and render the empty, denied and
+grouped states with literal data through eval.
