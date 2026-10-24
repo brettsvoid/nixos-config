@@ -175,6 +175,10 @@ pub fn dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| Path::new(&home).join(".config/edgebar"))
 }
 
+pub fn cache_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| Path::new(&home).join(".cache/edgebar"))
+}
+
 fn read_object(file: &Path) -> Result<Option<Value>, String> {
     let text = match std::fs::read_to_string(file) {
         Ok(text) if text.trim().is_empty() => return Ok(None),
@@ -189,7 +193,7 @@ fn read_object(file: &Path) -> Result<Option<Value>, String> {
     }
 }
 
-fn write_atomic(file: &Path, doc: &Value) -> Result<(), String> {
+pub(crate) fn write_atomic(file: &Path, doc: &impl Serialize) -> Result<(), String> {
     let text = serde_json::to_string_pretty(doc).map_err(|e| e.to_string())? + "\n";
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)

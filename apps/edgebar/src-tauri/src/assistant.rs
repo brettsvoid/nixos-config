@@ -411,8 +411,8 @@ fn emit_chunk<R: Runtime>(app: &AppHandle<R>, turn: &Turn, kind: ChunkKind, text
 }
 
 fn cache_dir() -> PathBuf {
-    match std::env::var_os("HOME") {
-        Some(home) => Path::new(&home).join(".cache/edgebar/assistant"),
+    match crate::settings::cache_dir() {
+        Some(dir) => dir.join("assistant"),
         None => std::env::temp_dir().join("edgebar-assistant"),
     }
 }

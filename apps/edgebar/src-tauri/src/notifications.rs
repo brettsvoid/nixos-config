@@ -252,8 +252,7 @@ fn read_records(src: &Path, now: f64) -> Result<Read, Access> {
 static HIDDEN_LOCK: Mutex<()> = Mutex::new(());
 
 fn hidden_path() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    Some(Path::new(&home).join(".cache/edgebar/notifications-hidden.json"))
+    Some(crate::settings::cache_dir()?.join("notifications-hidden.json"))
 }
 
 fn load_hidden(path: &Path) -> Hidden {
@@ -263,20 +262,11 @@ fn load_hidden(path: &Path) -> Hidden {
         .unwrap_or_default()
 }
 
-fn save_hidden(path: &Path, hidden: &Hidden) -> io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec(hidden)?)?;
-    std::fs::rename(&tmp, path)
-}
-
 fn update_hidden(path: &Path, change: impl FnOnce(&mut Hidden)) {
     let _guard = HIDDEN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut hidden = load_hidden(path);
     change(&mut hidden);
-    if let Err(e) = save_hidden(path, &hidden) {
+    if let Err(e) = crate::settings::write_atomic(path, &hidden) {
         eprintln!("notifications: cannot save the hidden list: {e}");
     }
 }
@@ -626,13 +616,13 @@ mod tests {
         dismiss_in(&path, vec!["7".into(), "9".into()]);
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            r#"{"ids":["3","7","9"],"clearedBefore":0.0}"#
+            "{\n  \"ids\": [\n    \"3\",\n    \"7\",\n    \"9\"\n  ],\n  \"clearedBefore\": 0.0\n}\n"
         );
 
         clear_in(&path, 1234.5);
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            r#"{"ids":[],"clearedBefore":1234.5}"#
+            "{\n  \"ids\": [],\n  \"clearedBefore\": 1234.5\n}\n"
         );
         assert!(!dir.path().join("notifications-hidden.json.tmp").exists());
     }

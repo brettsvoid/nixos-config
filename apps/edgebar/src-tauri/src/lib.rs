@@ -296,8 +296,7 @@ fn resolve_notch_idle(idle: Option<&str>) -> String {
 
 fn load_palettes() -> Palettes {
     const DEFAULT: &str = include_str!("../palette.default.json");
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
+    palette_json_path()
         .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_else(|| {
@@ -310,8 +309,7 @@ const DEFAULT_MATUGEN_SCHEME: &str = "scheme-tonal-spot";
 /// matugen scheme persisted by `select-scheme` / the theme view, read by
 /// `generate-edgebar-theme`.
 fn scheme_state_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/scheme"))
+    Some(settings::dir()?.join("scheme"))
 }
 
 fn persisted_scheme() -> String {
@@ -332,8 +330,7 @@ fn persist_scheme(scheme: &str) {
 }
 
 fn ink_state_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/ink.json"))
+    Some(settings::dir()?.join("ink.json"))
 }
 
 fn load_ink_override() -> InkOverride {
@@ -1589,16 +1586,14 @@ async fn current_wallpaper(app: tauri::AppHandle) -> String {
 /// Touch a marker whose mtime tells the launchd watcher an in-app change just
 /// happened, so it skips its redundant (and potentially clobbering) re-run.
 fn touch_inapp_marker() {
-    if let Some(home) = std::env::var_os("HOME") {
-        let dir = std::path::Path::new(&home).join(".cache/edgebar");
+    if let Some(dir) = settings::cache_dir() {
         let _ = std::fs::create_dir_all(&dir);
         let _ = std::fs::write(dir.join(".inapp-change"), b"");
     }
 }
 
 fn palette_json_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
+    Some(settings::dir()?.join("palette.json"))
 }
 
 /// Per-(wallpaper, scheme) precomputed palette cache, keyed by scheme,
@@ -1614,11 +1609,11 @@ fn palette_cache_path(path: &str, scheme: &str) -> Option<std::path::PathBuf> {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    std::env::var_os("HOME").map(|home| {
-        std::path::Path::new(&home)
-            .join(".cache/edgebar/palettes")
-            .join(format!("{scheme}__{sanitized}__{mtime}.json"))
-    })
+    Some(
+        settings::cache_dir()?
+            .join("palettes")
+            .join(format!("{scheme}__{sanitized}__{mtime}.json")),
+    )
 }
 
 /// Install a precomputed palette as the live palette.json atomically (copy to a
@@ -2671,6 +2666,16 @@ fn install_fullscreen_watcher(app: tauri::AppHandle) {
     });
 }
 
+/// Bind `name` in edgebar's cache folder, replacing a socket a previous run
+/// left behind.
+pub(crate) fn listen(name: &str) -> Option<std::os::unix::net::UnixListener> {
+    let dir = settings::cache_dir()?;
+    let _ = std::fs::create_dir_all(&dir);
+    let sock = dir.join(name);
+    let _ = std::fs::remove_file(&sock);
+    std::os::unix::net::UnixListener::bind(&sock).ok()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2805,15 +2810,7 @@ pub fn run() {
             // backlog.
             let ws_handle = app.handle().clone();
             std::thread::spawn(move || {
-                use std::os::unix::net::UnixListener;
-                let Some(home) = std::env::var_os("HOME") else {
-                    return;
-                };
-                let dir = std::path::Path::new(&home).join(".cache/edgebar");
-                let _ = std::fs::create_dir_all(&dir);
-                let sock = dir.join("ws.sock");
-                let _ = std::fs::remove_file(&sock); // clear any stale socket
-                let Ok(listener) = UnixListener::bind(&sock) else {
+                let Some(listener) = listen("ws.sock") else {
                     return;
                 };
                 let (tx, rx) = std::sync::mpsc::channel::<()>();
@@ -2839,15 +2836,7 @@ pub fn run() {
             // socket setup as ws.sock, but the reload runs inline (no debounce).
             let theme_handle = app.handle().clone();
             std::thread::spawn(move || {
-                use std::os::unix::net::UnixListener;
-                let Some(home) = std::env::var_os("HOME") else {
-                    return;
-                };
-                let dir = std::path::Path::new(&home).join(".cache/edgebar");
-                let _ = std::fs::create_dir_all(&dir);
-                let sock = dir.join("theme.sock");
-                let _ = std::fs::remove_file(&sock); // clear any stale socket
-                let Ok(listener) = UnixListener::bind(&sock) else {
+                let Some(listener) = listen("theme.sock") else {
                     return;
                 };
                 for conn in listener.incoming() {

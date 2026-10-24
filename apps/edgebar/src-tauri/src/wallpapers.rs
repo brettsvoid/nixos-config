@@ -216,7 +216,7 @@ fn tinted_name(
 }
 
 pub fn tinted_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|home| Path::new(&home).join(".cache/edgebar/tinted"))
+    Some(crate::settings::cache_dir()?.join("tinted"))
 }
 
 fn sidecar(tinted: &Path) -> PathBuf {

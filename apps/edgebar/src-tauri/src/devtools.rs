@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -80,14 +80,7 @@ pub fn start(app: &tauri::App) {
     app.manage(Evals::default());
     let handle = app.handle().clone();
     std::thread::spawn(move || {
-        let Some(home) = std::env::var_os("HOME") else {
-            return;
-        };
-        let dir = Path::new(&home).join(".cache/edgebar");
-        let _ = std::fs::create_dir_all(&dir);
-        let sock = dir.join("dev.sock");
-        let _ = std::fs::remove_file(&sock);
-        let Ok(listener) = UnixListener::bind(&sock) else {
+        let Some(listener) = crate::listen("dev.sock") else {
             return;
         };
         for mut conn in listener.incoming().flatten() {
