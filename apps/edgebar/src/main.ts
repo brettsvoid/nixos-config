@@ -16,14 +16,8 @@ import { releaseKeyboard } from "./keyboard";
 import { setLine } from "./marquee";
 import { SPRING } from "./motion";
 import { current, onChange } from "./settings";
-import {
-  isView,
-  type NotchView,
-  type RailEntry,
-  type ViewContext,
-  type ViewHandle,
-} from "./notch/view";
-import { home, rail, views } from "./notch/views";
+import type { NotchView, ViewContext, ViewHandle } from "./notch/view";
+import { home, views } from "./notch/views";
 
 // ---- tuned constants (named so each value lives in one place) ----
 const POLL = {
@@ -1001,34 +995,29 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     showView: switchView,
   };
 
-  function railTab(entry: RailEntry): HTMLElement {
+  function railTab(view: NotchView): HTMLElement {
     const tab = document.createElement("button");
     tab.className = "rail-tab";
-    tab.classList.toggle("rail-foot", entry.rail === "foot");
-    tab.innerHTML = `<span class="icon">${entry.icon}</span>`;
-    if (isView(entry)) {
-      tab.title = entry.title;
-      tab.dataset.to = entry.id;
-      tab.addEventListener("click", (e) => {
-        e.stopPropagation();
-        switchView(entry.id);
-      });
-    } else {
-      tab.classList.add("wip");
-      tab.title = `${entry.title} — not implemented`;
-    }
+    tab.classList.toggle("rail-foot", view.rail === "foot");
+    tab.innerHTML = `<span class="icon">${view.icon}</span>`;
+    tab.title = view.title;
+    tab.dataset.to = view.id;
+    tab.addEventListener("click", (e) => {
+      e.stopPropagation();
+      switchView(view.id);
+    });
     return tab;
   }
-  for (const entry of rail) {
-    const tab = railTab(entry);
-    railTabs.set(entry.id, tab);
+  for (const view of views) {
+    const tab = railTab(view);
+    railTabs.set(view.id, tab);
     railEl.append(tab);
   }
 
   // The amber dot on a rail button, with the reason in its tooltip.
   function setAlert(id: string, reason: string | null) {
     const tab = railTabs.get(id);
-    const entry = rail.find((e) => e.id === id);
+    const entry = views.find((v) => v.id === id);
     if (!tab || !entry) return;
     let dot = tab.querySelector<HTMLElement>(".rail-dot");
     if (!dot) {

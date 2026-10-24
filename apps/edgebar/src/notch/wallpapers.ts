@@ -6,7 +6,7 @@ import { current, onChange, set as setSetting } from "../settings";
 import type { NotchView } from "./view";
 
 // matugen scheme types, in select-scheme.sh's order.
-const SCHEMES = [
+export const SCHEMES = [
   "scheme-tonal-spot",
   "scheme-vibrant",
   "scheme-expressive",

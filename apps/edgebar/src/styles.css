@@ -563,52 +563,6 @@ body {
   font-weight: 600;
 }
 
-/* ---- not-implemented placeholders ----
-   `.wip` mutes a control that is drawn but does nothing yet. `.ph` is a
-   reserved box named after the component that will fill it. Both are meant to
-   be deleted, not styled around. */
-/* Doubled class so `.wip` beats the single-class rule styling the control it
-   marks (e.g. .rail-tab, declared later) on specificity, not source order. */
-.wip.wip {
-  color: var(--on-surface-variant);
-  opacity: 0.6;
-}
-/* no hover highlight or pointer on something that doesn't work: it keeps the
-   container tint every control it marks rests on */
-.wip.wip:hover {
-  background: var(--surface-container);
-}
-.wip,
-.ph {
-  cursor: default;
-}
-
-.ph {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  min-width: 0;
-  min-height: 0;
-  border: 1px dashed var(--surface-bright);
-  border-radius: var(--radius-sm);
-  color: var(--on-surface-variant);
-  text-align: center;
-}
-.ph-icon {
-  font-size: var(--font-2xl);
-}
-.ph-name {
-  font-size: var(--font-2xs);
-  font-weight: 600;
-  letter-spacing: 0.4px;
-}
-.ph-note {
-  font-size: var(--font-3xs);
-}
-
 /* ---- notch rail ----
    The views' buttons, with the foot-pinned ones (Settings) at the bottom, as
    in ambxst's Dashboard.qml. A sibling of the tab body, so it stays put across
