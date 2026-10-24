@@ -1963,11 +1963,19 @@ async fn battery() -> Battery {
 }
 
 // ───────────────────────── volume / mic (osascript) ─────────────────
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Volume {
     output: u8,
+    /// While edgebar holds the mic muted, the level unmuting restores.
     input: u8,
+    output_muted: bool,
+    input_muted: bool,
 }
+
+/// The mic level edgebar's mute took away. macOS has no input mute, so muting
+/// sets the input volume to 0 and unmuting puts this back.
+static MIC_HELD: Mutex<Option<u8>> = Mutex::new(None);
 
 pub(crate) fn run_osa(script: &str) -> Option<String> {
     let out = std::process::Command::new("osascript")
@@ -1977,22 +1985,68 @@ pub(crate) fn run_osa(script: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-fn osa_num(script: &str) -> u8 {
-    run_osa(script)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
+/// Parse the reply to `get volume settings`, e.g. "output volume:100, input
+/// volume:100, alert volume:100, output muted:false". A device without a
+/// control answers "missing value" for it, read as 0 or unmuted.
+fn parse_volume_settings(reply: &str) -> Volume {
+    let mut v = Volume::default();
+    for field in reply.split(", ") {
+        let Some((key, value)) = field.split_once(':') else {
+            continue;
+        };
+        match key {
+            "output volume" => v.output = value.parse().unwrap_or(0),
+            "input volume" => v.input = value.parse().unwrap_or(0),
+            "output muted" => v.output_muted = value == "true",
+            _ => {}
+        }
+    }
+    v
+}
+
+/// Fold edgebar's mic mute into a fresh read. The mute lasts while the mic
+/// stays at 0; a level set anywhere else ends it.
+fn apply_mic_hold(mut v: Volume, held: &mut Option<u8>) -> Volume {
+    if v.input > 0 {
+        *held = None;
+    }
+    if let Some(level) = *held {
+        v.input = level;
+        v.input_muted = true;
+    }
+    v
+}
+
+/// The input volume that muting or unmuting the mic sets, given a read already
+/// folded through `apply_mic_hold`; None when it is already in that state.
+fn mic_mute_target(muted: bool, read: &Volume, held: &mut Option<u8>) -> Option<u8> {
+    match (muted, *held) {
+        (true, None) => {
+            *held = Some(read.input);
+            Some(0)
+        }
+        (false, Some(level)) => {
+            *held = None;
+            Some(level)
+        }
+        _ => None,
+    }
+}
+
+fn read_volume_settings() -> Volume {
+    parse_volume_settings(&run_osa("get volume settings").unwrap_or_default())
 }
 
 #[tauri::command]
 async fn get_volume() -> Volume {
-    tauri::async_runtime::spawn_blocking(|| Volume {
-        output: osa_num("output volume of (get volume settings)"),
-        input: osa_num("input volume of (get volume settings)"),
+    tauri::async_runtime::spawn_blocking(|| {
+        apply_mic_hold(read_volume_settings(), &mut MIC_HELD.lock().unwrap())
     })
     .await
     .unwrap_or_default()
 }
 
+/// Sets the speaker's level and unmutes it, as the volume keys do.
 #[tauri::command]
 async fn set_volume(app: tauri::AppHandle, output: u8) {
     let level = output.min(100);
@@ -2003,11 +2057,14 @@ async fn set_volume(app: tauri::AppHandle, output: u8) {
         Some(level as f64 / 100.0),
     );
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        run_osa(&format!("set volume output volume {level}"))
+        run_osa(&format!(
+            "set volume output volume {level} without output muted"
+        ))
     })
     .await;
 }
 
+/// Sets the mic's level, which also ends edgebar's mute.
 #[tauri::command]
 async fn set_input_volume(app: tauri::AppHandle, input: u8) {
     let level = input.min(100);
@@ -2018,44 +2075,112 @@ async fn set_input_volume(app: tauri::AppHandle, input: u8) {
         Some(level as f64 / 100.0),
     );
     let _ = tauri::async_runtime::spawn_blocking(move || {
+        *MIC_HELD.lock().unwrap() = None;
         run_osa(&format!("set volume input volume {level}"))
     })
     .await;
 }
 
+#[tauri::command]
+async fn set_output_muted(app: tauri::AppHandle, muted: bool) {
+    let level = tauri::async_runtime::spawn_blocking(move || {
+        let verb = if muted { "with" } else { "without" };
+        run_osa(&format!("set volume {verb} output muted"));
+        read_volume_settings().output
+    })
+    .await
+    .unwrap_or(0);
+    flash_mute(&app, "volume", "Volume", muted, level);
+}
+
+#[tauri::command]
+async fn set_input_muted(app: tauri::AppHandle, muted: bool) {
+    let level = tauri::async_runtime::spawn_blocking(move || {
+        let mut held = MIC_HELD.lock().unwrap();
+        let read = apply_mic_hold(read_volume_settings(), &mut held);
+        if let Some(target) = mic_mute_target(muted, &read, &mut held) {
+            run_osa(&format!("set volume input volume {target}"));
+        }
+        read.input
+    })
+    .await
+    .unwrap_or(0);
+    flash_mute(&app, "mic", "Mic", muted, level);
+}
+
+fn flash_mute(app: &tauri::AppHandle, glyph: &str, name: &str, muted: bool, level: u8) {
+    if muted {
+        notch::flash(app, glyph, format!("{name} muted"), Some(0.0));
+    } else {
+        notch::flash(
+            app,
+            glyph,
+            format!("{name} {level}%"),
+            Some(level as f64 / 100.0),
+        );
+    }
+}
+
 // ───────────────────────── brightness (DisplayServices) ─────────────
-// Private framework; linked in build.rs. Works for the internal display.
+// Private framework; linked in build.rs. It dims only the built-in display.
 #[cfg(target_os = "macos")]
 mod brightness {
     type CGDirectDisplayID = u32;
     extern "C" {
-        fn CGMainDisplayID() -> CGDirectDisplayID;
+        fn CGGetOnlineDisplayList(
+            max: u32,
+            displays: *mut CGDirectDisplayID,
+            count: *mut u32,
+        ) -> i32;
+        fn CGDisplayIsBuiltin(display: CGDirectDisplayID) -> u32;
         fn DisplayServicesGetBrightness(id: CGDirectDisplayID, brightness: *mut f32) -> i32;
         fn DisplayServicesSetBrightness(id: CGDirectDisplayID, brightness: f32) -> i32;
     }
-    pub fn get() -> f32 {
-        let mut b: f32 = 0.0;
-        unsafe {
-            DisplayServicesGetBrightness(CGMainDisplayID(), &mut b);
+
+    fn builtin() -> Option<CGDirectDisplayID> {
+        let mut ids = [0; 16];
+        let mut count = 0;
+        // SAFETY: CoreGraphics writes at most `ids.len()` ids into the buffer.
+        let err = unsafe { CGGetOnlineDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
+        if err != 0 {
+            return None;
         }
-        b
+        ids[..count as usize]
+            .iter()
+            .copied()
+            .find(|&id| unsafe { CGDisplayIsBuiltin(id) } != 0)
     }
+
+    pub fn get() -> Result<f32, String> {
+        let id = builtin().ok_or("no built-in display is on")?;
+        let mut b: f32 = 0.0;
+        let err = unsafe { DisplayServicesGetBrightness(id, &mut b) };
+        if err != 0 {
+            return Err(format!("macOS won't read it (DisplayServices error {err})"));
+        }
+        Ok(b)
+    }
+
     pub fn set(value: f32) {
-        unsafe {
-            DisplayServicesSetBrightness(CGMainDisplayID(), value.clamp(0.0, 1.0));
+        if let Some(id) = builtin() {
+            unsafe {
+                DisplayServicesSetBrightness(id, value.clamp(0.0, 1.0));
+            }
         }
     }
 }
 
+/// The built-in display's brightness, 0..1. Fails with the reason when there is
+/// none (a desktop Mac, or a closed lid) or macOS won't read it.
 #[tauri::command]
-fn get_brightness() -> f32 {
+fn get_brightness() -> Result<f32, String> {
     #[cfg(target_os = "macos")]
     {
         brightness::get()
     }
     #[cfg(not(target_os = "macos"))]
     {
-        0.0
+        Err("brightness needs macOS".to_string())
     }
 }
 
@@ -2693,6 +2818,8 @@ pub fn run() {
             get_volume,
             set_volume,
             set_input_volume,
+            set_output_muted,
+            set_input_muted,
             get_brightness,
             set_brightness,
             network,
@@ -2877,4 +3004,71 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod volume_tests {
+    use super::*;
+
+    #[test]
+    fn parses_the_volume_settings_reply() {
+        assert_eq!(
+            parse_volume_settings(
+                "output volume:62, input volume:100, alert volume:100, output muted:true"
+            ),
+            Volume {
+                output: 62,
+                input: 100,
+                output_muted: true,
+                input_muted: false,
+            }
+        );
+        assert_eq!(
+            parse_volume_settings(
+                "output volume:missing value, input volume:40, alert volume:100, output muted:missing value"
+            ),
+            Volume {
+                output: 0,
+                input: 40,
+                output_muted: false,
+                input_muted: false,
+            }
+        );
+    }
+
+    fn mic(input: u8) -> Volume {
+        Volume {
+            output: 50,
+            input,
+            ..Volume::default()
+        }
+    }
+
+    #[test]
+    fn a_muted_mic_reports_the_level_it_will_restore() {
+        let mut held = Some(70);
+        let read = apply_mic_hold(mic(0), &mut held);
+        assert_eq!((read.input, read.input_muted, held), (70, true, Some(70)));
+    }
+
+    #[test]
+    fn a_level_set_elsewhere_ends_the_mute() {
+        let mut held = Some(70);
+        let read = apply_mic_hold(mic(30), &mut held);
+        assert_eq!((read.input, read.input_muted, held), (30, false, None));
+    }
+
+    #[test]
+    fn muting_holds_the_level_and_unmuting_restores_it() {
+        let mut held = None;
+        let read = apply_mic_hold(mic(55), &mut held);
+        assert_eq!(mic_mute_target(true, &read, &mut held), Some(0));
+        assert_eq!(held, Some(55));
+
+        let read = apply_mic_hold(mic(0), &mut held);
+        assert_eq!(mic_mute_target(true, &read, &mut held), None);
+        assert_eq!(mic_mute_target(false, &read, &mut held), Some(55));
+        assert_eq!(held, None);
+        assert_eq!(mic_mute_target(false, &mic(55), &mut held), None);
+    }
 }

@@ -129,7 +129,11 @@ export interface MetricsHistory {
 
 export interface Volume {
   output: number;
+  // While edgebar holds the mic muted (macOS has no input mute, so it sets the
+  // mic to 0), the level unmuting restores.
   input: number;
+  outputMuted: boolean;
+  inputMuted: boolean;
 }
 
 export interface Network {
@@ -227,9 +231,12 @@ export interface Commands {
   metrics_history: { args: NoArgs; result: MetricsHistory };
   cpu_state: { args: NoArgs; result: CpuSnapshot };
   get_volume: { args: NoArgs; result: Volume };
-  set_volume: { args: { output: number }; result: void };
-  set_input_volume: { args: { input: number }; result: void };
-  get_brightness: { args: NoArgs; result: number }; // 0..1
+  set_volume: { args: { output: number }; result: void }; // also unmutes
+  set_input_volume: { args: { input: number }; result: void }; // also unmutes
+  set_output_muted: { args: { muted: boolean }; result: void };
+  set_input_muted: { args: { muted: boolean }; result: void };
+  // The built-in display's, 0..1. Rejects with the reason when there is none.
+  get_brightness: { args: NoArgs; result: number };
   set_brightness: { args: { value: number }; result: void };
   list_wallpapers: { args: NoArgs; result: Wallpaper[] };
   current_wallpaper: { args: NoArgs; result: string };
