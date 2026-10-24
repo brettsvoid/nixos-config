@@ -11,7 +11,8 @@
 let
   geom = config.flake.lib.barGeometry;
   wp = config.flake.lib.wallpaper;
-  defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
+  bundledConfig = ../../../apps/edgebar/src-tauri/config.default.json;
+  defaults = lib.importJSON bundledConfig;
   schemes = lib.importJSON ../../../apps/edgebar/src/schemes.json;
   rendered = defaults // {
     geometry = defaults.geometry // {
@@ -115,8 +116,7 @@ in
       edgebar-wallpaper-folder = pkgs.writeShellApplication {
         name = "edgebar-wallpaper-folder";
         runtimeInputs = [ pkgs.jq ];
-        runtimeEnv.DEFAULT_FOLDER = defaults.wallpaper.folder;
-        excludeShellChecks = [ "SC2088" ];
+        runtimeEnv.BUNDLED_CONFIG = "${bundledConfig}";
         text = builtins.readFile ./edgebar/wallpaper-folder.sh;
       };
 
