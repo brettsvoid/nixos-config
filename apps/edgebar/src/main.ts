@@ -12,7 +12,7 @@ import {
   type Workspace,
 } from "./ipc";
 import { lucide } from "./icons";
-import { FADE, SPRING, STAGGER } from "./motion";
+import { SPRING } from "./motion";
 import {
   isView,
   type NotchView,
@@ -205,20 +205,20 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       o.onOpen?.();
       openPanels.add(o.id);
       await syncWindowHeight();
-      animate(o.pill, { width: o.width, height: o.height }, SPRING.panelOpen);
-      animate(o.panel, { opacity: 1 }, { duration: FADE.in, delay: FADE.inDelay });
+      animate(o.pill, { width: o.width, height: o.height }, SPRING.drawer);
+      animate(o.panel, { opacity: 1 }, SPRING.fade);
     }
 
     async function collapse() {
       if (!open) return;
       open = false;
       o.onClose?.();
-      animate(o.panel, { opacity: 0 }, { duration: FADE.out });
+      animate(o.panel, { opacity: 0 }, SPRING.fade);
       const target = o.collapsedWidth?.() ?? collapsedW;
       await animate(
         o.pill,
         { width: target, height: COLLAPSED_H },
-        SPRING.panelClose,
+        SPRING.drawer,
       ).finished;
       // Hand the width back to CSS, unless it comes from `collapsedWidth`,
       // which CSS knows nothing about.
@@ -245,7 +245,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     animate(
       pills,
       { y: 0, opacity: 1 },
-      { ...SPRING.reveal, delay: stagger(STAGGER.reveal) },
+      { ...SPRING.move, delay: stagger(0.05) },
     );
   }
   function hideBar() {
@@ -255,7 +255,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     animate(
       pills,
       { y: LAYOUT.hiddenY, opacity: 0 },
-      { ...SPRING.hide, delay: stagger(STAGGER.hide) },
+      { ...SPRING.move, delay: stagger(0.03) },
     );
   }
 
@@ -368,7 +368,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     animate(
       ctlPanelEl,
       { opacity: 1, y: 0 },
-      SPRING.popup,
+      SPRING.drawer,
     );
   }
   async function closeControls() {
@@ -378,7 +378,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     await animate(
       ctlPanelEl,
       { opacity: 0, y: LAYOUT.popupTuck },
-      { duration: FADE.out },
+      SPRING.fade,
     ).finished;
     openPanels.delete("controls");
     await syncWindowHeight();
@@ -410,7 +410,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     animate(
       menuPanel,
       { opacity: 1, y: 0 },
-      SPRING.popup,
+      SPRING.drawer,
     );
   }
   async function closeLauncher() {
@@ -420,7 +420,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     await animate(
       menuPanel,
       { opacity: 0, y: LAYOUT.popupTuck },
-      { duration: FADE.out },
+      SPRING.fade,
     ).finished;
     openPanels.delete("launcher");
     await syncWindowHeight();
@@ -1044,7 +1044,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     // value up via `collapsedWidth`. Report rects once the spring settles, not
     // mid-flight.
     if (!notchPanel.isOpen()) {
-      animate(notchEl, { width }, SPRING.panelOpen)
+      animate(notchEl, { width }, SPRING.move)
         .finished.then(reportInteractiveRects)
         .catch(() => {}); // superseded by a newer item; that one reports instead
     }
@@ -1063,13 +1063,13 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     // so fade out whichever is visible now and fade in whichever is visible
     // after the render; fading a fixed one would strand the other at opacity 0.
     const outgoing = niMedia.hidden ? notchItem : niMedia;
-    animate(outgoing, { opacity: 0 }, { duration: FADE.out })
+    animate(outgoing, { opacity: 0 }, SPRING.fade)
       .finished.then(() => {
         renderNotch(item);
         const incoming = niMedia.hidden ? notchItem : niMedia;
         if (outgoing !== incoming) outgoing.style.opacity = "1"; // it's hidden now
         incoming.style.opacity = "0"; // start the fade from a known state
-        animate(incoming, { opacity: 1 }, { duration: FADE.in });
+        animate(incoming, { opacity: 1 }, SPRING.fade);
       })
       .catch(() => {});
   }
@@ -1166,7 +1166,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     const view = views.find((v) => v.id === id);
     if (!view || shownView === id) return;
     showView(view);
-    animate(notchEl, { width: view.size.w, height: view.size.h }, SPRING.panelOpen);
+    animate(notchEl, { width: view.size.w, height: view.size.h }, SPRING.drawer);
     await syncWindowHeight();
   }
 
