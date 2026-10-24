@@ -9,7 +9,7 @@ export interface Workspace {
   icon: string;
 }
 
-export interface Colors {
+export interface Colours {
   surface: string;
   text: string;
   subtext: string;
@@ -29,7 +29,7 @@ export interface Geometry {
 }
 
 export interface Config {
-  colors: Colors;
+  colors: Colours;
   geometry: Geometry;
   appearance: string;
   scheme: string;

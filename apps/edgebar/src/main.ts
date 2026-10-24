@@ -4,7 +4,7 @@ import defaults from "../src-tauri/config.default.json";
 import {
   call,
   on,
-  type Colors,
+  type Colours,
   type Config,
   type CpuSample,
   type CpuStat,
@@ -72,7 +72,7 @@ call("get_config")
     initBar(defaults.geometry.barHeight, defaults.geometry.windowHeight, defaults.notch.idle),
   );
 
-function applyColors(c: Colors) {
+function applyColours(c: Colours) {
   const s = document.documentElement.style;
   s.setProperty("--surface", c.surface);
   s.setProperty("--on-surface", c.text);
@@ -87,7 +87,7 @@ function applyColors(c: Colors) {
 
 function applyConfig(cfg: Config) {
   const s = document.documentElement.style;
-  applyColors(cfg.colors);
+  applyColours(cfg.colors);
   s.setProperty("--bar-h", `${cfg.geometry.barHeight}px`);
   s.setProperty("--frame-t", `${cfg.geometry.frameThickness}px`);
 }
