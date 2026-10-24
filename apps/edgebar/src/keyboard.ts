@@ -10,5 +10,7 @@ export function releaseKeyboard(): void {
 }
 
 export function keyboardField(area: HTMLElement): void {
+  area.style.setProperty("-webkit-user-select", "text");
+  area.style.setProperty("user-select", "text");
   area.addEventListener("pointerdown", takeKeyboard);
 }

@@ -299,8 +299,6 @@
   font-size: var(--font-sm);
   line-height: var(--as-line);
   overflow-y: auto;
-  -webkit-user-select: text;
-  user-select: text;
 }
 .as-field::placeholder {
   color: var(--on-surface-variant);

@@ -280,8 +280,6 @@
   color: var(--on-surface);
   font: inherit;
   font-size: var(--font-xs);
-  -webkit-user-select: text;
-  user-select: text;
 }
 .st-input::placeholder {
   color: var(--on-surface-variant);

@@ -108,8 +108,6 @@
   caret-color: var(--primary);
   font: inherit;
   font-size: var(--font-sm);
-  -webkit-user-select: text;
-  user-select: text;
 }
 .wp-query::placeholder {
   color: var(--on-surface-variant);
