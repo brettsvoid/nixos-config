@@ -24,7 +24,7 @@ export const dashboardView: NotchView = {
     '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
   ),
   // The width is the grid's columns and gaps.
-  size: { w: 600, h: 352 },
+  size: { w: 680, h: 352 },
   mount(root, ctx) {
     const handles: ViewHandle[] = [];
     const fill = (name: string, widget: Widget, parent: HTMLElement) => {

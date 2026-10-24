@@ -1,4 +1,255 @@
-/* a placeholder that owns a whole dashboard column */
+/* Column 3 (ambxst NotificationHistory): a header over a scrolling list of
+   app groups, each a card. The toggle note hangs from the header. */
 .dash-notifications {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.nf-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  height: 26px;
+}
+.nf-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nf-head > .qt,
+.nf-clear {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+.nf-head .icon {
+  font-size: var(--font-lg);
+}
+.nf-clear {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.nf-clear:hover:not(:disabled) {
+  background: var(--surface-container-high);
+}
+.nf-clear:disabled {
+  opacity: var(--dim-more);
+  cursor: default;
+}
+
+.nf-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.nf-body::-webkit-scrollbar {
+  width: 6px;
+}
+.nf-body::-webkit-scrollbar-thumb {
+  background: var(--surface-container);
+  border-radius: 3px;
+}
+
+/* ---- off, denied, unavailable and empty: a quiet icon over a line ---- */
+.nf-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  margin: auto 0;
+  padding: 0 var(--space-4);
+  color: var(--on-surface-variant);
+  font-size: var(--font-xs);
+  line-height: 1.4;
+  text-align: center;
+}
+.nf-message > .icon {
+  font-size: var(--font-3xl);
+  opacity: var(--dim-icon);
+}
+.nf-action {
+  height: 26px;
+  padding: 0 var(--space-6);
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---- a group: its header, then its entries; collapsed shows the newest ---- */
+.nf-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-card);
+  background: var(--surface-container);
+}
+.nf-ghead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 26px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--on-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.nf-ghead:hover:not(:disabled) {
+  background: var(--surface-container-high);
+}
+.nf-ghead:disabled {
+  cursor: default;
+}
+.nf-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+.nf-icon[hidden] {
+  display: none;
+}
+.nf-app {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nf-count {
+  flex: none;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  font-size: var(--font-2xs);
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.nf-chevron {
+  font-size: var(--font-sm);
+  color: var(--on-surface-variant);
+  transition: rotate var(--dur-med) var(--ease-out);
+}
+.nf-group.expanded .nf-chevron {
+  rotate: 180deg;
+}
+.nf-group:not(.expanded) .nf-entry ~ .nf-entry {
+  display: none;
+}
+
+/* ---- an entry: title and age, subtitle, up to three lines of body ---- */
+.nf-entry {
+  position: relative;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.nf-entry:hover {
+  background: var(--surface-container-high);
+}
+.nf-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.nf-etitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nf-time {
+  flex: none;
+  font-size: var(--font-2xs);
+  color: var(--on-surface-variant);
+  font-variant-numeric: tabular-nums;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+/* the dismiss button takes the age's place */
+.nf-entry:hover .nf-time {
+  opacity: 0;
+}
+.nf-sub {
+  overflow: hidden;
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--on-surface-variant);
+}
+.nf-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-top: var(--space-1);
+  font-size: var(--font-xs);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+/* shown on hover, over the age */
+.nf-dismiss {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-bright);
+  color: var(--on-surface);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.nf-entry:hover .nf-dismiss {
+  opacity: 1;
+}
+.nf-dismiss .icon {
+  font-size: var(--font-xs);
 }
