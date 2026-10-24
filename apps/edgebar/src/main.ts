@@ -1043,7 +1043,14 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     const view = views.find((v) => v.id === id);
     if (!view || shownView === id) return;
     showView(view);
-    animate(notchBox, { width: view.size.w + NOTCH_CHROME.w }, SPRING.drawer);
+    // From the width on screen: openViews sets it without Motion, which would
+    // otherwise start from the last switch's target and, back on that view,
+    // leave the box at the dashboard's width.
+    animate(
+      notchBox,
+      { width: [notchBox.offsetWidth, view.size.w + NOTCH_CHROME.w] },
+      SPRING.drawer,
+    );
     notchDrawer.resize();
   }
 
