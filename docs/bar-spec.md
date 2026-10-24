@@ -1,7 +1,8 @@
 # Bar spec — edgebar
 
-The design language of **edgebar**, the macOS Tauri overlay bar (`apps/edgebar`): the
-ambxst look, a screen-edge frame with attached pills.
+The design language of **edgebar**, the macOS Tauri overlay bar (`apps/edgebar`): one
+frame in the surface colour, with the bar as its top band and drawers that grow out of
+it, after the custom shell (§3).
 
 > **Edgebar only, since 2026-10-09.** This spec used to bind two bars, edgebar and the
 > Wayland/QML bar in `modules/home/desktop/quickshell`, with the QML bar catching up to
@@ -69,47 +70,60 @@ split, none of them is planned work.
 
 ## 3. Normative spec (edgebar)
 
+Since 2026-10-24 edgebar takes the custom shell's look (`modules/home/desktop/quickshell`):
+one frame in the surface colour, with the bar as its top band and drawers that grow out
+of it. The values below come from that shell's source; the file named in each row says
+where.
+
 ### 3.1 Geometry
 
 | Token | Value | Notes |
 |---|---|---|
-| `bar.height` | **32** | interactive band; WM top reservation = height + gap (AeroSpace `outerTop = 32+10`) |
-| `bar.windowHeight` | 64 | render surface incl. transparent overshoot for shadow/fillet |
-| `frame.lineThickness` | **4** | screen-edge frame line (= ambxst `frameThickness`) |
-| `frame.innerRadius` | **20** | frame inner corner radius |
-| `pill.radius` | **16** | pill bottom corners |
-| `pill.concave` | **16** | fillet radius — invariant `= bar.height / 2` |
-| `pill.padX` | 12 | horizontal pill padding (`space-6`) |
-| `pill.gap` | 4 | sibling pill gap (`space-2`) |
+| `geometry.barHeight` | **32** | the band: the frame's top edge, and the strip AeroSpace keeps clear (`outerTop = 32 + 10`); Nix sets it from `flake.lib.barGeometry` (`Theme.barHeight`) |
+| `geometry.frameThickness` | **8** | the frame's sides and bottom (`Settings.qml` `appearance.frameThickness`) |
+| `geometry.frameRadius` | **16** | corners of the hole inside the frame (`Theme.frameRounding`) |
+| `geometry.windowHeight` | 64 | the bar window while no drawer is open; an open drawer grows it to fit |
+| `--bar-pad` | 12 | each end of the band to its first segment (`Theme.barPadding`) |
+| `--seg-gap` | 16 | between segments (`Bar.qml`, `Theme.spacingLarge`) |
+| `--fillet` | 16 | the curve where a drawer meets the band (`Theme.frameFillet`) |
+| `--radius-drawer` | 28 | a drawer's corners away from the band (`Theme.drawerRadius`) |
+| `--drawer-pad` | 16 | a drawer's padding (`Theme.drawerPadding`) |
+| shadow | 12 | inward from the frame and out from each drawer: black, 0.3 at the edge, fading quadratically to 0 (`frame.frag`) |
 
-Corner pills (workspaces top-left, clock top-right) sit square against the frame
-corner with a fillet on the outer bottom edge only. Detached pills (e.g. controls
-cog): radius 14, height `bar.height − 2`, top-offset +2.
+The frame is one opaque shape in `surface`: the band along the top, `frameThickness`
+down the sides and along the bottom, round a hole with `frameRadius` corners. The native
+frame window (level 4) draws it, with its shadow as gradients that follow the falloff
+exactly. The bar window (level 5) sits above it and paints the band again, so the
+drawers join the band with no seam between two windows. The drawers' CSS shadow,
+`drop-shadow(0 0 6.5px rgb(0 0 0 / 0.6))`, was measured in the dev snapshot to match the
+frame's within one 8-bit step. The display's top device row, which it does not show, is
+band colour in both windows, so it hides nothing.
 
 ### 3.2 Colour roles
 
-Single vocabulary, both modes. matugen source is normative — dropping edgebar's
-Catppuccin aliasing.
-
-| Role | matugen (dark) | matugen (light) | Use |
+| Role | Palette key | matugen | Use |
 |---|---|---|---|
-| `base` | `surface` | `on_surface` | frame-adjacent ink; text on pills |
-| `pillBg` | `primary` | `primary_container` | pill/segment background |
-| `text` | `on_surface` | `on_surface` | primary text |
-| `subtext` | `on_surface_variant` | `on_surface_variant` | secondary text |
-| `accent` | `tertiary` | `tertiary` | active-workspace ring, selection |
-| `occupied` | `secondary` | `secondary` | occupied-workspace mark |
-| `empty` | `outline` | `outline` | empty-workspace mark |
-| `batteryCharging` | `#40a02b` | `#40a02b` | fixed semantic green |
-| `batteryLow` | `#d20f39` | `#d20f39` | fixed semantic red |
-| `vpn` | `#179299` | `#179299` | fixed teal |
-| `warn` | `#df8e1d` | `#df8e1d` | no-internet |
-| `frameLine` | = `pillBg` | = `pillBg` | frame ring |
-| `frameCorner` | `#000000` | `#000000` | corner fills |
+| `surface` | `base` | `surface` | the band, the frame, the notch and every drawer; ink on an accent fill |
+| `text` | `text` | `on_surface` | text and icons |
+| `subtext` | `subtext0` | `on_surface_variant` | dim text |
+| `accent` | `primary\|rosewater` | `primary` | every active or selected state |
+| `batteryCharging` | `#40a02b` | | fixed semantic green |
+| `batteryLow` | `#d20f39` | | fixed semantic red |
+| `vpn` | `#179299` | | fixed teal |
+| `warn` | `#df8e1d` (CSS only) | | no internet, a rail alert |
 
-Derived marks (alpha of `base` over `pillBg`): `separator 30%`, `handle 45%`,
-`track 18%`, `hover 12%`, `wsEmpty 28%`, `wsOccupied 55%`.
-Shadows: pill `0 3px 6px rgba(0,0,0,.4)`, popup `0 6px 16px rgba(0,0,0,.35)`.
+The same keys serve both modes. `a|b` names fallbacks, and the first key the palette has
+wins: `rosewater` serves palettes rendered before the template had `primary`.
+
+The view tokens in `styles.css :root` are derived from these: `--surface`,
+`--on-surface` (`text`), `--on-surface-variant` (`subtext`), `--primary` (`accent`),
+`--on-primary` (`surface`). Cards, tracks and quiet marks are `surface` tinted toward
+`text`, as the custom shell derives them (`Theme.qml`): `--surface-container` 7 %,
+`--surface-container-high` 11 %, `--surface-bright` 20 %.
+
+`text` has to clear 4.5:1 on `surface` (WCAG AA) and `accent` 3:1; otherwise the palette
+colour with the most contrast replaces it. The theme view's Ink control pins `text` per
+scheme.
 
 Default scheme **`scheme-tonal-spot`**; appearance **auto**; fallback palette =
 Catppuccin Latte/Mocha (`palette.default.json`).
@@ -117,56 +131,84 @@ Catppuccin Latte/Mocha (`palette.default.json`).
 ### 3.3 Scales
 
 - **Spacing** (2px grid): `s1..s9 = 2,4,6,8,10,12,14,16,18`.
-- **Radius**: `sm 8, md 12, lg 14, pill 16`.
+- **Radius**: `sm 8, md 12, card 16, drawer 28`. Buttons, chips and tabs are full-round.
 - **Type** (px): `2xs 10, xs 11, sm 12, md 13 (base), lg 14, xl 16, 2xl 18, 3xl 30`.
   Font **FiraCode Nerd Font**, mono variant for data labels (SSID). Numerics
   `tabular-nums`; time/percent bold (700).
 - **Dim**: `dim .75, dimMore .5, dimIcon .8`.
 - **Icons**: Lucide geometry (stroke 2, round caps), 1em in a 1.2em cell at `2xl`.
 
-### 3.4 Segments (left → right)
+### 3.4 Segments (left to right)
 
-1. **workspaces** (corner, left) — launcher button + dynamic dots. Empty 8px circle
-   `wsEmpty`; occupied circle `wsOccupied` or 22px app-icon cell where the WM exposes
-   icons; active = `base` dot + ring `1px pillBg / 3px accent` (or `accent@22%`
-   backplate + 2px ring when icon).
-2. **notch** (center, expandable) — collapsed row is a content slot at one of two
-   fixed widths: 200 idle (the 26×4 handle), 320 with an item. An item is a square
-   art/glyph cell of `pillHeight − 8` (24 at the default 32px row) + `xs`/600
-   headline over `3xs`/dim subline, with a 2px
-   progress hairline in `track` along the bottom. Text that overflows marquees
-   (dwell, travel, dwell, back) rather than widening the pill — a width that
-   tracked content made the whole bar twitch on every song change. Expanded
-   250×250 = big clock (3xl) + metrics rows; theme view 704×256.
-3. **controls** (detached cog) — dropdown ≥200px, sliders volume/mic/brightness,
-   track 5px `track`, thumb 14px `base`.
-4. **status** — Wi-Fi arc icon (dBm bounds −82/−72/−60, ±3 hysteresis) + SSID (`2xs`
+Segments are content laid on the band: no background, fillet, shadow or box of their
+own.
+
+1. **workspaces** (`Workspaces.qml`): the ⌘ launcher button, then the dots. 8px dots
+   4px apart: empty `surface-bright`, occupied `subtext`, active a 24×8 `accent`
+   capsule. Width and colour ease over 150ms (OutQuad). An occupied workspace whose app
+   the WM names shows that app's icon at 16px; the active one sits on a 32×20 capsule of
+   `accent` at 25 % over `surface`.
+2. **cpu**: the hungriest process's name (`subtext`) over the total percentage and a
+   108×14 stacked system/user graph.
+3. **notch** (centre): collapsed, a row on the band at one of two fixed widths, 200
+   idle (the 26×4 handle in `surface-bright`), 320 with an item. An item is a 20px
+   art/glyph cell, an `xs`/600 headline over a `3xs` `subtext` subline, and a 2px
+   progress hairline. Text that overflows marquees (dwell, travel, dwell, back) rather
+   than widening the row: a width that tracked content made the whole bar twitch on
+   every song change. A playable source becomes a media pill filling the row (album art
+   under a scrim, white transport). Open, it is a drawer (§3.5).
+4. **controls**: a button whose drawer holds the volume, mic and brightness sliders
+   (`Slider.qml`): a 6px `surface-container-high` track filled in `accent` up to an
+   18px `accent` handle.
+5. **status**: Wi-Fi arc icon (dBm bounds −82/−72/−60, ±3 hysteresis) + SSID (`2xs`
    mono) · battery icon + `%` (bold). Battery: charging bolt; ≤20 low; ≤60 medium;
-   else full. No mid-yellow.
-5. **clock** (corner, right) — `HH:mm` bold · hairline 1×14 `separator` · `ddd, MMM d`
-   (`sm`, dim). Minute-aligned tick.
+   else full.
+6. **clock** (`Clock.qml`): `HH:mm` 13px bold, a 1×16 `surface-bright` divider, then
+   `ddd, MMM d` at 12px in `subtext`, 8px apart. Minute-aligned tick.
 
-### 3.5 Motion
+Hover feedback only where something is clickable, and quiet: a `surface-container`
+plate behind ⌘, the controls button, the notch row and the menu items; a lighter dot,
+or a plate behind an app icon, on the workspaces.
 
-| Name | Spring (stiffness/damping) | QML fallback |
+### 3.5 Drawers
+
+The notch, the controls and the ⌘ menu open as drawers (`frame/Drawer.qml`). A drawer
+is a `surface` box that grows down out from behind the band, joined to it by fillets
+that grow to 16px as it opens, with 28px corners away from the band and 16px padding.
+Its content rides the box's lower edge, so it slides out from behind the band, clipped
+by the growing box, never faded.
+
+- **notch**: centred under the row. The rail sits beside the view's body. A view's
+  `size` is its own area; the shell adds the padding and the 56px rail. Rail buttons
+  (`Pill.qml`, `Dashboard.qml` tabs) are 48px and full-round: `surface-container` at
+  rest, `surface-container-high` on hover, `accent` with `surface` ink when active.
+- **controls**: centred under its button.
+- **⌘ menu**: runs on into the frame's corner, as a drawer with `align: "start"` does:
+  square against the frame's side with a fillet into it, and clipped at the frame's
+  inner edge so it casts no shadow on the frame.
+
+### 3.6 Motion
+
+The custom shell's Material 3 springs (`Theme.qml`), mass 1; Motion takes the damping
+coefficient `2 × ratio × √stiffness`.
+
+| Spring | Ratio / stiffness | Use |
 |---|---|---|
-| reveal (bar in) | 420/26, stagger 50ms | 300ms `OutCubic` |
-| hide | 520/34, stagger 30ms | 200ms `InCubic` |
-| panelOpen | 280/26 | 350ms `OutCubic` |
-| panelClose | 320/30 | 280ms `OutCubic` |
-| popup | 300/26, y from −8 | 300ms `OutCubic` |
-| fadeIn / fadeOut | 250ms (delay 80) / 120ms | same |
-| workspace dot | 150ms `cubic-bezier(0.2,0.8,0.2,1)` | 150ms `OutQuad` (already matches) |
+| default spatial | 0.8 / 380 | drawers opening, closing and resizing |
+| fast spatial | 0.6 / 800 | small moves: the notch row's width |
+| default effects | 1 / 1600 | colour and opacity: the notch content's crossfade |
 
-The QML fallback column was for the old Quickshell bar and no longer applies; it is
-kept with §1 as a record.
+Workspace marks ease over 150ms in CSS. There is no reveal: the band is there from the
+start, as the native frame draws it.
 
-### 3.6 Interaction / click-through
+### 3.7 Interaction / click-through
 
-- Idle: only pill rects are interactive; transparent overshoot passes clicks through.
-- Panel open: whole bar window interactive; outside-click / pointer-leave collapses
-  all panels; only a panel header toggles (content clicks don't collapse).
-- Workspace dot click focuses that workspace. Bar never takes keyboard focus.
+- Idle: only the segments' rects are interactive; the rest of the bar window passes
+  clicks through.
+- A drawer open: the whole bar window is interactive. A click outside the drawer's
+  segment, or the pointer leaving the window, closes it. Only its toggle (the notch
+  row, ⌘, the controls button) opens and closes it, so clicks inside it never do.
+- A workspace click focuses that workspace. The bar never takes keyboard focus.
 
 ---
 
@@ -180,8 +222,8 @@ both bars to share; since the split it is edgebar's alone.)
    `bar-geometry.nix`: promote to `flake.lib.barTokens = lib.importJSON ./tokens.json`,
    and merge it into the rendered `~/.config/edgebar/config.json` (`edgebar.nix`
    already renders it; `main.ts applyConfig()` already maps config → CSS vars).
-   Invariants (`concave = barHeight/2`, WM top reservation) stay computed in Nix at
-   render time, as `edgebar.nix` already does.
+   The WM top reservation stays computed in Nix at render time, as `edgebar.nix`
+   already does.
 
 2. **`modules/shared/bar/palette.json.tmpl`** — the matugen template. Emits **both**
    `dark` and `light` blocks keyed by the §3.2 role names, written to
@@ -203,7 +245,7 @@ The quickshell items that used to be here (catching the QML bar up to edgebar) w
 dropped at the split; the Quickshell shell's own work is in `.scratch/custom-shell/`.
 
 1. Create `modules/shared/bar/tokens.json` + `palette.json.tmpl` with §3 values; wire `flake.lib.barTokens`.
-2. Rename edgebar palette keys Catppuccin→roles (`rosewater→pillBg`, `blue→accent`, `peach→occupied`, `surface1/overlay0→empty`) across `palette.json.tmpl`, `config.default.json`, `lib.rs Colors`, `palette.default.json`.
+2. Rename edgebar palette keys Catppuccin→roles (`base→surface`, `subtext0→subtext`, `primary→accent`) across `palette.json.tmpl`, `config.default.json`, `lib.rs Colors`, `palette.default.json`. The roles themselves are already §3.2's.
 3. Pin the scheme default (`scheme-tonal-spot`) in `generate-edgebar-theme` from one Nix constant.
 4. Consume `tokens` from shared config (delete duplicated `styles.css :root` defaults or keep as fallback only).
 5. Adopt renamed roles end-to-end; move hardcoded `warn` into the palette template.

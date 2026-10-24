@@ -1,20 +1,23 @@
 # edgebar
 
-An ambxst-style top status bar for macOS, built with Tauri. It replaces
-sketchybar on the aerospace window-manager stack: workspace dots (AeroSpace), a
-CPU load graph, clock, battery, Wi-Fi, and an expandable notch with system
-metrics and a theme picker.
+A top status bar for macOS in the look of the brett-desktop custom shell, built
+with Tauri. It replaces sketchybar on the aerospace window-manager stack:
+workspace dots (AeroSpace), a CPU load graph, clock, battery, Wi-Fi, and an
+expandable notch with system metrics and a theme picker.
 
 ## How it works
 
 Click-through is solved with window *geometry*, not by toggling
 `ignore_cursor_events` from a hot loop (which deadlocks on macOS). Two windows:
 
-- **frame** — full-screen, transparent, permanently click-through: the bezel.
-- **bar** — a thin interactive strip pinned to the top: the pills.
+- **frame**: full-screen and permanently click-through. It draws one shape in
+  the surface colour round the screen, with the bar's band as its top edge.
+- **bar**: a strip pinned to the top, one window level above the frame. It
+  paints the band again, lays the segments on it and grows the drawers out of
+  it.
 
-Anything outside the top strip lands on the frame and passes through to the app
-underneath. See the header of `src-tauri/src/lib.rs` for the full rationale.
+Anything outside the bar's segments and open drawers passes through. See the
+header of `src-tauri/src/lib.rs` for the full rationale.
 
 Both windows join every space, so they'd otherwise draw on top of native
 fullscreen. A watcher polls the window list twice a second and orders a display's
@@ -109,18 +112,17 @@ appearance, geometry or `notch.idle` change, the native frame and bar windows
 when geometry changes, and the notch rules when `notch.workspaces` or
 `notch.transientMs` change. Setting the same value again does nothing.
 
-The ink drawn on the pills (`colors.base`) is contrast-checked against the pill.
+The ink drawn on the surface (`colors.text`) is contrast-checked against it.
 If the role map's ink falls under 4.5:1 (WCAG AA), edgebar uses the palette
 colour that contrasts most instead, or plain black or white if no palette colour
-clears it. Monochrome's light scheme needs this, because its `primary_container`
-is a dark grey. The theme view's **Ink** control overrides the check: it sets an
+clears it. The theme view's **Ink** control overrides the check: it sets an
 explicit ink for the light or dark scheme in effect and saves it to
 `~/.config/edgebar/ink.json`. **Auto** clears the override.
 
-The accent (the active workspace ring and the selected wallpaper's border) gets
-the same check, with WCAG's 3:1 floor for graphical indicators. matugen's accent
-often matches the pill's tone: in dark mode it is about 1:1 on the pill in every
-scheme, so there the ring always takes the surface colour, as the ink does.
+The accent (the active workspace, the active rail button, every selected state)
+gets the same check, with WCAG's 3:1 floor for graphical indicators. It names
+`primary|rosewater`: the first key the palette has wins, so a palette rendered
+before the template had `primary` still themes.
 
 `modules/home/darwin/edgebar.nix` owns deployment; edit config/palette there and
 rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for edgebar's
