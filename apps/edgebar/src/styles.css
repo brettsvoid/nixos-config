@@ -203,6 +203,12 @@ body {
   color: var(--on-primary);
 }
 
+.why {
+  font-size: var(--font-2xs);
+  line-height: 1.35;
+  color: var(--warn);
+}
+
 .scroll-y {
   overflow-x: hidden;
   overflow-y: auto;

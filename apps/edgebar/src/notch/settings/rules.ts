@@ -1,8 +1,8 @@
-import { el } from "../../dom";
+import { el, whyLine } from "../../dom";
 import { lucide } from "../../icons";
 import { call } from "../../ipc";
 import { isOverridden, reset, set } from "../../settings";
-import { button, field, segmented, whyLine, type Option, type Part } from "./rows";
+import { button, field, segmented, type Option, type Part } from "./rows";
 
 type Rule =
   | { source: "focusedWindow" }
@@ -140,7 +140,8 @@ export function rulesPart(): Part {
   const list = el("div", "st-rule-list");
   const empty = el("p", "st-note st-rules-empty", "No rules: every workspace shows what's playing.");
   const add = button("pill st-btn", `<span class="icon">${PLUS}</span><span>Add a rule</span>`);
-  box.append(list, empty, add);
+  const why = whyLine();
+  box.append(list, empty, add, why.el);
   const rows = new Map<string, RuleRow>();
   let rules: Record<string, Rule> = {};
   let names: string[] = [];
@@ -169,7 +170,11 @@ export function rulesPart(): Part {
 
   add.addEventListener("click", () => {
     const free = names.find((n) => !(n in rules));
-    if (free) void set(keyOf(free), { source: "focusedWindow" }).catch(() => {});
+    if (!free) return;
+    set(keyOf(free), { source: "focusedWindow" }).then(
+      () => why.show(null),
+      (e) => why.show(String(e)),
+    );
   });
   call("get_config")
     .then((cfg) => {

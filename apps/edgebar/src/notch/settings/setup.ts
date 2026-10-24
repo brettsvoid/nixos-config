@@ -1,7 +1,7 @@
-import { el } from "../../dom";
+import { el, whyLine } from "../../dom";
 import { call, type SetupItem } from "../../ipc";
 import { lucide } from "../../icons";
-import { button, whyLine, type Part } from "./rows";
+import { button, type Part } from "./rows";
 
 const ICON: Record<SetupItem["state"], string> = {
   ready: lucide('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),

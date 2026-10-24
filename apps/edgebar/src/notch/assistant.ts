@@ -1,5 +1,5 @@
 import "./assistant.css";
-import { el } from "../dom";
+import { el, whyLine } from "../dom";
 import { call, on, type AssistantChunk } from "../ipc";
 import { lucide } from "../icons";
 import { keyboardField, releaseKeyboard, takeKeyboard } from "../keyboard";
@@ -80,6 +80,8 @@ export const assistantView: NotchView = {
     const sendBtn = root.querySelector<HTMLButtonElement>(".as-send")!;
     const newBtn = root.querySelector<HTMLButtonElement>(".as-new")!;
     const modelBtn = root.querySelector<HTMLButtonElement>(".as-model")!;
+    const modelWhy = whyLine();
+    modelBtn.after(modelWhy.el);
 
     let phase: Phase = { kind: "idle" };
     const dirty = new Set<Reply>();
@@ -268,7 +270,10 @@ export const assistantView: NotchView = {
     modelBtn.addEventListener("click", () => {
       const at = MODELS.findIndex((m) => m.value === current().assistant.model);
       const next = MODELS[(at + 1) % MODELS.length].value;
-      setSetting("assistant.model", next).catch(() => {});
+      setSetting("assistant.model", next).then(
+        () => modelWhy.show(null),
+        (e) => modelWhy.show(String(e)),
+      );
     });
     onChange(showModel);
     showModel();

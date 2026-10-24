@@ -8,3 +8,15 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   node.append(...children);
   return node;
 }
+
+export function whyLine(): { el: HTMLElement; show(reason: string | null): void } {
+  const line = el("span", "why");
+  line.hidden = true;
+  return {
+    el: line,
+    show(reason) {
+      line.hidden = reason === null;
+      line.textContent = reason ?? "";
+    },
+  };
+}

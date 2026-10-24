@@ -30,7 +30,10 @@ const ICON = {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-function latest<T>(send: (value: T) => Promise<unknown>): (value: T) => void {
+function latest<T>(
+  send: (value: T) => Promise<unknown>,
+  refused: (reason: unknown) => void,
+): (value: T) => void {
   let pending: { value: T } | null = null;
   let busy = false;
   return (value) => {
@@ -41,7 +44,7 @@ function latest<T>(send: (value: T) => Promise<unknown>): (value: T) => void {
       while (pending) {
         const next: T = pending.value;
         pending = null;
-        await send(next).catch(() => {});
+        await send(next).catch(refused);
       }
       busy = false;
     })();
@@ -71,7 +74,7 @@ const arc = (from: number, to: number) =>
     ? `M${pt(from, DIAL.r)}A${DIAL.r} ${DIAL.r} 0 ${to - from > 180 ? 1 : 0} 1 ${pt(to, DIAL.r)}`
     : "";
 
-function dial(root: HTMLElement, spec: DialSpec) {
+function dial(root: HTMLElement, spec: DialSpec, reread: () => void) {
   const el = document.createElement("div");
   el.className = "ctl-dial";
   el.innerHTML =
@@ -81,7 +84,12 @@ function dial(root: HTMLElement, spec: DialSpec) {
   root.append(el);
   const [rest, fill, tick] = [...el.querySelectorAll<SVGPathElement>("path")];
   const iconEl = el.querySelector<HTMLElement>(".dial-icon")!;
-  const send = latest(spec.setLevel);
+  let refusal: string | null = null;
+  const refuse = (reason: unknown) => {
+    refusal = `${spec.name}: ${String(reason)}`;
+    reread();
+  };
+  const send = latest(spec.setLevel, refuse);
   const steps = wheelStepper(WHEEL_PX, fingersUp);
   let level: Level = { value: 0, muted: false };
   let drag: { y: number; from: number; moved: boolean } | null = null;
@@ -95,13 +103,14 @@ function dial(root: HTMLElement, spec: DialSpec) {
     tick.setAttribute("d", `M${pt(at, DIAL.r - DIAL.tick.in)}L${pt(at, DIAL.r + DIAL.tick.out)}`);
     el.classList.toggle("muted", level.muted);
     iconEl.innerHTML = level.muted ? spec.mutedIcon : spec.icon;
-    el.title = level.muted ? `${spec.name} muted` : `${spec.name} ${level.value}%`;
+    el.title = refusal ?? (level.muted ? `${spec.name} muted` : `${spec.name} ${level.value}%`);
   }
 
   function setLevel(value: number) {
     const v = Math.round(clamp(value, 0, 100));
     if (v === level.value && !level.muted) return;
     level = { value: v, muted: false };
+    refusal = null;
     draw();
     send(v);
   }
@@ -120,10 +129,12 @@ function dial(root: HTMLElement, spec: DialSpec) {
   el.addEventListener("pointerup", () => {
     if (drag && !drag.moved) {
       level = { ...level, muted: !level.muted };
+      refusal = null;
       draw();
-      spec.setMuted(level.muted).catch(() => {});
+      spec.setMuted(level.muted).catch(refuse);
     }
     drag = null;
+    if (refusal) reread();
   });
   el.addEventListener("pointercancel", () => (drag = null));
   el.addEventListener(
@@ -147,7 +158,7 @@ function dial(root: HTMLElement, spec: DialSpec) {
 
 type Brightness = { ok: true; value: number } | { ok: false; reason: string };
 
-function brightnessSlider(root: HTMLElement) {
+function brightnessSlider(root: HTMLElement, reread: () => void) {
   const el = document.createElement("div");
   el.className = "ctl-bri";
   el.innerHTML =
@@ -157,7 +168,14 @@ function brightnessSlider(root: HTMLElement) {
   root.append(el);
   const track = el.querySelector<HTMLElement>(".bri-track")!;
   const label = el.querySelector<HTMLElement>(".bri-label")!;
-  const send = latest((value: number) => call("set_brightness", { value }));
+  let refusal: string | null = null;
+  const send = latest(
+    (value: number) => call("set_brightness", { value }),
+    (reason) => {
+      refusal = `Brightness: ${String(reason)}`;
+      reread();
+    },
+  );
   const steps = wheelStepper(WHEEL_PX, fingersUp);
   let state: Brightness = { ok: false, reason: "not read yet" };
   let dragging = false;
@@ -172,12 +190,13 @@ function brightnessSlider(root: HTMLElement) {
     const pct = Math.round(state.value * 100);
     track.style.setProperty("--v", String(state.value));
     label.textContent = `${pct}%`;
-    el.title = `Brightness ${pct}%`;
+    el.title = refusal ?? `Brightness ${pct}%`;
   }
 
   function setValue(value: number) {
     if (!state.ok) return;
     state = { ok: true, value: clamp(value, 0, 1) };
+    refusal = null;
     draw();
     send(state.value);
   }
@@ -200,6 +219,7 @@ function brightnessSlider(root: HTMLElement) {
     el.addEventListener(type, () => {
       dragging = false;
       el.classList.remove("dragging");
+      if (refusal) reread();
     });
   }
   el.addEventListener(
@@ -222,21 +242,30 @@ function brightnessSlider(root: HTMLElement) {
 }
 
 export const controls: Widget = (root) => {
-  const brightness = brightnessSlider(root);
-  const volume = dial(root, {
-    name: "Volume",
-    icon: ICON.volume,
-    mutedIcon: ICON.volumeMuted,
-    setLevel: (output) => call("set_volume", { output }),
-    setMuted: (muted) => call("set_output_muted", { muted }),
-  });
-  const mic = dial(root, {
-    name: "Mic",
-    icon: ICON.mic,
-    mutedIcon: ICON.micMuted,
-    setLevel: (input) => call("set_input_volume", { input }),
-    setMuted: (muted) => call("set_input_muted", { muted }),
-  });
+  const reread = () => void read();
+  const brightness = brightnessSlider(root, reread);
+  const volume = dial(
+    root,
+    {
+      name: "Volume",
+      icon: ICON.volume,
+      mutedIcon: ICON.volumeMuted,
+      setLevel: (output) => call("set_volume", { output }),
+      setMuted: (muted) => call("set_output_muted", { muted }),
+    },
+    reread,
+  );
+  const mic = dial(
+    root,
+    {
+      name: "Mic",
+      icon: ICON.mic,
+      mutedIcon: ICON.micMuted,
+      setLevel: (input) => call("set_input_volume", { input }),
+      setMuted: (muted) => call("set_input_muted", { muted }),
+    },
+    reread,
+  );
 
   async function read() {
     const [levels, bright] = await Promise.allSettled([

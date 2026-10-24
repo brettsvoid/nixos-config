@@ -132,11 +132,6 @@
   line-height: 1.35;
   color: var(--on-surface-variant);
 }
-.st-why {
-  font-size: var(--font-2xs);
-  line-height: 1.35;
-  color: var(--warn);
-}
 .st-selectable {
   -webkit-user-select: text;
   user-select: text;

@@ -1,6 +1,6 @@
 import "./notifications.css";
 import { animate } from "motion";
-import { el } from "../../dom";
+import { el, whyLine } from "../../dom";
 import { call, type NotificationEntry, type NotificationHistory } from "../../ipc";
 import { lucide } from "../../icons";
 import { current, onChange, set } from "../../settings";
@@ -54,15 +54,21 @@ function ago(iso: string, now: number): string {
   return `${Math.floor(s / 86400)}d`;
 }
 
-function message(icon: string, text: string, action?: { label: string; run: () => void }) {
+function message(icon: string, text: string, action?: { label: string; run: () => Promise<unknown> }) {
   const box = el("div", "nf-message");
   box.innerHTML = `<span class="icon">${icon}</span>`;
   box.append(el("p", "", text));
   if (action) {
     const btn = el("button", "pill filled nf-action", action.label);
     btn.type = "button";
-    btn.addEventListener("click", action.run);
-    box.append(btn);
+    const why = whyLine();
+    btn.addEventListener("click", () => {
+      action.run().then(
+        () => why.show(null),
+        (e) => why.show(String(e)),
+      );
+    });
+    box.append(btn, why.el);
   }
   return box;
 }
@@ -156,14 +162,14 @@ export const notifications: Widget = (root) => {
           message(
             BELL,
             "macOS notification history can show here. Reading it opens macOS's notification store, which needs Full Disk Access.",
-            { label: "Turn on", run: () => void set("notifications.history", true).catch(() => {}) },
+            { label: "Turn on", run: () => set("notifications.history", true) },
           ),
         ];
       case "denied":
         return [
           message(LOCK, "edgebar needs Full Disk Access to read macOS's notification history.", {
             label: "Open Full Disk Access",
-            run: () => void openPane("fullDiskAccess"),
+            run: () => openPane("fullDiskAccess"),
           }),
         ];
       case "unavailable":

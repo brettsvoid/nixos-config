@@ -1,4 +1,4 @@
-import { el } from "../../dom";
+import { el, whyLine } from "../../dom";
 import { lucide } from "../../icons";
 import { keyboardField } from "../../keyboard";
 import { current, isOverridden, reset, set, type Settings, type SettingValue } from "../../settings";
@@ -33,18 +33,6 @@ export function button(className: string, html: string, title = ""): HTMLButtonE
   b.innerHTML = html;
   if (title) b.title = title;
   return b;
-}
-
-export function whyLine(): { el: HTMLElement; show(reason: string | null): void } {
-  const line = el("span", "st-why");
-  line.hidden = true;
-  return {
-    el: line,
-    show(reason) {
-      line.hidden = reason === null;
-      line.textContent = reason ?? "";
-    },
-  };
 }
 
 export interface Frame {
