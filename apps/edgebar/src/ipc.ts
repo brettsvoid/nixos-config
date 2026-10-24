@@ -241,8 +241,8 @@ export interface Commands {
   toggles: { args: NoArgs; result: ToggleState[] };
   set_toggle: { args: { id: ToggleId; on: boolean }; result: ToggleState };
   notification_history: { args: NoArgs; result: NotificationHistory };
-  notification_dismiss: { args: { ids: string[] }; result: void };
-  notification_clear: { args: NoArgs; result: void };
+  notification_hide: { args: { ids: string[] }; result: void };
+  notification_hide_all: { args: NoArgs; result: void };
   assistant_send: { args: { prompt: string }; result: string };
   assistant_cancel: { args: NoArgs; result: void };
   assistant_reset: { args: NoArgs; result: void };

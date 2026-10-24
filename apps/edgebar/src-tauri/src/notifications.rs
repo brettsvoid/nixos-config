@@ -55,7 +55,7 @@ struct RawRow {
     id: i64,
     bundle_id: Option<String>,
     data: Option<Vec<u8>>,
-    delivered: f64,
+    delivered_cocoa_secs: f64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -92,7 +92,7 @@ fn parse_row(row: RawRow) -> Option<Record> {
         title: text("titl"),
         subtitle: text("subt"),
         body: text("body"),
-        unix_secs: row.delivered + COCOA_EPOCH_UNIX,
+        unix_secs: row.delivered_cocoa_secs + COCOA_EPOCH_UNIX,
     })
 }
 
@@ -215,7 +215,7 @@ fn query_rows(conn: &rusqlite::Connection, since_cocoa: f64) -> rusqlite::Result
             id: r.get(0)?,
             bundle_id: r.get(1)?,
             data: r.get(2)?,
-            delivered: r.get(3)?,
+            delivered_cocoa_secs: r.get(3)?,
         })
     })?;
     rows.collect()
@@ -271,11 +271,11 @@ fn update_hidden(path: &Path, change: impl FnOnce(&mut Hidden)) {
     }
 }
 
-fn dismiss_in(path: &Path, ids: Vec<String>) {
+fn hide_in(path: &Path, ids: Vec<String>) {
     update_hidden(path, |h| h.ids.extend(ids));
 }
 
-fn clear_in(path: &Path, now: f64) {
+fn hide_all_in(path: &Path, now: f64) {
     update_hidden(path, |h| {
         h.ids.clear();
         h.cleared_before = now;
@@ -306,7 +306,7 @@ fn installed_app_name(_bundle_id: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn installed_app_icon(bundle_id: &str) -> Option<String> {
+fn installed_app_icon(_main_thread: objc2::MainThreadMarker, bundle_id: &str) -> Option<String> {
     use objc2_app_kit::NSWorkspace;
 
     let path = app_path(bundle_id)?;
@@ -338,10 +338,14 @@ fn icons_for(app: &tauri::AppHandle, bundle_ids: &BTreeSet<String>) -> HashMap<S
     let (tx, rx) = std::sync::mpsc::channel();
     let handle = app.clone();
     let hop = app.run_on_main_thread(move || {
+        let Some(main_thread) = objc2::MainThreadMarker::new() else {
+            let _ = tx.send(Vec::new());
+            return;
+        };
         let state = handle.state::<crate::AppState>();
         let found: Vec<(String, String)> = missing
             .into_iter()
-            .filter_map(|id| installed_app_icon(&id).map(|icon| (id, icon)))
+            .filter_map(|id| installed_app_icon(main_thread, &id).map(|icon| (id, icon)))
             .collect();
         let mut cache = state.icon_cache.lock().unwrap();
         for (id, icon) in &found {
@@ -431,15 +435,15 @@ pub async fn notification_history(app: tauri::AppHandle) -> NotificationHistory 
 }
 
 #[tauri::command]
-pub async fn notification_dismiss(ids: Vec<String>) {
+pub async fn notification_hide(ids: Vec<String>) {
     let Some(path) = hidden_path() else { return };
-    let _ = tauri::async_runtime::spawn_blocking(move || dismiss_in(&path, ids)).await;
+    let _ = tauri::async_runtime::spawn_blocking(move || hide_in(&path, ids)).await;
 }
 
 #[tauri::command]
-pub async fn notification_clear() {
+pub async fn notification_hide_all() {
     let Some(path) = hidden_path() else { return };
-    let _ = tauri::async_runtime::spawn_blocking(move || clear_in(&path, now_unix())).await;
+    let _ = tauri::async_runtime::spawn_blocking(move || hide_all_in(&path, now_unix())).await;
 }
 
 #[cfg(test)]
@@ -484,7 +488,7 @@ mod tests {
             id: 42,
             bundle_id: bundle_id.map(str::to_string),
             data,
-            delivered: 100.0,
+            delivered_cocoa_secs: 100.0,
         }
     }
 
@@ -607,19 +611,19 @@ mod tests {
     }
 
     #[test]
-    fn hidden_file_round_trips_dismiss_then_clear() {
+    fn hidden_file_round_trips_hide_then_hide_all() {
         let dir = Scratch::new("hidden");
         let path = dir.path().join("notifications-hidden.json");
         assert_eq!(load_hidden(&path), Hidden::default());
 
-        dismiss_in(&path, vec!["7".into(), "3".into()]);
-        dismiss_in(&path, vec!["7".into(), "9".into()]);
+        hide_in(&path, vec!["7".into(), "3".into()]);
+        hide_in(&path, vec!["7".into(), "9".into()]);
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "{\n  \"ids\": [\n    \"3\",\n    \"7\",\n    \"9\"\n  ],\n  \"clearedBefore\": 0.0\n}\n"
         );
 
-        clear_in(&path, 1234.5);
+        hide_all_in(&path, 1234.5);
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "{\n  \"ids\": [],\n  \"clearedBefore\": 1234.5\n}\n"
@@ -634,7 +638,13 @@ mod tests {
         assert_eq!(load_hidden(&path), Hidden::default());
     }
 
-    fn fake_store(dir: &Path, now: f64) -> Connection {
+    /// Holds the fake store's writer open: closing it would checkpoint the WAL
+    /// the tests read into the main file.
+    struct OpenWriter {
+        _conn: Connection,
+    }
+
+    fn fake_store(dir: &Path, now: f64) -> OpenWriter {
         let conn = Connection::open(dir.join("db")).unwrap();
         conn.pragma_update(None, "journal_mode", "WAL").unwrap();
         conn.execute_batch(
@@ -668,7 +678,7 @@ mod tests {
             Some(plist_blob(request(Some("ancient"), None, None))),
             9.0 * day,
         );
-        conn
+        OpenWriter { _conn: conn }
     }
 
     #[test]

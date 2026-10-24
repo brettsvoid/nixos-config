@@ -222,7 +222,7 @@ export const notifications: Widget = (root) => {
 
   async function dismissOne(item: NotificationEntry, target: HTMLElement) {
     dismissed.add(item.id);
-    call("notification_dismiss", { ids: [item.id] }).catch(() => {});
+    call("notification_hide", { ids: [item.id] }).catch(() => {});
     await animate(target, { x: 48, opacity: 0 }, { duration: 0.18, ease: "easeIn" }).finished;
     await animate(target, { height: 0, marginTop: 0, paddingTop: 0, paddingBottom: 0 }, { duration: 0.14 })
       .finished;
@@ -239,7 +239,7 @@ export const notifications: Widget = (root) => {
       ),
     );
     clearedBefore = Date.now();
-    await call("notification_clear").catch(() => {});
+    await call("notification_hide_all").catch(() => {});
     clearing = false;
     setColumn({ kind: "history", items: [] });
   }
