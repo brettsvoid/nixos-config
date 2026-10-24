@@ -2899,6 +2899,7 @@ pub fn run() {
             assistant::assistant_send,
             assistant::assistant_cancel,
             assistant::assistant_reset,
+            assistant::assistant_open_link,
             keyboard::take_keyboard,
             keyboard::release_keyboard,
             #[cfg(all(debug_assertions, target_os = "macos"))]

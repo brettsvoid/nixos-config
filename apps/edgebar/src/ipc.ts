@@ -257,6 +257,8 @@ export interface Commands {
   assistant_send: { args: { prompt: string }; result: string }; // the turn id
   assistant_cancel: { args: NoArgs; result: void };
   assistant_reset: { args: NoArgs; result: void };
+  // Opens a link from a reply in the browser; rejects anything but http(s).
+  assistant_open_link: { args: { url: string }; result: void };
   // The calling bar window takes the keyboard until release_keyboard, which
   // hands it back to the app that was in front (keyboard.ts).
   take_keyboard: { args: NoArgs; result: void };

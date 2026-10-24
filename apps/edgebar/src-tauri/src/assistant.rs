@@ -551,6 +551,27 @@ pub async fn assistant_reset<R: Runtime>(app: AppHandle<R>) {
     lock(&app.state::<AssistantState>().conversation).reset();
 }
 
+/// A link from a reply, if it is a web link. Replies are model output, and
+/// `open` would hand any other scheme to whichever app claims it.
+fn web_link(url: &str) -> Result<tauri::Url, String> {
+    let link = tauri::Url::parse(url).map_err(|e| format!("{url} is not a link: {e}"))?;
+    match link.scheme() {
+        "http" | "https" => Ok(link),
+        scheme => Err(format!("Only web links open from a reply, not {scheme}: links.")),
+    }
+}
+
+/// Opens a link from a reply in the default browser.
+#[tauri::command]
+pub fn assistant_open_link(url: String) -> Result<(), String> {
+    let link = web_link(&url)?;
+    Command::new("/usr/bin/open")
+        .arg(link.as_str())
+        .spawn()
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -631,6 +652,30 @@ mod tests {
                 "There's an issue with the selected model (nosuchmodel). It may not exist or you may not have access to it. Run --model to pick a different model."
                     .into()
             ))
+        );
+    }
+
+    #[test]
+    fn only_web_links_from_a_reply_reach_open() {
+        assert_eq!(
+            web_link("https://example.com/a b").map(|u| u.to_string()),
+            Ok("https://example.com/a%20b".to_string())
+        );
+        assert_eq!(
+            web_link("HTTP://example.com").map(|u| u.to_string()),
+            Ok("http://example.com/".to_string())
+        );
+        assert_eq!(
+            web_link("file:///etc/passwd"),
+            Err("Only web links open from a reply, not file: links.".to_string())
+        );
+        assert_eq!(
+            web_link("x-apple.systempreferences:com.apple.wifi-settings-extension"),
+            Err("Only web links open from a reply, not x-apple.systempreferences: links.".to_string())
+        );
+        assert_eq!(
+            web_link("-a Terminal"),
+            Err("-a Terminal is not a link: relative URL without a base".to_string())
         );
     }
 
