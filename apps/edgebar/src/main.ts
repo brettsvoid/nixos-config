@@ -20,6 +20,7 @@ import { SPRING } from "./motion";
 import { current, onChange } from "./settings";
 import type { NotchView, ViewHandle } from "./notch/view";
 import { home, views } from "./notch/views";
+import { fadeIn, stepWave, swell } from "./wave";
 
 // ---- tuned constants (named so each value lives in one place) ----
 const POLL = {
@@ -48,17 +49,12 @@ const NOTCH = {
 } as const;
 // The media playhead, after Android's lock-screen player: a travelling sine
 // over the played part, a rounded thumb, a flat rule for the rest. The sine
-// flattens when paused. `wavelength` is in px so the pitch is width-independent;
-// `ease` is the per-frame approach to the target amplitude; `speed` is rad/sec.
+// flattens when paused. `wavelength` is in px so the pitch is width-independent.
 const WAVE = {
   amp: 2.2,
   wavelength: 22,
-  speed: 2.4,
-  ease: 0.15,
   line: 2,
   thumb: { w: 4, h: 12, gap: 2.5 }, // px; `gap` clears it either side
-  rampPx: 8, // px of played track over which the wave swells to full amplitude
-  fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
 } as const;
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
@@ -727,10 +723,10 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) 
       const len = waveTo - pad;
       // Swell the amplitude over the first stretch, so the squiggle grows out
       // of the left edge.
-      const grow = Math.min(1, len / WAVE.rampPx);
+      const grow = swell(len);
       // Fade it in over a shorter run: round caps paint even a hairline-long
       // stroke as a line-width blob, which would otherwise pop in.
-      const fade = Math.min(1, len / WAVE.fadeInPx);
+      const fade = fadeIn(len);
       const waveY = (x: number) =>
         y + media.amp * grow * Math.sin((2 * Math.PI * x) / WAVE.wavelength + media.phase);
       waveCtx.globalAlpha = fade;
@@ -755,11 +751,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) 
   let waveRaf = 0;
   function waveFrame(now: number) {
     waveRaf = 0;
-    const dt = media.last ? Math.min(0.05, (now - media.last) / 1000) : 0;
-    media.last = now;
-    media.amp += ((media.playing ? WAVE.amp : 0) - media.amp) * WAVE.ease;
-    if (!media.playing && media.amp < 0.05) media.amp = 0; // settle, don't wobble
-    if (media.playing) media.phase += WAVE.speed * dt;
+    stepWave(media, now, media.playing, WAVE.amp);
     paintWave();
     // Loop only while something moves: playing, or flattening after a pause.
     if (!niMedia.hidden && (media.playing || media.amp > 0)) {

@@ -4,6 +4,7 @@ import { call, on, type MediaState } from "../../ipc";
 import { lucide, TRANSPORT } from "../../icons";
 import { setLine } from "../../marquee";
 import { SPRING } from "../../motion";
+import { fadeIn, stepWave, swell } from "../../wave";
 import type { Widget } from "../view";
 
 const AREA = { w: 156, h: 138 } as const;
@@ -12,12 +13,8 @@ const RING = {
   r: 70,
   amp: 2,
   wavelength: 26,
-  speed: 2.4,
-  ease: 0.15,
   line: 4,
   tick: { h: 10, gap: 3 },
-  rampPx: 8,
-  fadeInPx: 3,
 } as const;
 const SPIN_SEC = 8;
 
@@ -140,24 +137,20 @@ export const player: Widget = (root) => {
     }
     let d = "";
     for (let s = 0; ; s = Math.min(s + 2, len)) {
-      const grow = Math.min(1, s / RING.rampPx);
+      const grow = swell(s);
       const r =
         RING.r + wave.amp * grow * Math.sin((2 * Math.PI * s) / RING.wavelength + wave.phase);
       d += (s === 0 ? "M" : "L") + pt(Math.PI + s / RING.r, r);
       if (s >= len) break;
     }
     played.setAttribute("d", d);
-    played.style.opacity = String(Math.min(1, len / RING.fadeInPx));
+    played.style.opacity = String(fadeIn(len));
   }
 
   function frame(now: number) {
     wave.raf = 0;
-    const dt = wave.last ? Math.min(0.05, (now - wave.last) / 1000) : 0;
-    wave.last = now;
     const moving = live();
-    wave.amp += ((moving ? RING.amp : 0) - wave.amp) * RING.ease;
-    if (!moving && wave.amp < 0.05) wave.amp = 0;
-    if (moving) wave.phase += RING.speed * dt;
+    stepWave(wave, now, moving, RING.amp);
     paint();
     if (visible && (moving || wave.amp > 0)) wave.raf = requestAnimationFrame(frame);
   }
