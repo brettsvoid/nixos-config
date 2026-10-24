@@ -1,5 +1,5 @@
 import "./styles.css";
-import { animate, stagger } from "motion";
+import { animate, motionValue } from "motion";
 import {
   call,
   on,
@@ -38,10 +38,12 @@ const CPU_GRAPH = {
   thresholds: { hot: 0.7, warm: 0.3, mild: 0.1 },
 } as const;
 const LAYOUT = {
-  hiddenY: -48, // px above the top edge (clipped by the window)
-  windowExpandedH: 280, // bar-window height while a panel is open
-  popupTuck: -8, // px a dropdown starts tucked up (hidden) before sliding in
-  settleDelay: 600, // ms to let the reveal spring settle before hit-testing
+  // px of bar window kept below an open drawer, for its shadow and the
+  // launcher's fillet into the frame's side
+  drawerRoom: 32,
+  // ms for the first replies (network, battery) to size their segments before
+  // the second hit-test report
+  settleDelay: 600,
 } as const;
 // Collapsed notch sizing: one width per state, not sized to content, so the
 // bar doesn't twitch on every track change. Long text marquees instead.
@@ -65,7 +67,7 @@ const WAVE = {
   fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
 } as const;
 const FALLBACK = { barHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
-// Interactive-rect sentinel: the whole window is hit-testable while a panel is open.
+// Interactive-rect sentinel: the whole window is hit-testable while a drawer is open.
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
 // Apply the shared config (also read by the native frame) as CSS variables,
@@ -108,36 +110,25 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
-// Panel width outside the tab body: side padding (2 × --space-6), the rail
-// (48px) and its gap (--space-4). Keep in step with .notch-panel / .rail-tab.
-const PANEL_CHROME = 12 * 2 + 48 + 8;
-// An open view's bar window is its height plus this (400 + 48 = 448 for every
-// view the old per-view table listed).
-const WINDOW_PAD = 48;
+// The open notch's chrome around a view's body: the drawer's padding on each
+// side, plus the rail (48px) and its gap beside the body. Keep in step with
+// --drawer-pad, .rail-tab and .notch-panel's gap.
+const NOTCH_CHROME = { w: 16 * 2 + 48 + 8, h: 16 * 2 } as const;
 
 function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
-  const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
+  const segments = [...document.querySelectorAll<HTMLElement>(".seg")];
 
-  let shown = false;
-  let hovering = false;
-
-  // Hover auto-hide, off because it fought the auto-hidden macOS menu bar.
-  const AUTO_HIDE = false;
-
-  // ---- expandable-panel window sizing ------------------------------------
-  // Open panels need a taller (transparent) bar window. It's shared, so it's
-  // tall while any panel is open and back to base once all are closed. Base is
-  // geometry.windowHeight, the size lib.rs creates the window at.
-  const WINDOW_BASE_H = windowHeight;
-  const COLLAPSED_H = barHeight;
-  const openPanels = new Set<string>();
-  // Bar-window height while a panel is open: the popup height by default,
-  // raised by the notch's views (showView) and reset when the notch closes.
-  let expandedWindowH: number = LAYOUT.windowExpandedH;
+  // ---- bar window sizing --------------------------------------------------
+  // An open drawer needs a taller (transparent) bar window. The window is
+  // shared, so it fits the tallest open drawer and goes back to
+  // geometry.windowHeight, the size lib.rs creates it at, once all are closed.
+  const drawerHeights = new Map<string, number>();
   let lastWindowH = -1;
 
   async function syncWindowHeight() {
-    const target = openPanels.size > 0 ? expandedWindowH : WINDOW_BASE_H;
+    const tallest = Math.max(0, ...drawerHeights.values());
+    const target =
+      drawerHeights.size > 0 ? barHeight + tallest + LAYOUT.drawerRoom : windowHeight;
     if (target === lastWindowH) return;
     lastWindowH = target;
     await call("set_bar_size", {
@@ -147,23 +138,23 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     reportInteractiveRects();
   }
 
-  // True while the playhead is dragged. Like an open panel, it makes the whole
-  // window interactive, or a scrub that strays off the pill would go
+  // True while the playhead is dragged. Like an open drawer, it makes the whole
+  // window interactive, or a scrub that strays off the notch would go
   // click-through and stop receiving pointer events.
   let scrubbing = false;
   let rectsScheduled = false;
   // Tell lib.rs's click-through tracker which regions stay interactive: the
-  // pills, or the whole window while a popup is open (so an outside click
-  // reaches the bar and closes it). Coalesced to one IPC per frame.
+  // band's segments, or the whole window while a drawer is open (so an outside
+  // click reaches the bar and closes it). Coalesced to one IPC per frame.
   function reportInteractiveRects() {
     if (rectsScheduled) return;
     rectsScheduled = true;
     requestAnimationFrame(() => {
       rectsScheduled = false;
       const rects =
-        openPanels.size > 0 || scrubbing
+        drawerHeights.size > 0 || scrubbing
           ? [RECT_WHOLE_WINDOW]
-          : pills
+          : segments
               .map((p) => {
                 const r = p.getBoundingClientRect();
                 return [r.left, r.top, r.width, r.height];
@@ -174,99 +165,79 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   }
   window.addEventListener("resize", reportInteractiveRects);
 
-  interface PanelOpts {
+  // ---- drawers: the notch, the controls and the launcher -------------------
+  // A drawer is a box that grows down out of the band. Its `--reach` is how far
+  // it shows below the band: 0 when closed, its body's height when open. The
+  // body rides the box's lower edge, so it slides out from behind the band.
+  interface DrawerOpts {
     id: string;
-    pill: HTMLElement;
-    header: HTMLElement; // the always-visible strip that toggles expansion
-    panel: HTMLElement; // the content faded in on expand
-    width: number;
-    height: number;
-    onOpen?: () => void;
+    root: HTMLElement; // holds the toggle and the drawer; a click outside closes it
+    toggle: HTMLElement;
+    box: HTMLElement; // the .drawer
+    body: HTMLElement; // its .drawer-body, whose height is how far it opens
+    onOpen?: () => void | Promise<void>;
     onClose?: () => void;
-    /// Width to collapse back to. Omit it to reuse the width captured on
-    /// expand; the notch can't, as its collapsed width changes while open.
-    collapsedWidth?: () => number;
   }
 
-  interface Panel {
-    pill: HTMLElement;
+  interface Drawer {
+    root: HTMLElement;
     isOpen: () => boolean;
-    collapse: () => void;
+    close: () => Promise<void>;
+    // Follow a change in the body's height, such as the notch switching views.
+    resize: () => void;
   }
 
-  function makePanel(o: PanelOpts): Panel {
+  function makeDrawer(o: DrawerOpts): Drawer {
     let open = false;
-    let collapsedW = 0;
+    const reach = motionValue(0);
+    reach.on("change", (v) => o.box.style.setProperty("--reach", `${Math.max(0, v)}px`));
+    // Read by the CSS (a closed drawer is hidden) and by scripts/snap-states.sh.
+    const setState = (state: "opening" | "open" | "closing" | "closed") => {
+      o.box.dataset.state = state;
+    };
+    setState("closed");
 
-    async function expand() {
+    async function show() {
       if (open) return;
       open = true;
-      collapsedW = o.pill.offsetWidth;
-      o.onOpen?.();
-      openPanels.add(o.id);
+      await o.onOpen?.();
+      if (!open) return; // closed again while it loaded
+      drawerHeights.set(o.id, o.body.offsetHeight);
       await syncWindowHeight();
-      animate(o.pill, { width: o.width, height: o.height }, SPRING.drawer);
-      animate(o.panel, { opacity: 1 }, SPRING.fade);
+      setState("opening");
+      await animate(reach, o.body.offsetHeight, SPRING.drawer).finished;
+      if (open) setState("open");
     }
 
-    async function collapse() {
+    async function close() {
       if (!open) return;
       open = false;
       o.onClose?.();
-      animate(o.panel, { opacity: 0 }, SPRING.fade);
-      const target = o.collapsedWidth?.() ?? collapsedW;
-      await animate(
-        o.pill,
-        { width: target, height: COLLAPSED_H },
-        SPRING.drawer,
-      ).finished;
-      // Hand the width back to CSS, unless it comes from `collapsedWidth`,
-      // which CSS knows nothing about.
-      if (!o.collapsedWidth) o.pill.style.width = "";
-      o.pill.style.height = "";
-      openPanels.delete(o.id);
+      setState("closing");
+      await animate(reach, 0, SPRING.drawer).finished;
+      if (open) return; // opened again before it shut
+      setState("closed");
+      drawerHeights.delete(o.id);
       await syncWindowHeight();
-      if (AUTO_HIDE && !hovering) hideBar();
     }
 
-    // Only the header toggles, so clicks on panel content don't collapse it.
-    o.header.addEventListener("click", (e) => {
+    function resize() {
+      if (!open) return;
+      drawerHeights.set(o.id, o.body.offsetHeight);
+      void syncWindowHeight();
+      animate(reach, o.body.offsetHeight, SPRING.drawer);
+    }
+
+    o.toggle.addEventListener("click", (e) => {
       e.stopPropagation();
-      open ? collapse() : expand();
+      void (open ? close() : show());
     });
 
-    return { pill: o.pill, isOpen: () => open, collapse };
+    return { root: o.root, isOpen: () => open, close, resize };
   }
 
-  // ---- show / hide --------------------------------------------------------
-  function showBar() {
-    if (shown) return;
-    shown = true;
-    animate(
-      pills,
-      { y: 0, opacity: 1 },
-      { ...SPRING.move, delay: stagger(0.05) },
-    );
-  }
-  function hideBar() {
-    if (!AUTO_HIDE) return;
-    if (!shown || openPanels.size > 0) return;
-    shown = false;
-    animate(
-      pills,
-      { y: LAYOUT.hiddenY, opacity: 0 },
-      { ...SPRING.move, delay: stagger(0.03) },
-    );
-  }
-
-  document.addEventListener("mouseenter", () => {
-    hovering = true;
-    showBar();
-  });
   document.addEventListener("mouseleave", () => {
-    hovering = false;
-    for (const p of panels) p.collapse();
-    hideBar();
+    for (const d of drawers) void d.close();
   });
 
   // ---- clock --------------------------------------------------------------
@@ -297,17 +268,15 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
 
   // ---- centre notch: the dashboard / wallpapers / performance hub ---------
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
-  // Collapsed notch width, updated by renderNotch. Read on collapse so the pill
-  // returns to the width for its *current* content, not the one it had on open.
-  let notchCollapsedW: number = NOTCH.idleW;
-  const notchPanel = makePanel({
+  const notchBox = notchEl.querySelector<HTMLElement>(".notch-drawer")!;
+  const notchBody = notchBox.querySelector<HTMLElement>(".notch-panel")!;
+  let notchW: number = NOTCH.idleW; // the collapsed row's width, set by renderNotch
+  const notchDrawer = makeDrawer({
     id: "notch",
-    pill: notchEl,
-    header: notchEl.querySelector<HTMLElement>(".notch-row")!,
-    panel: notchEl.querySelector<HTMLElement>(".notch-panel")!,
-    width: home.size.w,
-    height: home.size.h,
-    collapsedWidth: () => notchCollapsedW,
+    root: notchEl,
+    toggle: notchEl.querySelector<HTMLElement>(".notch-row")!,
+    box: notchBox,
+    body: notchBody,
     onOpen: openViews,
     onClose: closeViews,
   });
@@ -323,6 +292,12 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const briRange = controlsEl.querySelector<HTMLInputElement>(
     '.slider-row[data-k="brightness"] .s-range',
   )!;
+  const ranges = [volRange, micRange, briRange];
+
+  // The track fills in `--primary` up to the handle; a range input has no
+  // part for that, so its background reads this.
+  const paintRange = (r: HTMLInputElement) => r.style.setProperty("--fill", `${r.value}%`);
+  for (const r of ranges) r.addEventListener("input", () => paintRange(r));
 
   async function loadControls() {
     try {
@@ -334,6 +309,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     } catch {
       /* ignore */
     }
+    ranges.forEach(paintRange);
   }
   volRange.addEventListener(
     "input",
@@ -351,104 +327,40 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     ),
   );
 
-  // A floating dropdown with its own width, so the pill stays a small cog
-  // button. Mirrors the launcher menu.
-  const ctlBtn = document.querySelector<HTMLElement>("#ctl-btn")!;
-  const ctlPanelEl = controlsEl.querySelector<HTMLElement>(".ctl-panel")!;
-  let controlsOpen = false;
-  animate(ctlPanelEl, { y: LAYOUT.popupTuck }, { duration: 0 }); // start tucked up (hidden)
-
-  async function openControls() {
-    if (controlsOpen) return;
-    controlsOpen = true;
-    openPanels.add("controls");
-    await syncWindowHeight();
-    await loadControls();
-    ctlPanelEl.style.pointerEvents = "auto";
-    animate(
-      ctlPanelEl,
-      { opacity: 1, y: 0 },
-      SPRING.drawer,
-    );
-  }
-  async function closeControls() {
-    if (!controlsOpen) return;
-    controlsOpen = false;
-    ctlPanelEl.style.pointerEvents = "none";
-    await animate(
-      ctlPanelEl,
-      { opacity: 0, y: LAYOUT.popupTuck },
-      SPRING.fade,
-    ).finished;
-    openPanels.delete("controls");
-    await syncWindowHeight();
-  }
-  ctlBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    controlsOpen ? closeControls() : openControls();
+  const ctlBox = controlsEl.querySelector<HTMLElement>(".ctl-panel")!;
+  const controlsDrawer = makeDrawer({
+    id: "controls",
+    root: controlsEl,
+    toggle: document.querySelector<HTMLElement>("#ctl-btn")!,
+    box: ctlBox,
+    body: ctlBox.querySelector<HTMLElement>(".drawer-body")!,
+    onOpen: loadControls,
   });
-  // Same shape as makePanel() so outside-click / mouse-leave close it.
-  const controlsPanel = {
-    pill: controlsEl,
-    isOpen: () => controlsOpen,
-    collapse: closeControls,
-  };
 
-  // ---- launcher: ⌘ quick-actions menu (drops down from the workspaces pill)
-  const wsPill = document.querySelector<HTMLElement>("#workspaces")!;
-  const launcherBtn = document.querySelector<HTMLElement>("#launcher-btn")!;
-  const menuPanel = wsPill.querySelector<HTMLElement>(".menu-panel")!;
-  let launcherOpen = false;
-  animate(menuPanel, { y: LAYOUT.popupTuck }, { duration: 0 }); // start tucked up (hidden)
-
-  async function openLauncher() {
-    if (launcherOpen) return;
-    launcherOpen = true;
-    openPanels.add("launcher");
-    await syncWindowHeight();
-    menuPanel.style.pointerEvents = "auto";
-    animate(
-      menuPanel,
-      { opacity: 1, y: 0 },
-      SPRING.drawer,
-    );
-  }
-  async function closeLauncher() {
-    if (!launcherOpen) return;
-    launcherOpen = false;
-    menuPanel.style.pointerEvents = "none";
-    await animate(
-      menuPanel,
-      { opacity: 0, y: LAYOUT.popupTuck },
-      SPRING.fade,
-    ).finished;
-    openPanels.delete("launcher");
-    await syncWindowHeight();
-  }
-  launcherBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    launcherOpen ? closeLauncher() : openLauncher();
+  // ---- launcher: the ⌘ quick-actions menu ---------------------------------
+  const wsEl = document.querySelector<HTMLElement>("#workspaces")!;
+  const menuBox = wsEl.querySelector<HTMLElement>(".menu-panel")!;
+  const launcherDrawer = makeDrawer({
+    id: "launcher",
+    root: wsEl,
+    toggle: document.querySelector<HTMLElement>("#launcher-btn")!,
+    box: menuBox,
+    body: menuBox.querySelector<HTMLElement>(".drawer-body")!,
   });
-  for (const btn of menuPanel.querySelectorAll<HTMLElement>(".menu-item")) {
+  for (const btn of menuBox.querySelectorAll<HTMLElement>(".menu-item")) {
     btn.addEventListener("click", () => {
       call("launcher_action", { action: btn.dataset.action! });
-      closeLauncher();
+      void launcherDrawer.close();
     });
   }
-  // Same shape as makePanel() so outside-click / mouse-leave close it.
-  const launcherPanel = {
-    pill: wsPill,
-    isOpen: () => launcherOpen,
-    collapse: closeLauncher,
-  };
 
-  const panels = [notchPanel, controlsPanel, launcherPanel];
+  const drawers = [notchDrawer, controlsDrawer, launcherDrawer];
 
-  // Click outside an open panel collapses it.
+  // Click outside an open drawer closes it.
   document.addEventListener("click", (e) => {
     const t = e.target as Node;
-    for (const p of panels) {
-      if (p.isOpen() && !p.pill.contains(t)) p.collapse();
+    for (const d of drawers) {
+      if (d.isOpen() && !d.root.contains(t)) void d.close();
     }
   });
 
@@ -1038,16 +950,12 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     }
 
     const width = shown ? NOTCH.itemW : NOTCH.idleW;
-    if (width === notchCollapsedW) return;
-    notchCollapsedW = width;
-    // While a panel is open the view owns the width; collapse picks the new
-    // value up via `collapsedWidth`. Report rects once the spring settles, not
-    // mid-flight.
-    if (!notchPanel.isOpen()) {
-      animate(notchEl, { width }, SPRING.move)
-        .finished.then(reportInteractiveRects)
-        .catch(() => {}); // superseded by a newer item; that one reports instead
-    }
+    if (width === notchW) return;
+    notchW = width;
+    // Report rects once the spring settles, not mid-flight.
+    animate(notchEl, { width }, SPRING.move)
+      .finished.then(reportInteractiveRects)
+      .catch(() => {}); // superseded by a newer item; that one reports instead
   }
 
   function pushNotch(item: NotchItem | null) {
@@ -1082,9 +990,8 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   // ---- notch views: the rail, switching and window sizing -----------------
   // notch/views.ts lists what the rail shows. Each view owns its DOM, state and
   // CSS and is built when the notch first opens; this section only places them.
-  const notchPanelEl = notchEl.querySelector<HTMLElement>(".notch-panel")!;
-  const tabBody = notchPanelEl.querySelector<HTMLElement>(".tab-body")!;
-  const railEl = notchPanelEl.querySelector<HTMLElement>(".dash-rail")!;
+  const tabBody = notchBody.querySelector<HTMLElement>(".tab-body")!;
+  const railEl = notchBody.querySelector<HTMLElement>(".dash-rail")!;
   const railTabs = new Map<string, HTMLElement>();
   const viewEls = new Map<string, HTMLElement>();
   const handles = new Map<string, ViewHandle>();
@@ -1102,7 +1009,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     tab.classList.toggle("rail-foot", entry.rail === "foot");
     tab.innerHTML = `<span class="icon">${entry.icon}</span>`;
     if (isView(entry)) {
-      tab.classList.add("view-switch");
       tab.title = entry.title;
       tab.dataset.to = entry.id;
       tab.addEventListener("click", (e) => {
@@ -1151,37 +1057,36 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   function showView(view: NotchView) {
     if (shownView && shownView !== view.id) handles.get(shownView)?.hide?.();
     shownView = view.id;
-    // Pin the body to the view's final width before the pill springs, or fluid
-    // layouts inside (the wallpaper grid's auto-fill) reflow every frame.
-    // .notch-panel-clip crops it while the pill catches up.
-    tabBody.style.width = `${view.size.w - PANEL_CHROME}px`;
+    // Pin the body to the view's size before the drawer springs, or fluid
+    // layouts inside (the wallpaper grid's auto-fill) reflow every frame. The
+    // drawer body clips it while the box catches up.
+    tabBody.style.width = `${view.size.w}px`;
+    notchBody.style.height = `${view.size.h + NOTCH_CHROME.h}px`;
     for (const [id, el] of viewEls) el.hidden = id !== view.id;
     // The rail survives the view swap, so move its highlight.
     for (const [id, tab] of railTabs) tab.classList.toggle("active", id === view.id);
-    expandedWindowH = view.size.h + WINDOW_PAD;
     handles.get(view.id)?.show?.();
   }
 
-  async function switchView(id: string) {
+  function switchView(id: string) {
     const view = views.find((v) => v.id === id);
     if (!view || shownView === id) return;
     showView(view);
-    animate(notchEl, { width: view.size.w, height: view.size.h }, SPRING.drawer);
-    await syncWindowHeight();
+    animate(notchBox, { width: view.size.w + NOTCH_CHROME.w }, SPRING.drawer);
+    notchDrawer.resize();
   }
 
   function openViews() {
     mountViews();
     showView(home); // always open on the dashboard, as ambxst does
+    // It opens at its width; only a view switch eases it.
+    notchBox.style.width = `${home.size.w + NOTCH_CHROME.w}px`;
     for (const handle of handles.values()) handle.open?.();
   }
 
   function closeViews() {
     if (shownView) handles.get(shownView)?.hide?.();
     shownView = null;
-    // Back to the popup height, so the controls/launcher popups don't inherit
-    // the notch's taller window.
-    expandedWindowH = LAYOUT.windowExpandedH;
   }
 
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
@@ -1194,9 +1099,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
 
   // ---- init ---------------------------------------------------------------
   tickMinute(); // start the per-minute clock (updates immediately)
-  animate(pills, { y: LAYOUT.hiddenY, opacity: 0 }, { duration: 0 });
-  requestAnimationFrame(showBar);
-  // Seed the click-through rects once the reveal spring has settled (pill
-  // transforms skew getBoundingClientRect mid-animation).
+  reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
 }

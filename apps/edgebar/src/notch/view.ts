@@ -12,7 +12,8 @@ export interface RailButton {
 }
 
 export interface NotchView extends RailButton {
-  size: { w: number; h: number }; // the open notch's size while this view shows
+  // The view's own area in the open notch; the shell adds the rail and padding.
+  size: { w: number; h: number };
   // Builds the view's DOM inside `root`, once, when the notch first opens.
   mount(root: HTMLElement, ctx: ViewContext): ViewHandle;
 }
