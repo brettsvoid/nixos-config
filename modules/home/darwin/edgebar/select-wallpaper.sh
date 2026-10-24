@@ -1,8 +1,9 @@
-# Select a desktop wallpaper from ~/Pictures/Wallpapers: an interactive menu
-# with no argument, otherwise by number or filename substring (e.g.
-# `select-wallpaper rem`), then re-theme edgebar directly. `desktoppr` and
-# `generate-edgebar-theme` come from writeShellApplication's runtimeInputs.
-wall_dir="$HOME/Pictures/Wallpapers"
+# Select a desktop wallpaper from edgebar's wallpaper folder: an interactive
+# menu with no argument, otherwise by number or filename substring (e.g.
+# `select-wallpaper rem`), then re-theme edgebar directly. `desktoppr`,
+# `generate-edgebar-theme` and `edgebar-wallpaper-folder` come from
+# writeShellApplication's runtimeInputs.
+wall_dir="$(edgebar-wallpaper-folder)"
 cd "$wall_dir" || exit 1
 shopt -s nullglob
 files=(*.jpg *.jpeg *.png *.webp)

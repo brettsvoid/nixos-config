@@ -120,6 +120,17 @@ in
         fi
       '';
 
+      # The folder the wallpaper commands pick from: edgebar's own setting, so
+      # they agree with the Wallpapers view.
+      edgebar-wallpaper-folder = pkgs.writeShellApplication {
+        name = "edgebar-wallpaper-folder";
+        runtimeInputs = [ pkgs.jq ];
+        runtimeEnv.DEFAULT_FOLDER = defaults.wallpaper.folder;
+        # The folder's `~` is literal until the script expands it.
+        excludeShellChecks = [ "SC2088" ];
+        text = builtins.readFile ./edgebar/wallpaper-folder.sh;
+      };
+
       # Wallpaper commands. Each sets the desktop picture and re-themes edgebar
       # directly; the launchd watcher below covers changes made elsewhere.
       cycle-wallpaper = pkgs.writeShellApplication {
@@ -127,6 +138,7 @@ in
         runtimeInputs = [
           pkgs.desktoppr
           generate-edgebar-theme
+          edgebar-wallpaper-folder
         ];
         text = builtins.readFile ./edgebar/cycle-wallpaper.sh;
       };
@@ -135,6 +147,7 @@ in
         runtimeInputs = [
           pkgs.desktoppr
           generate-edgebar-theme
+          edgebar-wallpaper-folder
         ];
         text = builtins.readFile ./edgebar/select-wallpaper.sh;
       };
