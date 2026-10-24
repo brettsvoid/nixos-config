@@ -1,4 +1,5 @@
-/* a tall brightness slider over two dials */
+/* Column 4 (ambxst's control rail): a tall brightness slider over two dials,
+   each a full-round tile like the rail's buttons opposite. */
 .dash-controls {
   display: flex;
   flex-direction: column;
@@ -6,18 +7,134 @@
   gap: var(--space-4);
   min-height: 0;
 }
-.ph-vslider {
+
+/* ---- brightness: a 4 px track with a short handle, the sun at its foot ---- */
+.ctl-bri {
+  position: relative;
   flex: 1 1 auto;
   width: 48px;
-  padding: var(--space-3) 0;
+  border-radius: 24px;
+  background: var(--surface-container);
+  cursor: ns-resize;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
-.ph-vslider .ph-name {
-  writing-mode: vertical-rl; /* the label runs with the slider's travel */
+.ctl-bri:hover:not(.disabled) {
+  background: var(--surface-container-high);
 }
-.ph-dial {
+.ctl-bri.disabled {
+  cursor: default;
+}
+.ctl-bri.disabled > * {
+  opacity: var(--dim-more);
+}
+/* --v (0..1) is the level; the fill and the rest stop short of the handle by
+   its half-height plus a 4 px gap */
+.bri-track {
+  --v: 0;
+  --clear: 6px;
+  position: absolute;
+  top: 18px;
+  bottom: 40px;
+  left: 50%;
+  width: 4px;
+  translate: -50% 0;
+}
+.bri-track > i {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-radius: 2px;
+}
+.bri-fill {
+  bottom: 0;
+  height: max(0px, calc(var(--v) * 100% - var(--clear)));
+  background: var(--primary);
+}
+.bri-rest {
+  top: 0;
+  height: max(0px, calc((1 - var(--v)) * 100% - var(--clear)));
+  background: var(--surface-bright);
+}
+.bri-track > .bri-handle {
+  left: 50%;
+  bottom: calc(var(--v) * 100%);
+  width: 20px;
+  height: 4px;
+  translate: -50% 50%;
+  background: var(--primary);
+}
+.ctl-bri.disabled .bri-handle {
+  display: none;
+}
+/* The level, beside the handle while it is dragged: out to the left of the
+   rail, since the rail is the dashboard's right edge. */
+.bri-label {
+  position: absolute;
+  right: calc(100% + 28px); /* the track's offset in the rail, plus a gap */
+  bottom: calc(var(--v) * 100%);
+  translate: 0 50%;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.ctl-bri.dragging .bri-label {
+  opacity: 1;
+}
+.bri-icon {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 50%;
+  translate: -50% 0;
+  font-size: var(--font-lg);
+}
+
+/* ---- volume and mic: a 270° arc open at the bottom, the icon inside ---- */
+.ctl-dial {
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: none;
   width: 48px;
   height: 48px;
-  padding: 0;
-  border-radius: 50%; /* the dial it stands in for is a ring */
+  border-radius: 50%;
+  background: var(--surface-container);
+  cursor: ns-resize;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.ctl-dial:hover {
+  background: var(--surface-container-high);
+}
+.ctl-dial > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ctl-dial > svg path {
+  fill: none;
+  stroke-width: 4px;
+  stroke-linecap: round;
+}
+.dial-rest {
+  stroke: var(--surface-bright);
+}
+.dial-fill,
+.dial-tick {
+  stroke: var(--primary);
+}
+.ctl-dial.muted .dial-fill,
+.ctl-dial.muted .dial-tick {
+  stroke: var(--surface-bright);
+}
+.dial-icon {
+  font-size: var(--font-lg);
+}
+.ctl-dial.muted .dial-icon {
+  color: var(--on-surface-variant);
 }
