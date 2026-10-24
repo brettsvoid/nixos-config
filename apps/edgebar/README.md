@@ -63,6 +63,24 @@ the first stdout line as the headline and the second as the dim line, and are
 killed after 2s. Workspaces with no rule fall through to the media readout —
 which is the point of the ladder.
 
+## Quick toggles
+
+The dashboard's five toggles live in `src-tauri/src/toggles.rs`, one table row
+each. edgebar inherits kitty's permissions through herdr, which is what makes
+the Focus file readable.
+
+| Toggle | Read | Write |
+|---|---|---|
+| Wi-Fi | CoreWLAN `powerOn` | `networksetup -setairportpower` |
+| Bluetooth | the `com.apple.bluetooth.power` notify key | IOBluetooth's private power setter, which asks for Bluetooth permission for kitty |
+| Focus | `~/Library/DoNotDisturb/DB/Assertions.json` (needs Full Disk Access) | runs the Shortcut named in `toggles.focusShortcut` |
+| Night Shift | CoreBrightness `CBBlueLightClient` | the same client's `setEnabled:` |
+| Caffeine | a `caffeinate -di -w <edgebar's pid>` child is alive | starts or kills that child |
+
+donotdisturbd refuses XPC from unentitled processes, so the Focus toggle stays
+read-only until a Shortcut called "Toggle Focus" exists. Make one in Shortcuts
+with a single **Set Focus** action set to Do Not Disturb and Toggle.
+
 ## Config & theming
 
 Both are Nix-rendered, not committed live files:

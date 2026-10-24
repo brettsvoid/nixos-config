@@ -21,6 +21,9 @@ mod metrics;
 /// Notification history, read from a copy of macOS's store.
 mod notifications;
 
+/// The dashboard's quick toggles: Wi-Fi, Bluetooth, Focus, Night Shift, Caffeine.
+mod toggles;
+
 /// Debug-only socket that drives and snapshots the live bar.
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod devtools;
@@ -110,6 +113,9 @@ struct Config {
     /// Per-workspace notch rules + the idle fallback. See `notch.rs`.
     #[serde(default)]
     notch: notch::NotchConfig,
+    /// The quick toggles' settings. See `toggles.rs`.
+    #[serde(default)]
+    toggles: toggles::TogglesConfig,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colours resolved
@@ -2651,6 +2657,8 @@ pub fn run() {
             notifications::notification_history,
             notifications::notification_dismiss,
             notifications::notification_clear,
+            toggles::toggles,
+            toggles::set_toggle,
             #[cfg(all(debug_assertions, target_os = "macos"))]
             devtools::dev_result
         ])
@@ -2699,6 +2707,7 @@ pub fn run() {
             // The notch store, managed before the workspace socket below, which
             // publishes into it.
             app.manage(notch::NotchState::new(config.notch));
+            app.manage(toggles::Toggles::new(config.toggles));
 
             // Per-display chrome, rebuilt on every display-config change.
             #[cfg(target_os = "macos")]
