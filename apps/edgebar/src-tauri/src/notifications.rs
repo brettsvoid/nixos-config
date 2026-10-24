@@ -415,7 +415,7 @@ fn history(app: &tauri::AppHandle) -> NotificationHistory {
 #[tauri::command]
 pub async fn notification_history(app: tauri::AppHandle) -> NotificationHistory {
     tauri::async_runtime::spawn_blocking(move || {
-        if !crate::load_config().notifications.history {
+        if !crate::settings::current(&app).notifications.history {
             return NotificationHistory {
                 access: Access::Off,
                 items: Vec::new(),

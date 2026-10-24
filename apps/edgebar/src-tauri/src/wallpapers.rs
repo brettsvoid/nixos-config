@@ -27,13 +27,9 @@ fn expand_home(folder: &str, home: &Path) -> PathBuf {
     }
 }
 
-pub fn folder() -> Option<PathBuf> {
+pub fn folder(config: &WallpaperConfig) -> Option<PathBuf> {
     let home = PathBuf::from(std::env::var_os("HOME")?);
-    Some(expand_home(&super::load_config().wallpaper.folder, &home))
-}
-
-pub fn tint_on() -> bool {
-    super::load_config().wallpaper.tint
+    Some(expand_home(&config.folder, &home))
 }
 
 pub struct Found {
@@ -453,7 +449,8 @@ pub fn spawn_converge(app: &tauri::AppHandle) {
     tauri::async_runtime::spawn_blocking(move || {
         let desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         QUEUED.store(false, Ordering::SeqCst);
-        let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, tint_on(), &dir, None));
+        let tint = crate::settings::current(&app).wallpaper.tint;
+        let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, tint, &dir, None));
         announce(&app, shown);
     });
 }
@@ -781,7 +778,10 @@ mod tests {
     #[test]
     #[ignore = "live: reads ~/.config/edgebar/config.json and the wallpaper folder"]
     fn live_scan_the_real_folder() {
-        let dir = folder().unwrap();
+        let config = crate::settings::load(crate::settings::dir().as_deref())
+            .config
+            .wallpaper;
+        let dir = folder(&config).unwrap();
         let found = scan(&dir);
         let mut kinds: Vec<&str> = found.iter().map(|f| f.kind.as_str()).collect();
         kinds.sort_unstable();
@@ -792,7 +792,7 @@ mod tests {
             dir.display(),
             found.len(),
             folders.iter().any(|f| !f.is_empty()),
-            tint_on()
+            config.tint
         );
         assert!(!found.is_empty());
     }

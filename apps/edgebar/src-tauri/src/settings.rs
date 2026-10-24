@@ -1,4 +1,4 @@
-use crate::{apply_theme, reload_theme, resolve_notch_idle, Appearance, Config, ThemeState};
+use crate::{apply_theme, resolve_notch_idle, Appearance, Config, ThemeState};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
@@ -325,7 +325,8 @@ struct Changes {
     idle: bool,
     rules: bool,
     flash_hold: bool,
-    wallpaper: bool,
+    oled: bool,
+    tint: bool,
     toggles: bool,
 }
 
@@ -337,7 +338,8 @@ fn changes(prev: &Config, next: &Config) -> Changes {
         idle: prev.notch.idle != next.notch.idle,
         rules: prev.notch.workspaces != next.notch.workspaces,
         flash_hold: prev.notch.transient_ms != next.notch.transient_ms,
-        wallpaper: prev.oled != next.oled || prev.wallpaper.tint != next.wallpaper.tint,
+        oled: prev.oled != next.oled,
+        tint: prev.wallpaper.tint != next.wallpaper.tint,
         toggles: prev.toggles != next.toggles,
     }
 }
@@ -345,7 +347,7 @@ fn changes(prev: &Config, next: &Config) -> Changes {
 fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
     let c = changes(prev, next);
 
-    if c.colors || c.appearance || c.geometry || c.idle {
+    if c.colors || c.appearance || c.geometry || c.idle || c.oled {
         let idle = c
             .idle
             .then(|| resolve_notch_idle(next.notch.idle.as_deref()));
@@ -361,6 +363,7 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
             if let Some(idle) = idle {
                 ts.notch_idle = idle;
             }
+            ts.oled = next.oled;
         }
         apply_theme(app, next.appearance);
     }
@@ -376,10 +379,7 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
             .set_config(app, next.notch.clone());
     }
 
-    if c.wallpaper {
-        reload_theme(app);
-    }
-    if c.appearance || c.wallpaper {
+    if c.appearance || c.oled || c.tint {
         crate::wallpapers::spawn_converge(app);
     }
 
@@ -403,16 +403,32 @@ impl Store {
     }
 }
 
+/// The validated config every subsystem runs on.
+pub fn current<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Config {
+    app.state::<Store>().applied.lock().unwrap().config.clone()
+}
+
+fn apply(app: &tauri::AppHandle, store: &Store, next: Loaded) -> Snapshot {
+    let prev = std::mem::replace(&mut *store.applied.lock().unwrap(), next.clone());
+    converge(app, &prev.config, &next.config);
+    let _ = app.emit("settings", &next.snapshot);
+    next.snapshot
+}
+
+/// Re-read the layers from disk, for a rebuilt config.json or a hand-edited
+/// settings.json, and bring every subsystem to them.
+pub fn reload(app: &tauri::AppHandle) {
+    let store = app.state::<Store>();
+    let _writer = store.writer.lock().unwrap();
+    apply(app, &store, load(dir().as_deref()));
+}
+
 fn set(app: &tauri::AppHandle, key: &str, value: Value) -> Result<Snapshot, String> {
     let store = app.state::<Store>();
     let _writer = store.writer.lock().unwrap();
     let dir = dir().ok_or("HOME is not set")?;
     write_override(&dir, key, value)?;
-    let next = load(Some(&dir));
-    let prev = std::mem::replace(&mut *store.applied.lock().unwrap(), next.clone());
-    converge(app, &prev.config, &next.config);
-    let _ = app.emit("settings", &next.snapshot);
-    Ok(next.snapshot)
+    Ok(apply(app, &store, load(Some(&dir))))
 }
 
 #[tauri::command]
@@ -505,8 +521,7 @@ pub fn settings_files(app: tauri::AppHandle) -> Files {
     }
 }
 
-#[tauri::command]
-pub fn open_settings_file(app: tauri::AppHandle) -> Result<(), String> {
+fn open_user_file(app: &tauri::AppHandle) -> Result<(), String> {
     let file = dir().ok_or("HOME is not set")?.join(USER_FILE);
     {
         let store = app.state::<Store>();
@@ -521,6 +536,15 @@ pub fn open_settings_file(app: tauri::AppHandle) -> Result<(), String> {
         .spawn()
         .map(drop)
         .map_err(|e| format!("cannot open {}: {e}", file.display()))
+}
+
+/// Async so the main thread never waits on the writer lock, which a converge
+/// may hold while it waits on the main thread for an app icon.
+#[tauri::command]
+pub async fn open_settings_file(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || open_user_file(&app))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
@@ -959,16 +983,20 @@ mod tests {
                 ..Changes::default()
             }
         );
-        for (key, value) in [("oled", json!(true)), ("wallpaper.tint", json!(true))] {
-            assert_eq!(
-                changes(&base, &config_with(key, value)),
-                Changes {
-                    wallpaper: true,
-                    ..Changes::default()
-                },
-                "{key}"
-            );
-        }
+        assert_eq!(
+            changes(&base, &config_with("oled", json!(true))),
+            Changes {
+                oled: true,
+                ..Changes::default()
+            }
+        );
+        assert_eq!(
+            changes(&base, &config_with("wallpaper.tint", json!(true))),
+            Changes {
+                tint: true,
+                ..Changes::default()
+            }
+        );
         assert_eq!(
             changes(&base, &config_with("toggles.focusShortcut", json!("Focus"))),
             Changes {

@@ -272,10 +272,6 @@ struct Geometry {
     window_height: f64,
 }
 
-fn load_config() -> Config {
-    settings::load(settings::dir().as_deref()).config
-}
-
 /// Resolve `notch.idle` to what the WebView should draw when no provider owns
 /// the slot. `handle` and `clock` are rendered there; `userHost` is expanded
 /// here (the WebView has no way to ask who or where it is) and anything else is
@@ -468,19 +464,15 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     }
 }
 
-/// Reload palettes and role maps from disk and re-apply the current appearance.
-/// Run on a `theme.sock` ping, or directly when an in-app pick finds its
-/// palette precomputed. Geometry changes still need a relaunch.
-fn reload_theme(app: &tauri::AppHandle) {
+/// Reload the palettes from disk and re-apply the current appearance. Run on a
+/// `theme.sock` ping, or directly when an in-app pick finds its palette
+/// precomputed.
+fn reload_palettes(app: &tauri::AppHandle) {
     let palettes = load_palettes();
-    let config = load_config();
     let appearance = {
         let state = app.state::<Mutex<ThemeState>>();
         let mut ts = state.lock().unwrap();
         ts.palettes = palettes;
-        ts.colors = config.colors;
-        ts.geometry = config.geometry;
-        ts.oled = config.oled;
         ts.appearance
     };
     apply_theme(app, appearance);
@@ -1550,7 +1542,7 @@ fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
 async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let Some(dir) = wallpapers::folder() else {
+        let Some(dir) = wallpapers::folder(&settings::current(&app).wallpaper) else {
             return Vec::new();
         };
         wallpapers::scan(&dir)
@@ -1634,8 +1626,8 @@ fn install_palette(cache: &std::path::Path) -> bool {
 /// Background-precompute the palette for every wallpaper in the folder for
 /// `scheme` (skipping cached ones), so picking one is an instant cache hit.
 /// Sequential to avoid a matugen CPU spike; each is ~0.3s.
-fn spawn_precompute(theme_cmd: String, scheme: String) {
-    let Some(dir) = wallpapers::folder() else {
+fn spawn_precompute(app: &tauri::AppHandle, theme_cmd: String, scheme: String) {
+    let Some(dir) = wallpapers::folder(&settings::current(app).wallpaper) else {
         return;
     };
     std::thread::spawn(move || {
@@ -1658,15 +1650,15 @@ fn spawn_precompute(theme_cmd: String, scheme: String) {
 /// Precompute every wallpaper's palette for the active scheme. Called when the
 /// theme view opens so later picks are instant.
 #[tauri::command]
-fn precompute_palettes(state: tauri::State<Mutex<ThemeState>>) {
+fn precompute_palettes(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>) {
     let theme_cmd = state.lock().unwrap().theme_command.clone();
-    spawn_precompute(theme_cmd, persisted_scheme());
+    spawn_precompute(&app, theme_cmd, persisted_scheme());
 }
 
 fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, wait: bool) {
     if let Some(cache) = palette_cache_path(path, &persisted_scheme()) {
         if cache.exists() && install_palette(&cache) {
-            reload_theme(app);
+            reload_palettes(app);
             return;
         }
     }
@@ -1674,7 +1666,7 @@ fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, wai
     generate.arg(path);
     if wait {
         let _ = generate.status();
-        reload_theme(app);
+        reload_palettes(app);
     } else {
         let _ = generate.spawn();
     }
@@ -1686,7 +1678,7 @@ fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, 
         let ts = state.lock().unwrap();
         (ts.wallpaper_command.clone(), ts.theme_command.clone())
     };
-    if wallpapers::tint_on() {
+    if settings::current(&app).wallpaper.tint {
         wallpapers::spawn_tinted_pick(&app, theme_cmd, path);
         return;
     }
@@ -1743,13 +1735,13 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
             (ts.wallpaper_command.clone(), ts.theme_command.clone())
         };
         let current = wallpapers::original_picture(&wallpaper_cmd);
-        spawn_precompute(theme_cmd.clone(), scheme.clone());
+        spawn_precompute(&app, theme_cmd.clone(), scheme.clone());
         // re-theme the current wallpaper now (cache is cold for the new scheme, so
         // this usually generates once; precompute warms the rest in the background)
         if !current.is_empty() {
             if let Some(cache) = palette_cache_path(&current, &scheme) {
                 if cache.exists() && install_palette(&cache) {
-                    reload_theme(&app);
+                    reload_palettes(&app);
                     wallpapers::spawn_converge(&app);
                     return;
                 }
@@ -2850,7 +2842,8 @@ pub fn run() {
                     if conn.is_err() {
                         continue;
                     }
-                    reload_theme(&theme_handle);
+                    settings::reload(&theme_handle);
+                    reload_palettes(&theme_handle);
                     wallpapers::spawn_converge(&theme_handle);
                 }
             });

@@ -144,9 +144,9 @@ const CHECKS: [Check; 9] = [
     Check {
         id: "claude",
         label: "Claude CLI",
-        probe: |_| {
+        probe: |app| {
             tool(
-                &crate::load_config().assistant.command,
+                &crate::settings::current(app).assistant.command,
                 true,
                 "Not on PATH or in ~/.local/bin. Install Claude Code, or set the CLI command under Assistant.",
             )
@@ -218,11 +218,11 @@ fn try_open(path: &Path) -> Opened {
     }
 }
 
-fn full_disk_access(_: &AppHandle) -> Status {
+fn full_disk_access(app: &AppHandle) -> Status {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
         return Status::new(State::Unknown, "HOME is not set", None);
     };
-    let history = crate::load_config().notifications.history;
+    let history = crate::settings::current(app).notifications.history;
     let focus = try_open(&home.join(toggles::ASSERTIONS));
     let store = match crate::notifications::store_dir() {
         Some(dir) if history => try_open(&dir.join("db")),

@@ -453,7 +453,7 @@ pub async fn assistant_send<R: Runtime>(app: AppHandle<R>, prompt: String) -> St
     let turn = lock(&app.state::<AssistantState>().conversation).begin_turn();
     let id = turn.id.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let config = crate::load_config().assistant;
+        let config = crate::settings::current(&app).assistant;
         run_turn(&app, &turn, &prompt, &config, &cache_dir());
     });
     id
