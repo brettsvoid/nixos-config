@@ -1107,8 +1107,10 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   onChange(applyBarSettings);
 
   // ---- init ---------------------------------------------------------------
-  // A reload while a view held the keyboard would otherwise leave it held.
+  // A reload while a view held the keyboard would otherwise leave it held, and
+  // one while a drawer was open would leave the window at the drawer's height.
   releaseKeyboard();
+  void syncWindowHeight();
   applyBarSettings(); // starts the clock
   reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
