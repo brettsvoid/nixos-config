@@ -38,7 +38,7 @@ function checkRow(onAction: () => void): CheckRow {
   const detail = el("span", "st-note st-selectable");
   const why = whyLine();
   text.append(name, detail, why.el);
-  const action = button("st-btn", "");
+  const action = button("pill st-btn", "");
   action.addEventListener("click", onAction);
   row.append(icon, text, action);
   return {

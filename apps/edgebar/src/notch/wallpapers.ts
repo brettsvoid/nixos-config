@@ -27,8 +27,8 @@ const ICON = {
 const TEMPLATE =
   '<div class="view-head"><span class="view-title">Wallpapers</span>' +
   '<div class="wp-switches">' +
-  `<button class="wp-switch" type="button" data-k="oled" aria-pressed="false"><span class="icon">${ICON.oled}</span><span>OLED</span></button>` +
-  `<button class="wp-switch" type="button" data-k="tint" aria-pressed="false"><span class="icon wp-tint-icon">${ICON.tint}</span><span>Tint</span></button>` +
+  `<button class="pill wp-switch" type="button" data-k="oled" aria-pressed="false"><span class="icon">${ICON.oled}</span><span>OLED</span></button>` +
+  `<button class="pill wp-switch" type="button" data-k="tint" aria-pressed="false"><span class="icon wp-tint-icon">${ICON.tint}</span><span>Tint</span></button>` +
   "</div>" +
   '<div class="theme-toggle" role="group" aria-label="Appearance">' +
   `<button class="theme-opt" data-mode="light" title="Light"><span class="icon">${lucide(
@@ -50,10 +50,10 @@ const TEMPLATE =
   '<button class="ink-opt" id="ink-auto">Auto</button>' +
   '<button class="ink-opt" id="ink-custom"><span class="ink-swatch"></span></button>' +
   "</div>" +
-  `<button class="browse-btn" id="browse-btn"><span class="icon">${ICON.folder}</span><span>Browse…</span></button>` +
+  `<button class="pill browse-btn" id="browse-btn"><span class="icon">${ICON.folder}</span><span>Browse…</span></button>` +
   "</div>" +
   '<div class="wp-filters" hidden></div>' +
-  '<div class="filmstrip" id="filmstrip"></div>' +
+  '<div class="filmstrip scroll-y" id="filmstrip"></div>' +
   `<div class="wp-empty" hidden><span class="icon">${ICON.empty}</span><span class="wp-empty-text"></span></div>`;
 
 interface Chip {
@@ -143,7 +143,7 @@ export const wallpapersView: NotchView = {
         ...chips.map((c) => {
           const b = document.createElement("button");
           b.type = "button";
-          b.className = "wp-chip";
+          b.className = "pill wp-chip";
           b.classList.toggle("active", selected.has(c.key));
           b.setAttribute("aria-pressed", String(selected.has(c.key)));
           b.innerHTML = `<span class="wp-check">${ICON.check}</span><span></span>`;

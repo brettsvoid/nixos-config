@@ -55,12 +55,4 @@
 .tg-note-open {
   height: 26px;
   padding: 0 var(--space-6);
-  border: none;
-  border-radius: 999px;
-  background: var(--primary);
-  color: var(--on-primary);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  cursor: pointer;
 }

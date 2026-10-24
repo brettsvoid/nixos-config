@@ -11,31 +11,11 @@
 }
 
 .as-new {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--control-h);
   margin-left: auto;
   padding: 0 var(--space-5) 0 var(--space-4);
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out);
-}
-.as-new .icon {
-  font-size: var(--font-md);
 }
 .as-new:hover:not(:disabled) {
   background: var(--surface-container-high);
-}
-.as-new:disabled {
-  opacity: var(--dim-more);
-  cursor: default;
 }
 
 .as-empty {
@@ -82,15 +62,6 @@
   flex: 1 1 auto;
   min-height: 0;
   padding-right: var(--space-2);
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-.as-log::-webkit-scrollbar {
-  width: 6px;
-}
-.as-log::-webkit-scrollbar-thumb {
-  background: var(--surface-container);
-  border-radius: 3px;
 }
 
 .as-msg {
@@ -171,20 +142,9 @@
   font-size: var(--font-lg);
 }
 .as-retry {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   height: 26px;
   padding: 0 var(--space-5) 0 var(--space-4);
-  border: none;
-  border-radius: 999px;
   background: var(--surface);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out);
 }
 .as-retry .icon {
   font-size: var(--font-sm);

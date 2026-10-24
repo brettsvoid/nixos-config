@@ -59,15 +59,6 @@
   gap: var(--space-4);
   flex: 1 1 auto;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-.nf-body::-webkit-scrollbar {
-  width: 6px;
-}
-.nf-body::-webkit-scrollbar-thumb {
-  background: var(--surface-container);
-  border-radius: 3px;
 }
 
 .nf-message {
@@ -89,14 +80,6 @@
 .nf-action {
   height: 26px;
   padding: 0 var(--space-6);
-  border: none;
-  border-radius: 999px;
-  background: var(--primary);
-  color: var(--on-primary);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .nf-group {

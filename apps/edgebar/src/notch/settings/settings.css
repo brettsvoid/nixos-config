@@ -326,37 +326,14 @@
 }
 
 .st-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   flex: none;
   height: 28px;
   padding: 0 var(--space-6);
-  border: none;
-  border-radius: 999px;
   background: var(--surface-container-high);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
   white-space: nowrap;
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out);
-}
-.st-btn .icon {
-  font-size: var(--font-md);
 }
 .st-btn:hover:not(:disabled) {
   background: var(--surface-bright);
-}
-.st-btn.filled,
-.st-btn.filled:hover:not(:disabled) {
-  background: var(--primary);
-  color: var(--on-primary);
-}
-.st-btn:disabled {
-  opacity: var(--dim-more);
-  cursor: default;
 }
 .st-icon-btn {
   display: grid;
@@ -388,12 +365,7 @@
   flex: 1 1 auto;
 }
 .st-icon-btn.busy svg {
-  animation: st-spin 0.8s linear infinite;
-}
-@keyframes st-spin {
-  to {
-    transform: rotate(1turn);
-  }
+  animation: spin 0.8s linear infinite;
 }
 .st-check-icon {
   align-self: flex-start;

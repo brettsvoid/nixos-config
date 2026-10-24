@@ -245,7 +245,7 @@ export function folderRow(key: KeyOf<string>, label: string, browse: () => Promi
   let f: Frame;
   const box = el("div", "st-folder");
   const fld = field({ mono: true }, (text) => void f.commit(key, text === "" ? null : text));
-  const pick = button("st-btn", "Browse…");
+  const pick = button("pill st-btn", "Browse…");
   pick.addEventListener("click", async () => {
     const chosen = await browse().catch(() => null);
     if (chosen) void f.commit(key, chosen);

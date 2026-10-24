@@ -13,14 +13,3 @@
   min-height: 0;
   min-width: 0;
 }
-.dash-widgets {
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.dash-widgets::-webkit-scrollbar {
-  width: 6px;
-}
-.dash-widgets::-webkit-scrollbar-thumb {
-  background: var(--surface-container);
-  border-radius: 3px;
-}

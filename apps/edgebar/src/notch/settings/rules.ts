@@ -139,7 +139,7 @@ export function rulesPart(): Part {
   const box = el("div", "st-rules");
   const list = el("div", "st-rule-list");
   const empty = el("p", "st-note st-rules-empty", "No rules: every workspace shows what's playing.");
-  const add = button("st-btn", `<span class="icon">${PLUS}</span><span>Add a rule</span>`);
+  const add = button("pill st-btn", `<span class="icon">${PLUS}</span><span>Add a rule</span>`);
   box.append(list, empty, add);
   const rows = new Map<string, RuleRow>();
   let rules: Record<string, Rule> = {};

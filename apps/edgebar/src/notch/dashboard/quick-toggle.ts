@@ -111,7 +111,7 @@ export function note(host: HTMLElement): Note {
   const el = document.createElement("div");
   el.className = "tg-note";
   el.hidden = true;
-  el.innerHTML = '<p class="tg-note-text"></p><button class="tg-note-open" type="button"></button>';
+  el.innerHTML = '<p class="tg-note-text"></p><button class="pill filled tg-note-open" type="button"></button>';
   host.append(el);
   const text = el.querySelector<HTMLElement>(".tg-note-text")!;
   const open = el.querySelector<HTMLButtonElement>(".tg-note-open")!;

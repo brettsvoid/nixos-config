@@ -172,6 +172,54 @@ body {
   z-index: 2;
 }
 
+.pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.pill .icon {
+  font-size: var(--font-md);
+}
+.pill:disabled {
+  opacity: var(--dim-more);
+  cursor: default;
+}
+.pill.filled,
+.pill.filled:hover:not(:disabled) {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.scroll-y {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.scroll-y::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-y::-webkit-scrollbar-thumb {
+  background: var(--surface-container);
+  border-radius: 3px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 .bar-btn {
   display: grid;
   place-items: center;

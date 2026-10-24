@@ -32,11 +32,11 @@ const ICON = {
 
 const TEMPLATE =
   '<div class="view-head"><span class="view-title">Assistant</span>' +
-  `<button class="as-new" type="button" disabled><span class="icon">${ICON.newChat}</span><span>New chat</span></button></div>` +
+  `<button class="pill as-new" type="button" disabled><span class="icon">${ICON.newChat}</span><span>New chat</span></button></div>` +
   `<div class="as-empty"><span class="as-empty-icon icon">${ICON.sparkles}</span>` +
   '<span class="as-greeting">Ask Claude anything</span>' +
   '<button class="as-model" type="button"></button></div>' +
-  '<div class="as-log" hidden></div>' +
+  '<div class="as-log scroll-y" hidden></div>' +
   '<div class="as-input">' +
   '<textarea class="as-field" rows="1" placeholder="Message Claude…" spellcheck="false" aria-label="Message Claude"></textarea>' +
   '<button class="as-send" type="button" hidden></button></div>';
@@ -91,7 +91,7 @@ export const assistantView: NotchView = {
       line.append(el("span", "as-error-text", message));
       const retry = document.createElement("button");
       retry.type = "button";
-      retry.className = "as-retry";
+      retry.className = "pill as-retry";
       retry.innerHTML = `<span class="icon">${ICON.retry}</span><span>Retry</span>`;
       retry.addEventListener("click", () => {
         if (phase.kind === "idle") startTurn(reply);

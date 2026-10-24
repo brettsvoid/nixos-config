@@ -21,7 +21,7 @@ export const dashboardView: NotchView = {
       handles.push(widget(parent.appendChild(el("div", `dash-${name}`))));
     };
     fill("player", player, root);
-    const column = root.appendChild(el("div", "dash-col dash-widgets"));
+    const column = root.appendChild(el("div", "dash-col scroll-y"));
     fill("toggles", toggles, column);
     fill("calendar", calendar, column);
     fill("notifications", notifications, root);

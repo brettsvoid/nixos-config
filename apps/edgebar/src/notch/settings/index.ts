@@ -100,7 +100,7 @@ function aboutPart(): Part {
   const versionCard = el("div", "st-card");
   versionCard.append(version.el);
   const card = el("div", "st-card");
-  const open = button("st-btn filled", "Open settings.json");
+  const open = button("pill st-btn filled", "Open settings.json");
   open.addEventListener("click", () => void openSettingsFile());
   const foot = el("div", "st-about-foot");
   foot.append(el("p", "st-note", "Each layer overrides the one above it. A row's reset drops your override."), open);
@@ -279,7 +279,7 @@ export const settingsView: NotchView = {
     const bannerText = banner.querySelector<HTMLElement>(".st-banner-text")!;
     const title = root.querySelector<HTMLElement>(".view-title")!;
     const scroll = root.querySelector<HTMLElement>(".st-scroll")!;
-    const fix = button("st-btn filled", "Open settings.json");
+    const fix = button("pill st-btn filled", "Open settings.json");
     fix.addEventListener("click", () => void openSettingsFile());
     banner.append(fix);
 

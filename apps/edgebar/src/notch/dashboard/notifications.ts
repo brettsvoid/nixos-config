@@ -59,7 +59,7 @@ function message(icon: string, text: string, action?: { label: string; run: () =
   box.innerHTML = `<span class="icon">${icon}</span>`;
   box.append(el("p", "", text));
   if (action) {
-    const btn = el("button", "nf-action", action.label);
+    const btn = el("button", "pill filled nf-action", action.label);
     btn.type = "button";
     btn.addEventListener("click", action.run);
     box.append(btn);
@@ -71,7 +71,7 @@ export const notifications: Widget = (root) => {
   root.innerHTML =
     '<div class="nf-head"><span class="nf-title">Notifications</span>' +
     `<button class="nf-clear" type="button" title="Clear all" aria-label="Clear all"><span class="icon">${BROOM}</span></button></div>` +
-    '<div class="nf-body"></div>';
+    '<div class="nf-body scroll-y"></div>';
   const head = root.querySelector<HTMLElement>(".nf-head")!;
   const clear = root.querySelector<HTMLButtonElement>(".nf-clear")!;
   const body = root.querySelector<HTMLElement>(".nf-body")!;

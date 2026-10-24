@@ -41,25 +41,7 @@
   margin-left: auto;
 }
 .wp-switch {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--control-h);
   padding: 0 var(--space-5) 0 var(--space-4);
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
-}
-.wp-switch .icon {
-  font-size: var(--font-md);
 }
 .wp-switch:hover:not(:disabled) {
   background: var(--surface-container-high);
@@ -68,10 +50,6 @@
 .wp-switch.active:hover:not(:disabled) {
   background: var(--primary);
   color: var(--on-primary);
-}
-.wp-switch:disabled {
-  opacity: var(--dim-more);
-  cursor: default;
 }
 .wp-switch.busy {
   cursor: progress;
@@ -86,12 +64,7 @@
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
-  animation: wp-spin 0.8s linear infinite;
-}
-@keyframes wp-spin {
-  to {
-    transform: rotate(1turn);
-  }
+  animation: spin 0.8s linear infinite;
 }
 
 .theme-bar {
@@ -207,20 +180,12 @@
 }
 
 .browse-btn {
-  display: flex;
-  align-items: center;
   justify-content: center;
   gap: var(--space-3);
   flex: none;
-  height: var(--control-h);
   padding: 0 var(--space-6) 0 var(--space-5);
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
   font-size: var(--font-sm);
-  cursor: pointer;
+  font-weight: normal;
 }
 .browse-btn:hover {
   background: var(--surface-container-high);
@@ -237,23 +202,11 @@
   display: none;
 }
 .wp-chip {
-  display: flex;
-  align-items: center;
   flex: none;
+  gap: 0;
   height: 26px;
   padding: 0 var(--space-5);
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-xs);
-  font-weight: 600;
   white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
 }
 .wp-chip:hover {
   background: var(--surface-container-high);
@@ -292,18 +245,9 @@
   grid-auto-rows: max-content;
   align-content: start;
   gap: var(--space-3);
-  overflow-y: auto;
-  overflow-x: hidden;
   flex: 1 1 auto;
   min-height: 0;
   padding-right: var(--space-2);
-}
-.filmstrip::-webkit-scrollbar {
-  width: 6px;
-}
-.filmstrip::-webkit-scrollbar-thumb {
-  background: var(--surface-container);
-  border-radius: 3px;
 }
 .thumb {
   width: 100%;
