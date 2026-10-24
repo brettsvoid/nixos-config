@@ -150,8 +150,7 @@ export type SettingsPane =
   | "displays"
   | "fullDiskAccess"
   | "privacyBluetooth"
-  | "privacyAutomation"
-  | "shortcuts";
+  | "privacyAutomation";
 
 export type Access = "granted" | "denied" | "unavailable" | "off";
 
@@ -205,7 +204,6 @@ type NoArgs = Record<string, never>;
 
 export interface Commands {
   get_config: { args: NoArgs; result: Config };
-  set_appearance: { args: { mode: string }; result: void };
   set_ink: { args: { colour: string | null }; result: void };
   pick_colour: { args: { initial: string }; result: string | null };
   aerospace_workspaces: { args: NoArgs; result: Workspace[] };

@@ -27,6 +27,7 @@ pub struct SetupItem {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
     Open(SettingsPane),
+    OpenShortcuts,
     /// Ask the player at this index of `PLAYERS`.
     Ask(usize),
 }
@@ -34,15 +35,16 @@ enum Action {
 impl Action {
     fn label(self) -> &'static str {
         match self {
-            Action::Open(SettingsPane::Shortcuts) => "Open Shortcuts",
             Action::Open(_) => "Open System Settings",
+            Action::OpenShortcuts => "Open Shortcuts",
             Action::Ask(_) => "Ask",
         }
     }
 
     fn run(self, app: &AppHandle) -> Result<(), String> {
         match self {
-            Action::Open(pane) => crate::open_pane(pane),
+            Action::Open(pane) => crate::open_settings_pane(pane),
+            Action::OpenShortcuts => crate::open_url("shortcuts://"),
             Action::Ask(player) => ask(app, player),
         }
     }
@@ -358,7 +360,7 @@ fn ask(app: &AppHandle, player: usize) -> Result<(), String> {
 fn focus_shortcut(app: &AppHandle) -> Status {
     let toggles = app.state::<Toggles>();
     let name = toggles.focus_shortcut();
-    let shortcuts = Some(Action::Open(SettingsPane::Shortcuts));
+    let shortcuts = Some(Action::OpenShortcuts);
     if name.is_empty() {
         return Status::new(
             State::Missing,

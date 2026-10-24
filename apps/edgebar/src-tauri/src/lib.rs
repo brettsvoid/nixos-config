@@ -552,17 +552,6 @@ async fn pick_colour(initial: String) -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", r / 257, g / 257, b / 257))
 }
 
-#[tauri::command]
-async fn set_appearance(app: tauri::AppHandle, mode: String) -> Result<(), String> {
-    settings::set_setting(
-        app,
-        "appearance".to_string(),
-        serde_json::Value::String(mode),
-    )
-    .await
-    .map(drop)
-}
-
 #[derive(Clone, Serialize)]
 struct Workspace {
     name: String,
@@ -1429,7 +1418,6 @@ enum SettingsPane {
     FullDiskAccess,
     PrivacyBluetooth,
     PrivacyAutomation,
-    Shortcuts,
 }
 
 impl SettingsPane {
@@ -1450,14 +1438,13 @@ impl SettingsPane {
             Self::PrivacyAutomation => {
                 "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"
             }
-            Self::Shortcuts => "shortcuts://",
         }
     }
 }
 
-fn open_pane(pane: SettingsPane) -> Result<(), String> {
+pub(crate) fn open_url(url: &str) -> Result<(), String> {
     std::process::Command::new("/usr/bin/open")
-        .arg(pane.url())
+        .arg(url)
         .spawn()
         .map(drop)
         .map_err(|e| e.to_string())
@@ -1465,7 +1452,7 @@ fn open_pane(pane: SettingsPane) -> Result<(), String> {
 
 #[tauri::command]
 fn open_settings_pane(pane: SettingsPane) -> Result<(), String> {
-    open_pane(pane)
+    open_url(pane.url())
 }
 
 // ───────────────────────── theme / wallpaper picker ─────────────────
@@ -2683,7 +2670,6 @@ pub fn run() {
             aerospace_focus,
             set_bar_size,
             get_config,
-            set_appearance,
             set_ink,
             pick_colour,
             battery,

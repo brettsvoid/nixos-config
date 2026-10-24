@@ -59,7 +59,6 @@ const PANE_NAMES: Record<SettingsPane, string> = {
   fullDiskAccess: "Full Disk Access",
   privacyBluetooth: "Bluetooth privacy",
   privacyAutomation: "Automation privacy",
-  shortcuts: "Shortcuts",
 };
 
 const FIXES: [RegExp, SettingsPane][] = [

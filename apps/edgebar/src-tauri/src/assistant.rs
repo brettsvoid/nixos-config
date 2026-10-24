@@ -479,12 +479,7 @@ fn web_link(url: &str) -> Result<tauri::Url, String> {
 
 #[tauri::command]
 pub fn assistant_open_link(url: String) -> Result<(), String> {
-    let link = web_link(&url)?;
-    Command::new("/usr/bin/open")
-        .arg(link.as_str())
-        .spawn()
-        .map(drop)
-        .map_err(|e| e.to_string())
+    crate::open_url(web_link(&url)?.as_str())
 }
 
 #[cfg(test)]

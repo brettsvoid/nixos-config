@@ -275,7 +275,7 @@ export const wallpapersView: NotchView = {
         const m = b.dataset.mode!;
         setActiveMode(m);
         retint();
-        call("set_appearance", { mode: m });
+        void setSetting("appearance", m);
       });
     }
 
