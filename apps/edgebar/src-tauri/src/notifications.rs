@@ -10,6 +10,9 @@
 //! "Dismiss" and "clear" therefore cannot remove anything from macOS. They
 //! record what the user hid in `~/.cache/edgebar/notifications-hidden.json`,
 //! which every read applies.
+//!
+//! Reading is opt-in: while `notifications.history` is false (the bundled
+//! default), `notification_history` answers `off` without touching the store.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
@@ -36,6 +39,16 @@ pub enum Access {
     Granted,
     Denied,
     Unavailable,
+    /// `notifications.history` is off, so the store was not opened.
+    Off,
+}
+
+/// The `notifications` block of config.json.
+#[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct NotificationsConfig {
+    /// Whether edgebar may read macOS's notification store at all.
+    pub history: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -488,7 +501,15 @@ fn history(app: &tauri::AppHandle) -> NotificationHistory {
 /// Reads and copies a file, so it runs off the main thread.
 #[tauri::command]
 pub async fn notification_history(app: tauri::AppHandle) -> NotificationHistory {
-    tauri::async_runtime::spawn_blocking(move || history(&app))
+    tauri::async_runtime::spawn_blocking(move || {
+        if !crate::load_config().notifications.history {
+            return NotificationHistory {
+                access: Access::Off,
+                items: Vec::new(),
+            };
+        }
+        history(&app)
+    })
         .await
         .unwrap_or(NotificationHistory {
             access: Access::Unavailable,
@@ -553,6 +574,13 @@ mod tests {
             data,
             delivered: 100.0,
         }
+    }
+
+    #[test]
+    fn the_bundled_config_keeps_history_off() {
+        let config: crate::Config =
+            serde_json::from_str(include_str!("../config.default.json")).unwrap();
+        assert!(!config.notifications.history);
     }
 
     #[test]

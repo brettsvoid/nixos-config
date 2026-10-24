@@ -132,6 +132,10 @@ struct Config {
     /// The Assistant tab's CLI and model. See `assistant.rs`.
     #[serde(default)]
     assistant: assistant::AssistantConfig,
+    /// Whether the dashboard may read macOS's notification history. See
+    /// `notifications.rs`.
+    #[serde(default)]
+    notifications: notifications::NotificationsConfig,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colours resolved
@@ -1575,6 +1579,49 @@ fn launcher_action(action: String) {
     };
 }
 
+/// The System Settings panes the dashboard links to: a toggle's own pane, and
+/// the privacy lists that grant what a toggle or the notification history
+/// needs. The ids are the panes' extension bundle ids and the anchors their
+/// `revealElementKeyName`s (SecurityPrivacyExtension.appex TCCServiceList.plist).
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum SettingsPane {
+    Wifi,
+    Bluetooth,
+    Focus,
+    /// Night Shift lives under Displays.
+    Displays,
+    FullDiskAccess,
+    PrivacyBluetooth,
+}
+
+impl SettingsPane {
+    fn url(self) -> &'static str {
+        match self {
+            Self::Wifi => "x-apple.systempreferences:com.apple.wifi-settings-extension",
+            Self::Bluetooth => "x-apple.systempreferences:com.apple.BluetoothSettings",
+            Self::Focus => "x-apple.systempreferences:com.apple.Focus-Settings.extension",
+            Self::Displays => "x-apple.systempreferences:com.apple.Displays-Settings.extension",
+            Self::FullDiskAccess => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"
+            }
+            Self::PrivacyBluetooth => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Bluetooth"
+            }
+        }
+    }
+}
+
+/// Open one of `SettingsPane`'s panes; any other name fails to deserialise.
+#[tauri::command]
+fn open_settings_pane(pane: SettingsPane) -> Result<(), String> {
+    std::process::Command::new("/usr/bin/open")
+        .arg(pane.url())
+        .spawn()
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
 // ───────────────────────── theme / wallpaper picker ─────────────────
 // Backs the notch's theme view. Uses the same desktoppr and
 // generate-edgebar-theme binaries as the CLI and the launchd watcher (paths
@@ -2824,6 +2871,7 @@ pub fn run() {
             set_brightness,
             network,
             launcher_action,
+            open_settings_pane,
             set_interactive_rects,
             list_wallpapers,
             current_wallpaper,

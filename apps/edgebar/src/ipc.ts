@@ -163,22 +163,18 @@ export interface ToggleState {
   detail: string; // a short status line: the SSID, "2 devices", "Contacts only"…
 }
 
-// Access to a source macOS guards with a privacy permission.
-export type Access = "granted" | "denied" | "notDetermined" | "unavailable";
+// The System Settings panes edgebar can open (SettingsPane in lib.rs).
+export type SettingsPane =
+  | "wifi"
+  | "bluetooth"
+  | "focus"
+  | "displays" // Night Shift lives here
+  | "fullDiskAccess"
+  | "privacyBluetooth";
 
-export interface CalendarEvent {
-  title: string;
-  start: string; // ISO 8601, local time
-  end: string;
-  allDay: boolean;
-  calendar: string;
-  colour: string; // the calendar's colour, #rrggbb
-}
-
-export interface CalendarEvents {
-  access: Access;
-  events: CalendarEvent[];
-}
+// Whether edgebar may read macOS's notification history. "off" means the
+// `notifications.history` setting is off, so Rust never opened the store.
+export type Access = "granted" | "denied" | "unavailable" | "off";
 
 export interface NotificationEntry {
   id: string;
@@ -226,6 +222,7 @@ export interface Commands {
   set_interactive_rects: { args: { rects: number[][] }; result: void };
   network: { args: NoArgs; result: Network };
   launcher_action: { args: { action: string }; result: void };
+  open_settings_pane: { args: { pane: SettingsPane }; result: void };
   battery: { args: NoArgs; result: Battery };
   metrics_sample: { args: NoArgs; result: Metrics };
   metrics_history: { args: NoArgs; result: MetricsHistory };
@@ -253,7 +250,6 @@ export interface Commands {
   media_seek: { args: { fraction: number }; result: void };
   toggles: { args: NoArgs; result: ToggleState[] };
   set_toggle: { args: { id: ToggleId; on: boolean }; result: ToggleState };
-  calendar_events: { args: { from: string; to: string }; result: CalendarEvents };
   notification_history: { args: NoArgs; result: NotificationHistory };
   // macOS's store is read-only to edgebar, so these hide entries in edgebar only.
   notification_dismiss: { args: { ids: string[] }; result: void };

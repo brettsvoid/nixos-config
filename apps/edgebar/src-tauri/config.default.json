@@ -32,6 +32,12 @@
   "toggles": {
     "focusShortcut": "Toggle Focus"
   },
+  "calendar": {
+    "weekStart": "monday"
+  },
+  "notifications": {
+    "history": false
+  },
   "assistant": {
     "command": "claude",
     "model": "haiku"
