@@ -11,7 +11,7 @@ import {
   type NotchItem,
   type Workspace,
 } from "./ipc";
-import { lucide } from "./icons";
+import { lucide, TRANSPORT } from "./icons";
 import { setLine } from "./marquee";
 import { SPRING } from "./motion";
 import {
@@ -681,12 +681,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   // Playhead colours are set on .nm-wave, not :root, so read them from there.
   const mediaVar = (name: string) =>
     getComputedStyle(nmWave).getPropertyValue(name).trim();
-  // Solid glyphs: Lucide's outlines read as hollow at this size.
-  const TRANSPORT_SVG = {
-    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.1-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"/></svg>',
-    pause:
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h3.2v16H7zm6.8 0H17v16h-3.2z"/></svg>',
-  };
 
   // Playhead state. `progress` is the last position Rust published and `t0`
   // when it arrived, so the head advances between the 2s polls. `amp`/`phase`
@@ -811,7 +805,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     media.duration = item.duration;
     media.playing = item.active;
     media.t0 = performance.now();
-    nmPlay.innerHTML = item.active ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
+    nmPlay.innerHTML = item.active ? TRANSPORT.pause : TRANSPORT.play;
     startWave();
   }
 
@@ -822,7 +816,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     media.progress = playedFraction();
     media.playing = !media.playing;
     media.t0 = performance.now();
-    nmPlay.innerHTML = media.playing ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
+    nmPlay.innerHTML = media.playing ? TRANSPORT.pause : TRANSPORT.play;
     startWave();
     call("media_toggle").catch(() => {});
   });
