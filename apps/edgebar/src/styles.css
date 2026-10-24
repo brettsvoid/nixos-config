@@ -101,6 +101,20 @@
      primaries are light tones meant for a dark surface. */
   --ws-empty: color-mix(in srgb, var(--base) 28%, transparent);
   --ws-occupied: color-mix(in srgb, var(--base) 55%, transparent);
+
+  /* ---- surface roles for the notch's views ----
+     Views paint with these, not with the pill-era names above, so a restyle
+     flips the mappings here and nothing else. */
+  --surface: var(--pill-bg); /* what the notch is painted with */
+  --on-surface: var(--base); /* text and icons on it */
+  --on-surface-variant: var(--base); /* dim text; dimming is still opacity */
+  --primary: var(--accent);
+  --on-primary: var(--pill-bg);
+  --surface-container: var(--track);
+  --surface-container-high: var(--hover);
+  --surface-bright: var(--ws-empty);
+  --radius-card: 16px;
+  --radius-drawer: var(--pill-radius);
 }
 
 * {
