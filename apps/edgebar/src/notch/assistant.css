@@ -47,10 +47,6 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-.as-empty[hidden],
-.as-log[hidden] {
-  display: none;
-}
 .as-empty-icon {
   margin-bottom: var(--space-2);
   color: var(--primary);
@@ -365,9 +361,6 @@
   color: var(--on-primary);
   cursor: pointer;
   transition: transform var(--dur-fast) var(--ease-out);
-}
-.as-send[hidden] {
-  display: none;
 }
 .as-send:active {
   transform: scale(0.9);

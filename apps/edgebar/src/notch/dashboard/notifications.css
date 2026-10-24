@@ -135,9 +135,6 @@
   height: 16px;
   object-fit: contain;
 }
-.nf-icon[hidden] {
-  display: none;
-}
 .nf-app {
   flex: 1 1 auto;
   min-width: 0;

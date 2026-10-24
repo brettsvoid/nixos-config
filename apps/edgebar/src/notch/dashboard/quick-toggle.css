@@ -46,9 +46,6 @@
   background: var(--surface-container-high);
   box-shadow: var(--shadow-drawer);
 }
-.tg-note[hidden] {
-  display: none;
-}
 .tg-note-text {
   font-size: var(--font-sm);
   line-height: 1.35;
@@ -66,7 +63,4 @@
   font-size: var(--font-xs);
   font-weight: 600;
   cursor: pointer;
-}
-.tg-note-open[hidden] {
-  display: none;
 }

@@ -79,6 +79,11 @@
   box-sizing: border-box;
 }
 
+/* A class that sets display would otherwise beat the UA's [hidden] rule. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   width: 100%;
@@ -297,13 +302,6 @@ body {
   border-radius: var(--space-1); /* round the thin bar's ends */
   background: var(--surface-bright);
 }
-.notch-handle[hidden],
-.notch-item[hidden],
-.ni-media[hidden],
-.ni-icon[hidden],
-.ni-secondary[hidden] {
-  display: none;
-}
 .notch-row.media {
   padding: 0;
 }
@@ -398,9 +396,6 @@ body {
   flex-direction: column;
   min-height: 0;
   width: 100%;
-}
-.view[hidden] {
-  display: none;
 }
 
 .ni-media {
@@ -549,9 +544,6 @@ body {
   background: var(--warn);
   box-shadow: 0 0 0 2px var(--tab-bg);
 }
-.rail-dot[hidden] {
-  display: none;
-}
 
 #status {
   gap: var(--space-6);
@@ -561,11 +553,6 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-}
-/* `display: flex` would otherwise beat the UA's [hidden] rule — the battery
-   group is hidden outright on machines with no battery */
-.stat-grp[hidden] {
-  display: none;
 }
 
 #battery .bat-icon {
@@ -612,9 +599,6 @@ body {
 
 #cpu {
   gap: var(--space-4);
-}
-#cpu[hidden] {
-  display: none;
 }
 #cpu .cpu-icon {
   font-size: var(--font-xl);

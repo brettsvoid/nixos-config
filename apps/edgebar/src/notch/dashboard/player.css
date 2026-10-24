@@ -153,9 +153,6 @@
   width: 20px;
   height: 20px;
 }
-.pl-source[hidden] {
-  display: none;
-}
 .pl-source img {
   width: 100%;
   height: 100%;
