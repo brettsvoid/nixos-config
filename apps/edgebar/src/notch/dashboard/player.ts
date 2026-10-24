@@ -310,7 +310,6 @@ export const player: Widget = (root) => {
   return {
     show() {
       visible = true;
-      linesShown = "";
       render();
     },
     hide() {
