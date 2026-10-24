@@ -26,6 +26,9 @@ mod notifications;
 /// The dashboard's quick toggles: Wi-Fi, Bluetooth, Focus, Night Shift, Caffeine.
 mod toggles;
 
+/// The wallpaper folder, the OLED palette and Tint.
+mod wallpapers;
+
 /// Debug-only socket that drives and snapshots the live bar.
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod devtools;
@@ -117,6 +120,12 @@ struct Config {
     /// The quick toggles' settings. See `toggles.rs`.
     #[serde(default)]
     toggles: toggles::TogglesConfig,
+    /// The wallpaper folder and Tint. See `wallpapers.rs`.
+    #[serde(default)]
+    wallpaper: wallpapers::WallpaperConfig,
+    /// Dark mode on a pure black surface.
+    #[serde(default = "wallpapers::default_oled")]
+    oled: bool,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colours resolved
@@ -476,13 +485,26 @@ struct ThemeState {
     notch_idle: String,
     /// The theme view's explicit ink, per scheme.
     ink: InkOverride,
+    /// Dark scheme on a pure black surface (`oled` in config).
+    oled: bool,
 }
 
 impl ThemeState {
+    /// The active scheme's palette: OLED makes the dark one's surface black
+    /// before any role resolves from it.
+    fn palette(&self) -> std::collections::HashMap<String, String> {
+        let palette = self.palettes.for_scheme(self.scheme);
+        if self.oled && self.scheme == Scheme::Dark {
+            wallpapers::blacken_base(palette)
+        } else {
+            palette.clone()
+        }
+    }
+
     /// Colours for the active scheme, with the ink on the surface settled: the
     /// override if one is set, else the role map's ink after the contrast check.
     fn resolve(&self) -> (Colors, InkInfo) {
-        let palette = self.palettes.for_scheme(self.scheme);
+        let palette = &self.palette();
         let mut colors = resolve_colors(self.colors.for_scheme(self.scheme), palette);
         let configured = std::mem::take(&mut colors.text);
         let (ink, source) = match self.ink.for_scheme(self.scheme) {
@@ -574,6 +596,8 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
         let surface = resolved.colors.surface.clone();
         let _ = app.run_on_main_thread(move || recolor_native_frame(&surface));
     }
+    // The palette changed, so a tinted desktop picture is out of date.
+    wallpapers::spawn_converge(app);
 }
 
 /// Reload palettes and role maps from disk and re-apply the current appearance.
@@ -588,6 +612,7 @@ fn reload_theme(app: &tauri::AppHandle) {
         ts.palettes = palettes;
         ts.colors = config.colors;
         ts.geometry = config.geometry;
+        ts.oled = config.oled;
         ts.appearance
     };
     apply_theme(app, appearance);
@@ -1556,20 +1581,10 @@ struct Wallpaper {
     name: String,
     path: String,
     thumb: String, // "data:image/png;base64,…"
-}
-
-fn wallpapers_dir() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join("Pictures/Wallpapers"))
-}
-
-fn is_image(path: &std::path::Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase())
-            .as_deref(),
-        Some("jpg" | "jpeg" | "png" | "webp" | "heic")
-    )
+    /// Subfolder under the wallpapers folder, "" at its root.
+    folder: String,
+    /// Lower-case file extension.
+    kind: String,
 }
 
 /// Standard base64 with padding. Pure Rust, so thumbnails can be encoded off
@@ -1630,24 +1645,21 @@ fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
 async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let Some(dir) = wallpapers_dir() else {
+        let Some(dir) = wallpapers::folder() else {
             return Vec::new();
         };
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return Vec::new();
-        };
-        let mut paths: Vec<std::path::PathBuf> = entries
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| is_image(p))
-            .collect();
-        paths.sort();
-        paths
+        wallpapers::scan(&dir)
             .into_iter()
-            .filter_map(|p| {
-                let path = p.to_str()?.to_string();
-                let name = p.file_name()?.to_str()?.to_string();
+            .filter_map(|found| {
+                let path = found.path.to_str()?.to_string();
                 let thumb = wallpaper_thumb(&state, &path).unwrap_or_default();
-                Some(Wallpaper { name, path, thumb })
+                Some(Wallpaper {
+                    name: found.name,
+                    path,
+                    thumb,
+                    folder: found.folder,
+                    kind: found.kind,
+                })
             })
             .collect()
     })
@@ -1655,8 +1667,9 @@ async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     .unwrap_or_default()
 }
 
-/// Runs the wallpaper command and returns the first display's picture path.
-fn query_current_wallpaper(cmd: &str) -> String {
+/// The wallpaper command's answer: the first display's picture path, which is
+/// a tinted copy while Tint is on.
+fn query_desktop_picture(cmd: &str) -> String {
     std::process::Command::new(cmd)
         .output()
         .ok()
@@ -1669,6 +1682,11 @@ fn query_current_wallpaper(cmd: &str) -> String {
                 .to_string()
         })
         .unwrap_or_default()
+}
+
+/// The wallpaper the desktop stands for: a tinted copy answers with its original.
+fn query_current_wallpaper(cmd: &str) -> String {
+    wallpapers::original_of(&query_desktop_picture(cmd))
 }
 
 /// The current desktop picture (first display) — to highlight the active thumb.
@@ -1736,20 +1754,12 @@ fn install_palette(cache: &std::path::Path) -> bool {
 /// `scheme` (skipping cached ones), so picking one is an instant cache hit.
 /// Sequential to avoid a matugen CPU spike; each is ~0.3s.
 fn spawn_precompute(theme_cmd: String, scheme: String) {
-    let Some(dir) = wallpapers_dir() else {
+    let Some(dir) = wallpapers::folder() else {
         return;
     };
     std::thread::spawn(move || {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return;
-        };
-        let mut paths: Vec<std::path::PathBuf> = entries
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| is_image(p))
-            .collect();
-        paths.sort();
-        for p in paths {
-            let Some(path) = p.to_str() else { continue };
+        for found in wallpapers::scan(&dir) {
+            let Some(path) = found.path.to_str() else { continue };
             let Some(cache) = palette_cache_path(path, &scheme) else {
                 continue;
             };
@@ -1772,29 +1782,46 @@ fn precompute_palettes(state: tauri::State<Mutex<ThemeState>>) {
     spawn_precompute(theme_cmd, persisted_scheme());
 }
 
-/// Set the desktop on every display and re-theme the bar. Instant when the
-/// palette is already precomputed (atomic copy + in-process reload); otherwise
-/// generates it now. The in-app marker stops the watcher from double-running.
+/// Re-theme the bar from `path`'s palette: instant when it is already
+/// precomputed (atomic copy + in-process reload), otherwise generated now.
+/// `wait` holds the caller until the new palette is live; without it a
+/// generation is left to ping the socket when it finishes.
+fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, wait: bool) {
+    if let Some(cache) = palette_cache_path(path, &persisted_scheme()) {
+        if cache.exists() && install_palette(&cache) {
+            reload_theme(app);
+            return;
+        }
+    }
+    let mut generate = std::process::Command::new(theme_cmd);
+    generate.arg(path);
+    if wait {
+        let _ = generate.status();
+        reload_theme(app);
+    } else {
+        let _ = generate.spawn();
+    }
+}
+
+/// Set the desktop on every display and re-theme the bar. The in-app marker
+/// stops the watcher from double-running. With Tint on the desktop gets a
+/// repainted copy instead, which `wallpapers::spawn_pick` sets once the palette
+/// is known.
 #[tauri::command]
 fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, path: String) {
     let (wallpaper_cmd, theme_cmd) = {
         let ts = state.lock().unwrap();
         (ts.wallpaper_command.clone(), ts.theme_command.clone())
     };
+    if wallpapers::tint_on() {
+        wallpapers::spawn_pick(&app, theme_cmd, path);
+        return;
+    }
     touch_inapp_marker();
     let _ = std::process::Command::new(wallpaper_cmd)
         .args(["all", &path])
         .spawn();
-
-    let scheme = persisted_scheme();
-    if let Some(cache) = palette_cache_path(&path, &scheme) {
-        if cache.exists() && install_palette(&cache) {
-            reload_theme(&app); // instant — no matugen, no socket round-trip
-            return;
-        }
-    }
-    // not precomputed yet: generate now (it pings the socket → reload)
-    let _ = std::process::Command::new(theme_cmd).arg(&path).spawn();
+    theme_from_wallpaper(&app, &theme_cmd, &path, false);
 }
 
 /// Open a Finder file picker and return the chosen image path, or None on
@@ -2729,6 +2756,7 @@ pub fn run() {
                     .unwrap_or_else(|| "desktoppr".to_string()),
                 notch_idle: resolve_notch_idle(config.notch.idle.as_deref()),
                 ink: load_ink_override(),
+                oled: config.oled,
             }));
             // The notch store, managed before the workspace socket below, which
             // publishes into it.
@@ -2808,6 +2836,10 @@ pub fn run() {
                     reload_theme(&theme_handle);
                 }
             });
+
+            // Put the desktop picture right for `wallpaper.tint`: a copy left by
+            // a previous run may be stale, or tint may have been turned off.
+            wallpapers::spawn_converge(app.handle());
 
             // Re-push workspaces on every app activation.
             #[cfg(target_os = "macos")]

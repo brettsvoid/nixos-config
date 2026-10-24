@@ -25,6 +25,8 @@ sysinfo = "0.37"
 # (SQLite, WAL mode), and the binary plists in its records.
 rusqlite = { version = "0.40", features = ["bundled"] }
 plist = "1.9"
+# Decode, resize and encode wallpapers for Tint (wallpapers.rs). No HEIC.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 
 # Native macOS: AppKit windows, events and icons, and the frame window drawn
 # with CAShapeLayer. Pinned to the objc2 0.3 crates tao/wry already pull in.
@@ -104,3 +106,33 @@ objc2-core-foundation = { version = "0.3", features = [
 # system-configuration 0.7 expects (separate from objc2-core-foundation).
 system-configuration = "0.7"
 core-foundation = "0.9"
+
+[dev-dependencies]
+# A mock app, so wallpapers.rs can drive `converge` without the real bar.
+tauri = { version = "2", features = ["test"] }
+
+# Tint decodes, resizes and re-encodes a multi-megapixel wallpaper. These
+# crates at the dev profile's opt-level 0 are an order of magnitude slower than
+# in release, which would make the dev bar's Tint miss its few-second budget.
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.flate2]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+[profile.dev.package.simd-adler32]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.zune-core]
+opt-level = 3
+[profile.dev.package.image-webp]
+opt-level = 3
+[profile.dev.package.moxcms]
+opt-level = 3

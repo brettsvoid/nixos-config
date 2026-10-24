@@ -70,6 +70,14 @@ in
         if [ -z "$WALLPAPER" ]; then
           WALLPAPER=$(${pkgs.desktoppr}/bin/desktoppr 2>/dev/null | head -1)
         fi
+        # With Tint on, the desktop shows a repainted copy from edgebar's tinted
+        # cache; take the palette from the picture it was made from, not the copy.
+        case "$WALLPAPER" in
+          "$HOME"/.cache/edgebar/tinted/*)
+            ORIGINAL=$(cat "$WALLPAPER.src" 2>/dev/null)
+            [ -f "$ORIGINAL" ] && WALLPAPER="$ORIGINAL"
+            ;;
+        esac
         if [ -z "$WALLPAPER" ] || [ ! -f "$WALLPAPER" ]; then
           WALLPAPER="${defaultWallpaper}"
         fi

@@ -37,5 +37,10 @@
     "frameThickness": 8,
     "frameRadius": 16,
     "windowHeight": 64
+  },
+  "oled": false,
+  "wallpaper": {
+    "folder": "~/Pictures/Wallpapers",
+    "tint": false
   }
 }
