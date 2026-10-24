@@ -12,13 +12,13 @@ const ITEM = /^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$/;
 
 const INLINE = new RegExp(
   [
-    "(`+)([\\s\\S]+?)\\1(?!`)",
-    "\\*\\*(?=\\S)([\\s\\S]*?\\S)\\*\\*",
-    "__(?=\\S)([\\s\\S]*?\\S)__(?!\\w)",
-    "\\*(?=[^\\s*])([\\s\\S]*?[^\\s*])\\*",
-    "(?<![\\w])_(?=[^\\s_])([\\s\\S]*?[^\\s_])_(?![\\w])",
-    "\\[([^\\]\\n]+)\\]\\(((?:[^()\\s]|\\([^()\\s]*\\))+)\\)",
-    "(https?:\\/\\/[^\\s<>]+)",
+    "(?<ticks>`+)(?<code>[\\s\\S]+?)\\k<ticks>(?!`)",
+    "\\*\\*(?=\\S)(?<starStrong>[\\s\\S]*?\\S)\\*\\*",
+    "__(?=\\S)(?<underStrong>[\\s\\S]*?\\S)__(?!\\w)",
+    "\\*(?=[^\\s*])(?<starEm>[\\s\\S]*?[^\\s*])\\*",
+    "(?<![\\w])_(?=[^\\s_])(?<underEm>[\\s\\S]*?[^\\s_])_(?![\\w])",
+    "\\[(?<linkText>[^\\]\\n]+)\\]\\((?<linkUrl>(?:[^()\\s]|\\([^()\\s]*\\))+)\\)",
+    "(?<url>https?:\\/\\/[^\\s<>]+)",
   ].join("|"),
   "g",
 );
@@ -45,20 +45,21 @@ function inline(text: string): Node[] {
   const re = new RegExp(INLINE.source, "g");
   let at = 0;
   for (let m = re.exec(text); m; m = re.exec(text)) {
+    const g = m.groups!;
     let end = m.index + m[0].length;
     let node: Node;
-    if (m[2] !== undefined) {
+    if (g.code !== undefined) {
       // One space each side is padding, as in `` `x` ``.
-      const code = /^ .* $/.test(m[2]) && m[2].trim() ? m[2].slice(1, -1) : m[2];
+      const code = /^ .* $/.test(g.code) && g.code.trim() ? g.code.slice(1, -1) : g.code;
       node = el("code", "md-inline", code);
-    } else if (m[3] !== undefined || m[4] !== undefined) {
-      node = el("strong", undefined, ...inline(m[3] ?? m[4]));
-    } else if (m[5] !== undefined || m[6] !== undefined) {
-      node = el("em", undefined, ...inline(m[5] ?? m[6]));
-    } else if (m[7] !== undefined) {
-      node = isWebLink(m[8]) ? link(inline(m[7]), m[8]) : document.createTextNode(m[7]);
+    } else if (g.starStrong !== undefined || g.underStrong !== undefined) {
+      node = el("strong", undefined, ...inline(g.starStrong ?? g.underStrong));
+    } else if (g.starEm !== undefined || g.underEm !== undefined) {
+      node = el("em", undefined, ...inline(g.starEm ?? g.underEm));
+    } else if (g.linkText !== undefined) {
+      node = isWebLink(g.linkUrl) ? link(inline(g.linkText), g.linkUrl) : document.createTextNode(g.linkText);
     } else {
-      const url = trimUrl(m[9]);
+      const url = trimUrl(g.url);
       end = m.index + url.length;
       re.lastIndex = end;
       node = link(url, url);

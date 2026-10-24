@@ -4,7 +4,7 @@ import { lucide } from "../icons";
 import { fingersUp, wheelStepper } from "../wheel";
 
 const SHORTER_SPANS_S = [30, 60, 120, 300];
-const START_SPAN = 2;
+const START_SPAN_INDEX = 2;
 const WHEEL_PX = 60;
 const LINE = 2;
 const FILL_ALPHA = 0.3;
@@ -71,7 +71,7 @@ export function resourceChart(root: HTMLElement): { show(): void; hide(): void; 
   const series: Record<SeriesKey, number[]> = { cpu: [], mem: [] };
   let intervalMs = 2000;
   let spansS = SHORTER_SPANS_S;
-  let zoom: number = START_SPAN;
+  let zoom: number = START_SPAN_INDEX;
   let visible = false;
 
   const capacity = () => Math.round((spansS[spansS.length - 1] * 1000) / intervalMs);

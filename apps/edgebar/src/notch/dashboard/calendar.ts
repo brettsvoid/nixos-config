@@ -5,6 +5,8 @@ import { wheelStepper } from "../../wheel";
 import type { Widget } from "../view";
 
 const WHEEL_PX = 300;
+const A_SUNDAY = { year: 2024, month: 0, date: 7 } as const;
+const PAST_MIDNIGHT_MS = 500;
 const PREV = lucide('<path d="m15 18-6-6 6-6"/>');
 const NEXT = lucide('<path d="m9 18 6-6-6-6"/>');
 
@@ -28,7 +30,9 @@ function weeks(m: Month, weekStart: number): Date[][] {
 }
 
 const initial = (day: number) =>
-  new Date(2024, 0, 7 + day).toLocaleDateString(undefined, { weekday: "narrow" });
+  new Date(A_SUNDAY.year, A_SUNDAY.month, A_SUNDAY.date + day).toLocaleDateString(undefined, {
+    weekday: "narrow",
+  });
 
 const setText = (el: Element, text: string) => {
   if (el.textContent !== text) el.textContent = text;
@@ -86,7 +90,7 @@ export const calendar: Widget = (root) => {
       if (shown.year === now.getFullYear() && shown.month === now.getMonth()) shown = monthOf(new Date());
       render();
       armMidnight();
-    }, next.getTime() - now.getTime() + 500);
+    }, next.getTime() - now.getTime() + PAST_MIDNIGHT_MS);
   }
 
   title.addEventListener("click", () => {

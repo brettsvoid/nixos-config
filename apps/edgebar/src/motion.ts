@@ -1,8 +1,8 @@
-const spring = (ratio: number, stiffness: number) =>
+const spring = (dampingRatio: number, stiffness: number) =>
   ({
     type: "spring",
     stiffness,
-    damping: 2 * ratio * Math.sqrt(stiffness),
+    damping: 2 * dampingRatio * Math.sqrt(stiffness),
     mass: 1,
   }) as const;
 

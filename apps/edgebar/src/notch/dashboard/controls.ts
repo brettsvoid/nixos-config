@@ -30,7 +30,7 @@ const ICON = {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-function latest<T>(
+function oneCallAtATime<T>(
   send: (value: T) => Promise<unknown>,
   refused: (reason: unknown) => void,
 ): (value: T) => void {
@@ -89,7 +89,7 @@ function dial(root: HTMLElement, spec: DialSpec, reread: () => void) {
     refusal = `${spec.name}: ${String(reason)}`;
     reread();
   };
-  const send = latest(spec.setLevel, refuse);
+  const send = oneCallAtATime(spec.setLevel, refuse);
   const steps = wheelStepper(WHEEL_PX, fingersUp);
   let level: Level = { value: 0, muted: false };
   let drag: { y: number; from: number; moved: boolean } | null = null;
@@ -169,7 +169,7 @@ function brightnessSlider(root: HTMLElement, reread: () => void) {
   const track = el.querySelector<HTMLElement>(".bri-track")!;
   const label = el.querySelector<HTMLElement>(".bri-label")!;
   let refusal: string | null = null;
-  const send = latest(
+  const send = oneCallAtATime(
     (value: number) => call("set_brightness", { value }),
     (reason) => {
       refusal = `Brightness: ${String(reason)}`;

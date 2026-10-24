@@ -1,6 +1,6 @@
 import "./marquee.css";
 
-const MARQUEE = { pxPerSec: 26, minSec: 4, pause: 0.18 } as const;
+const MARQUEE = { pxPerSec: 26, minSec: 4, dwellFraction: 0.18 } as const;
 
 const resized = new ResizeObserver((entries) => {
   for (const entry of entries) measure(entry.target as HTMLElement);
@@ -22,6 +22,6 @@ function measure(box: HTMLElement) {
   if (overflow <= 1) return;
   const travel = Math.max(MARQUEE.minSec, overflow / MARQUEE.pxPerSec);
   box.style.setProperty("--marquee-shift", `${overflow}px`);
-  box.style.setProperty("--marquee-dur", `${(travel + MARQUEE.pause * travel) * 2}s`);
+  box.style.setProperty("--marquee-dur", `${(travel + MARQUEE.dwellFraction * travel) * 2}s`);
   box.classList.add("scroll");
 }
