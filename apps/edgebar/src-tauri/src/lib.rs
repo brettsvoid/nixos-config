@@ -2529,11 +2529,23 @@ fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &Rec
                 .ok()
         });
         let Some(bar) = bar else { continue };
+        // Once a bar is placed, its height is the WebView's (taller while a
+        // drawer is open, see syncWindowHeight in main.ts), so a rebuild keeps
+        // it: a settings change to the geometry would otherwise cut an open
+        // drawer off at `window_height`.
+        let placed = TRACKED_BARS.with(|bars| bars.borrow().contains_key(&label));
+        let height = placed
+            .then(|| {
+                let px = bar.inner_size().ok()?;
+                Some(px.to_logical::<f64>(bar.scale_factor().ok()?).height)
+            })
+            .flatten()
+            .unwrap_or(window_height);
         let scale = m.scale_factor();
         let pos: LogicalPosition<f64> = m.position().to_logical(scale);
         let size: LogicalSize<f64> = m.size().to_logical(scale);
         let _ = bar.set_position(pos);
-        let _ = bar.set_size(LogicalSize::new(size.width, window_height));
+        let _ = bar.set_size(LogicalSize::new(size.width, height));
         let _ = bar.set_always_on_top(true);
         let _ = bar.set_visible_on_all_workspaces(true);
         make_overlay(&bar);
