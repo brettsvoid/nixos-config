@@ -27,13 +27,10 @@ const POLL = {
   battery: 60000,
 } as const; // ms (network is event-driven, so it has no poll)
 const DEBOUNCE = { volume: 60, mic: 60, brightness: 40 } as const; // ms
-// CPU histogram. `samples` must match CPU_HISTORY in lib.rs and equal `w`, so
-// each column is exactly 1px (otherwise they blur); at CPU_POLL's 2s that's
-// 3.6 min of history. `w`/`h` must match .cpu-graph in styles.css.
+// CPU histogram. `w`/`h` must match .cpu-graph in styles.css.
 const CPU_GRAPH = {
   w: 108,
   h: 14,
-  samples: 108,
   // Load ladder from the sketchybar helper; the colors live in styles.css.
   thresholds: { hot: 0.7, warm: 0.3, mild: 0.1 },
 } as const;
@@ -478,6 +475,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) 
   const cpuCanvas = cpuPill.querySelector<HTMLCanvasElement>(".cpu-graph")!;
   const cpuCtx = cpuCanvas.getContext("2d");
   const cpuHistory: CpuSample[] = [];
+  let cpuCapacity = 0;
 
   const cssVar = (name: string) =>
     getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -499,7 +497,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) 
 
     // One stacked column per sample: system from the baseline, user above it,
     // so a column's full height is total load.
-    const colW = w / CPU_GRAPH.samples; // 1px, butted up with no gap
+    const colW = w / cpuCapacity;
     const sysColor = cssVar("--cpu-sys");
     const userColor = cssVar("--cpu-user");
 
@@ -531,17 +529,18 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) 
   }
 
   on("cpu", (stat) => {
-    if (cpuPill.hidden) return;
+    if (cpuPill.hidden || !cpuCapacity) return;
     cpuHistory.push({ sys: stat.sys, user: stat.user });
-    if (cpuHistory.length > CPU_GRAPH.samples) cpuHistory.shift();
+    if (cpuHistory.length > cpuCapacity) cpuHistory.shift();
     renderCpu(stat);
     drawCpuGraph();
   });
   function seedCpu() {
     call("cpu_state")
       .then((s) => {
+        cpuCapacity = s.capacity;
         if (s.history.length === 0) return;
-        cpuHistory.splice(0, cpuHistory.length, ...s.history.slice(-CPU_GRAPH.samples));
+        cpuHistory.splice(0, cpuHistory.length, ...s.history.slice(-cpuCapacity));
         renderCpu(s.latest);
         drawCpuGraph();
       })

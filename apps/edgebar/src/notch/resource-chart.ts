@@ -3,7 +3,7 @@ import { call, on, type MetricsHistory } from "../ipc";
 import { lucide } from "../icons";
 import { fingersUp, wheelStepper } from "../wheel";
 
-const SPANS_S = [30, 60, 120, 300, 600] as const;
+const SHORTER_SPANS_S = [30, 60, 120, 300];
 const START_SPAN = 2;
 const WHEEL_PX = 60;
 const LINE = 2;
@@ -70,11 +70,12 @@ export function resourceChart(root: HTMLElement): { show(): void; hide(): void; 
 
   const series: Record<SeriesKey, number[]> = { cpu: [], mem: [] };
   let intervalMs = 2000;
+  let spansS = SHORTER_SPANS_S;
   let zoom: number = START_SPAN;
   let visible = false;
 
-  const capacity = () => Math.round((SPANS_S[SPANS_S.length - 1] * 1000) / intervalMs);
-  const shown = () => Math.max(2, Math.round((SPANS_S[zoom] * 1000) / intervalMs));
+  const capacity = () => Math.round((spansS[spansS.length - 1] * 1000) / intervalMs);
+  const shown = () => Math.max(2, Math.round((spansS[zoom] * 1000) / intervalMs));
 
   function showLatest() {
     for (const { key } of SERIES) {
@@ -86,13 +87,16 @@ export function resourceChart(root: HTMLElement): { show(): void; hide(): void; 
   }
 
   function showZoom() {
-    spanEl.textContent = spanLabel(SPANS_S[zoom]);
-    zoomOut.disabled = zoom === SPANS_S.length - 1;
+    spanEl.textContent = spanLabel(spansS[zoom]);
+    zoomOut.disabled = zoom === spansS.length - 1;
     zoomIn.disabled = zoom === 0;
   }
 
   function seed(h: MetricsHistory) {
     intervalMs = h.intervalMs || intervalMs;
+    spansS = [...SHORTER_SPANS_S.filter((s) => s < h.capacitySecs), h.capacitySecs];
+    zoom = Math.min(zoom, spansS.length - 1);
+    showZoom();
     series.cpu = h.cpu.map((s) => clamp01(s.sys + s.user)).slice(-capacity());
     series.mem = h.memUsedFraction.map(clamp01).slice(-capacity());
   }
@@ -169,7 +173,7 @@ export function resourceChart(root: HTMLElement): { show(): void; hide(): void; 
   }
 
   function setZoom(next: number) {
-    const z = Math.max(0, Math.min(SPANS_S.length - 1, next));
+    const z = Math.max(0, Math.min(spansS.length - 1, next));
     if (z === zoom) return;
     zoom = z;
     showZoom();

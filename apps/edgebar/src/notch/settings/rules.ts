@@ -1,5 +1,6 @@
 import { el } from "../../dom";
 import { lucide } from "../../icons";
+import { call } from "../../ipc";
 import { isOverridden, reset, set } from "../../settings";
 import { button, field, segmented, whyLine, type Option, type Part } from "./rows";
 
@@ -20,8 +21,6 @@ const NOTE: Record<Rule["source"], string> = {
   none: "What's playing, as on a workspace with no rule.",
 };
 
-const NAMES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "*"];
-
 const PLUS = lucide('<path d="M5 12h14"/><path d="M12 5v14"/>');
 const TRASH = lucide(
   '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
@@ -29,9 +28,9 @@ const TRASH = lucide(
 
 const keyOf = (ws: string) => `notch.workspaces.${ws}`;
 
-function sorted(names: string[]): string[] {
-  const rank = (n: string) => (n === "*" ? 2 : NAMES.includes(n) ? 0 : 1);
-  return [...names].sort((a, b) => rank(a) - rank(b) || NAMES.indexOf(a) - NAMES.indexOf(b) || a.localeCompare(b));
+function sorted(keys: string[], order: string[]): string[] {
+  const rank = (n: string) => (n === "*" ? 2 : order.includes(n) ? 0 : 1);
+  return [...keys].sort((a, b) => rank(a) - rank(b) || order.indexOf(a) - order.indexOf(b) || a.localeCompare(b));
 }
 
 function withSource(rule: Rule, source: string): Rule {
@@ -144,35 +143,46 @@ export function rulesPart(): Part {
   box.append(list, empty, add);
   const rows = new Map<string, RuleRow>();
   let rules: Record<string, Rule> = {};
+  let names: string[] = [];
+
+  function draw() {
+    const shown = sorted(Object.keys(rules), names);
+    for (const [ws, row] of rows) {
+      if (!(ws in rules)) {
+        row.el.remove();
+        rows.delete(ws);
+      }
+    }
+    shown.forEach((ws, i) => {
+      let row = rows.get(ws);
+      if (!row) {
+        row = ruleRow(ws);
+        rows.set(ws, row);
+      }
+      row.draw(rules[ws], rules);
+      // Moved only when out of place: moving a row blurs a field typed in.
+      if (list.children[i] !== row.el) list.insertBefore(row.el, list.children[i] ?? null);
+    });
+    empty.hidden = shown.length > 0;
+    add.disabled = names.every((n) => n in rules);
+  }
 
   add.addEventListener("click", () => {
-    const free = NAMES.find((n) => !(n in rules));
+    const free = names.find((n) => !(n in rules));
     if (free) void set(keyOf(free), { source: "focusedWindow" }).catch(() => {});
   });
+  call("get_config")
+    .then((cfg) => {
+      names = [...cfg.workspaceNames, "*"];
+      draw();
+    })
+    .catch(() => {});
 
   return {
     el: box,
     update(s) {
       rules = s.notch.workspaces;
-      const names = sorted(Object.keys(rules));
-      for (const [ws, row] of rows) {
-        if (!(ws in rules)) {
-          row.el.remove();
-          rows.delete(ws);
-        }
-      }
-      names.forEach((ws, i) => {
-        let row = rows.get(ws);
-        if (!row) {
-          row = ruleRow(ws);
-          rows.set(ws, row);
-        }
-        row.draw(rules[ws], rules);
-        // Moved only when out of place: moving a row blurs a field typed in.
-        if (list.children[i] !== row.el) list.insertBefore(row.el, list.children[i] ?? null);
-      });
-      empty.hidden = names.length > 0;
-      add.disabled = NAMES.every((n) => n in rules);
+      draw();
     },
   };
 }
