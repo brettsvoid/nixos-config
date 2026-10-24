@@ -1,7 +1,7 @@
 import "./settings.css";
 import { call, on, type Config, type SettingsFiles, type SetupItem } from "../../ipc";
 import { lucide } from "../../icons";
-import { current, error, onChange, type Settings } from "../../settings";
+import { current, errors, onChange, type Settings } from "../../settings";
 import { assistantView } from "../assistant";
 import { dashboardView } from "../dashboard";
 import type { NotchView } from "../view";
@@ -328,9 +328,9 @@ export const settingsView: NotchView = {
     }
 
     function update(s: Settings) {
-      const problem = error();
-      banner.hidden = problem === null;
-      bannerText.textContent = problem ?? "";
+      const problems = errors();
+      banner.hidden = problems.length === 0;
+      bannerText.textContent = problems.join("\n");
       for (const { part } of bodies.values()) part.update?.(s);
     }
     onChange(update);

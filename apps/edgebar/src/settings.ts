@@ -5,7 +5,7 @@ export type Settings = typeof defaults;
 
 export type SettingValue = string | number | boolean | object;
 
-let snapshot: SettingsSnapshot = { effective: defaults, user: {}, error: null };
+let snapshot: SettingsSnapshot = { effective: defaults, user: {}, errors: [] };
 let heard = false;
 const listeners = new Set<(settings: Settings) => void>();
 
@@ -38,8 +38,8 @@ export function isSet(key: string): boolean {
   return true;
 }
 
-export function error(): string | null {
-  return snapshot.error;
+export function errors(): string[] {
+  return snapshot.errors;
 }
 
 export async function set(key: string, value: SettingValue): Promise<void> {

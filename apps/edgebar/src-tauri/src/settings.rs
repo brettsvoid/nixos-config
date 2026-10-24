@@ -9,6 +9,9 @@ const BUNDLED: &str = include_str!("../config.default.json");
 const NIX_FILE: &str = "config.json";
 const USER_FILE: &str = "settings.json";
 const LEGACY_APPEARANCE_FILE: &str = "appearance";
+/// Settings whose children are the user's own keys (AeroSpace workspace
+/// names), so any child is allowed.
+const FREE_FORM_KEYS: [&str; 1] = ["notch.workspaces"];
 
 fn empty() -> Value {
     Value::Object(Map::new())
@@ -75,17 +78,21 @@ fn remove_path(root: &mut Value, path: &[String]) {
     }
 }
 
+fn is_free_form(dotted: &str) -> bool {
+    FREE_FORM_KEYS.contains(&dotted)
+}
+
 fn check(defaults: &Value, path: &[String], value: &Value) -> Result<(), String> {
     let mut node = defaults;
     for (depth, key) in path.iter().enumerate() {
+        let parent = path[..depth].join(".");
         let Value::Object(map) = node else {
-            let parent = path[..depth].join(".");
             return Err(format!(
                 "`{parent}` is {}, so it has no `{key}`",
                 kind(node)
             ));
         };
-        if map.is_empty() {
+        if is_free_form(&parent) {
             return Ok(());
         }
         let Some(child) = map.get(key) else {
@@ -98,7 +105,7 @@ fn check(defaults: &Value, path: &[String], value: &Value) -> Result<(), String>
 
 fn check_value(default: &Value, value: &Value, name: &str) -> Result<(), String> {
     match (default, value) {
-        (Value::Object(d), Value::Object(v)) if !d.is_empty() => {
+        (Value::Object(d), Value::Object(v)) if !is_free_form(name) => {
             v.iter().try_for_each(|(key, child)| {
                 let name = format!("{name}.{key}");
                 match d.get(key) {
@@ -127,9 +134,10 @@ fn leaves(defaults: &Value, user: &Value) -> Vec<(Vec<String>, Value)> {
             out.push((path.clone(), node.clone()));
             return;
         };
+        let free_form = is_free_form(&path.join("."));
         for (key, child) in n {
             path.push(key.clone());
-            if d.is_empty() {
+            if free_form {
                 out.push((path.clone(), child.clone()));
             } else {
                 walk(d.get(key), child, path, out);
@@ -180,16 +188,20 @@ pub fn cache_dir() -> Option<PathBuf> {
 }
 
 fn read_object(file: &Path) -> Result<Option<Value>, String> {
+    let name = file.file_name().map_or_else(
+        || file.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
     let text = match std::fs::read_to_string(file) {
         Ok(text) if text.trim().is_empty() => return Ok(None),
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("cannot be read: {e}")),
+        Err(e) => return Err(format!("{name} cannot be read: {e}")),
     };
     match serde_json::from_str::<Value>(&text) {
         Ok(doc @ Value::Object(_)) => Ok(Some(doc)),
-        Ok(_) => Err("is not a JSON object".to_string()),
-        Err(e) => Err(format!("is not valid JSON: {e}")),
+        Ok(_) => Err(format!("{name} is not a JSON object")),
+        Err(e) => Err(format!("{name} is not valid JSON: {e}")),
     }
 }
 
@@ -214,15 +226,19 @@ fn trial(base: &Value, user: &Value) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-fn base_layer(defaults: &Value, dir: Option<&Path>) -> Value {
-    let nix = dir
-        .and_then(|d| read_object(&d.join(NIX_FILE)).ok().flatten())
-        .unwrap_or_else(empty);
+/// The defaults with config.json over them, or the defaults alone and the
+/// reason when config.json can't be used.
+fn base_layer(defaults: &Value, dir: Option<&Path>) -> (Value, Option<String>) {
+    let ignored = |why: String| (defaults.clone(), Some(format!("{why}; it is ignored")));
+    let nix = match dir.map(|d| read_object(&d.join(NIX_FILE))) {
+        Some(Ok(Some(doc))) => doc,
+        Some(Err(why)) => return ignored(why),
+        _ => return (defaults.clone(), None),
+    };
     let base = merge(defaults.clone(), nix);
-    if trial(&base, &empty()).is_ok() {
-        base
-    } else {
-        defaults.clone()
+    match trial(&base, &empty()) {
+        Ok(()) => (base, None),
+        Err(why) => ignored(format!("{NIX_FILE}: {why}")),
     }
 }
 
@@ -230,7 +246,7 @@ fn base_layer(defaults: &Value, dir: Option<&Path>) -> Value {
 pub struct Snapshot {
     effective: Value,
     user: Value,
-    error: Option<String>,
+    errors: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -241,22 +257,18 @@ pub struct Loaded {
 
 pub fn load(dir: Option<&Path>) -> Loaded {
     let defaults = bundled();
-    let base = base_layer(&defaults, dir);
-    let mut problems = Vec::new();
+    let (base, nix_problem) = base_layer(&defaults, dir);
+    let mut problems: Vec<String> = nix_problem.into_iter().collect();
     let raw = match dir.map(|d| read_object(&d.join(USER_FILE))) {
         Some(Ok(Some(doc))) => doc,
         Some(Err(why)) => {
-            problems.push(format!("settings.json {why}; it is ignored"));
+            problems.push(format!("{why}; it is ignored"));
             empty()
         }
         _ => empty(),
     };
     let (user, dropped) = sanitise(&defaults, &raw, |candidate| trial(&base, candidate));
-    problems.extend(
-        dropped
-            .into_iter()
-            .map(|why| format!("settings.json: {why}")),
-    );
+    problems.extend(dropped.into_iter().map(|why| format!("{USER_FILE}: {why}")));
     let effective = merge(base, user.clone());
     let config = serde_json::from_value(effective.clone())
         .expect("every kept override passed `trial` on top of this base");
@@ -265,7 +277,7 @@ pub fn load(dir: Option<&Path>) -> Loaded {
         snapshot: Snapshot {
             effective,
             user,
-            error: (!problems.is_empty()).then(|| problems.join("\n")),
+            errors: problems,
         },
     }
 }
@@ -274,9 +286,7 @@ fn write_override(dir: &Path, key: &str, value: Value) -> Result<bool, String> {
     let path = split_key(key)?;
     let file = dir.join(USER_FILE);
     let raw = read_object(&file)
-        .map_err(|why| {
-            format!("settings.json {why}; it was left as it is, fix or delete it first")
-        })?
+        .map_err(|why| format!("{why}; it was left as it is, fix or delete it first"))?
         .unwrap_or_else(empty);
     let mut next = raw.clone();
     if value.is_null() {
@@ -284,7 +294,7 @@ fn write_override(dir: &Path, key: &str, value: Value) -> Result<bool, String> {
     } else {
         let defaults = bundled();
         check(&defaults, &path, &value)?;
-        let base = base_layer(&defaults, Some(dir));
+        let (base, _) = base_layer(&defaults, Some(dir));
         let (mut kept, _) = sanitise(&defaults, &raw, |candidate| trial(&base, candidate));
         set_path(&mut kept, &path, value.clone());
         trial(&base, &kept).map_err(|why| format!("`{key}`: {why}"))?;
@@ -306,7 +316,7 @@ pub fn import_legacy_appearance(dir: &Path) -> Result<(), String> {
     };
     let mode = Value::String(text.trim().to_string());
     if serde_json::from_value::<Appearance>(mode.clone()).is_ok() {
-        let below = base_layer(&bundled(), Some(dir));
+        let (below, _) = base_layer(&bundled(), Some(dir));
         let value = if below.get("appearance") == Some(&mode) {
             Value::Null
         } else {
@@ -322,9 +332,9 @@ struct Changes {
     colors: bool,
     appearance: bool,
     geometry: bool,
-    idle: bool,
-    rules: bool,
-    flash_hold: bool,
+    notch_idle: bool,
+    notch_workspaces: bool,
+    notch_transient_ms: bool,
     oled: bool,
     tint: bool,
     toggles: bool,
@@ -335,9 +345,9 @@ fn changes(prev: &Config, next: &Config) -> Changes {
         colors: prev.colors != next.colors,
         appearance: prev.appearance != next.appearance,
         geometry: prev.geometry != next.geometry,
-        idle: prev.notch.idle != next.notch.idle,
-        rules: prev.notch.workspaces != next.notch.workspaces,
-        flash_hold: prev.notch.transient_ms != next.notch.transient_ms,
+        notch_idle: prev.notch.idle != next.notch.idle,
+        notch_workspaces: prev.notch.workspaces != next.notch.workspaces,
+        notch_transient_ms: prev.notch.transient_ms != next.notch.transient_ms,
         oled: prev.oled != next.oled,
         tint: prev.wallpaper.tint != next.wallpaper.tint,
         toggles: prev.toggles != next.toggles,
@@ -347,9 +357,9 @@ fn changes(prev: &Config, next: &Config) -> Changes {
 fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
     let c = changes(prev, next);
 
-    if c.colors || c.appearance || c.geometry || c.idle || c.oled {
+    if c.colors || c.appearance || c.geometry || c.notch_idle || c.oled {
         let idle = c
-            .idle
+            .notch_idle
             .then(|| resolve_notch_idle(next.notch.idle.as_deref()));
         {
             let state = app.state::<Mutex<ThemeState>>();
@@ -374,7 +384,7 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
         let _ = app.run_on_main_thread(move || crate::rebuild_displays(&handle));
     }
 
-    if c.rules || c.flash_hold {
+    if c.notch_workspaces || c.notch_transient_ms {
         app.state::<crate::notch::NotchState>()
             .set_config(app, next.notch.clone());
     }
@@ -721,12 +731,12 @@ mod tests {
         assert_eq!(loaded.config.notch.transient_ms, Some(900));
         assert_eq!(loaded.config.theme_command.as_deref(), Some("gen"));
         assert_eq!(
-            loaded.snapshot.error.as_deref(),
-            Some(
-                "settings.json: `appearance`: unknown variant `purple`, expected one of `light`, `dark`, `auto`\n\
-                 settings.json: `bogus` is not a setting\n\
-                 settings.json: `geometry.frameRadius` takes a number, not a string"
-            )
+            loaded.snapshot.errors,
+            [
+                "settings.json: `appearance`: unknown variant `purple`, expected one of `light`, `dark`, `auto`",
+                "settings.json: `bogus` is not a setting",
+                "settings.json: `geometry.frameRadius` takes a number, not a string",
+            ]
         );
     }
 
@@ -738,8 +748,8 @@ mod tests {
         assert_eq!(loaded.snapshot.user, json!({}));
         assert_eq!(loaded.snapshot.effective, bundled());
         assert_eq!(
-            loaded.snapshot.error.as_deref(),
-            Some("settings.json is not valid JSON: EOF while parsing a value at line 1 column 32; it is ignored")
+            loaded.snapshot.errors,
+            ["settings.json is not valid JSON: EOF while parsing a value at line 1 column 32; it is ignored"]
         );
         assert_eq!(dir.read(USER_FILE), "{\"geometry\": {\"frameRadius\": 40,");
     }
@@ -747,21 +757,47 @@ mod tests {
     #[test]
     fn a_missing_or_blank_file_is_no_overrides() {
         let dir = Scratch::new("blank");
-        assert_eq!(load(Some(dir.path())).snapshot.error, None);
+        assert_eq!(load(Some(dir.path())).snapshot.errors, Vec::<String>::new());
         dir.write(USER_FILE, "  \n");
         let loaded = load(Some(dir.path()));
-        assert_eq!(loaded.snapshot.error, None);
+        assert_eq!(loaded.snapshot.errors, Vec::<String>::new());
         assert_eq!(loaded.snapshot.user, json!({}));
         assert_eq!(load(None).snapshot.effective, bundled());
     }
 
     #[test]
-    fn a_config_json_that_no_longer_fits_is_ignored() {
+    fn a_config_json_that_no_longer_fits_is_ignored_and_reported() {
         let dir = Scratch::new("badnix");
         dir.write(NIX_FILE, r#"{"geometry": {"frameRadius": "tall"}}"#);
         let loaded = load(Some(dir.path()));
         assert_eq!(loaded.snapshot.effective, bundled());
-        assert_eq!(loaded.snapshot.error, None);
+        assert_eq!(
+            loaded.snapshot.errors,
+            ["config.json: invalid type: string \"tall\", expected f64; it is ignored"]
+        );
+
+        dir.write(NIX_FILE, "[1]");
+        assert_eq!(
+            load(Some(dir.path())).snapshot.errors,
+            ["config.json is not a JSON object; it is ignored"]
+        );
+    }
+
+    #[test]
+    fn only_a_free_form_key_takes_children_it_does_not_list() {
+        let defaults = json!({"notch": {"workspaces": {}}, "clock": {}});
+        assert_eq!(
+            check(
+                &defaults,
+                &path("notch.workspaces.3"),
+                &json!({"source": "none"})
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            check(&defaults, &path("clock.hour24"), &json!(true)),
+            Err("`clock.hour24` is not a setting".to_string())
+        );
     }
 
     #[test]
@@ -941,7 +977,7 @@ mod tests {
         assert_eq!(
             changes(&base, &config_with("notch.idle", json!("clock"))),
             Changes {
-                idle: true,
+                notch_idle: true,
                 ..Changes::default()
             }
         );
@@ -972,14 +1008,14 @@ mod tests {
                 &config_with("notch.workspaces.1", json!({"source": "focusedWindow"}))
             ),
             Changes {
-                rules: true,
+                notch_workspaces: true,
                 ..Changes::default()
             }
         );
         assert_eq!(
             changes(&base, &config_with("notch.transientMs", json!(900))),
             Changes {
-                flash_hold: true,
+                notch_transient_ms: true,
                 ..Changes::default()
             }
         );

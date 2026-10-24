@@ -179,7 +179,7 @@ export interface AssistantChunk {
 export interface SettingsSnapshot {
   effective: Record<string, unknown>;
   user: Record<string, unknown>;
-  error: string | null;
+  errors: string[];
 }
 
 export interface SetupItem {
