@@ -396,6 +396,8 @@ struct Changes {
     flash_hold: bool,
     /// `oled` or `wallpaper.tint`
     wallpaper: bool,
+    /// `toggles.focusShortcut`
+    toggles: bool,
 }
 
 fn changes(prev: &Config, next: &Config) -> Changes {
@@ -407,6 +409,7 @@ fn changes(prev: &Config, next: &Config) -> Changes {
         rules: prev.notch.workspaces != next.notch.workspaces,
         flash_hold: prev.notch.transient_ms != next.notch.transient_ms,
         wallpaper: prev.oled != next.oled || prev.wallpaper.tint != next.wallpaper.tint,
+        toggles: prev.toggles != next.toggles,
     }
 }
 
@@ -458,6 +461,11 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
     // each listing reads it fresh.
     if c.wallpaper {
         reload_theme(app);
+    }
+
+    if c.toggles {
+        app.state::<crate::toggles::Toggles>()
+            .set_config(app, next.toggles.clone());
     }
 }
 
@@ -980,6 +988,13 @@ mod tests {
                 "{key}"
             );
         }
+        assert_eq!(
+            changes(&base, &config_with("toggles.focusShortcut", json!("Focus"))),
+            Changes {
+                toggles: true,
+                ..Changes::default()
+            }
+        );
         assert_eq!(
             changes(&base, &config_with("wallpaper.folder", json!("~/Pictures"))),
             Changes::default()

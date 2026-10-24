@@ -154,7 +154,8 @@ const _: () = {
 
 /// Managed state: the config the rows read and what they keep between calls.
 pub struct Toggles {
-    config: TogglesConfig,
+    /// Replaced when a setting changes it (`set_config`).
+    config: Mutex<TogglesConfig>,
     /// `shortcuts list`'s output, and when it was read.
     shortcuts: Mutex<Option<(Instant, String)>>,
     /// The device networksetup names for Wi-Fi ("en0"), once a write has found it.
@@ -166,11 +167,23 @@ pub struct Toggles {
 impl Toggles {
     pub fn new(config: TogglesConfig) -> Self {
         Self {
-            config,
+            config: Mutex::new(config),
             shortcuts: Mutex::new(None),
             wifi_device: OnceLock::new(),
             caffeine: Mutex::new(None),
         }
+    }
+
+    /// Swap in a changed config, then push all five as `toggles` so the
+    /// dashboard shows what the Focus toggle can do now.
+    pub fn set_config(&self, app: &tauri::AppHandle, config: TogglesConfig) {
+        *self.config.lock().unwrap() = config;
+        let _ = app.emit("toggles", self.read_all());
+    }
+
+    /// The Shortcut the Focus toggle runs; empty when none is named.
+    pub fn focus_shortcut(&self) -> String {
+        self.config.lock().unwrap().focus_shortcut.clone()
     }
 
     fn read_all(&self) -> Vec<ToggleState> {
@@ -350,11 +363,11 @@ fn read_focus(t: &Toggles) -> Reading {
     };
     let on = mode.is_some();
 
-    let name = t.config.focus_shortcut.as_str();
+    let name = t.focus_shortcut();
     if name.is_empty() {
         return Reading::unavailable(on, "Name a Shortcut in toggles.focusShortcut");
     }
-    match t.has_shortcut(name) {
+    match t.has_shortcut(&name) {
         Some(true) => {}
         Some(false) => {
             return Reading::unavailable(
@@ -378,7 +391,7 @@ fn read_focus(t: &Toggles) -> Reading {
 /// The Shortcut toggles Focus, so `on` is not passed on: `converge` only calls
 /// this when Focus is in the other state.
 fn write_focus(t: &Toggles, _on: bool) -> Result<(), String> {
-    let name = &t.config.focus_shortcut;
+    let name = t.focus_shortcut();
     let mut cmd = Command::new("/usr/bin/shortcuts");
     cmd.args(["run", name.as_str()]);
     run(cmd)
