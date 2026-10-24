@@ -24,6 +24,9 @@ use objc2_web_kit::WKWebView;
 use tauri::{AppHandle, Manager};
 
 const TIMEOUT: Duration = Duration::from_secs(5);
+/// `kVK_Escape` and `kVK_Delete` (Backspace) from Carbon's Events.h.
+const KEY_ESCAPE: u16 = 53;
+const KEY_DELETE: u16 = 51;
 
 type Reply = Result<String, String>;
 
@@ -149,14 +152,14 @@ fn snap(app: &AppHandle, path: PathBuf) -> Reply {
 fn type_keys(app: &AppHandle, text: String) -> Reply {
     let (tx, rx) = mpsc::channel();
     app.run_on_main_thread(move || {
-        let _ = tx.send(post_keys(&text));
+        let _ = tx.send(post_keys_to_own_queue(&text));
     })
     .map_err(|e| format!("main thread: {e}"))?;
     rx.recv_timeout(TIMEOUT)
         .unwrap_or_else(|_| Err(format!("no answer within {}s", TIMEOUT.as_secs())))
 }
 
-fn post_keys(text: &str) -> Reply {
+fn post_keys_to_own_queue(text: &str) -> Reply {
     use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
     use objc2_foundation::{NSPoint, NSString};
 
@@ -166,8 +169,8 @@ fn post_keys(text: &str) -> Reply {
     let number = key_window.as_ref().map_or(0, |w| w.windowNumber());
     for ch in text.chars() {
         let code = match ch {
-            '\u{1b}' => 53,
-            '\u{7f}' => 51,
+            '\u{1b}' => KEY_ESCAPE,
+            '\u{7f}' => KEY_DELETE,
             _ => 0,
         };
         let chars = NSString::from_str(&ch.to_string());
@@ -195,10 +198,22 @@ fn post_keys(text: &str) -> Reply {
     ))
 }
 
+enum Pixels {
+    Pending,
+    Failed,
+    Ready(CFRetained<CGImage>),
+}
+
+impl From<Option<CFRetained<CGImage>>> for Pixels {
+    fn from(image: Option<CFRetained<CGImage>>) -> Self {
+        image.map_or(Pixels::Failed, Pixels::Ready)
+    }
+}
+
 struct Plane {
     level: isize,
     rect: CGRect,
-    image: Option<CFRetained<CGImage>>,
+    pixels: Pixels,
 }
 
 struct Snap {
@@ -231,7 +246,9 @@ fn start_snap(app: &AppHandle, path: PathBuf, reply: Sender<Reply>) {
             planes.push(Plane {
                 level: f.window.level(),
                 rect,
-                image: layer.and_then(|l| render_layer(&l, rect.size, scale)),
+                pixels: layer
+                    .and_then(|l| render_layer(&l, rect.size, scale))
+                    .into(),
             });
         }
     });
@@ -252,7 +269,7 @@ fn start_snap(app: &AppHandle, path: PathBuf, reply: Sender<Reply>) {
             planes.push(Plane {
                 level,
                 rect: ns_window.frame(),
-                image: None,
+                pixels: Pixels::Failed,
             });
             continue;
         };
@@ -261,7 +278,7 @@ fn start_snap(app: &AppHandle, path: PathBuf, reply: Sender<Reply>) {
         planes.push(Plane {
             level,
             rect,
-            image: None,
+            pixels: Pixels::Pending,
         });
     }
 
@@ -280,7 +297,7 @@ fn start_snap(app: &AppHandle, path: PathBuf, reply: Sender<Reply>) {
         let job = job.clone();
         snapshot_webview(&wk, move |image| {
             let mut job = job.borrow_mut();
-            job.planes[i].image = image;
+            job.planes[i].pixels = image.into();
             job.in_flight -= 1;
             if job.in_flight == 0 {
                 finish(&job);
@@ -307,8 +324,12 @@ fn compose(job: &Snap) -> Result<CFRetained<CGImage>, String> {
     );
     CGContext::translate_ctm(Some(&ctx), -job.screen.origin.x, -job.screen.origin.y);
     for p in planes {
-        let Some(image) = p.image.as_deref() else {
-            return Err(format!("a level {} window did not render", p.level));
+        let image = match &p.pixels {
+            Pixels::Ready(image) => image,
+            Pixels::Pending => {
+                return Err(format!("a level {} window is still rendering", p.level))
+            }
+            Pixels::Failed => return Err(format!("a level {} window did not render", p.level)),
         };
         CGContext::draw_image(Some(&ctx), p.rect, Some(image));
     }

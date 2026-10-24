@@ -6,7 +6,7 @@ pub struct Keyboard(Mutex<Option<Held>>);
 
 struct Held {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    previous: Option<i32>,
+    previous_pid: Option<i32>,
 }
 
 #[tauri::command]
@@ -17,7 +17,7 @@ pub fn take_keyboard(app: AppHandle, window: WebviewWindow) {
         let mut held = state.0.lock().unwrap();
         if held.is_none() {
             *held = Some(Held {
-                previous: front_app(),
+                previous_pid: other_front_app_pid(),
             });
         }
         let _ = window.set_focusable(true);
@@ -39,8 +39,9 @@ pub fn release_keyboard(app: AppHandle) {
     });
 }
 
+/// The frontmost app's pid, or None when edgebar itself is in front.
 #[cfg(target_os = "macos")]
-fn front_app() -> Option<i32> {
+fn other_front_app_pid() -> Option<i32> {
     let me = std::process::id() as i32;
     objc2_app_kit::NSWorkspace::sharedWorkspace()
         .frontmostApplication()
@@ -49,7 +50,7 @@ fn front_app() -> Option<i32> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn front_app() -> Option<i32> {
+fn other_front_app_pid() -> Option<i32> {
     None
 }
 
@@ -65,7 +66,7 @@ fn hand_back(held: Held) {
         return;
     }
     match held
-        .previous
+        .previous_pid
         .and_then(NSRunningApplication::runningApplicationWithProcessIdentifier)
     {
         Some(previous) => {

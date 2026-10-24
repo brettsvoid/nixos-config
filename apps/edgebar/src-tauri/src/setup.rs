@@ -86,12 +86,12 @@ const CHECKS: [Check; 9] = [
     Check {
         id: "spotify",
         label: "Automation: Spotify",
-        probe: |app| automation(app, 0),
+        probe: |app| automation_as_last_asked(app, 0),
     },
     Check {
         id: "music",
         label: "Automation: Music",
-        probe: |app| automation(app, 1),
+        probe: |app| automation_as_last_asked(app, 1),
     },
     Check {
         id: "focusShortcut",
@@ -104,7 +104,7 @@ const CHECKS: [Check; 9] = [
         probe: |_| {
             tool(
                 "aerospace",
-                false,
+                Search::Path,
                 "Not on edgebar's PATH. The workspace dots and the notch's workspace rules need it.",
             )
         },
@@ -121,7 +121,7 @@ const CHECKS: [Check; 9] = [
                 .clone();
             tool(
                 &cmd,
-                false,
+                Search::Path,
                 "Not found, so a wallpaper pick can't re-theme the bar. The Nix config installs it.",
             )
         },
@@ -138,7 +138,7 @@ const CHECKS: [Check; 9] = [
                 .clone();
             tool(
                 &cmd,
-                false,
+                Search::Path,
                 "Not found, so the Wallpapers view can't set the desktop. The Nix config installs it.",
             )
         },
@@ -149,7 +149,7 @@ const CHECKS: [Check; 9] = [
         probe: |app| {
             tool(
                 &crate::settings::current(app).assistant.command,
-                true,
+                Search::PathAndLocalBin,
                 "Not on PATH or in ~/.local/bin. Install Claude Code, or set the CLI command under Assistant.",
             )
         },
@@ -201,6 +201,9 @@ pub async fn setup_run(app: AppHandle, id: String) -> Result<Vec<SetupItem>, Str
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// The AppleScript error macOS returns when the user refused Automation.
+const ERR_AE_EVENT_NOT_PERMITTED: &str = "-1743";
 
 const INHERITED: &str = "edgebar has the permissions of the app that started it \
 (kitty today, through herdr), so the grant goes to that app.";
@@ -305,7 +308,7 @@ fn installed(_: &str) -> bool {
     false
 }
 
-fn automation(app: &AppHandle, player: usize) -> Status {
+fn automation_as_last_asked(app: &AppHandle, player: usize) -> Status {
     let name = PLAYERS[player].name;
     if !installed(PLAYERS[player].bundle_id) {
         return Status::new(State::Unknown, format!("{name} isn't installed."), None);
@@ -348,7 +351,7 @@ fn ask(app: &AppHandle, player: usize) -> Result<(), String> {
         State::Ready
     } else if out.status.success() {
         return Err(format!("{name} isn't running. Start it, then ask again."));
-    } else if stderr.contains("-1743") {
+    } else if stderr.contains(ERR_AE_EVENT_NOT_PERMITTED) {
         State::Missing
     } else {
         return Err(format!("{name} didn't answer: {stderr}"));
@@ -386,9 +389,16 @@ fn focus_shortcut(app: &AppHandle) -> Status {
     }
 }
 
-fn tool(command: &str, local_bin: bool, missing: &str) -> Status {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Search {
+    Path,
+    /// PATH, then ~/.local/bin, where Claude Code's installer puts it.
+    PathAndLocalBin,
+}
+
+fn tool(command: &str, search: Search, missing: &str) -> Status {
     let path = std::env::var_os("PATH");
-    let home = local_bin
+    let home = (search == Search::PathAndLocalBin)
         .then(|| std::env::var_os("HOME").map(PathBuf::from))
         .flatten();
     match crate::assistant::resolve_command(command, path.as_deref(), home.as_deref()) {
@@ -411,12 +421,12 @@ mod tests {
 
     #[test]
     fn a_tool_is_found_by_path_or_on_path_and_named_when_missing() {
-        let found = tool("/bin/sh", false, "gone");
+        let found = tool("/bin/sh", Search::Path, "gone");
         assert_eq!(
             (found.state, found.detail.as_str()),
             (State::Ready, "/bin/sh")
         );
-        let missing = tool("no-such-edgebar-tool", false, "gone");
+        let missing = tool("no-such-edgebar-tool", Search::Path, "gone");
         assert_eq!(
             (missing.state, missing.detail.as_str()),
             (State::Missing, "`no-such-edgebar-tool`: gone")
