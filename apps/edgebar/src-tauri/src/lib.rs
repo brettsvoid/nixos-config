@@ -44,8 +44,8 @@ mod devtools;
 mod settings;
 
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
-/// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
-/// (persisted to `~/.config/edgebar/appearance`).
+/// `Light`/`Dark` pin it. The `appearance` setting, so the user's choice lives
+/// in settings.json like any other.
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum Appearance {
@@ -400,44 +400,10 @@ fn load_palettes() -> Palettes {
         })
 }
 
-/// Where the bar's light/dark/auto toggle is persisted. Not config.json: that
-/// is a read-only symlink into the Nix store.
-fn appearance_state_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/appearance"))
-}
-
-fn appearance_label(a: Appearance) -> &'static str {
-    match a {
-        Appearance::Light => "light",
-        Appearance::Dark => "dark",
-        Appearance::Auto => "auto",
-    }
-}
-
-fn persist_appearance(a: Appearance) {
-    if let Some(path) = appearance_state_path() {
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(path, appearance_label(a));
-    }
-}
-
-fn load_persisted_appearance() -> Option<Appearance> {
-    let text = std::fs::read_to_string(appearance_state_path()?).ok()?;
-    match text.trim() {
-        "light" => Some(Appearance::Light),
-        "dark" => Some(Appearance::Dark),
-        "auto" => Some(Appearance::Auto),
-        _ => None,
-    }
-}
-
 const DEFAULT_MATUGEN_SCHEME: &str = "scheme-tonal-spot";
 
 /// matugen scheme persisted by `select-scheme` / the theme view, read by
-/// `generate-edgebar-theme`. Lives next to the appearance file.
+/// `generate-edgebar-theme`.
 fn scheme_state_path() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .map(|home| std::path::Path::new(&home).join(".config/edgebar/scheme"))
@@ -460,7 +426,7 @@ fn persist_scheme(scheme: &str) {
     }
 }
 
-/// The theme view's ink override, next to the appearance and scheme files.
+/// The theme view's ink override, next to the scheme file.
 fn ink_state_path() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .map(|home| std::path::Path::new(&home).join(".config/edgebar/ink.json"))
@@ -707,17 +673,15 @@ async fn pick_colour(initial: String) -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", r / 257, g / 257, b / 257))
 }
 
-/// 3-way appearance toggle from the bar (light / dark / auto). Persists the
-/// choice and re-themes live.
+/// The Wallpapers view's light / dark / auto toggle. The mode is the
+/// `appearance` setting, so this is `set_setting` for that key under its own
+/// name; the settings converge re-themes. Rejects a mode that isn't one of the
+/// three.
 #[tauri::command]
-fn set_appearance(app: tauri::AppHandle, mode: String) {
-    let appearance = match mode.as_str() {
-        "light" => Appearance::Light,
-        "dark" => Appearance::Dark,
-        _ => Appearance::Auto,
-    };
-    persist_appearance(appearance);
-    apply_theme(&app, appearance);
+async fn set_appearance(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    settings::set_setting(app, "appearance".to_string(), serde_json::Value::String(mode))
+        .await
+        .map(drop)
 }
 
 #[derive(Clone, Serialize)]
@@ -2906,14 +2870,18 @@ pub fn run() {
             devtools::dev_result
         ])
         .setup(|app| {
+            if let Some(dir) = settings::dir() {
+                if let Err(why) = settings::import_legacy_appearance(&dir) {
+                    eprintln!("edgebar: the old appearance file was not imported: {why}");
+                }
+            }
             let loaded = settings::load(settings::dir().as_deref());
             let config = loaded.config.clone();
             app.manage(settings::Store::new(loaded));
             app.manage(keyboard::Keyboard::default());
             let palettes = load_palettes();
-            // Runtime override (the bar's light/dark/auto toggle) wins over the
-            // config's default; Auto then resolves against the live system setting.
-            let appearance = load_persisted_appearance().unwrap_or(config.appearance);
+            // Auto resolves against the live system setting.
+            let appearance = config.appearance;
             let scheme = resolve_scheme(appearance);
 
             // Accessory app: no Dock icon and never the active app, so showing

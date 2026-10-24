@@ -213,6 +213,8 @@ type NoArgs = Record<string, never>;
 
 export interface Commands {
   get_config: { args: NoArgs; result: Config };
+  // The `appearance` setting under its own name; rejects anything but
+  // "light" | "dark" | "auto".
   set_appearance: { args: { mode: string }; result: void };
   set_ink: { args: { colour: string | null }; result: void };
   pick_colour: { args: { initial: string }; result: string | null };

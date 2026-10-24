@@ -17,9 +17,7 @@
 //! input enters, in `load` (a hand edit) and `set` (the settings view), and nowhere
 //! else.
 
-use crate::{
-    apply_theme, persist_appearance, reload_theme, resolve_notch_idle, Config, ThemeState,
-};
+use crate::{apply_theme, reload_theme, resolve_notch_idle, Appearance, Config, ThemeState};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
@@ -29,6 +27,9 @@ use tauri::{Emitter, Manager};
 const BUNDLED: &str = include_str!("../config.default.json");
 const NIX_FILE: &str = "config.json";
 const USER_FILE: &str = "settings.json";
+/// Where the bar's light/dark/auto toggle kept the mode before it became the
+/// `appearance` setting. Only `import_legacy_appearance` reads it.
+const LEGACY_APPEARANCE_FILE: &str = "appearance";
 
 // ───────────────────────── pure JSON helpers ────────────────────────
 
@@ -352,6 +353,33 @@ fn write_override(dir: &Path, key: &str, value: Value) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Move the mode out of the file the bar's toggle used to keep it in and into
+/// settings.json, then delete the file, so the mode has one store. Before, the
+/// file's mode won at startup, so it wins here too: an override when it differs
+/// from the layers below, none when it matches them. A file that doesn't name a
+/// mode is deleted with nothing imported. Runs at every startup and does nothing
+/// once the file is gone. When settings.json can't take the override (a hand
+/// edit that doesn't parse) the file stays, and the next startup tries again.
+pub fn import_legacy_appearance(dir: &Path) -> Result<(), String> {
+    let file = dir.join(LEGACY_APPEARANCE_FILE);
+    let text = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("cannot read {}: {e}", file.display())),
+    };
+    let mode = Value::String(text.trim().to_string());
+    if serde_json::from_value::<Appearance>(mode.clone()).is_ok() {
+        let below = base_layer(&bundled(), Some(dir));
+        let value = if below.get("appearance") == Some(&mode) {
+            Value::Null
+        } else {
+            mode
+        };
+        write_override(dir, "appearance", value)?;
+    }
+    std::fs::remove_file(&file).map_err(|e| format!("cannot delete {}: {e}", file.display()))
+}
+
 // ───────────────────────── converging the running app ───────────────
 
 /// Which subsystem's config differs between two loads.
@@ -394,7 +422,7 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
         let idle = c
             .idle
             .then(|| resolve_notch_idle(next.notch.idle.as_deref()));
-        let appearance = {
+        {
             let state = app.state::<Mutex<ThemeState>>();
             let mut ts = state.lock().unwrap();
             if c.colors {
@@ -406,17 +434,8 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
             if let Some(idle) = idle {
                 ts.notch_idle = idle;
             }
-            ts.appearance
-        };
-        // The appearance file written by the bar's toggle wins at startup, so a
-        // changed setting has to land there too or a restart would undo it.
-        let appearance = if c.appearance {
-            persist_appearance(next.appearance);
-            next.appearance
-        } else {
-            appearance
-        };
-        apply_theme(app, appearance);
+        }
+        apply_theme(app, next.appearance);
     }
 
     // The native frame and the bar windows are sized from the geometry.
@@ -848,6 +867,58 @@ mod tests {
         );
         assert_eq!(write_override(&dir.0, "bogus", Value::Null), Ok(true));
         assert_eq!(dir.user_file(), json!({"geometry": {"frameThickness": 6}}));
+    }
+
+    #[test]
+    fn the_legacy_appearance_file_becomes_an_override_once() {
+        let dir = Scratch::new("legacy-dark");
+        dir.write(LEGACY_APPEARANCE_FILE, "dark\n");
+        assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
+        assert_eq!(dir.user_file(), json!({"appearance": "dark"}));
+        assert!(!dir.0.join(LEGACY_APPEARANCE_FILE).exists());
+        assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
+        assert_eq!(dir.user_file(), json!({"appearance": "dark"}));
+        assert!(load(Some(&dir.0)).config.appearance == Appearance::Dark);
+    }
+
+    #[test]
+    fn a_legacy_mode_equal_to_the_layers_below_writes_no_settings_file() {
+        let dir = Scratch::new("legacy-auto");
+        dir.write(LEGACY_APPEARANCE_FILE, "auto");
+        assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
+        assert!(!dir.0.join(USER_FILE).exists());
+        assert!(!dir.0.join(LEGACY_APPEARANCE_FILE).exists());
+    }
+
+    #[test]
+    fn the_legacy_file_wins_over_an_older_override() {
+        let dir = Scratch::new("legacy-wins");
+        dir.write(USER_FILE, r#"{"appearance": "dark", "oled": true}"#);
+        dir.write(LEGACY_APPEARANCE_FILE, "auto");
+        assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
+        assert_eq!(dir.user_file(), json!({"oled": true}));
+        dir.write(LEGACY_APPEARANCE_FILE, "light");
+        assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
+        assert_eq!(dir.user_file(), json!({"oled": true, "appearance": "light"}));
+    }
+
+    #[test]
+    fn a_legacy_file_without_a_mode_is_dropped() {
+        let dir = Scratch::new("legacy-junk");
+        dir.write(LEGACY_APPEARANCE_FILE, "purple");
+        assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
+        assert!(!dir.0.join(USER_FILE).exists());
+        assert!(!dir.0.join(LEGACY_APPEARANCE_FILE).exists());
+    }
+
+    #[test]
+    fn the_legacy_file_stays_while_settings_json_does_not_parse() {
+        let dir = Scratch::new("legacy-blocked");
+        dir.write(USER_FILE, "{oops");
+        dir.write(LEGACY_APPEARANCE_FILE, "dark");
+        assert!(import_legacy_appearance(&dir.0).is_err());
+        assert_eq!(dir.read(USER_FILE), "{oops");
+        assert_eq!(dir.read(LEGACY_APPEARANCE_FILE), "dark");
     }
 
     #[test]
