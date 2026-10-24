@@ -39,6 +39,9 @@
     "transientMs": 1600,
     "workspaces": {}
   },
+  "toggles": {
+    "focusShortcut": "Toggle Focus"
+  },
   "geometry": {
     "innerRadius": 20,
     "lineThickness": 4,
