@@ -44,8 +44,10 @@ changes nothing must not be shown.
      action opens the Shortcuts app.
    - Tools found on PATH: `aerospace`, the theme command, the wallpaper command
      (`desktoppr`), the Claude CLI (`assistant.command`), each with the path found.
-2. **Appearance.** Mode (light/dark/auto), scheme, OLED (the top-level `oled` key), and the frame's geometry keys the
-   restyle made configurable (thickness, corner radius). Mode and scheme have their own
+2. **Appearance.** Mode (light/dark/auto), scheme, OLED (the top-level `oled` key), and the frame's corner radius
+   (`geometry.frameRadius`). Frame thickness is owned by `modules/home/darwin/
+   bar-geometry.nix`, because AeroSpace's window gaps are built from it at rebuild time:
+   show it read-only with that explanation, not as a slider. Mode and scheme have their own
    stores today (`~/.config/edgebar/appearance`, `scheme`) with commands that scripts also
    use; decisions.tsv records that the settings backend left appearance in two stores.
    Fix it: route `set_appearance` through the settings layer so there is one store for

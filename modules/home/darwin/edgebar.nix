@@ -1,8 +1,8 @@
 # Renders edgebar's runtime config (~/.config/edgebar/config.json) from
 # apps/edgebar/src-tauri/config.default.json, which is also the binary's
 # bundled fallback when this file is absent. Edit colours, role maps and
-# geometry there, except geometry.barHeight (from flake.lib.barGeometry,
-# shared with the AeroSpace gaps), which is overridden here. The commands the
+# geometry there, except geometry.barHeight and frameThickness (from
+# flake.lib.barGeometry, shared with the AeroSpace gaps), which are overridden here. The commands the
 # in-app theme view runs are added here too.
 #
 # What the user changes in the app is layered over this file by edgebar, in
@@ -21,7 +21,7 @@ let
   defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
   rendered = defaults // {
     geometry = defaults.geometry // {
-      inherit (geom) barHeight;
+      inherit (geom) barHeight frameThickness;
     };
   };
   matugenDir = ./edgebar/matugen;
