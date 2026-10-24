@@ -27,6 +27,8 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 plist = "1.9"
 # Decode, resize and encode wallpapers for Tint (wallpapers.rs). No HEIC.
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+# Turn and session ids for the Assistant tab. Already in the tree through tauri.
+uuid = { version = "1", features = ["v4"] }
 
 # Native macOS: AppKit windows, events and icons, and the frame window drawn
 # with CAShapeLayer. Pinned to the objc2 0.3 crates tao/wry already pull in.

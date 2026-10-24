@@ -32,6 +32,10 @@
   "toggles": {
     "focusShortcut": "Toggle Focus"
   },
+  "assistant": {
+    "command": "claude",
+    "model": "haiku"
+  },
   "geometry": {
     "barHeight": 32,
     "frameThickness": 8,

@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 
+/// The Assistant tab's chat, through the Claude Code CLI.
+mod assistant;
+
 /// Dynamic content for the collapsed notch (media / per-workspace / OSD).
 mod notch;
 
@@ -126,6 +129,9 @@ struct Config {
     /// Dark mode on a pure black surface.
     #[serde(default = "wallpapers::default_oled")]
     oled: bool,
+    /// The Assistant tab's CLI and model. See `assistant.rs`.
+    #[serde(default)]
+    assistant: assistant::AssistantConfig,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colours resolved
@@ -2712,6 +2718,9 @@ pub fn run() {
             notifications::notification_clear,
             toggles::toggles,
             toggles::set_toggle,
+            assistant::assistant_send,
+            assistant::assistant_cancel,
+            assistant::assistant_reset,
             #[cfg(all(debug_assertions, target_os = "macos"))]
             devtools::dev_result
         ])
@@ -2762,6 +2771,7 @@ pub fn run() {
             // publishes into it.
             app.manage(notch::NotchState::new(config.notch));
             app.manage(toggles::Toggles::new(config.toggles));
+            app.manage(assistant::AssistantState::default());
 
             // Per-display chrome, rebuilt on every display-config change.
             #[cfg(target_os = "macos")]
