@@ -82,9 +82,13 @@ const states = new Map<ToggleId, ToggleState>();
 const pending = new Set<ToggleId>();
 const listeners = new Set<() => void>();
 
+function notify() {
+  for (const fn of listeners) fn();
+}
+
 function apply(next: ToggleState[]) {
   for (const s of next) if (!pending.has(s.id)) states.set(s.id, s);
-  for (const fn of listeners) fn();
+  notify();
 }
 
 on("toggles", apply);
@@ -99,7 +103,7 @@ async function flip(s: ToggleState): Promise<string | null> {
   const want = !s.on;
   pending.add(s.id);
   states.set(s.id, { ...s, on: want });
-  apply([]);
+  notify();
   try {
     const reply = await call("set_toggle", { id: s.id, on: want });
     states.set(s.id, reply);
@@ -109,7 +113,7 @@ async function flip(s: ToggleState): Promise<string | null> {
     return String(e);
   } finally {
     pending.delete(s.id);
-    apply([]);
+    notify();
   }
 }
 
