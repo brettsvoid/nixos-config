@@ -5,7 +5,6 @@ import { keyboardField } from "../keyboard";
 import { current, onChange, set as setSetting } from "../settings";
 import type { NotchView } from "./view";
 
-// matugen scheme types, in select-scheme.sh's order.
 export const SCHEMES = [
   "scheme-tonal-spot",
   "scheme-vibrant",
@@ -18,8 +17,6 @@ export const SCHEMES = [
   "scheme-fruit-salad",
 ] as const;
 
-// How long Tint may stay busy without a finished desktop pass before the
-// view stops waiting for one (a pass that never ran, or failed).
 const TINT_PATIENCE_MS = 20000;
 
 const ICON = {
@@ -28,7 +25,6 @@ const ICON = {
   chevron: lucide('<path d="m6 9 6 6 6-6"/>'),
   check: lucide('<path d="M20 6 9 17l-5-5"/>'),
   oled: lucide('<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12z"/>'),
-  // A droplet, not a palette: the rail's wallpapers tab already uses that icon.
   tint: lucide(
     '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
   ),
@@ -57,9 +53,6 @@ const TEMPLATE =
     '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
   )}</span></button>` +
   "</div></div>" +
-  // ambxst's WallpapersTab puts search, OLED mode, tint and the scheme picker
-  // in one row above the grid; OLED and Tint sit in the header here, by the
-  // appearance they change, so the search keeps room to type.
   '<div class="theme-bar">' +
   `<label class="wp-search"><span class="icon">${ICON.search}</span>` +
   '<input class="wp-query" type="text" placeholder="Search wallpapers…" spellcheck="false" autocomplete="off">' +
@@ -73,20 +66,16 @@ const TEMPLATE =
   "</div>" +
   `<button class="browse-btn" id="browse-btn"><span class="icon">${ICON.folder}</span><span>Browse…</span></button>` +
   "</div>" +
-  // ambxst's FilterBar: a chip per file kind and per subfolder.
   '<div class="wp-filters" hidden></div>' +
   '<div class="filmstrip" id="filmstrip"></div>' +
   `<div class="wp-empty" hidden><span class="icon">${ICON.empty}</span><span class="wp-empty-text"></span></div>`;
 
-// A filter chip: a file kind or a top-level subfolder.
 interface Chip {
   key: string;
   label: string;
   matches: (w: Wallpaper) => boolean;
 }
 
-// One chip per kind present and per subfolder; none when they couldn't narrow
-// anything (a single kind at the root).
 function chipsFor(list: Wallpaper[]): Chip[] {
   const kinds = [...new Set(list.map((w) => w.kind))].sort();
   const folders = [...new Set(list.map((w) => w.folder).filter(Boolean))].sort();
@@ -97,8 +86,6 @@ function chipsFor(list: Wallpaper[]): Chip[] {
   ];
 }
 
-// What Tint is waiting for: the pass that puts a picked picture on the
-// desktop, or the next pass after a palette or Tint change.
 type TintWait = { until: "pick"; path: string } | { until: "pass" } | null;
 
 export const wallpapersView: NotchView = {
@@ -125,11 +112,10 @@ export const wallpapersView: NotchView = {
     const inkSwatch = inkCustom.querySelector<HTMLElement>(".ink-swatch")!;
     let inkColour = "";
 
-    // ---- the grid, the search and the filter chips ----
     let all: Wallpaper[] = [];
     let chips: Chip[] = [];
-    const selected = new Set<string>(); // chip keys; none selected shows all
-    const thumbs = new Map<string, HTMLButtonElement>(); // by path
+    const selected = new Set<string>();
+    const thumbs = new Map<string, HTMLButtonElement>();
     let tintWait: TintWait = null;
 
     function visible(w: Wallpaper): boolean {
@@ -157,7 +143,6 @@ export const wallpapersView: NotchView = {
             : "Nothing matches these filters.";
     }
 
-    // The thumb standing for the desktop's picture.
     function setActive(path: string) {
       for (const [p, t] of thumbs) t.classList.toggle("active", p === path);
     }
@@ -186,8 +171,6 @@ export const wallpapersView: NotchView = {
       );
     }
 
-    // A thumb sets the desktop and re-themes the bar (Rust runs desktoppr and
-    // generate-edgebar-theme; with Tint on, the tinted copy lands seconds later).
     function renderGrid(list: Wallpaper[], desktop: string) {
       all = list;
       chips = chipsFor(list);
@@ -225,12 +208,11 @@ export const wallpapersView: NotchView = {
       applyFilter();
     });
     clear.addEventListener("click", (e) => {
-      e.preventDefault(); // the label would otherwise focus the field
+      e.preventDefault();
       query.value = "";
       applyFilter();
     });
 
-    // ---- OLED and Tint ----
     let tintTimer = 0;
     let mode: InkInfo["mode"] = "dark";
 
@@ -239,7 +221,6 @@ export const wallpapersView: NotchView = {
       const tintBusy = tintWait !== null;
       oledBtn.classList.toggle("active", s.oled);
       oledBtn.setAttribute("aria-pressed", String(s.oled));
-      // OLED only blackens the dark scheme's surface.
       oledBtn.disabled = mode === "light";
       oledBtn.title =
         mode === "light" ? "OLED: a black surface in dark mode (off while light)" : "OLED: a black surface";
@@ -256,7 +237,6 @@ export const wallpapersView: NotchView = {
       showSwitches();
     }
 
-    // Anything that changes the palette while Tint is on repaints the desktop.
     const retint = () => {
       if (current().wallpaper.tint) waitForTint({ until: "pass" });
     };
@@ -265,7 +245,7 @@ export const wallpapersView: NotchView = {
       try {
         await setSetting(key, on);
       } catch {
-        waitForTint(null); // nothing will repaint
+        waitForTint(null);
       }
       showSwitches();
     }
@@ -276,20 +256,16 @@ export const wallpapersView: NotchView = {
     });
     tintBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      // Either way the desktop changes: to the tinted copy, or back.
       waitForTint({ until: "pass" });
       void flip("wallpaper.tint", !current().wallpaper.tint);
     });
 
     on("desktop", (shown) => {
-      if (tintWait?.until === "pick" && shown !== tintWait.path) return; // an earlier pass
+      if (tintWait?.until === "pick" && shown !== tintWait.path) return;
       if (shown) setActive(shown);
       if (tintWait) waitForTint(null);
     });
 
-    // ---- appearance, scheme and ink ----
-    // set_appearance persists the choice, re-resolves colours and emits
-    // "theme". Auto follows the macOS setting (Rust observes it).
     function setActiveMode(m: string) {
       for (const b of modeButtons) b.classList.toggle("active", b.dataset.mode === m);
     }
@@ -303,9 +279,6 @@ export const wallpapersView: NotchView = {
       });
     }
 
-    // Ink: the colour drawn on the surface. Auto is Rust's contrast-checked pick;
-    // the swatch opens the system colour picker and pins an ink for the current
-    // light/dark scheme. Both report back through the "theme" event.
     function renderInk(info: InkInfo, colour: string) {
       inkColour = colour;
       const pinned = info.source === "override";
@@ -362,11 +335,9 @@ export const wallpapersView: NotchView = {
       ]);
       renderGrid(wallpapers, desktop);
       showConfig(cfg);
-      // warm the per-wallpaper palette caches so thumbnail clicks are instant
       call("precompute_palettes").catch(() => {});
     }
 
-    // Browse… → native Finder picker → set + theme the chosen file in place.
     root.querySelector<HTMLElement>("#browse-btn")!.addEventListener("click", (e) => {
       e.stopPropagation();
       call("pick_wallpaper_file").then((path) => {
@@ -377,7 +348,6 @@ export const wallpapersView: NotchView = {
       });
     });
 
-    // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
     on("theme", showConfig);
 
     let shown = false;
@@ -389,8 +359,6 @@ export const wallpapersView: NotchView = {
       if (shown) void load();
     });
 
-    // Seeds the toggles and the ink swatch, so they are right before the first
-    // load lands.
     call("get_config").then(showConfig).catch(() => {});
 
     return {

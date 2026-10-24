@@ -1,5 +1,3 @@
-/* Column 4 (ambxst's control rail): a tall brightness slider over two dials,
-   each a full-round tile like the rail's buttons opposite. */
 .dash-controls {
   display: flex;
   flex-direction: column;
@@ -8,7 +6,6 @@
   min-height: 0;
 }
 
-/* ---- brightness: a 4 px track with a short handle, the sun at its foot ---- */
 .ctl-bri {
   position: relative;
   flex: 1 1 auto;
@@ -27,8 +24,6 @@
 .ctl-bri.disabled > * {
   opacity: var(--dim-more);
 }
-/* --v (0..1) is the level; the fill and the rest stop short of the handle by
-   its half-height plus a 4 px gap */
 .bri-track {
   --v: 0;
   --clear: 6px;
@@ -66,11 +61,9 @@
 .ctl-bri.disabled .bri-handle {
   display: none;
 }
-/* The level, beside the handle while it is dragged: out to the left of the
-   rail, since the rail is the dashboard's right edge. */
 .bri-label {
   position: absolute;
-  right: calc(100% + 28px); /* the track's offset in the rail, plus a gap */
+  right: calc(100% + 28px);
   bottom: calc(var(--v) * 100%);
   translate: 0 50%;
   padding: var(--space-1) var(--space-3);
@@ -94,7 +87,6 @@
   font-size: var(--font-lg);
 }
 
-/* ---- volume and mic: a 270° arc open at the bottom, the icon inside ---- */
 .ctl-dial {
   position: relative;
   display: grid;

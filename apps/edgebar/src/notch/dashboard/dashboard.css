@@ -1,17 +1,11 @@
-/* The dashboard: four columns after ambxst's WidgetsTab (player, widgets,
-   notification history, control rail). `.view[hidden]` is more specific, so
-   it still wins over this display. */
 .view-dashboard {
   display: grid;
   grid-template-columns: 180px 208px minmax(140px, 1fr) 48px;
   gap: var(--space-4);
   align-items: stretch;
-  /* fills the panel rather than sizing to its tallest column, so the columns
-     keep their full height whatever is in them */
   flex: 1 1 auto;
 }
 
-/* the widgets column scrolls, like ambxst's Flickable */
 .dash-col {
   display: flex;
   flex-direction: column;

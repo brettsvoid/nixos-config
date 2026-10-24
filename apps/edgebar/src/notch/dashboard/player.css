@@ -1,5 +1,3 @@
-/* Column 1 (ambxst FullPlayer): a card framed by a thin band of the sharp
-   cover, around a face washed with a soft copy of it. */
 .dash-player {
   --pl-frame: var(--space-2);
   position: relative;
@@ -9,7 +7,6 @@
   background: var(--surface-container);
   overflow: hidden;
 }
-/* The sharp cover, seen only as the frame the face leaves around it. */
 .pl-art {
   position: absolute;
   inset: 0;
@@ -34,8 +31,6 @@
   background: var(--surface-container);
   overflow: hidden;
 }
-/* The wash: an 8 px copy of the cover (washOf in player.ts) stretched across
-   the face, which is what softens it. */
 .pl-face::before {
   content: "";
   position: absolute;
@@ -48,10 +43,9 @@
   opacity: 0.25;
 }
 .pl-face > * {
-  position: relative; /* above the wash */
+  position: relative;
 }
 
-/* ---- the disc under the seek ring; sizes match AREA and C in player.ts ---- */
 .pl-area {
   flex: none;
   width: 156px;
@@ -97,11 +91,11 @@
   width: 100%;
   height: 100%;
   overflow: visible;
-  pointer-events: none; /* only the ring's band takes a drag (.pl-hit) */
+  pointer-events: none;
 }
 .pl-ring path {
   fill: none;
-  stroke-width: 4px; /* RING.line */
+  stroke-width: 4px;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -121,7 +115,6 @@
   cursor: pointer;
 }
 
-/* ---- the track's lines; long ones marquee while playing ---- */
 .pl-lines {
   display: flex;
   flex-direction: column;
@@ -130,7 +123,7 @@
   text-align: center;
 }
 .pl-lines .marquee {
-  min-height: 1.3em; /* an empty line keeps its place */
+  min-height: 1.3em;
   line-height: 1.3;
 }
 .pl-title {
@@ -146,10 +139,8 @@
   animation: none;
 }
 
-/* ---- transport: the source's icon, then previous, play/pause, next ---- */
 .pl-transport {
   display: grid;
-  /* the outer columns balance, so play/pause sits under the disc's centre */
   grid-template-columns: 1fr auto auto auto 1fr;
   align-items: center;
   gap: var(--space-3);
@@ -219,7 +210,6 @@
   width: 20px;
   height: 20px;
 }
-/* playing, the circle becomes a rounded square (ambxst's play button) */
 .pl-play.playing {
   border-radius: var(--space-7);
 }

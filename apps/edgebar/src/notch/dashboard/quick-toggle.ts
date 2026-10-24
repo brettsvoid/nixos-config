@@ -2,7 +2,6 @@ import "./quick-toggle.css";
 import { call, on, type SettingsPane, type ToggleId, type ToggleState } from "../../ipc";
 import { lucide } from "../../icons";
 
-// One glyph for both states: the fill says which.
 const MOON = lucide(
   '<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>',
 );
@@ -13,8 +12,6 @@ const COFFEE = lucide(
   '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
 );
 
-// What edgebar draws for each toggle, and the System Settings pane that is its
-// home (Caffeine has none: it only runs caffeinate).
 const TOGGLES: Record<ToggleId, { name: string; on: string; off: string; pane: SettingsPane | null }> = {
   wifi: {
     name: "Wi-Fi",
@@ -65,8 +62,6 @@ const PANE_NAMES: Record<SettingsPane, string> = {
   shortcuts: "Shortcuts",
 };
 
-// The pane that fixes what a toggle's detail reports. toggles.rs words these
-// reasons, so one it rewords falls back to the toggle's own pane.
 const FIXES: [RegExp, SettingsPane][] = [
   [/Full Disk Access/, "fullDiskAccess"],
   [/Bluetooth permission/, "privacyBluetooth"],
@@ -76,11 +71,7 @@ const paneFor = (s: ToggleState): SettingsPane | null =>
 
 export const openPane = (pane: SettingsPane) => call("open_settings_pane", { pane }).catch(() => {});
 
-// ---- the one store: reads, the `toggles` event and each set_toggle reply ----
-
 const states = new Map<ToggleId, ToggleState>();
-// Ids with a set_toggle in flight: their reply wins over any read that lands
-// meanwhile, which may predate the change.
 const pending = new Set<ToggleId>();
 const listeners = new Set<() => void>();
 
@@ -99,8 +90,6 @@ export function refreshToggles() {
   call("toggles").then(apply).catch(() => {});
 }
 
-// Flip a toggle at once and correct it from Rust's reply. Resolves with the
-// reason when it didn't take, else null.
 async function flip(s: ToggleState): Promise<string | null> {
   const want = !s.on;
   pending.add(s.id);
@@ -119,15 +108,11 @@ async function flip(s: ToggleState): Promise<string | null> {
   }
 }
 
-// ---- the note: why a toggle can't be used, and the pane that fixes it ----
-
 export interface Note {
   show(anchor: HTMLElement, text: string, pane: SettingsPane | null): void;
   hide(): void;
 }
 
-// A callout under `anchor`, laid over whatever is below it in `host`. Any
-// press outside it, or on its anchor again, puts it away.
 export function note(host: HTMLElement): Note {
   const el = document.createElement("div");
   el.className = "tg-note";
@@ -170,10 +155,6 @@ export function note(host: HTMLElement): Note {
   };
 }
 
-// ---- a button bound to one toggle ----
-
-// Click flips it (or, when edgebar can't set it, explains why); right-click
-// opens its pane. `glyphs` replaces the toggle's own, as the bell does.
 export function toggleButton(
   id: ToggleId,
   hint: Note,

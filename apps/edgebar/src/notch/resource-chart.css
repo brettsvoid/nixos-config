@@ -1,8 +1,5 @@
-/* The Performance view's history card (resource-chart.ts): a legend and the
-   zoom over a canvas that takes the rest of the card. */
 .rc {
-  /* The line colours, read back by the canvas through the legend swatches.
-     Memory is --primary pulled toward the surface rather than a second hue:
+  /* Memory is --primary pulled toward the surface rather than a second hue:
      a monochrome scheme's --primary has none, so only lightness can tell
      the two lines apart in every scheme, light or dark. */
   --rc-cpu: var(--primary);
@@ -58,7 +55,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* − span + : the calendar header's round steppers */
 .rc-zoom {
   display: flex;
   align-items: center;
@@ -67,7 +63,7 @@
   height: 100%;
 }
 .rc-span {
-  min-width: 44px; /* "10 min" without the steppers shifting */
+  min-width: 44px;
   font-size: var(--font-xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;

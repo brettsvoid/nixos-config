@@ -4,13 +4,10 @@ import { lucide } from "../../icons";
 import { fingersUp, wheelStepper } from "../../wheel";
 import type { Widget } from "../view";
 
-const STEP = 5; // % per wheel step
-const DRAG_PX = 100; // vertical drag across a dial's full range
-const CLICK_SLOP_PX = 3; // a press that moves less than this is a click
-const WHEEL_PX = 30; // trackpad travel per step
-// The dials, after ambxst's CircularControl: a 270° arc open at the bottom,
-// with a radial tick at the value. `clearPx` is the arc left out either side of
-// the tick, along the ring; the tick runs from `r - in` to `r + out`.
+const STEP = 5;
+const DRAG_PX = 100;
+const CLICK_SLOP_PX = 3;
+const WHEEL_PX = 30;
 const DIAL = { size: 48, r: 16, startDeg: 135, sweepDeg: 270, clearPx: 6, tick: { in: 2, out: 4 } } as const;
 
 const ICON = {
@@ -33,8 +30,6 @@ const ICON = {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-// Sends the newest value, one call at a time. A drag outruns osascript, and
-// calls running side by side could land out of order and leave an old level.
 function latest<T>(send: (value: T) => Promise<unknown>): (value: T) => void {
   let pending: { value: T } | null = null;
   let busy = false;
@@ -53,10 +48,8 @@ function latest<T>(send: (value: T) => Promise<unknown>): (value: T) => void {
   };
 }
 
-// ---- the dials: volume and mic ----
-
 interface Level {
-  value: number; // 0..100
+  value: number;
   muted: boolean;
 }
 
@@ -105,7 +98,6 @@ function dial(root: HTMLElement, spec: DialSpec) {
     el.title = level.muted ? `${spec.name} muted` : `${spec.name} ${level.value}%`;
   }
 
-  // Setting a level unmutes, in Rust as here.
   function setLevel(value: number) {
     const v = Math.round(clamp(value, 0, 100));
     if (v === level.value && !level.muted) return;
@@ -146,14 +138,12 @@ function dial(root: HTMLElement, spec: DialSpec) {
 
   return {
     set(next: Level) {
-      if (drag) return; // the pointer owns it until release
+      if (drag) return;
       level = next;
       draw();
     },
   };
 }
-
-// ---- the brightness slider ----
 
 type Brightness = { ok: true; value: number } | { ok: false; reason: string };
 
@@ -192,7 +182,6 @@ function brightnessSlider(root: HTMLElement) {
     send(state.value);
   }
 
-  // Press jumps the handle to the pointer; the drag follows it.
   const valueAt = (e: PointerEvent) => {
     const r = track.getBoundingClientRect();
     return (r.bottom - e.clientY) / r.height;
@@ -232,9 +221,6 @@ function brightnessSlider(root: HTMLElement) {
   };
 }
 
-// Column 4 (ambxst's control rail): a tall brightness slider over volume and
-// mic dials. The controls popup on the band edits the same values, so they are
-// read afresh each time the dashboard shows.
 export const controls: Widget = (root) => {
   const brightness = brightnessSlider(root);
   const volume = dial(root, {

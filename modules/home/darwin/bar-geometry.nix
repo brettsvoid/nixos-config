@@ -11,20 +11,16 @@ _: {
     # AeroSpace must clear. Also feeds outerTop below.
     barHeight = 32;
 
-    # Thickness of edgebar's frame on the sides and bottom (the band is the top).
-    # Here rather than only in edgebar's config because the gaps below clear it.
     frameThickness = 8;
 
     # Gap between tiled windows (AeroSpace inner.horizontal/vertical).
     innerGap = 8;
 
-    # Gap between the frame and the tiled windows, as the custom shell's gaps_out.
     windowGap = 8;
 
     # Screen-edge inset around the tiled area (AeroSpace outer.left/right/bottom).
     outerGap = frameThickness + windowGap;
 
-    # Top of the tiled area: the bar band plus the window gap below it.
     outerTop = barHeight + windowGap;
   };
 }

@@ -1,14 +1,4 @@
 #!/bin/sh
-# Drive a running debug edgebar through its developer socket (devtools.rs).
-#
-#   scripts/dev.sh eval '<js>'      print the JSON of what <js> evaluates to in
-#                                   the main bar WebView
-#   scripts/dev.sh snap <out.png>   write the main display as edgebar draws it
-#   scripts/dev.sh type '<text>'    post <text> to edgebar as key presses (ESC
-#                                   is Escape, DEL Backspace), as macOS would
-#                                   deliver typing to it
-#
-# Prints the reply and exits non-zero when it is ERR.
 set -eu
 
 sock="$HOME/.cache/edgebar/dev.sock"

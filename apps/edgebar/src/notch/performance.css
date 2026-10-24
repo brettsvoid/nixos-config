@@ -4,7 +4,6 @@
   gap: var(--space-4);
 }
 
-/* ---- metrics rows ---- */
 .metrics {
   display: flex;
   flex-direction: column;
@@ -22,13 +21,13 @@
   opacity: var(--dim-icon);
 }
 .metric .m-label {
-  width: 52px; /* label column, so every bar starts on the same x */
+  width: 52px;
   font-weight: 600;
 }
 .metric .m-bar {
   flex: 1;
-  height: 6px; /* bar thickness (component-intrinsic) */
-  border-radius: 3px; /* round the thin bar's ends */
+  height: 6px;
+  border-radius: 3px;
   background: var(--surface-container-high);
   overflow: hidden;
 }
@@ -41,7 +40,7 @@
   transition: width var(--dur-slow) var(--ease-out);
 }
 .metric .m-val {
-  width: 34px; /* value column (component-intrinsic) */
+  width: 34px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;

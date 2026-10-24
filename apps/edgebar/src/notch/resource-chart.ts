@@ -4,22 +4,18 @@ import { lucide } from "../icons";
 import { fingersUp, wheelStepper } from "../wheel";
 import type { Widget } from "./view";
 
-// The spans the zoom steps through, in seconds: from half a minute up to the
-// ten minutes Rust keeps (HISTORY_LEN in metrics.rs).
 const SPANS_S = [30, 60, 120, 300, 600] as const;
-const START_SPAN = 2; // two minutes
-const WHEEL_PX = 60; // trackpad travel per zoom step
-const LINE = 2; // px
-const FILL_ALPHA = 0.3; // the fill under a line, at its top, fading to nothing
+const START_SPAN = 2;
+const WHEEL_PX = 60;
+const LINE = 2;
+const FILL_ALPHA = 0.3;
 const GRID = [0.25, 0.5, 0.75];
 
 type Rgb = [number, number, number];
 
-// Each line's colour comes from its legend swatch, so the CSS token is the
-// one place it is defined.
 const SERIES = [
   { key: "mem", label: "Memory" },
-  { key: "cpu", label: "CPU" }, // drawn last, over memory
+  { key: "cpu", label: "CPU" },
 ] as const;
 type SeriesKey = (typeof SERIES)[number]["key"];
 
@@ -29,7 +25,6 @@ const PLUS = lucide('<path d="M5 12h14"/><path d="M12 5v14"/>');
 const spanLabel = (s: number) => (s < 60 ? `${s} s` : `${s / 60} min`);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-// Any CSS colour the canvas accepts (color-mix results included), as sRGB bytes.
 const probe = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", {
   willReadFrequently: true,
 });
@@ -43,9 +38,6 @@ function rgbOf(css: string): Rgb {
 }
 const rgba = ([r, g, b]: Rgb, a: number) => `rgba(${r}, ${g}, ${b}, ${a})`;
 
-// ambxst's MetricsTab history canvas: CPU and memory as two lines over time,
-// newest at the right, with a zoom over how much of the last ten minutes shows.
-// It paints only when a sample lands, the zoom changes or the theme does.
 export const resourceChart: Widget = (root) => {
   root.classList.add("rc");
   root.innerHTML =
@@ -77,7 +69,6 @@ export const resourceChart: Widget = (root) => {
     }),
   );
 
-  // Fractions 0..1, oldest first, at most the longest span's worth.
   const series: Record<SeriesKey, number[]> = { cpu: [], mem: [] };
   let intervalMs = 2000;
   let zoom: number = START_SPAN;
@@ -126,12 +117,10 @@ export const resourceChart: Widget = (root) => {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    // Inset by the line's width, so a line at 0 % or 100 % isn't clipped.
     const top = LINE;
     const bottom = h - LINE;
     const y = (v: number) => bottom - v * (bottom - top);
 
-    // One device pixel, on a device pixel, so the grid stays a hairline.
     ctx.lineWidth = 1 / dpr;
     ctx.strokeStyle = getComputedStyle(root).getPropertyValue("--rc-grid").trim() || "rgba(128, 128, 128, 0.3)";
     for (const f of GRID) {
@@ -149,8 +138,6 @@ export const resourceChart: Widget = (root) => {
       if (values.length < 2) continue;
       const colour = rgbOf(getComputedStyle(keys.get(key)!.swatch).backgroundColor);
       const pts = values.map((v, i) => [w - (values.length - 1 - i) * step, y(v)] as const);
-      // Through the midpoints, with each sample as the control point: smooth,
-      // and never beyond the samples' own range.
       const trace = () => {
         ctx.moveTo(pts[0][0], pts[0][1]);
         for (let i = 1; i < pts.length - 1; i++) {
@@ -193,7 +180,6 @@ export const resourceChart: Widget = (root) => {
   for (const btn of [zoomOut, zoomIn]) {
     btn.addEventListener("click", () => setZoom(zoom + Number(btn.dataset.step)));
   }
-  // Up, the way the fingers or the wheel move, zooms in, as the dials turn up.
   const steps = wheelStepper(WHEEL_PX, fingersUp);
   root.addEventListener(
     "wheel",
@@ -204,15 +190,10 @@ export const resourceChart: Widget = (root) => {
     },
     { passive: false },
   );
-  // Canvas pixels don't follow the CSS colours; wait a frame so main.ts has
-  // applied the new ones first.
   on("theme", () => requestAnimationFrame(paint));
 
   showZoom();
 
-  // Seeded on each show (samples kept arriving while hidden), then fed by the
-  // `cpu` event until hidden. `session` drops a seed or listener that lands
-  // after the view has hidden again.
   let session = 0;
   let unlisten: (() => void) | null = null;
 
@@ -226,7 +207,6 @@ export const resourceChart: Widget = (root) => {
           if (s !== session) return;
           seed(history);
         } catch {
-          /* the live samples still fill it */
         }
         showLatest();
         paint();

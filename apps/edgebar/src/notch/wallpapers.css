@@ -4,7 +4,6 @@
   gap: var(--space-4);
 }
 
-/* ---- appearance toggle (light / dark / auto), in the header ---- */
 .theme-toggle {
   display: flex;
   align-items: center;
@@ -36,7 +35,6 @@
   opacity: 1;
 }
 
-/* ---- OLED and Tint: switches in the header, beside the appearance ---- */
 .wp-switches {
   display: flex;
   gap: var(--space-3);
@@ -71,13 +69,10 @@
   background: var(--primary);
   color: var(--on-primary);
 }
-/* OLED while light: it would change nothing */
 .wp-switch:disabled {
   opacity: var(--dim-more);
   cursor: default;
 }
-/* Tint repainting the desktop: the droplet gives way to a turning ring,
-   which runs only while this class is on */
 .wp-switch.busy {
   cursor: progress;
 }
@@ -99,15 +94,12 @@
   }
 }
 
-/* ---- toolbar above the grid: search, scheme, ink, Browse… ---- */
 .theme-bar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex: none;
 }
-/* every icon in the row at one size, or the tallest one sets the row's
-   optical weight even when the boxes match */
 .theme-bar .icon {
   font-size: var(--font-md);
 }
@@ -174,7 +166,6 @@
   height: 14px;
 }
 
-/* the select draws no arrow of its own, so the chevron sits over its end */
 .wp-select {
   position: relative;
   display: flex;
@@ -206,8 +197,6 @@
   background: var(--surface-container-high);
 }
 
-/* ---- ink picker (toolbar): auto / custom swatch ----
-   The appearance toggle's segmented look. */
 .ink-toggle {
   flex: none;
 }
@@ -243,8 +232,6 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  /* the ink contrasts with the surface by construction, but not always with
-     the fill the swatch sits on, so the ring keeps its edge either way */
   box-shadow: 0 0 0 1px var(--surface-bright);
 }
 
@@ -268,7 +255,6 @@
   background: var(--surface-container-high);
 }
 
-/* ---- filter chips (ambxst FilterBar): kinds and subfolders ---- */
 .wp-filters {
   display: flex;
   gap: var(--space-3);
@@ -308,7 +294,6 @@
   background: var(--primary);
   color: var(--on-primary);
 }
-/* the check grows in from nothing, pushing the label over */
 .wp-check {
   display: grid;
   place-items: center;
@@ -333,14 +318,9 @@
   opacity: 1;
 }
 
-/* A grid despite the name, like ambxst's WallpapersTab; wallpapers.ts fills it with
-   .thumb buttons. */
 .filmstrip {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  /* Rows size to the thumbs and stack from the top; otherwise the grid's
-     definite height is shared between the rows and each 16:9 thumb overflows
-     its row. */
   grid-auto-rows: max-content;
   align-content: start;
   gap: var(--space-3);
@@ -383,8 +363,6 @@
   border-color: var(--primary);
 }
 
-/* no pictures, or none that match: a quiet icon over a line, in the grid's
-   place */
 .wp-empty {
   display: flex;
   flex-direction: column;

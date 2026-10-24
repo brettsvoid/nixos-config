@@ -1,5 +1,3 @@
-/* A square month card under the toggles: the header, the weekday initials and
-   six week rows that share what is left. */
 .dash-calendar {
   flex: none;
   aspect-ratio: 1;

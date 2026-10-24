@@ -4,24 +4,22 @@ import { current, onChange, type Settings } from "../../settings";
 import { wheelStepper } from "../../wheel";
 import type { Widget } from "../view";
 
-const WHEEL_PX = 300; // trackpad travel per month after the first
+const WHEEL_PX = 300;
 const PREV = lucide('<path d="m15 18-6-6 6-6"/>');
 const NEXT = lucide('<path d="m9 18 6-6-6-6"/>');
 
 interface Month {
   year: number;
-  month: number; // 0..11, as Date numbers them
+  month: number;
 }
 
 const monthOf = (d: Date): Month => ({ year: d.getFullYear(), month: d.getMonth() });
 
-// The first column, as Date.getDay() numbers days (0 is Sunday).
 const weekStartOf = (s: Settings) => (s.calendar.weekStart === "sunday" ? 0 : 1);
 
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-// Six weeks from the one holding the 1st, so the grid never changes height.
 function weeks(m: Month, weekStart: number): Date[][] {
   const offset = (new Date(m.year, m.month, 1).getDay() - weekStart + 7) % 7;
   return Array.from({ length: 6 }, (_, w) =>
@@ -29,7 +27,6 @@ function weeks(m: Month, weekStart: number): Date[][] {
   );
 }
 
-// 7 January 2024 was a Sunday, so day `n` of that week has getDay() === n.
 const initial = (day: number) =>
   new Date(2024, 0, 7 + day).toLocaleDateString(undefined, { weekday: "narrow" });
 
@@ -37,8 +34,6 @@ const setText = (el: Element, text: string) => {
   if (el.textContent !== text) el.textContent = text;
 };
 
-// Under the toggles (ambxst's calendar, the custom shell's Calendar.qml): a
-// month grid with today marked. It has no events: decisions.tsv says why.
 export const calendar: Widget = (root) => {
   const cell = '<span class="cal-day"><span></span></span>';
   root.innerHTML =
@@ -83,17 +78,15 @@ export const calendar: Widget = (root) => {
     render();
   }
 
-  // One timer to the next midnight, re-armed each time it fires, while shown.
   function armMidnight() {
     clearTimeout(midnight);
     const now = new Date();
     const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     midnight = window.setTimeout(() => {
-      // Today's month follows today into the next; a month browsed to stays.
       if (shown.year === now.getFullYear() && shown.month === now.getMonth()) shown = monthOf(new Date());
       render();
       armMidnight();
-    }, next.getTime() - now.getTime() + 500); // a little past, so `new Date()` is the new day
+    }, next.getTime() - now.getTime() + 500);
   }
 
   title.addEventListener("click", () => {
@@ -103,7 +96,6 @@ export const calendar: Widget = (root) => {
   for (const btn of root.querySelectorAll<HTMLElement>(".cal-step")) {
     btn.addEventListener("click", () => step(Number(btn.dataset.step)));
   }
-  // Down the page is later: the content's direction, whatever the device.
   const steps = wheelStepper(WHEEL_PX, (e) => e.deltaY);
   grid.addEventListener(
     "wheel",

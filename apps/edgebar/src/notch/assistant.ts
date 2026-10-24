@@ -6,10 +6,8 @@ import { current, onChange, set as setSetting } from "../settings";
 import { renderMarkdown } from "./markdown";
 import type { NotchView } from "./view";
 
-// The empty state's model name steps through these `--model` aliases.
 const MODELS: readonly string[] = ["haiku", "sonnet", "opus"];
 const COPIED_MS = 1500;
-// Within this many px of the bottom, the log keeps a streaming reply in view.
 const FOLLOW_PX = 24;
 
 const ICON = {
@@ -44,14 +42,12 @@ type ReplyState =
   | { kind: "error"; message: string };
 
 interface Reply {
-  prompt: string; // what it answers, so a failed one can be sent again
+  prompt: string;
   text: string;
   state: ReplyState;
   el: HTMLElement;
 }
 
-// The conversation's one live turn. A turn's first chunks can land before
-// assistant_send answers with its id, so they wait in `early` until then.
 type Phase =
   | { kind: "idle" }
   | { kind: "sending"; reply: Reply; early: AssistantChunk[] }
@@ -80,7 +76,6 @@ function typingDots(): HTMLElement {
   return dots;
 }
 
-// ambxst's AssistantTab, trimmed: the conversation over an input pill.
 export const assistantView: NotchView = {
   id: "assistant",
   title: "Assistant",
@@ -99,7 +94,6 @@ export const assistantView: NotchView = {
     const dirty = new Set<Reply>();
     let frame = 0;
 
-    // ---- drawing a reply ----
     function errorBlock(reply: Reply, message: string): Node[] {
       const line = span("as-error-line");
       line.innerHTML = `<span class="icon">${ICON.alert}</span>`;
@@ -128,7 +122,6 @@ export const assistantView: NotchView = {
       reply.el.replaceChildren(...parts);
     }
 
-    // Deltas arrive faster than frames, so a reply redraws at most once a frame.
     function flush() {
       frame = 0;
       const follow = log.scrollHeight - log.scrollTop - log.clientHeight < FOLLOW_PX;
@@ -141,13 +134,11 @@ export const assistantView: NotchView = {
       if (!frame) frame = requestAnimationFrame(flush);
     }
 
-    // ---- the input pill ----
     function fit() {
       field.style.height = "auto";
       field.style.height = `${field.scrollHeight}px`;
     }
 
-    // The send button shows once there's text; while a reply runs it stops it.
     function showControls() {
       const mode = phase.kind !== "idle" ? "stop" : field.value.trim() ? "send" : null;
       sendBtn.hidden = mode === null;
@@ -162,7 +153,6 @@ export const assistantView: NotchView = {
       newBtn.disabled = !talking;
     }
 
-    // ---- turns ----
     function settle(reply: Reply, state: ReplyState) {
       reply.state = state;
       phase = { kind: "idle" };
@@ -175,7 +165,7 @@ export const assistantView: NotchView = {
         phase.early.push(chunk);
         return;
       }
-      if (phase.kind !== "live" || chunk.turn !== phase.turn) return; // a turn this view has left
+      if (phase.kind !== "live" || chunk.turn !== phase.turn) return;
       const reply = phase.reply;
       switch (chunk.kind) {
         case "delta":
@@ -207,8 +197,6 @@ export const assistantView: NotchView = {
       call("assistant_send", { prompt: reply.prompt }).then(
         (turn) => {
           if (phase.kind !== "sending" || phase.reply !== reply) {
-            // A new chat began before Rust registered this turn, so the reset
-            // may have missed it. Nothing else is running, so reset again.
             if (phase.kind === "idle") call("assistant_reset").catch(() => {});
             return;
           }
@@ -232,7 +220,6 @@ export const assistantView: NotchView = {
       if (!prompt || phase.kind !== "idle") return;
       field.value = "";
       fit();
-      // Only the last reply can be retried: the CLI's session runs in order.
       for (const old of log.querySelectorAll(".as-retry")) old.remove();
       const reply: Reply = {
         prompt,
@@ -245,7 +232,6 @@ export const assistantView: NotchView = {
       log.scrollTop = log.scrollHeight;
     }
 
-    // A cancelled turn still ends with `done`, which settles the reply.
     function stop() {
       if (phase.kind === "idle") return;
       const { reply } = phase;
@@ -287,7 +273,6 @@ export const assistantView: NotchView = {
       field.focus();
     });
 
-    // ---- links and code blocks in replies (markdown.ts draws them) ----
     log.addEventListener("click", (e) => {
       const target = e.target as Element;
       const copy = target.closest<HTMLButtonElement>(".md-copy");
@@ -308,7 +293,6 @@ export const assistantView: NotchView = {
       );
     });
 
-    // ---- the model, cycled from the empty state ----
     function showModel() {
       const id = current().assistant.model;
       modelBtn.textContent = modelName(id);
@@ -326,8 +310,6 @@ export const assistantView: NotchView = {
     return {
       show() {
         root.classList.remove("asleep");
-        // The tab was clicked to type here, so it takes the keyboard at once;
-        // main.ts gives it back when the notch closes.
         takeKeyboard();
         field.focus();
         log.scrollTop = log.scrollHeight;

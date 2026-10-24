@@ -8,13 +8,9 @@
   </head>
 
   <body>
-    <!-- The screen frame is drawn natively (src-tauri); this window paints its
-         top band again, with the segments on it and the drawers that grow out
-         of it: workspaces, cpu | notch | controls, status, clock. -->
     <!-- Icons are inline Lucide SVGs in a shared .icon cell (see styles.css). -->
     <div class="bar">
       <div class="cluster left">
-        <!-- workspaces: the ⌘ launcher menu on the left, then the dots -->
         <div class="seg" id="workspaces">
           <button class="bar-btn" id="launcher-btn" title="Menu">
             <span class="icon"
@@ -155,9 +151,6 @@
           </div>
           <div class="notch-drawer drawer">
             <div class="notch-panel drawer-body">
-              <!-- Both are filled by main.ts from notch/views.ts: the rail when
-                   the bar starts, each view's body the first time the notch
-                   opens. -->
               <nav class="dash-rail"></nav>
               <div class="tab-body"></div>
             </div>
@@ -165,7 +158,6 @@
         </div>
       </div>
       <div class="cluster right">
-        <!-- Controls: a button whose drawer holds the sliders -->
         <div class="seg" id="controls">
           <button class="bar-btn" id="ctl-btn" title="Adjustments">
             <span class="icon"
@@ -253,8 +245,6 @@
             </div>
           </div>
         </div>
-        <!-- Wi-Fi / network + battery in one segment; main.ts swaps the icons
-             to reflect state. -->
         <div class="seg" id="status">
           <span class="stat-grp" id="wifi">
             <span class="wifi-icon icon"

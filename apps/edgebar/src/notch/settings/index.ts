@@ -47,11 +47,6 @@ const ICON = {
 
 const openSettingsFile = () => call("open_settings_file").catch(() => {});
 
-// ---- rows that are more than one setting's control ----
-
-// The matugen scheme is its own store (~/.config/edgebar/scheme, which the Nix
-// activation and select-scheme read), so it is shown from the theme and set
-// through set_scheme, with no reset.
 function schemeRow(): Part {
   const box = el("span", "st-select");
   const select = el("select", "");
@@ -77,10 +72,9 @@ function schemeRow(): Part {
 
 const IDLE_PRESETS = ["handle", "clock", "userHost"];
 
-// `notch.idle`: a preset, or any other text shown as it is.
 function idleRow(): Part {
   let f: Frame;
-  let custom = "edgebar"; // what Text shows until some is typed
+  let custom = "edgebar";
   const seg = segmented(
     [
       { value: "handle", label: "Handle" },
@@ -108,7 +102,6 @@ function idleRow(): Part {
   };
 }
 
-// About: the version, the three layers and the file the user's changes go in.
 function aboutPart(): Part {
   const box = el("div", "st-section");
   const versionText = el("span", "st-value");
@@ -142,7 +135,6 @@ function aboutPart(): Part {
   }
   return {
     el: box,
-    // Its layer counts follow every change, so it reloads with them while shown.
     update() {
       if (shown) void load();
     },
@@ -155,8 +147,6 @@ function aboutPart(): Part {
     },
   };
 }
-
-// ---- the sections ----
 
 interface Section {
   id: string;
@@ -307,9 +297,6 @@ export const settingsView: NotchView = {
     const fix = button("st-btn filled", "Open settings.json");
     fix.addEventListener("click", () => void openSettingsFile());
     banner.append(fix);
-    // A removed rule's row leaves the DOM. Were Rust's answer ever to land
-    // before the click reached the document, main.ts would read the click as
-    // one outside the notch and close it.
     root.addEventListener("click", (e) => e.stopPropagation());
 
     const bodies = new Map<string, { el: HTMLElement; part: Part }>();
@@ -351,8 +338,6 @@ export const settingsView: NotchView = {
     select(active);
 
     return {
-      // Each opening checks the Mac again, so the rail's dot says whether
-      // something needs setting up before this view is ever shown.
       open() {
         call("setup_status").then(setAlert).catch(() => {});
       },

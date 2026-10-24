@@ -5,8 +5,6 @@ import { resourceChart } from "./resource-chart";
 import type { NotchView } from "./view";
 
 const POLL_MS = 2000;
-// Thresholds for the rail's alert dot. Only disk and swap: CPU and memory swing
-// too fast for a dot to mean anything.
 const HEALTH = {
   diskUsedPct: 90,
   // Bytes, not a percentage: macOS grows swap files on demand, so a small file
@@ -45,7 +43,6 @@ type MetricKey = (typeof METRICS)[number]["key"];
 
 const TEMPLATE =
   '<div class="view-head"><span class="view-title">Performance</span></div>' +
-  // ambxst draws a zoomable history canvas over the rows (MetricsTab.qml chartCanvas).
   '<div class="perf-chart"></div>' +
   '<div class="metrics">' +
   METRICS.map(
@@ -57,13 +54,9 @@ const TEMPLATE =
 
 const pctOf = (used: number, total: number) => (total > 0 ? (used / total) * 100 : 0);
 
-// The rows sample only while this view shows, as ambxst polls SystemResources
-// only while its metrics tab is the open one.
 export const performanceView: NotchView = {
   id: "performance",
   title: "Performance",
-  // heart-pulse, the Lucide answer to the Phosphor `heartbeat` glyph ambxst
-  // puts on this tab
   icon: lucide(
     '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>',
   ),
@@ -99,14 +92,11 @@ export const performanceView: NotchView = {
         if (m.swapUsed >= HEALTH.swapUsedBytes) reasons.push("heavy swap use");
         ctx.setAlert(performanceView.id, reasons.length ? reasons.join(", ") : null);
       } catch {
-        /* sampling can fail mid-teardown; ignore */
       }
     }
 
     let timer: number | undefined;
     return {
-      // The rail is only visible while the notch is open, so there is no
-      // background poll: one sample on open, then the view's own cadence.
       open: sample,
       show() {
         chart.show?.();

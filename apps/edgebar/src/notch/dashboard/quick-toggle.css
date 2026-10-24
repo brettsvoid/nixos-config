@@ -1,6 +1,3 @@
-/* A button bound to one toggle (quick-toggle.ts): full-round on the container
-   tint when off; on, a --primary fill with a squarer radius, as ambxst's
-   active toggles do. Sizes are the caller's. */
 .qt {
   display: grid;
   place-items: center;
@@ -28,7 +25,6 @@
   background: var(--primary);
   color: var(--on-primary);
 }
-/* edgebar can't set it: dimmed, but a click still says why */
 .qt.unavailable {
   opacity: var(--dim-more);
 }
@@ -36,7 +32,6 @@
   cursor: progress;
 }
 
-/* ---- the note: why a toggle can't be used, and the pane that fixes it ---- */
 .tg-note {
   position: absolute;
   left: 0;

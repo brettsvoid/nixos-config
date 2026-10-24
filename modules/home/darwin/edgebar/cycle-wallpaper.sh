@@ -1,7 +1,3 @@
-# Advance the desktop wallpaper to the next image in edgebar's wallpaper folder
-# (wrapping round), then re-theme edgebar directly. `desktoppr`,
-# `generate-edgebar-theme` and `edgebar-wallpaper-folder` come from
-# writeShellApplication's runtimeInputs.
 wall_dir="$(edgebar-wallpaper-folder)"
 cd "$wall_dir" || exit 1
 shopt -s nullglob

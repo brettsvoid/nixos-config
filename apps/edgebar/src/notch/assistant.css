@@ -1,11 +1,7 @@
-/* The Assistant (ambxst's AssistantTab, trimmed): a header, the conversation
-   or the greeting, and the input pill pinned to the bottom. */
 .view-assistant {
   flex: 1 1 auto;
   gap: var(--space-4);
-  /* a failed reply's tint: the fixed semantic red, as on a low battery */
   --as-error: var(--battery-low);
-  /* the input's line, and how many it grows to before it scrolls */
   --as-line: 18px;
   --as-lines: 4;
 }
@@ -42,7 +38,6 @@
   cursor: default;
 }
 
-/* ---- the greeting, while nothing has been said ---- */
 .as-empty {
   display: flex;
   flex-direction: column;
@@ -84,7 +79,6 @@
   color: var(--on-surface);
 }
 
-/* ---- the conversation ---- */
 .as-log {
   display: flex;
   flex-direction: column;
@@ -133,14 +127,12 @@
 .as-claude.as-error {
   background: color-mix(in srgb, var(--as-error) 16%, var(--surface));
 }
-/* stopped, or a reply with no text */
 .as-note {
   color: var(--on-surface-variant);
   font-size: var(--font-xs);
   font-style: italic;
 }
 
-/* three dots until the first words land; they rest while the view is away */
 .as-typing {
   display: flex;
   gap: var(--space-2);
@@ -205,7 +197,6 @@
   background: var(--surface-container);
 }
 
-/* ---- Markdown in a reply (markdown.ts) ---- */
 .as-claude > * {
   max-width: 100%;
 }
@@ -322,7 +313,6 @@
   border-radius: 3px;
 }
 
-/* ---- the input pill: full-round at one line, a rounded box as it grows ---- */
 .as-input {
   display: flex;
   align-items: flex-end;
@@ -341,7 +331,6 @@
   flex: 1 1 auto;
   min-width: 0;
   height: var(--control-h);
-  /* one line plus padding is a control's height */
   max-height: calc(var(--as-lines) * var(--as-line) + var(--control-h) - var(--as-line));
   padding: calc((var(--control-h) - var(--as-line)) / 2) 0;
   border: none;

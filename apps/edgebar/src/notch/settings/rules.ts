@@ -1,12 +1,7 @@
-// The editor for `notch.workspaces`: what the collapsed notch says on each
-// AeroSpace workspace (README.md, "The notch"; `Rule` in notch.rs). One row per
-// rule, and every change writes that rule's whole override.
 import { lucide } from "../../icons";
 import { isSet, reset, set, type Settings } from "../../settings";
 import { button, el, field, segmented, type Option, type Part } from "./rows";
 
-// notch.rs's `Rule`, as the settings carry it. Rust deserialises the whole
-// config before it accepts a change, so what arrives here has this shape.
 type Rule =
   | { source: "focusedWindow" }
   | { source: "command"; run: string; everyMs?: number; glyph?: string }
@@ -24,8 +19,6 @@ const NOTE: Record<Rule["source"], string> = {
   none: "What's playing, as on a workspace with no rule.",
 };
 
-// The keyboard row's workspaces (WS_ORDER in lib.rs), tried in turn for a new
-// rule, then the fallback for every other workspace.
 const NAMES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "*"];
 
 const PLUS = lucide('<path d="M5 12h14"/><path d="M12 5v14"/>');
@@ -36,7 +29,6 @@ const TRASH = lucide(
 const keyOf = (ws: string) => `notch.workspaces.${ws}`;
 const rulesOf = (s: Settings) => s.notch.workspaces as Record<string, Rule>;
 
-// Keyboard order, names AeroSpace made up after them, the fallback last.
 function sorted(names: string[]): string[] {
   const rank = (n: string) => (n === "*" ? 2 : NAMES.includes(n) ? 0 : 1);
   return [...names].sort((a, b) => rank(a) - rank(b) || NAMES.indexOf(a) - NAMES.indexOf(b) || a.localeCompare(b));
@@ -77,7 +69,6 @@ function ruleRow(ws: string): RuleRow {
     }
   }
 
-  // Renaming writes the rule under its new name, then drops the old one.
   const name = field({ placeholder: "1" }, async (text) => {
     if (text === ws) return;
     const refuse = (reason: string) => {
@@ -145,7 +136,6 @@ function ruleRow(ws: string): RuleRow {
         run.show(rule.run);
         every.show(rule.everyMs ? String(rule.everyMs / 1000) : "");
       }
-      // A rule the Nix config sets can be changed here but not removed.
       remove.hidden = !isSet(keyOf(ws));
     },
   };

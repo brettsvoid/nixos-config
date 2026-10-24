@@ -5,7 +5,6 @@ import { settingsView } from "./settings";
 import type { NotchView } from "./view";
 import { wallpapersView } from "./wallpapers";
 
-// The notch's rail, top to bottom; Settings pins itself to the foot.
 export const views: NotchView[] = [
   dashboardView,
   wallpapersView,
@@ -14,5 +13,4 @@ export const views: NotchView[] = [
   settingsView,
 ];
 
-// The view the notch opens on, as ambxst does.
 export const home = dashboardView;

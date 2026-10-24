@@ -1,6 +1,3 @@
-// The Setup section: what edgebar still needs from this Mac, one row per check
-// in setup.rs, each with its state and the action that moves it on. Rust probes
-// on every read; this only draws the answer.
 import { call, type SetupItem } from "../../ipc";
 import { lucide } from "../../icons";
 import { button, el, type Part } from "./rows";
@@ -20,7 +17,6 @@ const STATE_NAME: Record<SetupItem["state"], string> = {
   unknown: "Unknown",
 };
 
-// What the rail's dot says, or null when nothing is missing.
 export function alertFor(items: SetupItem[]): string | null {
   const missing = items.filter((i) => i.state === "missing").length;
   if (missing === 0) return null;
@@ -30,12 +26,9 @@ export function alertFor(items: SetupItem[]): string | null {
 interface CheckRow {
   el: HTMLElement;
   draw(item: SetupItem): void;
-  // why the action failed, under the detail, until it next succeeds
   why(reason: string | null): void;
 }
 
-// Built once per check and redrawn in place: a clicked button that left the DOM
-// would read as a click outside the notch.
 function checkRow(onAction: () => void): CheckRow {
   const row = el("div", "st-check");
   const icon = el("span", "st-check-icon icon");

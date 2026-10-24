@@ -1,17 +1,5 @@
 import { lucide } from "../icons";
 
-// The Markdown a reply may use, drawn with DOM calls and textContent only, so
-// nothing in a reply is ever parsed as HTML: paragraphs, headings (as bold
-// lines), lists, rules, fenced code, inline code, bold, italics and web links.
-// Anything else shows as the text it is. A fence or a bold that hasn't closed
-// yet (a reply mid-stream) draws as far as it has got.
-//
-// Links and copy buttons carry no handlers: a link is an `a.md-link` with its
-// URL in `data-href` and no href, so a click can't navigate the bar's WebView,
-// and a code block's `button.md-copy` sits beside its `pre`. The view handles
-// both by delegation.
-
-// A code block's copy button holds both glyphs; `.copied` shows the check.
 const COPY_GLYPHS =
   `<span class="md-copy-idle">${lucide('<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>')}</span>` +
   `<span class="md-copy-done">${lucide('<path d="M20 6 9 17l-5-5"/>')}</span>`;
@@ -21,17 +9,15 @@ const HEADING = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/;
 const RULE = /^ {0,3}([-*_])(\s*\1){2,}\s*$/;
 const ITEM = /^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$/;
 
-// One pass over a line of inline text, earliest match first: a code span, bold,
-// italics, a [text](url) link or a bare URL.
 const INLINE = new RegExp(
   [
-    "(`+)([\\s\\S]+?)\\1(?!`)", // 1 run, 2 code
-    "\\*\\*(?=\\S)([\\s\\S]*?\\S)\\*\\*", // 3
-    "__(?=\\S)([\\s\\S]*?\\S)__(?!\\w)", // 4
-    "\\*(?=[^\\s*])([\\s\\S]*?[^\\s*])\\*", // 5
-    "(?<![\\w])_(?=[^\\s_])([\\s\\S]*?[^\\s_])_(?![\\w])", // 6
-    "\\[([^\\]\\n]+)\\]\\(((?:[^()\\s]|\\([^()\\s]*\\))+)\\)", // 7 text, 8 url, one (pair) allowed
-    "(https?:\\/\\/[^\\s<>]+)", // 9
+    "(`+)([\\s\\S]+?)\\1(?!`)",
+    "\\*\\*(?=\\S)([\\s\\S]*?\\S)\\*\\*",
+    "__(?=\\S)([\\s\\S]*?\\S)__(?!\\w)",
+    "\\*(?=[^\\s*])([\\s\\S]*?[^\\s*])\\*",
+    "(?<![\\w])_(?=[^\\s_])([\\s\\S]*?[^\\s_])_(?![\\w])",
+    "\\[([^\\]\\n]+)\\]\\(((?:[^()\\s]|\\([^()\\s]*\\))+)\\)",
+    "(https?:\\/\\/[^\\s<>]+)",
   ].join("|"),
   "g",
 );
@@ -56,7 +42,6 @@ function link(text: Node[] | string, url: string): HTMLElement {
   return a;
 }
 
-// A bare URL ends before trailing punctuation, and before a ")" it didn't open.
 function trimUrl(url: string): string {
   let end = url.replace(/[.,;:!?'"]+$/, "");
   while (end.endsWith(")") && (end.match(/\(/g)?.length ?? 0) < (end.match(/\)/g)?.length ?? 0)) {
@@ -136,7 +121,7 @@ export function renderMarkdown(text: string): DocumentFragment {
   const lines = text.split("\n");
   let para: string[] = [];
   let items: Item[] = [];
-  let indents: number[] = []; // the open list's indents, outermost first
+  let indents: number[] = [];
 
   const flushPara = () => {
     if (para.length) out.append(el("p", undefined, ...inline(para.join("\n"))));
@@ -188,7 +173,6 @@ export function renderMarkdown(text: string): DocumentFragment {
       items.push({ level: indents.length - 1, marker, text: [item[3]] });
       continue;
     }
-    // A line under a list item, indented, carries on that item.
     if (items.length && /^\s/.test(line)) {
       items[items.length - 1].text.push(line.trim());
       continue;

@@ -7,7 +7,7 @@ import type { Widget } from "../view";
 import { note, openPane, toggleButton } from "./quick-toggle";
 
 const POLL_MS = 15_000;
-const CASCADE_S = 0.08; // between groups as Clear all sweeps them out
+const CASCADE_S = 0.08;
 
 const BELL = lucide(
   '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
@@ -22,14 +22,12 @@ const BROOM = lucide(
 const X = lucide('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>');
 const CHEVRON = lucide('<path d="m6 9 6 6 6-6"/>');
 
-// What the column shows. `loading` is the moment between turning the history
-// on (or showing it) and the first read landing.
 type Column =
   | { kind: "off" }
   | { kind: "loading" }
   | { kind: "denied" }
   | { kind: "unavailable" }
-  | { kind: "history"; items: NotificationEntry[] }; // newest first
+  | { kind: "history"; items: NotificationEntry[] };
 
 interface Group {
   app: string;
@@ -37,7 +35,6 @@ interface Group {
   items: NotificationEntry[];
 }
 
-// Grouped by app, the app with the newest entry first.
 function groupByApp(items: NotificationEntry[]): Group[] {
   const groups = new Map<string, Group>();
   for (const item of items) {
@@ -63,7 +60,6 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node;
 };
 
-// A quiet icon over a line of text, and an action when there is one.
 function message(icon: string, text: string, action?: { label: string; run: () => void }) {
   const box = el("div", "nf-message");
   box.innerHTML = `<span class="icon">${icon}</span>`;
@@ -77,8 +73,6 @@ function message(icon: string, text: string, action?: { label: string; run: () =
   return box;
 }
 
-// Column 3 (ambxst NotificationHistory): macOS's delivered notifications,
-// grouped by app, read only while `notifications.history` is on.
 export const notifications: Widget = (root) => {
   root.innerHTML =
     '<div class="nf-head"><span class="nf-title">Notifications</span>' +
@@ -96,11 +90,10 @@ export const notifications: Widget = (root) => {
   let visible = false;
   let poll = 0;
   let clearing = false;
-  const expanded = new Set<string>(); // apps whose group the user opened
-  // Hidden here before Rust's next read reflects it.
+  const expanded = new Set<string>();
   const dismissed = new Set<string>();
-  let clearedBefore = 0; // ms since the epoch
-  let drawn = ""; // what the body was last built from
+  let clearedBefore = 0;
+  let drawn = "";
 
   const enabled = () => current().notifications.history;
 
@@ -108,7 +101,6 @@ export const notifications: Widget = (root) => {
     switch (h.access) {
       case "granted": {
         const items = h.items.filter((i) => !dismissed.has(i.id) && Date.parse(i.time) > clearedBefore);
-        // Forget ids Rust no longer returns: its own hidden list has them.
         for (const id of dismissed) if (!h.items.some((i) => i.id === id)) dismissed.delete(id);
         return { kind: "history", items };
       }
@@ -122,7 +114,7 @@ export const notifications: Widget = (root) => {
   }
 
   async function read() {
-    if (!enabled()) return; // the opt-in gates every read, here as in Rust
+    if (!enabled()) return;
     const h = await call("notification_history").catch(() => null);
     if (!h || !visible || clearing || !enabled()) return;
     setColumn(columnOf(h));
@@ -138,7 +130,6 @@ export const notifications: Widget = (root) => {
     poll = 0;
   }
 
-  // Follow the setting: off stops reading at once and forgets what was read.
   function sync() {
     if (!visible) return;
     if (enabled()) {
@@ -202,8 +193,6 @@ export const notifications: Widget = (root) => {
     icon.hidden = !g.icon;
     header.append(icon, el("span", "nf-app", g.app || "Unknown app"), el("span", "nf-count", String(g.items.length)));
     if (many) header.insertAdjacentHTML("beforeend", `<span class="nf-chevron icon">${CHEVRON}</span>`);
-    // A class flip, not a rebuild: a click target that leaves the DOM reads
-    // as a click outside the notch, which closes it (main.ts).
     header.addEventListener("click", () => {
       const open = !section.classList.contains("expanded");
       section.classList.toggle("expanded", open);
@@ -231,7 +220,6 @@ export const notifications: Widget = (root) => {
     return entry;
   }
 
-  // Slides it out, then drops it here; Rust hides it from every later read.
   async function dismissOne(item: NotificationEntry, target: HTMLElement) {
     dismissed.add(item.id);
     call("notification_dismiss", { ids: [item.id] }).catch(() => {});
@@ -241,7 +229,6 @@ export const notifications: Widget = (root) => {
     if (column.kind === "history") setColumn({ kind: "history", items: column.items.filter((i) => i.id !== item.id) });
   }
 
-  // The groups sweep out one after another, then Rust hides everything so far.
   async function clearAll() {
     if (column.kind !== "history" || !column.items.length || clearing) return;
     clearing = true;

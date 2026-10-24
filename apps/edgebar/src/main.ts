@@ -35,11 +35,7 @@ const CPU_GRAPH = {
   thresholds: { hot: 0.7, warm: 0.3, mild: 0.1 },
 } as const;
 const LAYOUT = {
-  // px of bar window kept below an open drawer, for its shadow and the
-  // launcher's fillet into the frame's side
   drawerRoom: 32,
-  // ms for the first replies (network, battery) to size their segments before
-  // the second hit-test report
   settleDelay: 600,
 } as const;
 // Collapsed notch sizing: one width per state, not sized to content, so the
@@ -62,8 +58,7 @@ const WAVE = {
   rampPx: 8, // px of played track over which the wave swells to full amplitude
   fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
 } as const;
-const FALLBACK = { barHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
-// Interactive-rect sentinel: the whole window is hit-testable while a drawer is open.
+const FALLBACK = { barHeight: 32, windowHeight: 64 } as const;
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
 // Apply the shared config (also read by the native frame) as CSS variables,
@@ -88,8 +83,6 @@ function applyColors(c: Colors) {
   s.setProperty("--cpu-user", c.cpuUser);
 }
 
-// Re-applied on every `theme` event, which a settings change to the geometry
-// sends too (the native frame rebuilds at the same time).
 function applyConfig(cfg: Config) {
   const s = document.documentElement.style;
   applyColors(cfg.colors);
@@ -106,18 +99,11 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
-// The open notch's chrome around a view's body: the drawer's padding on each
-// side, plus the rail (48px) and its gap beside the body. Keep in step with
-// --drawer-pad, .rail-tab and .notch-panel's gap.
 const NOTCH_CHROME = { w: 16 * 2 + 48 + 8, h: 16 * 2 } as const;
 
 function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const segments = [...document.querySelectorAll<HTMLElement>(".seg")];
 
-  // ---- bar window sizing --------------------------------------------------
-  // An open drawer needs a taller (transparent) bar window. The window is
-  // shared, so it fits the tallest open drawer and goes back to
-  // geometry.windowHeight, the size lib.rs creates it at, once all are closed.
   const drawerHeights = new Map<string, number>();
   let lastWindowH = -1;
 
@@ -134,14 +120,8 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     reportInteractiveRects();
   }
 
-  // True while the playhead is dragged. Like an open drawer, it makes the whole
-  // window interactive, or a scrub that strays off the notch would go
-  // click-through and stop receiving pointer events.
   let scrubbing = false;
   let rectsScheduled = false;
-  // Tell lib.rs's click-through tracker which regions stay interactive: the
-  // band's segments, or the whole window while a drawer is open (so an outside
-  // click reaches the bar and closes it). Coalesced to one IPC per frame.
   function reportInteractiveRects() {
     if (rectsScheduled) return;
     rectsScheduled = true;
@@ -161,16 +141,12 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   }
   window.addEventListener("resize", reportInteractiveRects);
 
-  // ---- drawers: the notch, the controls and the launcher -------------------
-  // A drawer is a box that grows down out of the band. Its `--reach` is how far
-  // it shows below the band: 0 when closed, its body's height when open. The
-  // body rides the box's lower edge, so it slides out from behind the band.
   interface DrawerOpts {
     id: string;
-    root: HTMLElement; // holds the toggle and the drawer; a click outside closes it
+    root: HTMLElement;
     toggle: HTMLElement;
-    box: HTMLElement; // the .drawer
-    body: HTMLElement; // its .drawer-body, whose height is how far it opens
+    box: HTMLElement;
+    body: HTMLElement;
     onOpen?: () => void | Promise<void>;
     onClose?: () => void;
   }
@@ -179,7 +155,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     root: HTMLElement;
     isOpen: () => boolean;
     close: () => Promise<void>;
-    // Follow a change in the body's height, such as the notch switching views.
     resize: () => void;
   }
 
@@ -187,7 +162,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     let open = false;
     const reach = motionValue(0);
     reach.on("change", (v) => o.box.style.setProperty("--reach", `${Math.max(0, v)}px`));
-    // Read by the CSS (a closed drawer is hidden) and by scripts/snap-states.sh.
     const setState = (state: "opening" | "open" | "closing" | "closed") => {
       o.box.dataset.state = state;
     };
@@ -197,7 +171,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       if (open) return;
       open = true;
       await o.onOpen?.();
-      if (!open) return; // closed again while it loaded
+      if (!open) return;
       drawerHeights.set(o.id, o.body.offsetHeight);
       await syncWindowHeight();
       setState("opening");
@@ -211,7 +185,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       o.onClose?.();
       setState("closing");
       await animate(reach, 0, SPRING.drawer).finished;
-      if (open) return; // opened again before it shut
+      if (open) return;
       setState("closed");
       drawerHeights.delete(o.id);
       await syncWindowHeight();
@@ -237,8 +211,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   });
 
   // ---- clock --------------------------------------------------------------
-  // Shaped by the `clock` settings. It ticks on the minute, or on the second
-  // while `clock.seconds` is on and the bar is on screen.
   const timeEl = document.querySelector<HTMLElement>("#clock .time")!;
   const sepEl = document.querySelector<HTMLElement>("#clock .sep")!;
   const dateEl = document.querySelector<HTMLElement>("#clock .date")!;
@@ -266,12 +238,9 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   function tick() {
     const now = new Date();
     updateCompactClock(now);
-    // The notch's idle clock too, while no provider owns the slot. It shows no
-    // seconds, so it repaints once a minute.
     const minute = Math.floor(now.getTime() / 60000);
     if (minute !== clockMinute && notchIdle === "clock" && !notchLive) renderNotch(null);
     clockMinute = minute;
-    // reschedule for the next boundary (no drift)
     const step = current().clock.seconds && !document.hidden ? 1000 : 60000;
     window.clearTimeout(clockTimer);
     clockTimer = window.setTimeout(tick, step - (Date.now() % step));
@@ -282,7 +251,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
   const notchBox = notchEl.querySelector<HTMLElement>(".notch-drawer")!;
   const notchBody = notchBox.querySelector<HTMLElement>(".notch-panel")!;
-  let notchW: number = NOTCH.idleW; // the collapsed row's width, set by renderNotch
+  let notchW: number = NOTCH.idleW;
   const notchDrawer = makeDrawer({
     id: "notch",
     root: notchEl,
@@ -306,8 +275,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   )!;
   const ranges = [volRange, micRange, briRange];
 
-  // The track fills in `--primary` up to the handle; a range input has no
-  // part for that, so its background reads this.
   const paintRange = (r: HTMLInputElement) => r.style.setProperty("--fill", `${r.value}%`);
   for (const r of ranges) r.addEventListener("input", () => paintRange(r));
 
@@ -316,7 +283,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       const v = await call("get_volume");
       volRange.value = String(v.output);
       micRange.value = String(v.input);
-      const br = await call("get_brightness"); // 0..1
+      const br = await call("get_brightness");
       briRange.value = String(Math.round(br * 100));
     } catch {
       /* ignore */
@@ -349,7 +316,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     onOpen: loadControls,
   });
 
-  // ---- launcher: the ⌘ quick-actions menu ---------------------------------
   const wsEl = document.querySelector<HTMLElement>("#workspaces")!;
   const menuBox = wsEl.querySelector<HTMLElement>(".menu-panel")!;
   const launcherDrawer = makeDrawer({
@@ -368,7 +334,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
 
   const drawers = [notchDrawer, controlsDrawer, launcherDrawer];
 
-  // Click outside an open drawer closes it.
   document.addEventListener("click", (e) => {
     const t = e.target as Node;
     for (const d of drawers) {
@@ -568,8 +533,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     cpuPill.classList.toggle("mild", stat.total >= t.mild && stat.total < t.warm);
   }
 
-  // A hidden segment (`segments.cpu` off) ignores the event; the sampler runs
-  // on for the notch's Performance chart.
   on("cpu", (stat) => {
     if (cpuPill.hidden) return;
     cpuHistory.push({ sys: stat.sys, user: stat.user });
@@ -577,8 +540,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     renderCpu(stat);
     drawCpuGraph();
   });
-  // Rust's history is the whole record, so it replaces what is here: at
-  // startup, and when the segment shows again after missing events.
   function seedCpu() {
     call("cpu_state")
       .then((s) => {
@@ -637,7 +598,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   }
 
   on("workspaces", renderWorkspaces);
-  call("aerospace_workspaces") // initial state
+  call("aerospace_workspaces")
     .then(renderWorkspaces)
     .catch(() => {});
 
@@ -944,10 +905,9 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     const width = shown ? NOTCH.itemW : NOTCH.idleW;
     if (width === notchW) return;
     notchW = width;
-    // Report rects once the spring settles, not mid-flight.
     animate(notchEl, { width }, SPRING.move)
       .finished.then(reportInteractiveRects)
-      .catch(() => {}); // superseded by a newer item; that one reports instead
+      .catch(() => {});
   }
 
   function pushNotch(item: NotchItem | null) {
@@ -975,19 +935,16 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   }
 
   on("notch", pushNotch);
-  call("notch_state") // whatever was already winning
+  call("notch_state")
     .then((item) => renderNotch(item))
     .catch(() => renderNotch(null));
 
-  // ---- notch views: the rail, switching and window sizing -----------------
-  // notch/views.ts lists what the rail shows. Each view owns its DOM, state and
-  // CSS and is built when the notch first opens; this section only places them.
   const tabBody = notchBody.querySelector<HTMLElement>(".tab-body")!;
   const railEl = notchBody.querySelector<HTMLElement>(".dash-rail")!;
   const railTabs = new Map<string, HTMLElement>();
   const viewEls = new Map<string, HTMLElement>();
   const handles = new Map<string, ViewHandle>();
-  let shownView: string | null = null; // null while the notch is closed
+  let shownView: string | null = null;
 
   const viewCtx: ViewContext = {
     reportInteractiveRects,
@@ -1014,7 +971,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     railEl.append(tab);
   }
 
-  // The amber dot on a rail button, with the reason in its tooltip.
   function setAlert(id: string, reason: string | null) {
     const tab = railTabs.get(id);
     const entry = views.find((v) => v.id === id);
@@ -1044,13 +1000,9 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   function showView(view: NotchView) {
     if (shownView && shownView !== view.id) handles.get(shownView)?.hide?.();
     shownView = view.id;
-    // Pin the body to the view's size before the drawer springs, or fluid
-    // layouts inside (the wallpaper grid's auto-fill) reflow every frame. The
-    // drawer body clips it while the box catches up.
     tabBody.style.width = `${view.size.w}px`;
     notchBody.style.height = `${view.size.h + NOTCH_CHROME.h}px`;
     for (const [id, el] of viewEls) el.hidden = id !== view.id;
-    // The rail survives the view swap, so move its highlight.
     for (const [id, tab] of railTabs) tab.classList.toggle("active", id === view.id);
     handles.get(view.id)?.show?.();
   }
@@ -1072,8 +1024,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
 
   function openViews() {
     mountViews();
-    showView(home); // always open on the dashboard, as ambxst does
-    // It opens at its width; only a view switch eases it.
+    showView(home);
     notchBox.style.width = `${home.size.w + NOTCH_CHROME.w}px`;
     for (const handle of handles.values()) handle.open?.();
   }
@@ -1087,31 +1038,26 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
   on("theme", (theme) => {
     applyConfig(theme);
-    // Canvas pixels don't follow CSS vars, so repaint them by hand.
     drawCpuGraph();
     paintWave();
-    // `notch.idle` travels with the theme (see ResolvedConfig in lib.rs).
     if (theme.notchIdle !== notchIdle) {
       notchIdle = theme.notchIdle;
       if (!notchLive) renderNotch(null);
     }
   });
 
-  // The bar's own settings: the clock's shape and which segments show.
   function applyBarSettings() {
     showCpuSegment(current().segments.cpu);
-    clockMinute = -1; // so the notch's idle clock takes a changed hour24 too
+    clockMinute = -1;
     tick();
     reportInteractiveRects();
   }
   onChange(applyBarSettings);
 
   // ---- init ---------------------------------------------------------------
-  // A reload while a view held the keyboard would otherwise leave it held, and
-  // one while a drawer was open would leave the window at the drawer's height.
   releaseKeyboard();
   void syncWindowHeight();
-  applyBarSettings(); // starts the clock
+  applyBarSettings();
   reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
 }

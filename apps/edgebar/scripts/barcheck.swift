@@ -1,8 +1,3 @@
-// Multi-monitor check against a running edgebar: every NSScreen must have a
-// bar window (level 5) spanning its top edge and a frame window (level 4,
-// under the bar) matching its bounds. Exits 0 on PASS. NSWindow layout has no headless test
-// seam, so this live check is the regression test for per-display geometry.
-//
 //   DEVELOPER_DIR=/Library/Developer/CommandLineTools \
 //     /Library/Developer/CommandLineTools/usr/bin/swiftc \
 //     -sdk /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk \

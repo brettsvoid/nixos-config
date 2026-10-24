@@ -1,15 +1,9 @@
-// The Settings view's rows: a label, its control and a reset button, bound to
-// one setting. A row draws only from the settings it is handed (`update`), and
-// every change goes through `set` or `reset`, so what it shows is always what
-// Rust accepted.
 import { lucide } from "../../icons";
 import { keyboardField } from "../../keyboard";
 import { current, isSet, reset, set, type Settings, type SettingValue } from "../../settings";
 
 export const UNDO = lucide('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>');
 
-// A piece of a section. `update` runs with the settings after every change,
-// `show` and `hide` when its section comes and goes.
 export interface Part {
   el: HTMLElement;
   update?(s: Settings): void;
@@ -17,8 +11,6 @@ export interface Part {
   hide?(): void;
 }
 
-// The dotted keys whose setting has type V: KeyOf<boolean> takes "oled" and
-// "clock.seconds" and refuses "notch.idle".
 type KeysTo<T, V, P extends string = ""> = {
   [K in keyof T & string]: T[K] extends V
     ? `${P}${K}`
@@ -49,14 +41,10 @@ export function button(className: string, html: string, title = ""): HTMLButtonE
   return b;
 }
 
-// The frame every row shares. `why` shows Rust's reason under the label when a
-// change was refused, until the next change lands.
 export interface Frame {
   el: HTMLElement;
   why(reason: string | null): void;
-  // set or reset, with a refusal shown under the label
   commit(key: string, value: SettingValue | null): Promise<void>;
-  // the reset button follows whether `key` is overridden
   sync(): void;
 }
 
@@ -96,8 +84,6 @@ export function frame(label: string, note: string, control: HTMLElement, key: st
   };
 }
 
-// ---- switch ----
-
 export function switchRow(key: KeyOf<boolean>, label: string, note = ""): Part {
   const sw = button("st-switch", '<span class="st-knob"></span>');
   sw.setAttribute("role", "switch");
@@ -114,15 +100,12 @@ export function switchRow(key: KeyOf<boolean>, label: string, note = ""): Part {
   };
 }
 
-// ---- segmented choice ----
-
 export interface Option {
   value: string;
   label: string;
-  icon?: string; // drawn instead of the label, which becomes the tooltip
+  icon?: string;
 }
 
-// Full-round pills; the one matching the value is --primary.
 export function segmented(options: Option[], pick: (value: string) => void) {
   const box = el("div", "st-seg");
   box.setAttribute("role", "group");
@@ -159,8 +142,6 @@ export function choiceRow(key: KeyOf<string>, label: string, options: Option[], 
   };
 }
 
-// ---- slider ----
-
 export interface Range {
   min: number;
   max: number;
@@ -168,7 +149,6 @@ export interface Range {
   format: (value: number) => string;
 }
 
-// The value shows while dragging; the setting changes once, on release.
 export function sliderRow(key: KeyOf<number>, label: string, range: Range, note = ""): Part {
   const box = el("div", "st-slider");
   const input = el("input", "s-range");
@@ -203,17 +183,12 @@ export function sliderRow(key: KeyOf<number>, label: string, range: Range, note 
   };
 }
 
-// ---- text field ----
-
 export interface Field {
   el: HTMLElement;
   input: HTMLInputElement;
-  // shows `value` unless the field is being typed in
   show(value: string): void;
 }
 
-// A full-round field that commits on Enter or when it loses focus; Escape puts
-// the shown value back. Pressing it takes the keyboard (keyboard.ts).
 export function field(opts: { placeholder?: string; mono?: boolean }, commit: (text: string) => void): Field {
   const box = el("label", "st-field");
   box.classList.toggle("mono", !!opts.mono);
@@ -249,7 +224,6 @@ export function field(opts: { placeholder?: string; mono?: boolean }, commit: (t
   };
 }
 
-// An empty field drops the override when `emptyResets`, rather than saving "".
 export function textRow(
   key: KeyOf<string>,
   label: string,
@@ -267,7 +241,6 @@ export function textRow(
   };
 }
 
-// A folder: its path in a field, and Browse… for Finder's folder picker.
 export function folderRow(key: KeyOf<string>, label: string, browse: () => Promise<string | null>, note = ""): Part {
   let f: Frame;
   const box = el("div", "st-folder");
@@ -288,8 +261,6 @@ export function folderRow(key: KeyOf<string>, label: string, browse: () => Promi
   };
 }
 
-// ---- read-only ----
-
 export function infoRow(label: string, value: (s: Settings) => string, note = ""): Part {
   const shown = el("span", "st-value");
   const f = frame(label, note, shown, null);
@@ -302,9 +273,6 @@ export function infoRow(label: string, value: (s: Settings) => string, note = ""
   };
 }
 
-// ---- grouping ----
-
-// A card of rows under an optional heading.
 export function group(title: string, parts: Part[]): Part {
   const box = el("section", "st-group");
   if (title) box.append(el("h3", "st-group-title", title));
@@ -314,7 +282,6 @@ export function group(title: string, parts: Part[]): Part {
   return fanOut(box, parts);
 }
 
-// One part standing for several: each hook runs on every child that has it.
 export function fanOut(el: HTMLElement, parts: Part[]): Part {
   return {
     el,

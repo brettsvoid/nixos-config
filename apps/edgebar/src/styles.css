@@ -1,24 +1,17 @@
 :root {
-  /* ---- colour roles ----
-     main.ts sets the live values from the resolved config (Colors in lib.rs);
-     these are fallbacks. The band, the frame, the notch and every drawer are
-     --surface. --warn and the --cpu-hot/warm/mild ladder are CSS-only. */
   --surface: #1e1e2e;
   --on-surface: #cdd6f4;
   --on-surface-variant: #a6adc8;
   --primary: #89b4fa;
   --on-primary: var(--surface);
-  /* Cards, tracks and quiet marks: the surface tinted toward its ink, as the
-     custom shell derives them (quickshell theme/Theme.qml). */
   --surface-container: color-mix(in srgb, var(--on-surface) 7%, var(--surface));
   --surface-container-high: color-mix(in srgb, var(--on-surface) 11%, var(--surface));
   --surface-bright: color-mix(in srgb, var(--on-surface) 20%, var(--surface));
-  --battery-charging: #40a02b; /* catppuccin latte green */
+  --battery-charging: #40a02b;
   --battery-low: #d20f39; /* catppuccin latte red */
   --vpn: #179299; /* catppuccin latte teal */
-  --warn: #df8e1d; /* catppuccin latte yellow: wifi connected, no internet */
+  --warn: #df8e1d;
 
-  /* CPU graph traces: Catppuccin Latte red/blue. */
   --cpu-sys: #d20f39;
   --cpu-user: #1e66f5;
   /* Load colours for the percentage readout; the thresholds are
@@ -27,17 +20,14 @@
   --cpu-warm: #fe640b; /* catppuccin latte peach */
   --cpu-mild: #df8e1d; /* catppuccin latte yellow */
 
-  /* ---- the band and the frame (geometry from config.json) ---- */
-  --bar-h: 32px; /* geometry.barHeight: the band, also the frame's top edge */
-  --frame-t: 8px; /* geometry.frameThickness: the frame's sides */
-  --bar-pad: 12px; /* from each end of the band to its first segment */
-  --seg-gap: 16px; /* between segments */
+  --bar-h: 32px;
+  --frame-t: 8px;
+  --bar-pad: 12px;
+  --seg-gap: 16px;
 
-  /* ---- drawers (quickshell frame/Drawer.qml) ---- */
-  --fillet: 16px; /* the curve where a drawer meets the band */
-  --radius-drawer: 28px; /* a drawer's corners away from the band */
+  --fillet: 16px;
+  --radius-drawer: 28px;
   --drawer-pad: 16px;
-  /* Matches the native frame's shadow (FRAME_SHADOW_* in lib.rs). */
   --shadow-drawer: 0 0 6.5px rgb(0 0 0 / 0.6);
   --radius-card: 16px;
 
@@ -57,12 +47,11 @@
      its own font and icon size. */
   --control-h: 30px;
 
-  /* ---- radius scale ---- */
   --radius-sm: 8px;
   --radius-md: 12px;
 
   /* ---- type scale ---- */
-  --font-3xs: 9px; /* caption under a readout (the CPU segment's process name) */
+  --font-3xs: 9px;
   --font-2xs: 10px;
   --font-xs: 11px;
   --font-sm: 12px;
@@ -72,7 +61,6 @@
   --font-2xl: 18px;
   --font-3xl: 30px;
 
-  /* ---- motion (springs are in motion.ts) ---- */
   --dur-fast: 0.12s;
   --dur-med: 0.25s;
   --dur-slow: 0.4s;
@@ -126,10 +114,6 @@ body {
   display: block;
 }
 
-/* ---- the band ----
-   The native frame (src-tauri/src/lib.rs) draws it too. Painting it here as
-   well lets the drawers grow out of it inside this window, with no seam
-   between two windows. */
 .bar {
   position: fixed;
   top: 0;
@@ -140,7 +124,7 @@ body {
   align-items: center;
   gap: var(--seg-gap);
   padding: 0 var(--bar-pad);
-  pointer-events: none; /* segments opt back in */
+  pointer-events: none;
 }
 .bar::before {
   content: "";
@@ -156,10 +140,6 @@ body {
   gap: var(--seg-gap);
   height: 100%;
 }
-/* The side clusters are `flex: 1` (zero basis) with `min-width: 0`, so they
-   always halve the space the centre leaves and the notch stays on the screen's
-   midpoint at any width. Without `min-width: 0` a cluster floors at its content
-   width and a wide notch shoves the centre sideways. */
 .cluster.left {
   flex: 1;
   min-width: 0;
@@ -174,32 +154,24 @@ body {
   justify-content: flex-end;
 }
 
-/* ---- segments: content laid on the band, with no box of their own ---- */
 .seg {
-  /* Positioned for its drawer, but with no z-index: a stacking context here
-     would lift the drawer over the band it slides out from behind. */
   position: relative;
   display: flex;
   align-items: center;
   height: var(--bar-h);
-  /* Never shrink: a narrow cluster should overflow rather than squash the
-     readouts. */
   flex: none;
   pointer-events: auto; /* interactive (native click-through toggles to match) */
 }
-/* What sits on the band paints above it; a segment's drawer stays beneath. */
 .seg > :not(.drawer) {
   position: relative;
   z-index: 2;
 }
 
-/* An icon button on the band. Quiet: a plate shows only on hover. */
 .bar-btn {
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
-  /* the plate overhangs, so the glyph itself sits on the segment's edge */
   margin: 0 -4px;
   padding: 0;
   border: none;
@@ -213,13 +185,8 @@ body {
   background: var(--surface-container);
 }
 
-/* ---- drawers: boxes that grow down out of the band (frame/Drawer.qml) ----
-   main.ts springs --reach from 0 (closed: tucked a fillet's depth behind the
-   band) to the body's height. The body sits on the box's lower edge, so it
-   slides out from behind the band, clipped by the growing box, never faded. */
 .drawer {
   --reach: 0px;
-  /* the fillets grow with the drawer until it is a fillet deep */
   --r: min(var(--fillet), var(--reach));
   position: absolute;
   z-index: 0;
@@ -227,18 +194,15 @@ body {
   height: calc(var(--fillet) + var(--reach));
   display: flex;
   flex-direction: column;
-  justify-content: flex-end; /* the body overflows upward, behind the band */
+  justify-content: flex-end;
   background: var(--surface);
   border-radius: 0 0 var(--radius-drawer) var(--radius-drawer);
-  /* drop-shadow, not box-shadow, so the fillets cast it too */
   filter: drop-shadow(var(--shadow-drawer));
   cursor: default;
 }
 .drawer[data-state="closed"] {
   visibility: hidden;
 }
-/* Concave fillets joining the box to the band. The +0.5px is an anti-aliasing
-   fudge so the mask meets the curve cleanly, not a design value. */
 .drawer::before,
 .drawer::after {
   content: "";
@@ -267,17 +231,12 @@ body {
 .drawer-body {
   flex: none;
   padding: var(--drawer-pad);
-  overflow: hidden; /* clips a view wider than the box while it resizes */
+  overflow: hidden;
   border-radius: inherit;
 }
-/* A drawer at the start of the band runs on into the frame's corner, as the
-   custom shell's `align: "start"` does: square against the frame's side, with
-   its fillet there instead of against the band. */
 .drawer.start {
   left: calc(-1 * var(--bar-pad));
   border-bottom-left-radius: 0;
-  /* Cut at the frame's inner edge, so the drawer casts no shadow onto the
-     frame's side; what it covers there is the frame's own colour. */
   clip-path: inset(-40px -40px -40px var(--frame-t));
 }
 .drawer.start::before {
@@ -296,7 +255,6 @@ body {
   padding-left: calc(var(--frame-t) + var(--drawer-pad));
 }
 
-/* ---- clock (quickshell bar/Clock.qml) ---- */
 #clock {
   gap: var(--space-4);
 }
@@ -314,7 +272,6 @@ body {
   color: var(--on-surface-variant);
 }
 
-/* ---- notch: its row sits on the band; open, its drawer hangs below ---- */
 #notch {
   cursor: pointer;
   /* Starting width only (NOTCH.idleW); main.ts sets it from then on. */
@@ -347,14 +304,10 @@ body {
 .ni-secondary[hidden] {
   display: none;
 }
-/* The media pill fills the row, so the row gives up its side padding. */
 .notch-row.media {
   padding: 0;
 }
 
-/* ---- dynamic notch content (media / workspace context / OSD flash) ----
-   The box is a fixed width (NOTCH.itemW in main.ts), so text that doesn't fit
-   marquees rather than widening the row. */
 .notch-item {
   position: relative;
   display: flex;
@@ -401,8 +354,6 @@ body {
   font-size: var(--font-3xs);
   color: var(--on-surface-variant);
 }
-/* Progress (e.g. a volume level): a hairline along the bottom. Shown only when
-   the item has progress; the text lifts to make room. */
 .ni-progress {
   position: absolute;
   left: 0;
@@ -428,8 +379,6 @@ body {
   transition: width 0.45s linear;
 }
 
-/* The open notch: a drawer centred under the row, its rail beside the view's
-   body. Only .tab-body's contents change when a view switches. */
 .notch-drawer {
   left: 50%;
   translate: -50% 0;
@@ -438,15 +387,12 @@ body {
   display: flex;
   gap: var(--space-4);
 }
-/* Width is set by showView (see there); it overflows the box mid-animation on
-   purpose and the drawer body clips it. */
 .tab-body {
   display: flex;
   flex-direction: column;
   flex: none;
   min-height: 0;
 }
-/* one view visible at a time in the tab body */
 .view {
   display: flex;
   flex-direction: column;
@@ -457,10 +403,6 @@ body {
   display: none;
 }
 
-/* ---- media pill: art backdrop + wavy playhead + transport ----
-   An inset pill filling the notch's row. The album art is a soft backdrop
-   behind a scrim, not a thumbnail: a cover this small reads as noise, a wash of
-   its colour as identity. Title and artist are in the tooltip. */
 .ni-media {
   position: relative;
   display: flex;
@@ -473,8 +415,6 @@ body {
   border-radius: calc((var(--bar-h) - 8px) / 2);
   background: var(--surface-container);
   overflow: hidden; /* clips the blurred art to the pill */
-  /* White marks over the scrim, whatever the theme. Read by the playhead's
-     canvas in main.ts too. */
   --nm-played: #ffffff;
   --nm-remaining: rgb(255 255 255 / 0.38);
 }
@@ -552,7 +492,6 @@ body {
   border-radius: 50%;
 }
 
-/* ---- view chrome: the header views share ---- */
 .view-head {
   display: flex;
   align-items: center;
@@ -563,12 +502,6 @@ body {
   font-weight: 600;
 }
 
-/* ---- notch rail ----
-   The views' buttons, with the foot-pinned ones (Settings) at the bottom, as
-   in ambxst's Dashboard.qml. A sibling of the tab body, so it stays put across
-   view switches. Each button is the custom shell's (components/Pill.qml):
-   full-round, a container tint at rest, a higher one on hover, --primary when
-   active. */
 .dash-rail {
   display: flex;
   flex-direction: column;
@@ -576,7 +509,7 @@ body {
   flex: none;
 }
 .rail-tab {
-  --tab-bg: var(--surface-container); /* the alert dot's ring matches it */
+  --tab-bg: var(--surface-container);
   position: relative; /* anchors .rail-dot */
   display: grid;
   place-items: center;
@@ -620,9 +553,8 @@ body {
   display: none;
 }
 
-/* ---- status: Wi-Fi / network + battery ---- */
 #status {
-  gap: var(--space-6); /* between the wifi group and the battery group */
+  gap: var(--space-6);
 }
 /* each group keeps its icon and text tightly paired */
 .stat-grp {
@@ -678,13 +610,9 @@ body {
   opacity: var(--dim-more);
 }
 
-/* ---- CPU: process name over the percentage and load graph ----
-   Unlike sketchybar's, the text doesn't overlay the graph, where it wouldn't
-   read over the graph's fill. */
 #cpu {
   gap: var(--space-4);
 }
-/* `segments.cpu` off; `.seg`'s display would beat the UA's [hidden] rule */
 #cpu[hidden] {
   display: none;
 }
@@ -754,7 +682,6 @@ body {
   display: block;
 }
 
-/* ---- launcher: the ⌘ quick-actions menu, a drawer at the band's start ---- */
 .menu-panel > .drawer-body {
   display: flex;
   flex-direction: column;
@@ -783,7 +710,6 @@ body {
   font-size: var(--font-xl);
 }
 
-/* ---- controls: volume / mic / brightness, a drawer under its button ---- */
 .ctl-panel {
   left: 50%;
   translate: -50% 0;
@@ -802,8 +728,6 @@ body {
 .slider-row .s-icon {
   font-size: var(--font-xl);
 }
-/* quickshell components/Slider.qml: a 6px track, filled in --primary up to an
-   18px handle. main.ts keeps --fill at the value. */
 .s-range {
   flex: 1;
   -webkit-appearance: none;
@@ -826,9 +750,6 @@ body {
   background: var(--primary);
 }
 
-/* ---- workspaces (quickshell bar/Workspaces.qml) ----
-   8px dots 4px apart; the active one a 24px capsule. An occupied workspace
-   shows its app's icon instead, the active one on a tinted capsule. */
 #workspaces {
   gap: var(--space-8);
 }
@@ -843,7 +764,6 @@ body {
   padding: 0 var(--space-1);
   cursor: pointer;
 }
-/* the mark, and the icon over it, share one grid cell */
 .ws::before,
 .ws-icon {
   grid-area: 1 / 1;

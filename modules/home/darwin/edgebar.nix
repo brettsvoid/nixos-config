@@ -1,13 +1,6 @@
 # Renders edgebar's runtime config (~/.config/edgebar/config.json) from
 # apps/edgebar/src-tauri/config.default.json, which is also the binary's
-# bundled fallback when this file is absent. Edit colours, role maps and
-# geometry there, except geometry.barHeight and frameThickness (from
-# flake.lib.barGeometry, shared with the AeroSpace gaps), which are overridden here. The commands the
-# in-app theme view runs are added here too.
-#
-# What the user changes in the app is layered over this file by edgebar, in
-# ~/.config/edgebar/settings.json. Home Manager does not manage that file, so
-# edgebar can write it.
+# bundled fallback when this file is absent.
 #
 # The wallpaper-derived palette is separate: `generate-edgebar-theme` runs
 # matugen over the current wallpaper to write ~/.config/edgebar/palette.json
@@ -70,8 +63,6 @@ in
         if [ -z "$WALLPAPER" ]; then
           WALLPAPER=$(${pkgs.desktoppr}/bin/desktoppr 2>/dev/null | head -1)
         fi
-        # With Tint on, the desktop shows a repainted copy from edgebar's tinted
-        # cache; take the palette from the picture it was made from, not the copy.
         case "$WALLPAPER" in
           "$HOME"/.cache/edgebar/tinted/*)
             ORIGINAL=$(cat "$WALLPAPER.src" 2>/dev/null)
@@ -120,13 +111,10 @@ in
         fi
       '';
 
-      # The folder the wallpaper commands pick from: edgebar's own setting, so
-      # they agree with the Wallpapers view.
       edgebar-wallpaper-folder = pkgs.writeShellApplication {
         name = "edgebar-wallpaper-folder";
         runtimeInputs = [ pkgs.jq ];
         runtimeEnv.DEFAULT_FOLDER = defaults.wallpaper.folder;
-        # The folder's `~` is literal until the script expands it.
         excludeShellChecks = [ "SC2088" ];
         text = builtins.readFile ./edgebar/wallpaper-folder.sh;
       };
