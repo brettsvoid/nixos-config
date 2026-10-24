@@ -1,9 +1,3 @@
-// edgebar: an ambxst-style top bar for macOS.
-//
-// Each display gets two windows: a native frame (the bezel, permanently
-// click-through; see `create_native_frame`) and a transparent WebView bar (the
-// pills). The bar is click-through except over the rects its WebView reports,
-// switched by NSEvent cursor monitors (see "click-through bar window" below).
 // Don't toggle `ignore_cursor_events` from a polling loop instead: Tauri's
 // getters block on the main event loop, which stops servicing them while the
 // cursor is tracked over a window, so the loop deadlocks.
@@ -12,22 +6,39 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 
+mod assistant;
+
 /// Dynamic content for the collapsed notch (media / per-workspace / OSD).
 mod notch;
 
+mod metrics;
+
+mod notifications;
+
+mod toggles;
+
+mod wallpapers;
+
+mod keyboard;
+
+#[cfg(all(debug_assertions, target_os = "macos"))]
+mod devtools;
+
+mod settings;
+
+mod setup;
+
+#[cfg(test)]
+mod scratch;
+
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
-/// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
-/// (persisted to `~/.config/edgebar/appearance`).
+/// `Light`/`Dark` pin it.
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum Appearance {
     Light,
     Dark,
     Auto,
-}
-
-fn default_appearance() -> Appearance {
-    Appearance::Auto
 }
 
 /// The scheme in effect once `Auto` is resolved against the system; picks the
@@ -38,11 +49,7 @@ enum Scheme {
     Dark,
 }
 
-/// Per-scheme colour-role maps. Catppuccin inverts its neutral ramp between
-/// flavours, so day and night need distinct mappings (e.g. the on-pill ink is
-/// `base` at night but `text` by day). Each value is a palette key or a
-/// literal `#hex`.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 struct Themes {
     dark: Colors,
     light: Colors,
@@ -76,25 +83,25 @@ impl Palettes {
 }
 
 /// Single source of truth for colours and geometry, read by both the native
-/// frame and the bar WebView (as CSS custom properties). Loaded from
-/// `~/.config/edgebar/config.json` if present, else the bundled default.
+/// frame and the bar WebView (as CSS custom properties).
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Config {
-    #[serde(default = "default_appearance")]
     appearance: Appearance,
     colors: Themes,
     geometry: Geometry,
     /// Binaries the theme picker shells out to (this and `wallpaper_command`).
     /// Nix injects store paths; when absent (bundled default, dev) a bare name
     /// is resolved on PATH.
-    #[serde(default)]
     theme_command: Option<String>,
-    #[serde(default)]
     wallpaper_command: Option<String>,
     /// Per-workspace notch rules + the idle fallback. See `notch.rs`.
-    #[serde(default)]
     notch: notch::NotchConfig,
+    toggles: toggles::TogglesConfig,
+    wallpaper: wallpapers::WallpaperConfig,
+    oled: bool,
+    assistant: assistant::AssistantConfig,
+    notifications: notifications::NotificationsConfig,
 }
 
 /// What `get_config` and the `theme` event hand the WebView: colours resolved
@@ -107,51 +114,49 @@ struct ResolvedConfig {
     geometry: Geometry,
     appearance: Appearance,
     scheme: String,
-    /// How `colors.base` (the on-pill ink) was chosen.
     ink: InkInfo,
     /// What the notch shows when no provider has anything to say. Rendered
     /// entirely in the WebView (a clock ticks, and that shouldn't cost an event
     /// stream), so it travels with the config rather than the `notch` event.
     notch_idle: String,
+    /// The workspace dots, in order, for the Settings rules editor.
+    workspace_names: &'static [&'static str],
 }
 
-/// Resolve a role map against a palette: palette name → hex (literal `#hex`
-/// passes through; an unknown name passes through unchanged).
 fn resolve_colors(
     colors: &Colors,
     palette: &std::collections::HashMap<String, String>,
 ) -> Colors {
     let r = |v: &str| -> String {
-        if v.starts_with('#') {
-            v.to_string()
-        } else {
-            palette.get(v).cloned().unwrap_or_else(|| v.to_string())
-        }
+        v.split('|')
+            .find_map(|key| {
+                if key.starts_with('#') {
+                    Some(key.to_string())
+                } else {
+                    palette.get(key).cloned()
+                }
+            })
+            .unwrap_or_else(|| v.to_string())
     };
     Colors {
-        base: r(&colors.base),
-        pill_bg: r(&colors.pill_bg),
+        surface: r(&colors.surface),
         text: r(&colors.text),
         subtext: r(&colors.subtext),
         accent: r(&colors.accent),
-        occupied: r(&colors.occupied),
-        empty: r(&colors.empty),
         battery_charging: r(&colors.battery_charging),
         battery_low: r(&colors.battery_low),
         vpn: r(&colors.vpn),
         cpu_sys: r(&colors.cpu_sys),
         cpu_user: r(&colors.cpu_user),
-        frame_line: r(&colors.frame_line),
-        frame_corner: r(&colors.frame_corner),
     }
 }
 
-/// WCAG AA for body text. The pills' 13px labels are body text, so this is the
-/// floor the on-pill ink has to clear.
-const MIN_INK_CONTRAST: f64 = 4.5;
+/// WCAG 2 AA's floor for body text (1.4.3), which the ink must clear.
+const WCAG_AA_TEXT: f64 = 4.5;
 
-/// WCAG's floor for graphical indicators (1.4.11), which the accent rings are.
-const MIN_ACCENT_CONTRAST: f64 = 3.0;
+/// WCAG 2 AA's floor for UI components and graphics (1.4.11), which the
+/// accent must clear.
+const WCAG_AA_NON_TEXT: f64 = 3.0;
 
 /// WCAG 2 relative luminance of an sRGB `#hex` colour (alpha ignored).
 fn luminance(hex: &str) -> f64 {
@@ -172,9 +177,6 @@ fn contrast(a: &str, b: &str) -> f64 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
-/// Explicit on-pill ink per scheme, set from the theme view. Wins over both the
-/// role map and the contrast check. Per scheme because an ink picked for a dark
-/// pill would vanish on the light one the moment the appearance flips.
 #[derive(Clone, Default, Deserialize, Serialize)]
 struct InkOverride {
     #[serde(default)]
@@ -199,14 +201,12 @@ impl InkOverride {
     }
 }
 
-/// How the on-pill ink in effect was arrived at, for the theme view's control.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InkInfo {
     /// "config" (the role map's ink cleared the floor), "contrast" (the check
     /// replaced it) or "override" (set explicitly from the theme view).
     source: &'static str,
-    /// Contrast of the ink in effect against the pill.
     ratio: f64,
     /// The role map's ink and its contrast, before any correction.
     configured: String,
@@ -215,17 +215,13 @@ struct InkInfo {
     mode: &'static str,
 }
 
-/// A replacement for `configured` that reads on `pill`, or None if it already
-/// clears `floor`. Prefers the palette colour with the most contrast, which
-/// keeps the wallpaper's tint; if even that falls short (a mid-tone pill),
-/// the best of it, `configured`, black and white.
 fn readable_on(
-    pill: &str,
+    ground: &str,
     configured: &str,
     palette: &std::collections::HashMap<String, String>,
     floor: f64,
 ) -> Option<String> {
-    if contrast(configured, pill) >= floor {
+    if contrast(configured, ground) >= floor {
         return None;
     }
     // Sorted so a tie between two distinct colours resolves the same way every
@@ -239,12 +235,12 @@ fn readable_on(
     let best_of = |c: &[&str]| -> String {
         c.iter()
             .copied()
-            .max_by(|a, b| contrast(a, pill).total_cmp(&contrast(b, pill)))
+            .max_by(|a, b| contrast(a, ground).total_cmp(&contrast(b, ground)))
             .unwrap_or(configured)
             .to_string()
     };
     let best = best_of(&candidates);
-    if contrast(&best, pill) >= floor {
+    if contrast(&best, ground) >= floor {
         return Some(best);
     }
     Some(best_of(&[configured, best.as_str(), "#000000", "#ffffff"]))
@@ -257,91 +253,28 @@ fn normalise_hex(s: &str) -> Option<String> {
         .then(|| format!("#{}", h.to_ascii_lowercase()))
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Colors {
-    base: String,
-    pill_bg: String,
+    surface: String,
     text: String,
     subtext: String,
     accent: String,
-    occupied: String,
-    empty: String,
-    /// Battery-state accents. Serde defaults keep an older config.json (rendered
-    /// before these existed) parsing instead of dropping to the bundled default.
-    #[serde(default = "default_battery_charging")]
     battery_charging: String,
-    #[serde(default = "default_battery_low")]
     battery_low: String,
-    #[serde(default = "default_vpn")]
     vpn: String,
     /// The CPU graph's two stacked segments (system load, user load).
-    #[serde(default = "default_cpu_sys")]
     cpu_sys: String,
-    #[serde(default = "default_cpu_user")]
     cpu_user: String,
-    frame_line: String,
-    frame_corner: String,
 }
 
-fn default_battery_charging() -> String {
-    "#40a02b".to_string()
-}
-fn default_battery_low() -> String {
-    "#d20f39".to_string()
-}
-fn default_vpn() -> String {
-    "#179299".to_string()
-}
-fn default_cpu_sys() -> String {
-    "#d20f39".to_string()
-}
-fn default_cpu_user() -> String {
-    "#1e66f5".to_string()
-}
-
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Geometry {
-    inner_radius: f64,
-    line_thickness: f64,
-    pill_height: f64,
-    pill_radius: f64,
-    concave: f64,
-    /// Height (logical px) of the bar window. Taller than the band AeroSpace
-    /// reserves (`barHeight`, used only on the Nix side) so the pills' shadows
-    /// and the corner fillets below the band aren't clipped; the extra height
-    /// is transparent and click-through.
-    #[serde(default = "default_window_height")]
+    bar_height: f64,
+    frame_thickness: f64,
+    frame_radius: f64,
     window_height: f64,
-    /// How far the native frame's top edge is pushed down, in device pixels
-    /// (not points, so it is one row at any backing scale), to clear the top
-    /// row this display doesn't show. See `create_native_frame`; the bar
-    /// window isn't offset (see `sync_bars_to_monitors`).
-    #[serde(default = "default_top_offset_px")]
-    top_offset_px: f64,
-}
-
-/// Fallback for configs rendered before `windowHeight` existed, so they still
-/// parse instead of dropping to the bundled default.
-fn default_window_height() -> f64 {
-    64.0
-}
-
-/// Fallback for configs rendered before `topOffsetPx` existed.
-fn default_top_offset_px() -> f64 {
-    1.0
-}
-
-fn load_config() -> Config {
-    const DEFAULT: &str = include_str!("../config.default.json");
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/config.json"))
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_else(|| {
-            serde_json::from_str(DEFAULT).expect("bundled config.default.json is valid")
-        })
 }
 
 /// Resolve `notch.idle` to what the WebView should draw when no provider owns
@@ -364,8 +297,7 @@ fn resolve_notch_idle(idle: Option<&str>) -> String {
 
 fn load_palettes() -> Palettes {
     const DEFAULT: &str = include_str!("../palette.default.json");
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
+    palette_json_path()
         .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_else(|| {
@@ -373,47 +305,12 @@ fn load_palettes() -> Palettes {
         })
 }
 
-/// Where the bar's light/dark/auto toggle is persisted. Not config.json: that
-/// is a read-only symlink into the Nix store.
-fn appearance_state_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/appearance"))
-}
-
-fn appearance_label(a: Appearance) -> &'static str {
-    match a {
-        Appearance::Light => "light",
-        Appearance::Dark => "dark",
-        Appearance::Auto => "auto",
-    }
-}
-
-fn persist_appearance(a: Appearance) {
-    if let Some(path) = appearance_state_path() {
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(path, appearance_label(a));
-    }
-}
-
-fn load_persisted_appearance() -> Option<Appearance> {
-    let text = std::fs::read_to_string(appearance_state_path()?).ok()?;
-    match text.trim() {
-        "light" => Some(Appearance::Light),
-        "dark" => Some(Appearance::Dark),
-        "auto" => Some(Appearance::Auto),
-        _ => None,
-    }
-}
-
 const DEFAULT_MATUGEN_SCHEME: &str = "scheme-tonal-spot";
 
 /// matugen scheme persisted by `select-scheme` / the theme view, read by
-/// `generate-edgebar-theme`. Lives next to the appearance file.
+/// `generate-edgebar-theme`.
 fn scheme_state_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/scheme"))
+    Some(settings::dir()?.join("scheme"))
 }
 
 fn persisted_scheme() -> String {
@@ -433,10 +330,8 @@ fn persist_scheme(scheme: &str) {
     }
 }
 
-/// The theme view's ink override, next to the appearance and scheme files.
 fn ink_state_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/ink.json"))
+    Some(settings::dir()?.join("ink.json"))
 }
 
 fn load_ink_override() -> InkOverride {
@@ -469,42 +364,47 @@ struct ThemeState {
     wallpaper_command: String,
     /// `notch.idle` from config, passed through to the WebView.
     notch_idle: String,
-    /// The theme view's explicit on-pill ink, per scheme.
     ink: InkOverride,
+    oled: bool,
 }
 
 impl ThemeState {
-    /// Colours for the active scheme, with the on-pill ink settled: the
-    /// override if one is set, else the role map's ink after the contrast check.
-    fn resolve(&self) -> (Colors, InkInfo) {
+    fn palette(&self) -> std::collections::HashMap<String, String> {
         let palette = self.palettes.for_scheme(self.scheme);
+        if self.oled && self.scheme == Scheme::Dark {
+            wallpapers::blacken_base(palette)
+        } else {
+            palette.clone()
+        }
+    }
+
+    fn resolve(&self) -> (Colors, InkInfo) {
+        let palette = &self.palette();
         let mut colors = resolve_colors(self.colors.for_scheme(self.scheme), palette);
-        let configured = std::mem::take(&mut colors.base);
+        let configured = std::mem::take(&mut colors.text);
         let (ink, source) = match self.ink.for_scheme(self.scheme) {
             Some(hex) => (hex.to_string(), "override"),
-            None => match readable_on(&colors.pill_bg, &configured, palette, MIN_INK_CONTRAST) {
+            None => match readable_on(&colors.surface, &configured, palette, WCAG_AA_TEXT) {
                 Some(better) => (better, "contrast"),
                 None => (configured.clone(), "config"),
             },
         };
-        // The accent rings get the same check: matugen's accent often lands on
-        // the pill's own tone (in monochrome light it is the pill colour).
         if let Some(better) =
-            readable_on(&colors.pill_bg, &colors.accent, palette, MIN_ACCENT_CONTRAST)
+            readable_on(&colors.surface, &colors.accent, palette, WCAG_AA_NON_TEXT)
         {
             colors.accent = better;
         }
         let info = InkInfo {
             source,
-            ratio: contrast(&ink, &colors.pill_bg),
-            configured_ratio: contrast(&configured, &colors.pill_bg),
+            ratio: contrast(&ink, &colors.surface),
+            configured_ratio: contrast(&configured, &colors.surface),
             configured,
             mode: match self.scheme {
                 Scheme::Light => "light",
                 Scheme::Dark => "dark",
             },
         };
-        colors.base = ink;
+        colors.text = ink;
         (colors, info)
     }
 
@@ -517,6 +417,7 @@ impl ThemeState {
             scheme: persisted_scheme(),
             ink,
             notch_idle: self.notch_idle.clone(),
+            workspace_names: &WS_ORDER,
         }
     }
 }
@@ -553,8 +454,6 @@ fn resolve_scheme(appearance: Appearance) -> Scheme {
     }
 }
 
-/// Switch the active appearance: re-resolve colours for the new scheme, push
-/// them to the WebView and recolour the native frame's layers in place.
 fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     let resolved: ResolvedConfig = {
         let state = app.state::<Mutex<ThemeState>>();
@@ -566,24 +465,24 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     let _ = app.emit("theme", &resolved);
     #[cfg(target_os = "macos")]
     {
-        let line = resolved.colors.frame_line.clone();
-        let corner = resolved.colors.frame_corner.clone();
-        let _ = app.run_on_main_thread(move || recolor_native_frame(&line, &corner));
+        let surface = resolved.colors.surface.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Some(main_thread) = objc2::MainThreadMarker::new() {
+                recolor_native_frame(main_thread, &surface);
+            }
+        });
     }
 }
 
-/// Reload palettes and role maps from disk and re-apply the current appearance.
-/// Run on a `theme.sock` ping, or directly when an in-app pick finds its
-/// palette precomputed. Geometry changes still need a relaunch.
-fn reload_theme(app: &tauri::AppHandle) {
+/// Reload the palettes from disk and re-apply the current appearance. Run on a
+/// `theme.sock` ping, or directly when an in-app pick finds its palette
+/// precomputed.
+fn reload_palettes(app: &tauri::AppHandle) {
     let palettes = load_palettes();
-    let config = load_config();
     let appearance = {
         let state = app.state::<Mutex<ThemeState>>();
         let mut ts = state.lock().unwrap();
         ts.palettes = palettes;
-        ts.colors = config.colors;
-        ts.geometry = config.geometry;
         ts.appearance
     };
     apply_theme(app, appearance);
@@ -616,8 +515,6 @@ fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
     state.lock().unwrap().resolved_config()
 }
 
-/// Set (or, with None, clear) the on-pill ink for the active scheme from the
-/// theme view. Persists it and re-themes live.
 #[tauri::command]
 fn set_ink(app: tauri::AppHandle, colour: Option<String>) {
     let ink = colour.as_deref().and_then(normalise_hex);
@@ -665,19 +562,6 @@ async fn pick_colour(initial: String) -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", r / 257, g / 257, b / 257))
 }
 
-/// 3-way appearance toggle from the bar (light / dark / auto). Persists the
-/// choice and re-themes live.
-#[tauri::command]
-fn set_appearance(app: tauri::AppHandle, mode: String) {
-    let appearance = match mode.as_str() {
-        "light" => Appearance::Light,
-        "dark" => Appearance::Dark,
-        _ => Appearance::Auto,
-    };
-    persist_appearance(appearance);
-    apply_theme(&app, appearance);
-}
-
 #[derive(Clone, Serialize)]
 struct Workspace {
     name: String,
@@ -707,21 +591,34 @@ fn parse_win(line: &str) -> Option<(String, WinRef)> {
     Some((ws, WinRef { app, bundle_id }))
 }
 
-/// Run the AeroSpace CLI and return its non-empty, trimmed stdout lines. Capped
-/// at 5s, after which the child is killed and whatever it printed is used: a
-/// wedged server would otherwise block the caller forever.
-pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
+/// How a command run by `output_within` ended, with what it printed.
+pub(crate) enum Ran {
+    Exited(std::process::ExitStatus, String),
+    Killed(String),
+}
+
+impl Ran {
+    pub(crate) fn stdout(self) -> String {
+        match self {
+            Ran::Exited(_, text) | Ran::Killed(text) => text,
+        }
+    }
+}
+
+/// Run `cmd` with only stdout open, killing it once `limit` has passed. None
+/// when it could not be started or reaped.
+pub(crate) fn output_within(
+    mut cmd: std::process::Command,
+    limit: std::time::Duration,
+) -> Option<Ran> {
     use std::io::Read;
-    use std::process::{Command, Stdio};
-    let Ok(mut child) = Command::new("aerospace")
-        .args(args)
+    use std::process::Stdio;
+    let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-    else {
-        return Vec::new();
-    };
+        .ok()?;
     // Drain stdout on a side thread so a full pipe can't wedge the child, and
     // so the deadline can be enforced from here. kill() forces the pipe to EOF,
     // which unblocks the reader; the second recv then returns what was read.
@@ -734,15 +631,27 @@ pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
         }
         let _ = tx.send(text);
     });
-    let text = match rx.recv_timeout(std::time::Duration::from_secs(5)) {
-        Ok(text) => text,
+    match rx.recv_timeout(limit) {
+        Ok(text) => Some(Ran::Exited(child.wait().ok()?, text)),
         Err(_) => {
             let _ = child.kill();
-            rx.recv().unwrap_or_default()
+            let text = rx.recv().unwrap_or_default();
+            let _ = child.wait();
+            Some(Ran::Killed(text))
         }
-    };
-    let _ = child.wait();
-    text.lines()
+    }
+}
+
+/// Run the AeroSpace CLI and return its non-empty, trimmed stdout lines. Capped
+/// at 5s, after which the child is killed and whatever it printed is used: a
+/// wedged server would otherwise block the caller forever.
+pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
+    let mut cmd = std::process::Command::new("aerospace");
+    cmd.args(args);
+    output_within(cmd, std::time::Duration::from_secs(5))
+        .map(Ran::stdout)
+        .unwrap_or_default()
+        .lines()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
         .collect()
@@ -835,11 +744,10 @@ fn make_overlay(window: &tauri::WebviewWindow) {
 type RectMap = std::sync::Arc<Mutex<std::collections::HashMap<String, Vec<[f64; 4]>>>>;
 
 // ───────────────────────── click-through bar window ─────────────────
-// The bar window is taller than the bar band (for shadows and fillets) and
-// overlaps the tiled windows' top edge. A transparent window still swallows
-// clicks across its whole rect, and returning nil from a view's hitTest doesn't
-// pass them through; only the window's `ignoresMouseEvents` does. So bars stay
-// click-through except while the cursor is over a rect the WebView reported.
+// A transparent window still swallows clicks across its whole rect, and
+// returning nil from a view's hitTest doesn't pass them through; only the
+// window's `ignoresMouseEvents` does. So bars stay click-through except while
+// the cursor is over a rect the WebView reported.
 
 // The bar NSWindows the shared cursor monitors hit-test, keyed by window
 // label. Main-thread only (NSWindow isn't Send); bars register here when
@@ -851,11 +759,9 @@ thread_local! {
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-/// Set one bar's `ignoresMouseEvents` from the cursor position: interactive when
-/// it's over one of the reported rects (the pills, or a full-window rect while a
-/// popup is open), click-through otherwise. `mouseLocation` and the window frame
-/// are screen coords (bottom-left origin); the rects are window-relative CSS px
-/// from the top-left, so we map each rect into screen space to compare.
+/// `mouseLocation` and the window frame are screen coords (bottom-left origin);
+/// the rects are window-relative CSS px from the top-left, so we map each rect
+/// into screen space to compare.
 #[cfg(target_os = "macos")]
 fn sync_ignore_mouse(ns_window: &objc2_app_kit::NSWindow, rects: &[[f64; 4]]) {
     let loc = objc2_app_kit::NSEvent::mouseLocation();
@@ -913,8 +819,7 @@ fn install_cursor_monitors(rects: RectMap) {
     }
 }
 
-/// Register a bar window with the cursor monitors (idempotent). Starts
-/// click-through; the monitors flip it on when the cursor reaches a pill.
+/// Register a bar window with the cursor monitors (idempotent).
 #[cfg(target_os = "macos")]
 fn track_bar_window(label: &str, window: &tauri::WebviewWindow) {
     use objc2::rc::Retained;
@@ -960,32 +865,24 @@ fn set_interactive_rects(
         .insert(window.label().to_string(), rects);
 }
 
-/// Create one screen's frame as a borderless NSWindow drawn with CAShapeLayers
-/// (no WebView, so no web-content process): a rounded-rect ring hugging the
-/// screen edge in `frameLine`, and the four corners outside it filled with
-/// `frameCorner`. Click-through, all-spaces, stationary. Called once per
-/// NSScreen; the window is kept in FRAME_WINDOWS so a display change can close
-/// and rebuild it.
+/// Click-through, all-spaces, stationary. Called once per NSScreen; the window
+/// is kept in FRAME_WINDOWS so a display change can close and rebuild it.
 #[cfg(target_os = "macos")]
 fn create_native_frame(
     mtm: objc2::MainThreadMarker,
     screen: &objc2_app_kit::NSScreen,
     geometry: &Geometry,
-    frame_line: &str,
-    frame_corner: &str,
+    surface: &str,
 ) {
     use objc2::MainThreadOnly;
     use objc2_app_kit::{
         NSBackingStoreType, NSBezierPath, NSColor, NSWindow, NSWindowCollectionBehavior,
-        NSWindowStyleMask, NSWindingRule,
+        NSWindowStyleMask,
     };
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-    use objc2_quartz_core::{kCAFillRuleEvenOdd, CAShapeLayer};
-
-    let radius = geometry.inner_radius;
-    let line = geometry.line_thickness;
-    let line_rgba = hex_to_rgba(frame_line);
-    let corner_rgba = hex_to_rgba(frame_corner);
+    use objc2_quartz_core::{
+        kCAFillRuleEvenOdd, kCAGradientLayerRadial, CALayer, CAShapeLayer,
+    };
 
     let frame = screen.frame();
 
@@ -1001,9 +898,6 @@ fn create_native_frame(
     window.setOpaque(false);
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
-    // tao puts always-on-top windows (the bar) at kCGFloatingWindowLevelKey (5),
-    // not NSFloatingWindowLevel (3). One above keeps the edge line over the pills.
-    const FRAME_WINDOW_LEVEL: isize = 6;
     window.setLevel(FRAME_WINDOW_LEVEL);
     window.setIgnoresMouseEvents(true);
     // Same collection behaviour as the bar (see make_overlay).
@@ -1026,95 +920,122 @@ fn create_native_frame(
 
     let w = frame.size.width;
     let h = frame.size.height;
-
-    // Work in whole framebuffer pixels, converting to points (÷ scale) only at
-    // the CALayer/NSBezierPath boundary. In this display's scaled mode the
-    // HiDPI framebuffer is downscaled to the panel, which loses the top row (the
-    // "dead row") and rounds fractional point geometry unpredictably.
-    let scale = screen.backingScaleFactor();
-    let d = |px: f64| px / scale; // framebuffer device px -> points
-    let line_px = (line * scale).round(); // frame line thickness (e.g. 8)
-    let radius_px = (radius * scale).round(); // outer corner radius (e.g. 40)
-    let top_inset_px = geometry.top_offset_px; // dead-row compensation (e.g. 1)
-
-    let line_color = NSColor::colorWithSRGBRed_green_blue_alpha(
-        line_rgba[0], line_rgba[1], line_rgba[2], line_rgba[3],
-    );
-    let corner_color = NSColor::colorWithSRGBRed_green_blue_alpha(
-        corner_rgba[0], corner_rgba[1], corner_rgba[2], corner_rgba[3],
-    );
-
-    // root: clear, non-clipping container spanning the whole screen
     let full = CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(w, h));
     root.setFrame(full);
     root.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
     root.setMasksToBounds(false);
 
-    // Outer contour: the screen rect with its top edge lowered `top_inset_px` to
-    // clear the dead row (the layer's origin is bottom-left, so shrinking the
-    // height moves only the top).
-    let outer = CGRect::new(
-        CGPoint::new(0.0, 0.0),
-        CGSize::new(w, h - d(top_inset_px)),
+    let scale = screen.backingScaleFactor();
+    let snap = |pt: f64| (pt * scale).round() / scale;
+    let side = snap(geometry.frame_thickness);
+    let top = snap(geometry.bar_height);
+    let radius = snap(geometry.frame_radius);
+    let hole_rect = CGRect::new(
+        CGPoint::new(side, side),
+        CGSize::new(w - 2.0 * side, h - side - top),
     );
-    // Inner contour (the hole): inset `line_px` from the screen edges, not from
-    // `outer`, so the top line ends up `top_inset_px` thinner but its bottom edge
-    // stays put. The bar's pills flare their fillets into that edge, and as a
-    // separate window placed in logical px they can't follow a one-pixel shift.
-    let inner = CGRect::new(
-        CGPoint::new(d(line_px), d(line_px)),
-        CGSize::new(w - 2.0 * d(line_px), h - 2.0 * d(line_px)),
-    );
+    let hole = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(hole_rect, radius, radius);
 
-    // frame line = outer rounded rect minus inner rounded rect (even-odd ring)
-    let ring = NSBezierPath::bezierPath();
-    ring.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
-    ring.appendBezierPathWithRoundedRect_xRadius_yRadius(
-        inner,
-        d(radius_px - line_px),
-        d(radius_px - line_px),
-    );
-    ring.setWindingRule(NSWindingRule::EvenOdd);
-    let line_layer = CAShapeLayer::new();
-    line_layer.setFrame(full);
-    line_layer.setPath(Some(&ring.CGPath()));
-    line_layer.setFillRule(unsafe { kCAFillRuleEvenOdd });
-    line_layer.setFillColor(Some(&line_color.CGColor()));
-    root.addSublayer(&line_layer);
+    let (hw, hh) = (hole_rect.size.width, hole_rect.size.height);
+    let s = FRAME_SHADOW_SIZE;
+    let along = |l: f64| frame_shadow_at(l * s);
+    for (x, y, sw, sh, from, to) in [
+        (side, side + radius, s, hh - 2.0 * radius, (0.0, 0.5), (1.0, 0.5)),
+        (w - side - s, side + radius, s, hh - 2.0 * radius, (1.0, 0.5), (0.0, 0.5)),
+        (side + radius, side, hw - 2.0 * radius, s, (0.5, 0.0), (0.5, 1.0)),
+        (side + radius, h - top - s, hw - 2.0 * radius, s, (0.5, 1.0), (0.5, 0.0)),
+    ] {
+        let strip = shadow_gradient(&along);
+        strip.setFrame(CGRect::new(CGPoint::new(x, y), CGSize::new(sw, sh)));
+        strip.setStartPoint(CGPoint::new(from.0, from.1));
+        strip.setEndPoint(CGPoint::new(to.0, to.1));
+        root.addSublayer(&strip);
+    }
+    if radius > 0.0 {
+        let around = |l: f64| frame_shadow_at(radius * (1.0 - l));
+        for (x, y, cx, cy) in [
+            (side, h - top - radius, radius, 0.0),
+            (w - side - radius, h - top - radius, 0.0, 0.0),
+            (side, side, radius, radius),
+            (w - side - radius, side, 0.0, radius),
+        ] {
+            let corner = CALayer::new();
+            corner.setFrame(CGRect::new(CGPoint::new(x, y), CGSize::new(radius, radius)));
+            corner.setMasksToBounds(true);
+            let ring = shadow_gradient(&around);
+            ring.setType(unsafe { kCAGradientLayerRadial });
+            ring.setFrame(CGRect::new(
+                CGPoint::new(cx - radius, cy - radius),
+                CGSize::new(2.0 * radius, 2.0 * radius),
+            ));
+            ring.setStartPoint(CGPoint::new(0.5, 0.5));
+            ring.setEndPoint(CGPoint::new(1.0, 1.0));
+            corner.addSublayer(&ring);
+            root.addSublayer(&corner);
+        }
+    }
 
-    // corner fills = full screen rect minus the outer rounded rect (even-odd)
-    let notch = NSBezierPath::bezierPath();
-    notch.appendBezierPathWithRect(full);
-    notch.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
-    notch.setWindingRule(NSWindingRule::EvenOdd);
-    let corners = CAShapeLayer::new();
-    corners.setFrame(full);
-    corners.setPath(Some(&notch.CGPath()));
-    corners.setFillRule(unsafe { kCAFillRuleEvenOdd });
-    corners.setFillColor(Some(&corner_color.CGColor()));
-    root.addSublayer(&corners);
+    let shape = NSBezierPath::bezierPathWithRect(full);
+    shape.appendBezierPath(&hole);
+    let fill = CAShapeLayer::new();
+    fill.setFrame(full);
+    fill.setPath(Some(&shape.CGPath()));
+    fill.setFillRule(unsafe { kCAFillRuleEvenOdd });
+    fill.setFillColor(Some(&srgb(surface).CGColor()));
+    root.addSublayer(&fill);
 
     window.orderFrontRegardless();
 
-    // Keep the window and both layers: theme changes recolour the layers in
-    // place, and a display change closes the window and rebuilds.
-    FRAME_WINDOWS.with(|cell| {
-        cell.borrow_mut().push(FrameWindow {
-            window,
-            line: line_layer,
-            corners,
-        });
-    });
+    FRAME_WINDOWS.with(|cell| cell.borrow_mut().push(FrameWindow { window, fill }));
 }
 
-/// One screen's native frame: the NSWindow plus its two fill layers. CALayer
-/// and NSWindow aren't `Send`, so these live in a main-thread `thread_local!`,
-/// not Tauri's managed state.
+#[cfg(target_os = "macos")]
+const FRAME_SHADOW_SIZE: f64 = 12.0;
+#[cfg(target_os = "macos")]
+const FRAME_SHADOW_OPACITY: f64 = 0.3;
+
+#[cfg(target_os = "macos")]
+fn frame_shadow_at(d: f64) -> f64 {
+    let t = (1.0 - d / FRAME_SHADOW_SIZE).max(0.0);
+    FRAME_SHADOW_OPACITY * t * t
+}
+
+#[cfg(target_os = "macos")]
+fn shadow_gradient(
+    darkness: &dyn Fn(f64) -> f64,
+) -> objc2::rc::Retained<objc2_quartz_core::CAGradientLayer> {
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSArray, NSNumber};
+    const STOPS: usize = 13;
+    let at = |i: usize| i as f64 / (STOPS - 1) as f64;
+    let colours: Vec<_> = (0..STOPS)
+        .map(|i| {
+            objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, darkness(at(i)))
+                .CGColor()
+        })
+        .collect();
+    // CGColor is toll-free bridged, so the array can hold it as an object.
+    let objects: Vec<&AnyObject> = colours
+        .iter()
+        .map(|c| unsafe { &*(&**c as *const objc2_core_graphics::CGColor).cast::<AnyObject>() })
+        .collect();
+    let locations: Vec<_> = (0..STOPS).map(|i| NSNumber::new_f64(at(i))).collect();
+    let layer = objc2_quartz_core::CAGradientLayer::new();
+    unsafe { layer.setColors(Some(&NSArray::from_slice(&objects))) };
+    layer.setLocations(Some(&NSArray::from_retained_slice(&locations)));
+    layer
+}
+
+#[cfg(target_os = "macos")]
+fn srgb(hex: &str) -> objc2::rc::Retained<objc2_app_kit::NSColor> {
+    let [r, g, b, a] = hex_to_rgba(hex);
+    objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, a)
+}
+
 #[cfg(target_os = "macos")]
 struct FrameWindow {
     window: objc2::rc::Retained<objc2_app_kit::NSWindow>,
-    line: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
-    corners: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
+    fill: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
 }
 
 #[cfg(target_os = "macos")]
@@ -1134,23 +1055,20 @@ fn remove_native_frames() {
     });
 }
 
-/// Recolour every native frame's line and corner layers. Main thread only;
-/// callers hop via `run_on_main_thread`.
+/// The level tao gives an always-on-top window, so the bars' level: its
+/// `NSFloatingWindowLevel` is `kCGFloatingWindowLevelKey` (5), not AppKit's 3.
 #[cfg(target_os = "macos")]
-fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::NSColor;
-    if MainThreadMarker::new().is_none() {
-        return;
-    }
-    let l = hex_to_rgba(line_hex);
-    let c = hex_to_rgba(corner_hex);
+const BAR_WINDOW_LEVEL: isize = 5;
+
+/// Just under the bars, so a drawer the bar's WebView draws covers the frame.
+#[cfg(target_os = "macos")]
+const FRAME_WINDOW_LEVEL: isize = BAR_WINDOW_LEVEL - 1;
+
+#[cfg(target_os = "macos")]
+fn recolor_native_frame(_main_thread: objc2::MainThreadMarker, surface: &str) {
     FRAME_WINDOWS.with(|cell| {
         for f in cell.borrow().iter() {
-            let lc = NSColor::colorWithSRGBRed_green_blue_alpha(l[0], l[1], l[2], l[3]);
-            let cc = NSColor::colorWithSRGBRed_green_blue_alpha(c[0], c[1], c[2], c[3]);
-            f.line.setFillColor(Some(&lc.CGColor()));
-            f.corners.setFillColor(Some(&cc.CGColor()));
+            f.fill.setFillColor(Some(&srgb(surface).CGColor()));
         }
     });
 }
@@ -1501,6 +1419,55 @@ fn launcher_action(action: String) {
     };
 }
 
+/// The ids are the panes' extension bundle ids and the anchors their
+/// `revealElementKeyName`s (SecurityPrivacyExtension.appex TCCServiceList.plist).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum SettingsPane {
+    Wifi,
+    Bluetooth,
+    Focus,
+    Displays,
+    FullDiskAccess,
+    PrivacyBluetooth,
+    PrivacyAutomation,
+}
+
+impl SettingsPane {
+    fn url(self) -> &'static str {
+        match self {
+            Self::Wifi => "x-apple.systempreferences:com.apple.wifi-settings-extension",
+            Self::Bluetooth => "x-apple.systempreferences:com.apple.BluetoothSettings",
+            Self::Focus => "x-apple.systempreferences:com.apple.Focus-Settings.extension",
+            Self::Displays => "x-apple.systempreferences:com.apple.Displays-Settings.extension",
+            Self::FullDiskAccess => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"
+            }
+            Self::PrivacyBluetooth => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Bluetooth"
+            }
+            // Automation has no anchor of its own in TCCServiceList.plist; this
+            // is the name the older Security pane used.
+            Self::PrivacyAutomation => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"
+            }
+        }
+    }
+}
+
+pub(crate) fn open_url(url: &str) -> Result<(), String> {
+    std::process::Command::new("/usr/bin/open")
+        .arg(url)
+        .spawn()
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_settings_pane(pane: SettingsPane) -> Result<(), String> {
+    open_url(pane.url())
+}
+
 // ───────────────────────── theme / wallpaper picker ─────────────────
 // Backs the notch's theme view. Uses the same desktoppr and
 // generate-edgebar-theme binaries as the CLI and the launchd watcher (paths
@@ -1513,25 +1480,13 @@ struct Wallpaper {
     name: String,
     path: String,
     thumb: String, // "data:image/png;base64,…"
-}
-
-fn wallpapers_dir() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join("Pictures/Wallpapers"))
-}
-
-fn is_image(path: &std::path::Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase())
-            .as_deref(),
-        Some("jpg" | "jpeg" | "png" | "webp" | "heic")
-    )
+    folder: String,
+    kind: String,
 }
 
 /// Standard base64 with padding. Pure Rust, so thumbnails can be encoded off
 /// the main thread.
-fn base64_encode(bytes: &[u8]) -> String {
+pub(crate) fn base64_encode(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
@@ -1587,45 +1542,26 @@ fn wallpaper_thumb(state: &AppState, path: &str) -> Option<String> {
 async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let Some(dir) = wallpapers_dir() else {
+        let Some(dir) = wallpapers::folder(&settings::current(&app).wallpaper) else {
             return Vec::new();
         };
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return Vec::new();
-        };
-        let mut paths: Vec<std::path::PathBuf> = entries
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| is_image(p))
-            .collect();
-        paths.sort();
-        paths
+        wallpapers::scan(&dir)
             .into_iter()
-            .filter_map(|p| {
-                let path = p.to_str()?.to_string();
-                let name = p.file_name()?.to_str()?.to_string();
+            .filter_map(|found| {
+                let path = found.path.to_str()?.to_string();
                 let thumb = wallpaper_thumb(&state, &path).unwrap_or_default();
-                Some(Wallpaper { name, path, thumb })
+                Some(Wallpaper {
+                    name: found.name,
+                    path,
+                    thumb,
+                    folder: found.folder,
+                    kind: found.kind,
+                })
             })
             .collect()
     })
     .await
     .unwrap_or_default()
-}
-
-/// Runs the wallpaper command and returns the first display's picture path.
-fn query_current_wallpaper(cmd: &str) -> String {
-    std::process::Command::new(cmd)
-        .output()
-        .ok()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string()
-        })
-        .unwrap_or_default()
 }
 
 /// The current desktop picture (first display) — to highlight the active thumb.
@@ -1638,7 +1574,7 @@ async fn current_wallpaper(app: tauri::AppHandle) -> String {
             .unwrap()
             .wallpaper_command
             .clone();
-        query_current_wallpaper(&cmd)
+        wallpapers::original_picture(&cmd)
     })
     .await
     .unwrap_or_default()
@@ -1647,16 +1583,14 @@ async fn current_wallpaper(app: tauri::AppHandle) -> String {
 /// Touch a marker whose mtime tells the launchd watcher an in-app change just
 /// happened, so it skips its redundant (and potentially clobbering) re-run.
 fn touch_inapp_marker() {
-    if let Some(home) = std::env::var_os("HOME") {
-        let dir = std::path::Path::new(&home).join(".cache/edgebar");
+    if let Some(dir) = settings::cache_dir() {
         let _ = std::fs::create_dir_all(&dir);
         let _ = std::fs::write(dir.join(".inapp-change"), b"");
     }
 }
 
 fn palette_json_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/palette.json"))
+    Some(settings::dir()?.join("palette.json"))
 }
 
 /// Per-(wallpaper, scheme) precomputed palette cache, keyed by scheme,
@@ -1672,11 +1606,11 @@ fn palette_cache_path(path: &str, scheme: &str) -> Option<std::path::PathBuf> {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    std::env::var_os("HOME").map(|home| {
-        std::path::Path::new(&home)
-            .join(".cache/edgebar/palettes")
-            .join(format!("{scheme}__{sanitized}__{mtime}.json"))
-    })
+    Some(
+        settings::cache_dir()?
+            .join("palettes")
+            .join(format!("{scheme}__{sanitized}__{mtime}.json")),
+    )
 }
 
 /// Install a precomputed palette as the live palette.json atomically (copy to a
@@ -1692,21 +1626,13 @@ fn install_palette(cache: &std::path::Path) -> bool {
 /// Background-precompute the palette for every wallpaper in the folder for
 /// `scheme` (skipping cached ones), so picking one is an instant cache hit.
 /// Sequential to avoid a matugen CPU spike; each is ~0.3s.
-fn spawn_precompute(theme_cmd: String, scheme: String) {
-    let Some(dir) = wallpapers_dir() else {
+fn spawn_precompute(app: &tauri::AppHandle, theme_cmd: String, scheme: String) {
+    let Some(dir) = wallpapers::folder(&settings::current(app).wallpaper) else {
         return;
     };
     std::thread::spawn(move || {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return;
-        };
-        let mut paths: Vec<std::path::PathBuf> = entries
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| is_image(p))
-            .collect();
-        paths.sort();
-        for p in paths {
-            let Some(path) = p.to_str() else { continue };
+        for found in wallpapers::scan(&dir) {
+            let Some(path) = found.path.to_str() else { continue };
             let Some(cache) = palette_cache_path(path, &scheme) else {
                 continue;
             };
@@ -1724,34 +1650,55 @@ fn spawn_precompute(theme_cmd: String, scheme: String) {
 /// Precompute every wallpaper's palette for the active scheme. Called when the
 /// theme view opens so later picks are instant.
 #[tauri::command]
-fn precompute_palettes(state: tauri::State<Mutex<ThemeState>>) {
+fn precompute_palettes(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>) {
     let theme_cmd = state.lock().unwrap().theme_command.clone();
-    spawn_precompute(theme_cmd, persisted_scheme());
+    spawn_precompute(&app, theme_cmd, persisted_scheme());
 }
 
-/// Set the desktop on every display and re-theme the bar. Instant when the
-/// palette is already precomputed (atomic copy + in-process reload); otherwise
-/// generates it now. The in-app marker stops the watcher from double-running.
+/// Whether a wallpaper pick waits for its new palette.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Generate {
+    /// Wait and apply it, for a tinted pick that tints with it next.
+    Wait,
+    /// Let the generator apply it: it pings theme.sock when it is done.
+    InBackground,
+}
+
+fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, generate: Generate) {
+    if let Some(cache) = palette_cache_path(path, &persisted_scheme()) {
+        if cache.exists() && install_palette(&cache) {
+            reload_palettes(app);
+            return;
+        }
+    }
+    let mut generator = std::process::Command::new(theme_cmd);
+    generator.arg(path);
+    match generate {
+        Generate::Wait => {
+            let _ = generator.status();
+            reload_palettes(app);
+        }
+        Generate::InBackground => {
+            let _ = generator.spawn();
+        }
+    }
+}
+
 #[tauri::command]
 fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, path: String) {
     let (wallpaper_cmd, theme_cmd) = {
         let ts = state.lock().unwrap();
         (ts.wallpaper_command.clone(), ts.theme_command.clone())
     };
+    if settings::current(&app).wallpaper.tint {
+        wallpapers::spawn_tinted_pick(&app, theme_cmd, path);
+        return;
+    }
     touch_inapp_marker();
     let _ = std::process::Command::new(wallpaper_cmd)
         .args(["all", &path])
         .spawn();
-
-    let scheme = persisted_scheme();
-    if let Some(cache) = palette_cache_path(&path, &scheme) {
-        if cache.exists() && install_palette(&cache) {
-            reload_theme(&app); // instant — no matugen, no socket round-trip
-            return;
-        }
-    }
-    // not precomputed yet: generate now (it pings the socket → reload)
-    let _ = std::process::Command::new(theme_cmd).arg(&path).spawn();
+    theme_from_wallpaper(&app, &theme_cmd, &path, Generate::InBackground);
 }
 
 /// Open a Finder file picker and return the chosen image path, or None on
@@ -1774,6 +1721,18 @@ async fn pick_wallpaper_file() -> Option<String> {
     }
 }
 
+#[tauri::command]
+async fn pick_folder() -> Option<String> {
+    let path = tauri::async_runtime::spawn_blocking(|| {
+        run_osa("POSIX path of (choose folder with prompt \"Choose the wallpaper folder\")")
+    })
+    .await
+    .ok()
+    .flatten()?;
+    let path = path.trim_end_matches('/');
+    (!path.is_empty()).then(|| settings::tilde(std::path::Path::new(path)))
+}
+
 /// Set the matugen scheme: re-theme the current wallpaper with it now, and
 /// precompute the rest in the background so subsequent picks stay instant.
 #[tauri::command]
@@ -1787,14 +1746,15 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
             let ts = state.lock().unwrap();
             (ts.wallpaper_command.clone(), ts.theme_command.clone())
         };
-        let current = query_current_wallpaper(&wallpaper_cmd);
-        spawn_precompute(theme_cmd.clone(), scheme.clone());
+        let current = wallpapers::original_picture(&wallpaper_cmd);
+        spawn_precompute(&app, theme_cmd.clone(), scheme.clone());
         // re-theme the current wallpaper now (cache is cold for the new scheme, so
         // this usually generates once; precompute warms the rest in the background)
         if !current.is_empty() {
             if let Some(cache) = palette_cache_path(&current, &scheme) {
                 if cache.exists() && install_palette(&cache) {
-                    reload_theme(&app);
+                    reload_palettes(&app);
+                    wallpapers::spawn_converge(&app);
                     return;
                 }
             }
@@ -1809,8 +1769,7 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
 // ───────────────────────── shared app state ─────────────────────────
 struct AppState {
     /// Kept alive because sysinfo's CPU reading is a delta since the last
-    /// refresh (a fresh System reports 0%). On macOS CPU comes from CpuState,
-    /// so this serves memory and swap.
+    /// refresh (a fresh System reports 0%).
     sys: Mutex<sysinfo::System>,
     /// App icons as PNG data URLs, by bundle id.
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
@@ -1886,278 +1845,23 @@ async fn battery() -> Battery {
         .unwrap_or_default()
 }
 
-// ───────────────────────── system metrics (sysinfo) ─────────────────
-// Memory, swap and disk are sampled only while the notch's metrics view is open
-// (as ambxst does). CPU comes from the bar's always-on sampler (see
-// `cpu_percent`).
-#[derive(Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Metrics {
-    cpu: f32, // percent 0..100
-    mem_used: u64,
-    mem_total: u64,
-    swap_used: u64,
-    swap_total: u64,
-    disk_used: u64,
-    disk_total: u64,
-}
-
-/// Read from the bar's always-on sampler rather than refreshing sysinfo here:
-/// sysinfo's figure is the delta since its last refresh, so the first reading
-/// after the notch had been shut for an hour would be that hour's average, and
-/// a second sampler wouldn't agree with the bar's pill anyway.
-#[cfg(target_os = "macos")]
-fn cpu_percent(app: &tauri::AppHandle, _sys: &mut sysinfo::System) -> f32 {
-    app.state::<CpuState>().latest.lock().unwrap().total * 100.0
-}
-
-/// `host_statistics` is macOS-only, so the sampler never runs elsewhere — fall
-/// back to sysinfo's own aggregate there.
-#[cfg(not(target_os = "macos"))]
-fn cpu_percent(_app: &tauri::AppHandle, sys: &mut sysinfo::System) -> f32 {
-    sys.refresh_cpu_usage();
-    sys.global_cpu_usage()
-}
-
-fn sample_metrics(sys: &mut sysinfo::System, cpu: f32) -> Metrics {
-    sys.refresh_memory();
-
-    // Root volume (the boot disk). Fall back to the largest disk if "/" isn't
-    // listed (on macOS the data volume is mounted under /System/Volumes/Data).
-    let disks = sysinfo::Disks::new_with_refreshed_list();
-    let root = disks
-        .list()
-        .iter()
-        .find(|d| d.mount_point() == std::path::Path::new("/"))
-        .or_else(|| disks.list().iter().max_by_key(|d| d.total_space()));
-    let (disk_total, disk_avail) = root.map_or((0, 0), |d| (d.total_space(), d.available_space()));
-
-    Metrics {
-        cpu,
-        mem_used: sys.used_memory(),
-        mem_total: sys.total_memory(),
-        swap_used: sys.used_swap(),
-        swap_total: sys.total_swap(),
-        disk_used: disk_total.saturating_sub(disk_avail),
-        disk_total,
-    }
-}
-
-// Off the main thread: `Disks::new_with_refreshed_list()` rescans every mount,
-// every 2s while the metrics view is open.
-#[tauri::command]
-async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
-        let mut sys = state.sys.lock().unwrap();
-        // Lock order: AppState.sys then CpuState. The sampler thread never takes
-        // AppState.sys, so the two can't invert on each other.
-        let cpu = cpu_percent(&app, &mut sys);
-        sample_metrics(&mut sys, cpu)
-    })
-    .await
-    .unwrap_or_default()
-}
-
-// ───────────────────────── cpu load graph ───────────────────────────
-// Always on, unlike the metrics view: the bar's CPU pill draws a rolling
-// history. Ported from the sketchybar mach helper: the same system/user split
-// from `host_statistics(HOST_CPU_LOAD_INFO)` and the same top-process readout.
-
-/// Sampling period, matching the notch metrics' cadence. The graph spans
-/// CPU_HISTORY × CPU_POLL.
-const CPU_POLL: std::time::Duration = std::time::Duration::from_secs(2);
-/// Ring-buffer depth — one entry per histogram column, each 1px wide. Must match
-/// CPU_GRAPH.samples in main.ts, which is in turn pinned to the graph's pixel
-/// width so columns land on whole pixels.
-const CPU_HISTORY: usize = 108;
-/// Ticks between top-process lookups. A tick's `host_statistics` read is ~11µs,
-/// but naming the hungriest process walks every PID (~13ms with 600
-/// processes), and the name changes far more slowly than the graph.
-const CPU_TOP_PROC_EVERY: u32 = 3;
-
-/// One graph column: system and user load as fractions (0..1) of total CPU
-/// capacity, kept apart so the graph can stack user on top of system.
-#[derive(Clone, Copy, Default, Serialize)]
-struct CpuSample {
-    sys: f32,
-    user: f32,
-}
-
-/// The pill's current readout. `top_proc_pct` is percent of a single core (so it
-/// can exceed 100 on a threaded process) — the same convention `ps pcpu` used.
-#[derive(Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CpuStat {
-    sys: f32,
-    user: f32,
-    total: f32,
-    top_proc: String,
-    top_proc_pct: f32,
-    /// 0 when no process has been sampled yet — the bar hides the pid then.
-    top_pid: u32,
-}
-
-/// Seed for a bar that just loaded: the full history plus the latest readout.
-/// Bars are rebuilt on every display change, and without this a new one would
-/// start with an empty graph.
-#[derive(Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CpuSnapshot {
-    history: Vec<CpuSample>,
-    latest: CpuStat,
-}
-
-#[derive(Default)]
-struct CpuState {
-    history: Mutex<std::collections::VecDeque<CpuSample>>,
-    latest: Mutex<CpuStat>,
-}
-
-#[tauri::command]
-fn cpu_state(app: tauri::AppHandle) -> CpuSnapshot {
-    let state = app.state::<CpuState>();
-    let history = state.history.lock().unwrap().iter().copied().collect();
-    let latest = state.latest.lock().unwrap().clone();
-    CpuSnapshot { history, latest }
-}
-
-/// Cumulative CPU ticks since boot, indexed by `CPU_STATE_*`. Percentages come
-/// from the delta between two reads, so a single sample means nothing on its own.
-#[cfg(target_os = "macos")]
-fn read_cpu_ticks(host: libc::host_t) -> Option<[u32; libc::CPU_STATE_MAX as usize]> {
-    let mut info: libc::host_cpu_load_info = unsafe { std::mem::zeroed() };
-    let mut count = libc::HOST_CPU_LOAD_INFO_COUNT;
-    // SAFETY: `info` is the layout HOST_CPU_LOAD_INFO writes, and `count` tells
-    // the kernel how many words it may write (the matching _COUNT constant).
-    let err = unsafe {
-        libc::host_statistics(
-            host,
-            libc::HOST_CPU_LOAD_INFO,
-            &mut info as *mut _ as libc::host_info_t,
-            &mut count,
-        )
-    };
-    (err == libc::KERN_SUCCESS).then_some(info.cpu_ticks)
-}
-
-/// Drop the `com.apple.` prefix from reverse-DNS process names
-/// (`com.apple.WebKit.WebContent`): noise in a pill this narrow. Same filter as
-/// the sketchybar helper's FILTER_PATTERN.
-fn trim_proc_name(name: &str) -> &str {
-    name.strip_prefix("com.apple.").unwrap_or(name)
-}
-
-/// Background sampler: reads the tick split, finds the hungriest process, pushes
-/// both to every bar. Runs on its own thread — a display-config rebuild replaces
-/// the bar windows but leaves this and its history untouched.
-#[cfg(target_os = "macos")]
-fn install_cpu_sampler(app: tauri::AppHandle) {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
-
-    std::thread::spawn(move || {
-        // `mach_host_self` adds a send right per call, so take the port once and
-        // reuse it for the process's lifetime rather than leaking one per tick.
-        #[allow(deprecated)]
-        let host = unsafe { libc::mach_host_self() };
-
-        // Its own `System`, not AppState's: sysinfo's CPU figures are deltas
-        // since that instance's last refresh, so a second refresher would
-        // shrink the window to milliseconds and skew the readings.
-        let mut sys = sysinfo::System::new();
-        let proc_cpu = ProcessRefreshKind::nothing().with_cpu();
-        // Prime both baselines — the first delta of either is meaningless.
-        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, proc_cpu);
-        let mut prev = read_cpu_ticks(host);
-        // Last known hungriest process (name, percent, pid), carried across the
-        // ticks that skip the walk so every emitted stat still names one.
-        let mut top: (String, f32, u32) = Default::default();
-        let mut tick: u32 = 0;
-
-        loop {
-            std::thread::sleep(CPU_POLL);
-
-            let Some(now) = read_cpu_ticks(host) else {
-                continue;
-            };
-            let Some(before) = prev else {
-                prev = Some(now);
-                continue;
-            };
-            prev = Some(now);
-
-            // Ticks are monotonic but wrap at u32; wrapping_sub keeps the delta
-            // right across the rollover instead of yielding a huge bogus jump.
-            let delta = |i: libc::c_int| {
-                now[i as usize].wrapping_sub(before[i as usize]) as f64
-            };
-            let user = delta(libc::CPU_STATE_USER);
-            let system = delta(libc::CPU_STATE_SYSTEM);
-            let idle = delta(libc::CPU_STATE_IDLE);
-            // NICE is counted (the sketchybar helper left it out) so the
-            // fractions still total 1 under re-niced load; it's nearly always 0
-            // on macOS.
-            let nice = delta(libc::CPU_STATE_NICE);
-            let busy_total = user + system + idle + nice;
-            if busy_total <= 0.0 {
-                continue; // no elapsed ticks (clock skew / suspend) — nothing to plot
-            }
-            let sample = CpuSample {
-                sys: (system / busy_total) as f32,
-                // NICE is user-space work, so it counts as user load.
-                user: ((user + nice) / busy_total) as f32,
-            };
-
-            // `tick` starts at 0, so the first pass names a process straight
-            // away. Skipped ticks just widen the window each process's usage
-            // averages over.
-            if tick % CPU_TOP_PROC_EVERY == 0 {
-                sys.refresh_processes_specifics(ProcessesToUpdate::All, true, proc_cpu);
-                top = sys
-                    .processes()
-                    .values()
-                    .max_by(|a, b| a.cpu_usage().total_cmp(&b.cpu_usage()))
-                    .map(|p| {
-                        let name = p.name().to_string_lossy();
-                        (
-                            trim_proc_name(&name).to_string(),
-                            p.cpu_usage(),
-                            p.pid().as_u32(),
-                        )
-                    })
-                    .unwrap_or_default();
-            }
-            tick = tick.wrapping_add(1);
-
-            let stat = CpuStat {
-                sys: sample.sys,
-                user: sample.user,
-                total: sample.sys + sample.user,
-                top_proc: top.0.clone(),
-                top_proc_pct: top.1,
-                top_pid: top.2,
-            };
-
-            {
-                let state = app.state::<CpuState>();
-                let mut history = state.history.lock().unwrap();
-                if history.len() == CPU_HISTORY {
-                    history.pop_front();
-                }
-                history.push_back(sample);
-                *state.latest.lock().unwrap() = stat.clone();
-            }
-            let _ = app.emit("cpu", &stat);
-        }
-    });
-}
-
 // ───────────────────────── volume / mic (osascript) ─────────────────
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Volume {
     output: u8,
+    output_muted: bool,
+    /// The input level macOS reports, which is 0 while edgebar holds the mic
+    /// muted.
     input: u8,
+    /// The level unmuting restores, while edgebar holds the mic muted.
+    input_restore: Option<u8>,
 }
+
+/// macOS has no input mute, so muting the mic sets its level to 0 and holds
+/// the old level here.
+#[derive(Default)]
+struct MicHold(Mutex<Option<u8>>);
 
 pub(crate) fn run_osa(script: &str) -> Option<String> {
     let out = std::process::Command::new("osascript")
@@ -2167,17 +1871,54 @@ pub(crate) fn run_osa(script: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-fn osa_num(script: &str) -> u8 {
-    run_osa(script)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
+fn parse_volume_settings(reply: &str) -> Volume {
+    let mut v = Volume::default();
+    for field in reply.split(", ") {
+        let Some((key, value)) = field.split_once(':') else {
+            continue;
+        };
+        match key {
+            "output volume" => v.output = value.parse().unwrap_or(0),
+            "input volume" => v.input = value.parse().unwrap_or(0),
+            "output muted" => v.output_muted = value == "true",
+            _ => {}
+        }
+    }
+    v
+}
+
+fn apply_mic_hold(mut v: Volume, held: &mut Option<u8>) -> Volume {
+    if v.input > 0 {
+        *held = None;
+    }
+    v.input_restore = *held;
+    v
+}
+
+fn mic_mute_target(muted: bool, read: &Volume, held: &mut Option<u8>) -> Option<u8> {
+    match (muted, *held) {
+        (true, None) => {
+            *held = Some(read.input);
+            Some(0)
+        }
+        (false, Some(level)) => {
+            *held = None;
+            Some(level)
+        }
+        _ => None,
+    }
+}
+
+fn read_volume_settings() -> Volume {
+    parse_volume_settings(&run_osa("get volume settings").unwrap_or_default())
 }
 
 #[tauri::command]
-async fn get_volume() -> Volume {
-    tauri::async_runtime::spawn_blocking(|| Volume {
-        output: osa_num("output volume of (get volume settings)"),
-        input: osa_num("input volume of (get volume settings)"),
+async fn get_volume(app: tauri::AppHandle) -> Volume {
+    tauri::async_runtime::spawn_blocking(move || {
+        let hold = app.state::<MicHold>();
+        let mut held = hold.0.lock().unwrap();
+        apply_mic_hold(read_volume_settings(), &mut held)
     })
     .await
     .unwrap_or_default()
@@ -2193,7 +1934,9 @@ async fn set_volume(app: tauri::AppHandle, output: u8) {
         Some(level as f64 / 100.0),
     );
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        run_osa(&format!("set volume output volume {level}"))
+        run_osa(&format!(
+            "set volume output volume {level} without output muted"
+        ))
     })
     .await;
 }
@@ -2208,44 +1951,111 @@ async fn set_input_volume(app: tauri::AppHandle, input: u8) {
         Some(level as f64 / 100.0),
     );
     let _ = tauri::async_runtime::spawn_blocking(move || {
+        *app.state::<MicHold>().0.lock().unwrap() = None;
         run_osa(&format!("set volume input volume {level}"))
     })
     .await;
 }
 
+#[tauri::command]
+async fn set_output_muted(app: tauri::AppHandle, muted: bool) {
+    let level = tauri::async_runtime::spawn_blocking(move || {
+        let verb = if muted { "with" } else { "without" };
+        run_osa(&format!("set volume {verb} output muted"));
+        read_volume_settings().output
+    })
+    .await
+    .unwrap_or(0);
+    flash_mute(&app, "volume", "Volume", muted, level);
+}
+
+#[tauri::command]
+async fn set_input_muted(app: tauri::AppHandle, muted: bool) {
+    let handle = app.clone();
+    let level = tauri::async_runtime::spawn_blocking(move || {
+        let hold = handle.state::<MicHold>();
+        let mut held = hold.0.lock().unwrap();
+        let read = apply_mic_hold(read_volume_settings(), &mut held);
+        if let Some(target) = mic_mute_target(muted, &read, &mut held) {
+            run_osa(&format!("set volume input volume {target}"));
+        }
+        read.input_restore.unwrap_or(read.input)
+    })
+    .await
+    .unwrap_or(0);
+    flash_mute(&app, "mic", "Mic", muted, level);
+}
+
+fn flash_mute(app: &tauri::AppHandle, glyph: &str, name: &str, muted: bool, level: u8) {
+    if muted {
+        notch::flash(app, glyph, format!("{name} muted"), Some(0.0));
+    } else {
+        notch::flash(
+            app,
+            glyph,
+            format!("{name} {level}%"),
+            Some(level as f64 / 100.0),
+        );
+    }
+}
+
 // ───────────────────────── brightness (DisplayServices) ─────────────
-// Private framework; linked in build.rs. Works for the internal display.
+// Private framework; linked in build.rs.
 #[cfg(target_os = "macos")]
 mod brightness {
     type CGDirectDisplayID = u32;
     extern "C" {
-        fn CGMainDisplayID() -> CGDirectDisplayID;
+        fn CGGetOnlineDisplayList(
+            max: u32,
+            displays: *mut CGDirectDisplayID,
+            count: *mut u32,
+        ) -> i32;
+        fn CGDisplayIsBuiltin(display: CGDirectDisplayID) -> u32;
         fn DisplayServicesGetBrightness(id: CGDirectDisplayID, brightness: *mut f32) -> i32;
         fn DisplayServicesSetBrightness(id: CGDirectDisplayID, brightness: f32) -> i32;
     }
-    pub fn get() -> f32 {
-        let mut b: f32 = 0.0;
-        unsafe {
-            DisplayServicesGetBrightness(CGMainDisplayID(), &mut b);
+
+    fn builtin() -> Option<CGDirectDisplayID> {
+        let mut ids = [0; 16];
+        let mut count = 0;
+        let err = unsafe { CGGetOnlineDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
+        if err != 0 {
+            return None;
         }
-        b
+        ids[..count as usize]
+            .iter()
+            .copied()
+            .find(|&id| unsafe { CGDisplayIsBuiltin(id) } != 0)
     }
+
+    pub fn get() -> Result<f32, String> {
+        let id = builtin().ok_or("no built-in display is on")?;
+        let mut b: f32 = 0.0;
+        let err = unsafe { DisplayServicesGetBrightness(id, &mut b) };
+        if err != 0 {
+            return Err(format!("macOS won't read it (DisplayServices error {err})"));
+        }
+        Ok(b)
+    }
+
     pub fn set(value: f32) {
-        unsafe {
-            DisplayServicesSetBrightness(CGMainDisplayID(), value.clamp(0.0, 1.0));
+        if let Some(id) = builtin() {
+            unsafe {
+                DisplayServicesSetBrightness(id, value.clamp(0.0, 1.0));
+            }
         }
     }
 }
 
 #[tauri::command]
-fn get_brightness() -> f32 {
+fn get_brightness() -> Result<f32, String> {
     #[cfg(target_os = "macos")]
     {
         brightness::get()
     }
     #[cfg(not(target_os = "macos"))]
     {
-        0.0
+        Err("brightness needs macOS".to_string())
     }
 }
 
@@ -2283,7 +2093,7 @@ const ICON_PX: f64 = 64.0;
 /// Encode an NSImage as a PNG data URL, redrawn at ICON_PX first (then TIFF rep
 /// → bitmap rep → PNG → base64).
 #[cfg(target_os = "macos")]
-fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
+pub(crate) fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
     use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSCompositingOperation, NSImage};
     use objc2_foundation::{NSDataBase64EncodingOptions, NSDictionary, NSPoint, NSRect, NSSize};
 
@@ -2399,6 +2209,7 @@ objc2::define_class!(
             };
             if is_auto {
                 apply_theme(&app, Appearance::Auto);
+                wallpapers::spawn_converge(&app);
             }
         }
     }
@@ -2536,14 +2347,19 @@ fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &Rec
                 .ok()
         });
         let Some(bar) = bar else { continue };
+        let placed = TRACKED_BARS.with(|bars| bars.borrow().contains_key(&label));
+        let height = placed
+            .then(|| {
+                let px = bar.inner_size().ok()?;
+                Some(px.to_logical::<f64>(bar.scale_factor().ok()?).height)
+            })
+            .flatten()
+            .unwrap_or(window_height);
         let scale = m.scale_factor();
         let pos: LogicalPosition<f64> = m.position().to_logical(scale);
         let size: LogicalSize<f64> = m.size().to_logical(scale);
-        // No `top_offset_px` here: the pills sit a line-thickness below the top
-        // edge, clear of the dead row, and overlap the frame's top line, so
-        // lowering the bar would only open a 1px seam between the windows.
         let _ = bar.set_position(pos);
-        let _ = bar.set_size(LogicalSize::new(size.width, window_height));
+        let _ = bar.set_size(LogicalSize::new(size.width, height));
         let _ = bar.set_always_on_top(true);
         let _ = bar.set_visible_on_all_workspaces(true);
         make_overlay(&bar);
@@ -2569,16 +2385,16 @@ fn rebuild_displays(app: &tauri::AppHandle) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    let (geometry, line, corner) = {
+    let (geometry, surface) = {
         let state = app.state::<Mutex<ThemeState>>();
         let ts = state.lock().unwrap();
         let (c, _) = ts.resolve();
-        (ts.geometry.clone(), c.frame_line, c.frame_corner)
+        (ts.geometry.clone(), c.surface)
     };
     remove_native_frames();
     let screens = NSScreen::screens(mtm);
     for screen in screens.iter() {
-        create_native_frame(mtm, &screen, &geometry, &line, &corner);
+        create_native_frame(mtm, &screen, &geometry, &surface);
     }
     let rects = app.state::<AppState>().interactive_rects.clone();
     sync_bars_to_monitors(app, geometry.window_height, &rects);
@@ -2756,8 +2572,9 @@ fn covered_screens(bounds: &[[f64; 4]]) -> Vec<bool> {
         let Some(win) = (unsafe { win.as_ref() }) else {
             continue;
         };
-        // Layer 0 is where ordinary app windows live. Our own bar (5) and frame
-        // (6) sit above it, so they can never be read as a fullscreen app.
+        // Layer 0 is where ordinary app windows live. Our own bar and frame
+        // (BAR_WINDOW_LEVEL, FRAME_WINDOW_LEVEL) sit above it, so they can
+        // never be read as a fullscreen app.
         if window_int(win, unsafe { kCGWindowLayer }) != Some(0) {
             continue;
         }
@@ -2868,44 +2685,89 @@ fn install_fullscreen_watcher(app: tauri::AppHandle) {
     });
 }
 
+/// Bind `name` in edgebar's cache folder, replacing a socket a previous run
+/// left behind.
+pub(crate) fn listen(name: &str) -> Option<std::os::unix::net::UnixListener> {
+    let dir = settings::cache_dir()?;
+    let _ = std::fs::create_dir_all(&dir);
+    let sock = dir.join(name);
+    let _ = std::fs::remove_file(&sock);
+    std::os::unix::net::UnixListener::bind(&sock).ok()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(metrics::MetricsState::default())
         .invoke_handler(tauri::generate_handler![
             aerospace_workspaces,
             aerospace_focus,
             set_bar_size,
             get_config,
-            set_appearance,
             set_ink,
             pick_colour,
             battery,
-            metrics_sample,
-            cpu_state,
+            metrics::metrics_sample,
+            metrics::cpu_state,
+            metrics::metrics_history,
             get_volume,
             set_volume,
             set_input_volume,
+            set_output_muted,
+            set_input_muted,
             get_brightness,
             set_brightness,
             network,
             launcher_action,
+            open_settings_pane,
             set_interactive_rects,
             list_wallpapers,
             current_wallpaper,
             set_wallpaper,
             pick_wallpaper_file,
+            pick_folder,
             set_scheme,
             precompute_palettes,
             notch::notch_state,
+            notch::media_state,
+            notch::media_art,
             notch::media_toggle,
-            notch::media_seek
+            notch::media_next,
+            notch::media_previous,
+            notch::media_seek,
+            settings::get_settings,
+            settings::set_setting,
+            settings::settings_files,
+            settings::open_settings_file,
+            setup::setup_status,
+            setup::setup_run,
+            notifications::notification_history,
+            notifications::notification_hide,
+            notifications::notification_hide_all,
+            toggles::toggles,
+            toggles::set_toggle,
+            assistant::assistant_send,
+            assistant::assistant_cancel,
+            assistant::assistant_reset,
+            assistant::assistant_open_link,
+            keyboard::take_keyboard,
+            keyboard::release_keyboard,
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            devtools::dev_result
         ])
         .setup(|app| {
-            let config = load_config();
+            if let Some(dir) = settings::dir() {
+                if let Err(why) = settings::import_legacy_appearance(&dir) {
+                    eprintln!("edgebar: the old appearance file was not imported: {why}");
+                }
+            }
+            let loaded = settings::load(settings::dir().as_deref());
+            let config = loaded.config.clone();
+            app.manage(settings::Store::new(loaded));
+            app.manage(keyboard::Keyboard::default());
+            app.manage(MicHold::default());
             let palettes = load_palettes();
-            // Runtime override (the bar's light/dark/auto toggle) wins over the
-            // config's default; Auto then resolves against the live system setting.
-            let appearance = load_persisted_appearance().unwrap_or(config.appearance);
+            let appearance = config.appearance;
             let scheme = resolve_scheme(appearance);
 
             // Accessory app: no Dock icon and never the active app, so showing
@@ -2923,9 +2785,7 @@ pub fn run() {
                 thumb_cache: Mutex::new(std::collections::HashMap::new()),
                 interactive_rects: interactive_rects.clone(),
             });
-            // Managed now, before the sampler starts below, so `cpu_state` can
-            // answer a bar that asks before the first tick.
-            app.manage(CpuState::default());
+            metrics::install(app.handle().clone());
             app.manage(Mutex::new(ThemeState {
                 colors: config.colors,
                 geometry: config.geometry,
@@ -2940,10 +2800,14 @@ pub fn run() {
                     .unwrap_or_else(|| "desktoppr".to_string()),
                 notch_idle: resolve_notch_idle(config.notch.idle.as_deref()),
                 ink: load_ink_override(),
+                oled: config.oled,
             }));
             // The notch store, managed before the workspace socket below, which
             // publishes into it.
             app.manage(notch::NotchState::new(config.notch));
+            app.manage(toggles::Toggles::new(config.toggles));
+            app.manage(assistant::AssistantState::default());
+            app.manage(setup::Setup::default());
 
             // Per-display chrome, rebuilt on every display-config change.
             #[cfg(target_os = "macos")]
@@ -2966,15 +2830,7 @@ pub fn run() {
             // backlog.
             let ws_handle = app.handle().clone();
             std::thread::spawn(move || {
-                use std::os::unix::net::UnixListener;
-                let Some(home) = std::env::var_os("HOME") else {
-                    return;
-                };
-                let dir = std::path::Path::new(&home).join(".cache/edgebar");
-                let _ = std::fs::create_dir_all(&dir);
-                let sock = dir.join("ws.sock");
-                let _ = std::fs::remove_file(&sock); // clear any stale socket
-                let Ok(listener) = UnixListener::bind(&sock) else {
+                let Some(listener) = listen("ws.sock") else {
                     return;
                 };
                 let (tx, rx) = std::sync::mpsc::channel::<()>();
@@ -2984,8 +2840,8 @@ pub fn run() {
                         // Collapse a burst of pings into one query + push.
                         std::thread::sleep(std::time::Duration::from_millis(60));
                         while rx.try_recv().is_ok() {}
-                        let _ = query_handle
-                            .emit("workspaces", workspaces_with_icons(&query_handle));
+                        let _ =
+                            query_handle.emit("workspaces", workspaces_with_icons(&query_handle));
                         notch::refresh_workspace(&query_handle);
                     }
                 });
@@ -3000,24 +2856,20 @@ pub fn run() {
             // socket setup as ws.sock, but the reload runs inline (no debounce).
             let theme_handle = app.handle().clone();
             std::thread::spawn(move || {
-                use std::os::unix::net::UnixListener;
-                let Some(home) = std::env::var_os("HOME") else {
-                    return;
-                };
-                let dir = std::path::Path::new(&home).join(".cache/edgebar");
-                let _ = std::fs::create_dir_all(&dir);
-                let sock = dir.join("theme.sock");
-                let _ = std::fs::remove_file(&sock); // clear any stale socket
-                let Ok(listener) = UnixListener::bind(&sock) else {
+                let Some(listener) = listen("theme.sock") else {
                     return;
                 };
                 for conn in listener.incoming() {
                     if conn.is_err() {
                         continue;
                     }
-                    reload_theme(&theme_handle);
+                    settings::reload(&theme_handle);
+                    reload_palettes(&theme_handle);
+                    wallpapers::spawn_converge(&theme_handle);
                 }
             });
+
+            wallpapers::spawn_converge(app.handle());
 
             // Re-push workspaces on every app activation.
             #[cfg(target_os = "macos")]
@@ -3031,10 +2883,6 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             install_network_observer(app.handle().clone());
 
-            // Always-on CPU sampling for the bar's graph pill.
-            #[cfg(target_os = "macos")]
-            install_cpu_sampler(app.handle().clone());
-
             // Notch providers: what's making noise, and the focused workspace's
             // rule (seeded once here, then re-run on every workspace/focus event).
             notch::install_media_watcher(app.handle().clone());
@@ -3042,8 +2890,123 @@ pub fn run() {
             let seed = app.handle().clone();
             std::thread::spawn(move || notch::refresh_workspace(&seed));
 
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            devtools::start(app);
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod output_within_tests {
+    use super::*;
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    fn sh(script: &str) -> Command {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", script]);
+        cmd
+    }
+
+    #[test]
+    fn a_command_that_finishes_reports_its_status_and_output() {
+        let Some(Ran::Exited(status, text)) =
+            output_within(sh("echo hi; exit 3"), Duration::from_secs(5))
+        else {
+            panic!("the command should have exited");
+        };
+        assert_eq!((status.code(), text.as_str()), (Some(3), "hi\n"));
+    }
+
+    #[test]
+    fn a_command_past_its_limit_is_killed_and_keeps_what_it_printed() {
+        let started = Instant::now();
+        let Some(Ran::Killed(text)) = output_within(
+            sh("echo started; exec sleep 30"),
+            Duration::from_millis(200),
+        ) else {
+            panic!("the command should have been killed");
+        };
+        assert_eq!(text, "started\n");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn a_command_that_cannot_start_is_none() {
+        let missing = Command::new("/nonexistent/edgebar-tool");
+        assert!(output_within(missing, Duration::from_secs(1)).is_none());
+    }
+}
+
+#[cfg(test)]
+mod volume_tests {
+    use super::*;
+
+    #[test]
+    fn parses_the_volume_settings_reply() {
+        assert_eq!(
+            parse_volume_settings(
+                "output volume:62, input volume:100, alert volume:100, output muted:true"
+            ),
+            Volume {
+                output: 62,
+                output_muted: true,
+                input: 100,
+                input_restore: None,
+            }
+        );
+        assert_eq!(
+            parse_volume_settings(
+                "output volume:missing value, input volume:40, alert volume:100, output muted:missing value"
+            ),
+            Volume {
+                output: 0,
+                output_muted: false,
+                input: 40,
+                input_restore: None,
+            }
+        );
+    }
+
+    fn mic(input: u8) -> Volume {
+        Volume {
+            output: 50,
+            input,
+            ..Volume::default()
+        }
+    }
+
+    #[test]
+    fn a_muted_mic_reports_the_level_it_will_restore() {
+        let mut held = Some(70);
+        let read = apply_mic_hold(mic(0), &mut held);
+        assert_eq!(
+            (read.input, read.input_restore, held),
+            (0, Some(70), Some(70))
+        );
+    }
+
+    #[test]
+    fn a_level_set_elsewhere_ends_the_mute() {
+        let mut held = Some(70);
+        let read = apply_mic_hold(mic(30), &mut held);
+        assert_eq!((read.input, read.input_restore, held), (30, None, None));
+    }
+
+    #[test]
+    fn muting_holds_the_level_and_unmuting_restores_it() {
+        let mut held = None;
+        let read = apply_mic_hold(mic(55), &mut held);
+        assert_eq!(mic_mute_target(true, &read, &mut held), Some(0));
+        assert_eq!(held, Some(55));
+
+        let read = apply_mic_hold(mic(0), &mut held);
+        assert_eq!(mic_mute_target(true, &read, &mut held), None);
+        assert_eq!(mic_mute_target(false, &read, &mut held), Some(55));
+        assert_eq!(held, None);
+        assert_eq!(mic_mute_target(false, &mic(55), &mut held), None);
+    }
 }

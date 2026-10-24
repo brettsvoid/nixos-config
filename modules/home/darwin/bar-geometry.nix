@@ -11,13 +11,16 @@ _: {
     # AeroSpace must clear. Also feeds outerTop below.
     barHeight = 32;
 
+    frameThickness = 8;
+
     # Gap between tiled windows (AeroSpace inner.horizontal/vertical).
     innerGap = 8;
 
-    # Screen-edge inset around the tiled area (AeroSpace outer.left/right/bottom).
-    outerGap = 10;
+    windowGap = 8;
 
-    # Top of the tiled area: the bar band plus one outer gap below it.
-    outerTop = barHeight + outerGap;
+    # Screen-edge inset around the tiled area (AeroSpace outer.left/right/bottom).
+    outerGap = frameThickness + windowGap;
+
+    outerTop = barHeight + windowGap;
   };
 }

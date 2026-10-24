@@ -6,18 +6,9 @@
 #   select-scheme vibrant         # by name (with or without the scheme- prefix)
 #   select-scheme 2               # by number
 #
-# `generate-edgebar-theme` is on PATH via writeShellApplication's runtimeInputs.
-schemes=(
-  scheme-tonal-spot
-  scheme-vibrant
-  scheme-expressive
-  scheme-content
-  scheme-fidelity
-  scheme-neutral
-  scheme-monochrome
-  scheme-rainbow
-  scheme-fruit-salad
-)
+# `generate-edgebar-theme` is on PATH via writeShellApplication's runtimeInputs,
+# and SCHEMES is apps/edgebar/src/schemes.json joined by spaces.
+read -ra schemes <<<"$SCHEMES"
 state="$HOME/.config/edgebar/scheme"
 
 apply() {

@@ -1,202 +1,77 @@
 import "./styles.css";
-import { animate, stagger } from "motion";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-
-interface Workspace {
-  name: string;
-  focused: boolean;
-  has_windows: boolean;
-  app: string; // app name for the dot's tooltip ("" if empty)
-  icon: string; // PNG data URL, or "" when the workspace is empty
-}
-
-interface Config {
-  colors: Record<string, string>;
-  geometry: {
-    innerRadius: number;
-    lineThickness: number;
-    pillHeight: number;
-    pillRadius: number;
-    concave: number;
-    windowHeight: number;
-  };
-  appearance: string; // "light" | "dark" | "auto"
-  scheme: string; // active matugen scheme (e.g. "scheme-tonal-spot")
-  ink: InkInfo;
-  notchIdle: string; // "handle" | "clock" | literal text
-}
-
-// How the on-pill ink (colors.base) was chosen — see ThemeState::resolve in lib.rs.
-interface InkInfo {
-  source: "config" | "contrast" | "override";
-  ratio: number; // contrast of the ink in effect against the pill
-  configured: string; // the role map's ink, before any correction
-  configuredRatio: number;
-  mode: "light" | "dark"; // the scheme it belongs to; an override edits this one
-}
-
-// One line of collapsed-notch content. Rust picks the winner (an OSD flash
-// beats workspace context beats whatever is playing); null means the idle look.
-interface NotchItem {
-  tier: "transient" | "workspace" | "media";
-  glyph: string; // icon name, used when `icon` is empty
-  icon: string; // app icon PNG data URL, or ""
-  art: string; // album art data URL, or "" — the media pill's backdrop
-  primary: string;
-  secondary: string;
-  progress: number | null; // 0..1 hairline fill
-  duration: number; // track length in seconds, 0 when unknown
-  controls: boolean; // transport commands reach this source
-  active: boolean; // false dims it (paused player)
-}
-
-interface ThemePayload {
-  colors: Record<string, string>;
-  appearance: string;
-  scheme: string;
-  ink: InkInfo;
-}
-
-interface Battery {
-  present: boolean; // false on desktops — the readout is hidden entirely
-  percent: number;
-  state: string;
-  time: string | null;
-}
-
-interface Metrics {
-  cpu: number;
-  memUsed: number;
-  memTotal: number;
-  swapUsed: number;
-  swapTotal: number;
-  diskUsed: number;
-  diskTotal: number;
-}
-
-// One point on the CPU graph: fractions of total capacity, 0..1.
-interface CpuSample {
-  sys: number;
-  user: number;
-}
-
-interface CpuStat extends CpuSample {
-  total: number;
-  topProc: string;
-  topProcPct: number; // percent of one core, so >100 for a threaded process
-  topPid: number; // 0 before the first process walk lands
-}
-
-interface CpuSnapshot {
-  history: CpuSample[];
-  latest: CpuStat;
-}
-
-interface Volume {
-  output: number;
-  input: number;
-}
-
-interface Network {
-  state: string; // "wifi" | "vpn" | "off"
-  label: string;
-  rssi: number | null; // Wi-Fi signal in dBm when connected, else null
-  online: boolean; // false = connected but no internet (only meaningful for "wifi")
-}
+import { animate, motionValue } from "motion";
+import defaults from "../src-tauri/config.default.json";
+import {
+  call,
+  on,
+  type Colours,
+  type Config,
+  type CpuSample,
+  type CpuStat,
+  type Network,
+  type NotchIdle,
+  type NotchItem,
+  type Workspace,
+} from "./ipc";
+import { lucide, TRANSPORT } from "./icons";
+import { releaseKeyboard } from "./keyboard";
+import { setLine } from "./marquee";
+import { SPRING } from "./motion";
+import { current, onChange } from "./settings";
+import type { NotchView, ViewHandle } from "./notch/view";
+import { home, views } from "./notch/views";
+import { fadeIn, stepWave, swell } from "./wave";
 
 // ---- tuned constants (named so each value lives in one place) ----
-const SPRING = {
-  panelOpen: { type: "spring", stiffness: 280, damping: 26 },
-  panelClose: { type: "spring", stiffness: 320, damping: 30 },
-  reveal: { type: "spring", stiffness: 420, damping: 26 },
-  hide: { type: "spring", stiffness: 520, damping: 34 },
-  popup: { type: "spring", stiffness: 300, damping: 26 },
-} as const;
-const FADE = { in: 0.25, inDelay: 0.08, out: 0.12 } as const; // seconds
-const STAGGER = { reveal: 0.05, hide: 0.03 } as const; // seconds between pills
 const POLL = {
-  metrics: 2000,
   battery: 60000,
 } as const; // ms (network is event-driven, so it has no poll)
 const DEBOUNCE = { volume: 60, mic: 60, brightness: 40 } as const; // ms
-// Thresholds for the performance tab's alert dot. Only disk and swap: CPU and
-// memory swing too fast for a dot to mean anything.
-const HEALTH = {
-  diskUsedPct: 90,
-  // Bytes, not a percentage: macOS grows swap files on demand, so a small file
-  // on a healthy machine reads as near-full.
-  swapUsedBytes: 2 * 1024 ** 3,
-} as const;
-// CPU histogram. `samples` must match CPU_HISTORY in lib.rs and equal `w`, so
-// each column is exactly 1px (otherwise they blur); at CPU_POLL's 2s that's
-// 3.6 min of history. `w`/`h` must match .cpu-graph in styles.css.
+// CPU histogram. `w`/`h` must match .cpu-graph in styles.css.
 const CPU_GRAPH = {
   w: 108,
   h: 14,
-  samples: 108,
   // Load ladder from the sketchybar helper; the colors live in styles.css.
   thresholds: { hot: 0.7, warm: 0.3, mild: 0.1 },
 } as const;
 const LAYOUT = {
-  hiddenY: -48, // px above the top edge (clipped by the window)
-  windowExpandedH: 280, // bar-window height while a panel is open
-  popupTuck: -8, // px a dropdown starts tucked up (hidden) before sliding in
-  settleDelay: 600, // ms to let the reveal spring settle before hit-testing
+  drawerRoom: 32,
+  settleDelay: 600,
 } as const;
 // Collapsed notch sizing: one width per state, not sized to content, so the
 // bar doesn't twitch on every track change. Long text marquees instead.
 const NOTCH = {
   idleW: 200, // the bare handle
   itemW: 320, // any published item
-  marquee: { pxPerSec: 26, minSec: 4, pause: 0.18 }, // scroll speed / dwell at each end
 } as const;
 // The media playhead, after Android's lock-screen player: a travelling sine
 // over the played part, a rounded thumb, a flat rule for the rest. The sine
-// flattens when paused. `wavelength` is in px so the pitch is width-independent;
-// `ease` is the per-frame approach to the target amplitude; `speed` is rad/sec.
+// flattens when paused. `wavelength` is in px so the pitch is width-independent.
 const WAVE = {
   amp: 2.2,
   wavelength: 22,
-  speed: 2.4,
-  ease: 0.15,
   line: 2,
   thumb: { w: 4, h: 12, gap: 2.5 }, // px; `gap` clears it either side
-  rampPx: 8, // px of played track over which the wave swells to full amplitude
-  fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
 } as const;
-const FALLBACK = { pillHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
-// Interactive-rect sentinel: the whole window is hit-testable while a panel is open.
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
 // Apply the shared config (also read by the native frame) as CSS variables,
 // then start the bar. styles.css holds fallback values.
-invoke<Config>("get_config")
+call("get_config")
   .then((cfg) => {
     applyConfig(cfg);
-    initBar(
-      cfg.geometry.pillHeight,
-      cfg.geometry.windowHeight,
-      cfg.appearance,
-      cfg.notchIdle,
-      cfg.ink,
-      cfg.colors.base,
-    );
+    initBar(cfg.geometry.barHeight, cfg.geometry.windowHeight, cfg.notchIdle);
   })
   .catch(() =>
-    initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "auto", "handle", null, ""),
+    initBar(defaults.geometry.barHeight, defaults.geometry.windowHeight, defaults.notch.idle),
   );
 
-// Colour vars only; re-applied live on theme changes.
-function applyColors(c: Record<string, string>) {
+function applyColours(c: Colours) {
   const s = document.documentElement.style;
-  s.setProperty("--base", c.base);
-  s.setProperty("--pill-bg", c.pillBg);
-  s.setProperty("--text", c.text);
-  s.setProperty("--subtext", c.subtext);
-  s.setProperty("--accent", c.accent);
-  s.setProperty("--occupied", c.occupied);
-  s.setProperty("--empty", c.empty);
+  s.setProperty("--surface", c.surface);
+  s.setProperty("--on-surface", c.text);
+  s.setProperty("--on-surface-variant", c.subtext);
+  s.setProperty("--primary", c.accent);
   s.setProperty("--battery-charging", c.batteryCharging);
   s.setProperty("--battery-low", c.batteryLow);
   s.setProperty("--vpn", c.vpn);
@@ -206,13 +81,9 @@ function applyColors(c: Record<string, string>) {
 
 function applyConfig(cfg: Config) {
   const s = document.documentElement.style;
-  const g = cfg.geometry;
-  applyColors(cfg.colors);
-  s.setProperty("--bezel-line-thickness", `${g.lineThickness}px`);
-  s.setProperty("--pill-h", `${g.pillHeight}px`);
-  s.setProperty("--pill-radius", `${g.pillRadius}px`);
-  s.setProperty("--concave", `${g.concave}px`);
-  s.setProperty("--window-h", `${g.windowHeight}px`);
+  applyColours(cfg.colors);
+  s.setProperty("--bar-h", `${cfg.geometry.barHeight}px`);
+  s.setProperty("--frame-t", `${cfg.geometry.frameThickness}px`);
 }
 
 // Coalesces slider drags into fewer IPC calls.
@@ -224,303 +95,165 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
-interface Wallpaper {
-  name: string;
-  path: string;
-  thumb: string; // data:image/png;base64,…
-}
+function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) {
+  const segments = [...document.querySelectorAll<HTMLElement>(".seg")];
 
-// Per-view panel geometry. All views share a height, so switching only moves
-// the width. `win` is the bar-window height needed (overshoot included), 7×64.
-// The default view's width is its column grid plus PANEL_CHROME.
-const VIEW = {
-  default: { w: 680, h: 400, win: 448 },
-  theme: { w: 704, h: 400, win: 448 },
-  metrics: { w: 460, h: 400, win: 448 }, // 56 of it is the rail
-} as const;
-// Panel width outside the tab body: side padding (2 × --space-6), the rail
-// (48px) and its gap (--space-4). Keep in step with .notch-panel / .rail-tab.
-const PANEL_CHROME = 12 * 2 + 48 + 8;
-type ViewName = keyof typeof VIEW;
-
-// matugen scheme types, in select-scheme.sh's order.
-const SCHEMES = [
-  "scheme-tonal-spot",
-  "scheme-vibrant",
-  "scheme-expressive",
-  "scheme-content",
-  "scheme-fidelity",
-  "scheme-neutral",
-  "scheme-monochrome",
-  "scheme-rainbow",
-  "scheme-fruit-salad",
-] as const;
-
-function initBar(
-  pillHeight: number,
-  windowHeight: number,
-  appearance: string,
-  notchIdle: string,
-  ink: InkInfo | null,
-  inkColour: string,
-) {
-  const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
-
-  let shown = false;
-  let hovering = false;
-
-  // Hover auto-hide, off because it fought the auto-hidden macOS menu bar.
-  const AUTO_HIDE = false;
-
-  // ---- expandable-panel window sizing ------------------------------------
-  // Open panels need a taller (transparent) bar window. It's shared, so it's
-  // tall while any panel is open and back to base once all are closed. Base is
-  // geometry.windowHeight, the size lib.rs creates the window at.
-  const WINDOW_BASE_H = windowHeight;
-  const COLLAPSED_H = pillHeight;
-  const openPanels = new Set<string>();
-  // Bar-window height while a panel is open: the popup height by default,
-  // raised by the notch's views (showView) and reset when the notch closes.
-  let expandedWindowH: number = LAYOUT.windowExpandedH;
+  const drawerHeights = new Map<string, number>();
   let lastWindowH = -1;
 
   async function syncWindowHeight() {
-    const target = openPanels.size > 0 ? expandedWindowH : WINDOW_BASE_H;
+    const tallest = Math.max(0, ...drawerHeights.values());
+    const target =
+      drawerHeights.size > 0 ? barHeight + tallest + LAYOUT.drawerRoom : windowHeight;
     if (target === lastWindowH) return;
     lastWindowH = target;
-    await invoke("set_bar_size", {
+    await call("set_bar_size", {
       width: window.innerWidth,
       height: target,
     });
     reportInteractiveRects();
   }
 
-  // True while the playhead is dragged. Like an open panel, it makes the whole
-  // window interactive, or a scrub that strays off the pill would go
-  // click-through and stop receiving pointer events.
   let scrubbing = false;
   let rectsScheduled = false;
-  // Tell lib.rs's click-through tracker which regions stay interactive: the
-  // pills, or the whole window while a popup is open (so an outside click
-  // reaches the bar and closes it). Coalesced to one IPC per frame.
   function reportInteractiveRects() {
     if (rectsScheduled) return;
     rectsScheduled = true;
     requestAnimationFrame(() => {
       rectsScheduled = false;
       const rects =
-        openPanels.size > 0 || scrubbing
+        drawerHeights.size > 0 || scrubbing
           ? [RECT_WHOLE_WINDOW]
-          : pills
+          : segments
               .map((p) => {
                 const r = p.getBoundingClientRect();
                 return [r.left, r.top, r.width, r.height];
               })
               .filter((r) => r[2] > 0 && r[3] > 0);
-      invoke("set_interactive_rects", { rects }).catch(() => {});
+      call("set_interactive_rects", { rects }).catch(() => {});
     });
   }
   window.addEventListener("resize", reportInteractiveRects);
 
-  interface PanelOpts {
+  interface DrawerOpts {
     id: string;
-    pill: HTMLElement;
-    header: HTMLElement; // the always-visible strip that toggles expansion
-    panel: HTMLElement; // the content faded in on expand
-    width: number;
-    height: number;
-    onOpen?: () => void;
+    root: HTMLElement;
+    toggle: HTMLElement;
+    box: HTMLElement;
+    body: HTMLElement;
+    onOpen?: () => void | Promise<void>;
     onClose?: () => void;
-    /// Width to collapse back to. Omit it to reuse the width captured on
-    /// expand; the notch can't, as its collapsed width changes while open.
-    collapsedWidth?: () => number;
   }
 
-  interface Panel {
-    pill: HTMLElement;
+  interface Drawer {
+    root: HTMLElement;
     isOpen: () => boolean;
-    collapse: () => void;
+    close: () => Promise<void>;
+    resize: () => void;
   }
 
-  function makePanel(o: PanelOpts): Panel {
+  function makeDrawer(o: DrawerOpts): Drawer {
     let open = false;
-    let collapsedW = 0;
+    const reach = motionValue(0);
+    reach.on("change", (v) => o.box.style.setProperty("--reach", `${Math.max(0, v)}px`));
+    const setState = (state: "opening" | "open" | "closing" | "closed") => {
+      o.box.dataset.state = state;
+    };
+    setState("closed");
 
-    async function expand() {
+    async function show() {
       if (open) return;
       open = true;
-      collapsedW = o.pill.offsetWidth;
-      o.onOpen?.();
-      openPanels.add(o.id);
+      await o.onOpen?.();
+      if (!open) return;
+      drawerHeights.set(o.id, o.body.offsetHeight);
       await syncWindowHeight();
-      animate(o.pill, { width: o.width, height: o.height }, SPRING.panelOpen);
-      animate(o.panel, { opacity: 1 }, { duration: FADE.in, delay: FADE.inDelay });
+      setState("opening");
+      await animate(reach, o.body.offsetHeight, SPRING.drawer).finished;
+      if (open) setState("open");
     }
 
-    async function collapse() {
+    async function close() {
       if (!open) return;
       open = false;
       o.onClose?.();
-      animate(o.panel, { opacity: 0 }, { duration: FADE.out });
-      const target = o.collapsedWidth?.() ?? collapsedW;
-      await animate(
-        o.pill,
-        { width: target, height: COLLAPSED_H },
-        SPRING.panelClose,
-      ).finished;
-      // Hand the width back to CSS, unless it comes from `collapsedWidth`,
-      // which CSS knows nothing about.
-      if (!o.collapsedWidth) o.pill.style.width = "";
-      o.pill.style.height = "";
-      openPanels.delete(o.id);
+      setState("closing");
+      await animate(reach, 0, SPRING.drawer).finished;
+      if (open) return;
+      setState("closed");
+      drawerHeights.delete(o.id);
       await syncWindowHeight();
-      if (AUTO_HIDE && !hovering) hideBar();
     }
 
-    // Only the header toggles, so clicks on panel content don't collapse it.
-    o.header.addEventListener("click", (e) => {
+    function resize() {
+      if (!open) return;
+      drawerHeights.set(o.id, o.body.offsetHeight);
+      void syncWindowHeight();
+      animate(reach, o.body.offsetHeight, SPRING.drawer);
+    }
+
+    o.toggle.addEventListener("click", (e) => {
       e.stopPropagation();
-      open ? collapse() : expand();
+      void (open ? close() : show());
     });
 
-    return { pill: o.pill, isOpen: () => open, collapse };
+    return { root: o.root, isOpen: () => open, close, resize };
   }
 
-  // ---- show / hide --------------------------------------------------------
-  function showBar() {
-    if (shown) return;
-    shown = true;
-    animate(
-      pills,
-      { y: 0, opacity: 1 },
-      { ...SPRING.reveal, delay: stagger(STAGGER.reveal) },
-    );
-  }
-  function hideBar() {
-    if (!AUTO_HIDE) return;
-    if (!shown || openPanels.size > 0) return;
-    shown = false;
-    animate(
-      pills,
-      { y: LAYOUT.hiddenY, opacity: 0 },
-      { ...SPRING.hide, delay: stagger(STAGGER.hide) },
-    );
-  }
-
-  document.addEventListener("mouseenter", () => {
-    hovering = true;
-    showBar();
-  });
   document.addEventListener("mouseleave", () => {
-    hovering = false;
-    for (const p of panels) p.collapse();
-    hideBar();
+    for (const d of drawers) void d.close();
   });
 
   // ---- clock --------------------------------------------------------------
-  // HH:MM, so it updates once a minute on the minute boundary.
   const timeEl = document.querySelector<HTMLElement>("#clock .time")!;
+  const sepEl = document.querySelector<HTMLElement>("#clock .sep")!;
   const dateEl = document.querySelector<HTMLElement>("#clock .date")!;
 
-  function updateCompactClock() {
-    const now = new Date();
-    timeEl.textContent = now.toLocaleTimeString([], {
+  const timeText = (now: Date, seconds: boolean) =>
+    now.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      second: seconds ? "2-digit" : undefined,
+      hour12: !current().clock.hour24,
     });
+
+  function updateCompactClock(now: Date) {
+    const c = current().clock;
+    timeEl.textContent = timeText(now, c.seconds);
+    sepEl.hidden = dateEl.hidden = !c.date;
     dateEl.textContent = now.toLocaleDateString([], {
       weekday: "short",
       month: "short",
       day: "numeric",
     });
   }
-  function tickMinute() {
-    updateCompactClock();
-    // The notch's idle clock too, while no provider owns the slot.
-    if (notchIdle === "clock" && !notchLive) renderNotch(null);
-    // reschedule for the next minute boundary (no drift)
-    window.setTimeout(tickMinute, 60000 - (Date.now() % 60000));
+  let clockTimer = 0;
+  let clockMinute = -1;
+  function tick({ force = false } = {}) {
+    const now = new Date();
+    updateCompactClock(now);
+    const minute = Math.floor(now.getTime() / 60000);
+    if ((force || minute !== clockMinute) && notchIdle === "clock" && !notchLive) renderNotch(null);
+    clockMinute = minute;
+    const step = current().clock.seconds && !document.hidden ? 1000 : 60000;
+    window.clearTimeout(clockTimer);
+    clockTimer = window.setTimeout(() => tick(), step - (Date.now() % step));
   }
-
-  // ---- metrics (lazy: only sampled while the performance view is open) ----
-  const metricBars = new Map<string, HTMLElement>();
-  const metricVals = new Map<string, HTMLElement>();
-  for (const el of document.querySelectorAll<HTMLElement>("#notch .metric")) {
-    const k = el.dataset.k!;
-    metricBars.set(k, el.querySelector<HTMLElement>(".m-bar i")!);
-    metricVals.set(k, el.querySelector<HTMLElement>(".m-val")!);
-  }
-  function setMetric(k: string, pct: number) {
-    const clamped = Math.max(0, Math.min(100, pct));
-    metricBars.get(k)!.style.width = `${clamped}%`;
-    metricVals.get(k)!.textContent = `${Math.round(clamped)}%`;
-  }
-  const pctOf = (used: number, total: number) =>
-    total > 0 ? (used / total) * 100 : 0;
-  function startMetrics() {
-    if (metricsTimer !== undefined) return;
-    sampleMetrics();
-    metricsTimer = window.setInterval(sampleMetrics, POLL.metrics);
-  }
-  function stopMetrics() {
-    clearInterval(metricsTimer);
-    metricsTimer = undefined;
-  }
-  async function sampleMetrics() {
-    try {
-      const m = await invoke<Metrics>("metrics_sample");
-      setMetric("cpu", m.cpu);
-      setMetric("mem", pctOf(m.memUsed, m.memTotal));
-      setMetric("disk", pctOf(m.diskUsed, m.diskTotal));
-      setMetric("swap", pctOf(m.swapUsed, m.swapTotal));
-      setHealth(m);
-    } catch {
-      /* sampling can fail mid-teardown; ignore */
-    }
-  }
-
-  // Alert dot on the performance tab. The rail is only visible while the notch
-  // is open, so there's no background poll: one sample on open, then the
-  // metrics view's own cadence.
-  const perfTab = document.querySelector<HTMLElement>('.rail-tab[data-to="metrics"]')!;
-  const perfDot = document.querySelector<HTMLElement>("#perf-dot")!;
-  function setHealth(m: Metrics) {
-    const reasons: string[] = [];
-    if (pctOf(m.diskUsed, m.diskTotal) >= HEALTH.diskUsedPct) {
-      reasons.push("disk almost full");
-    }
-    if (m.swapUsed >= HEALTH.swapUsedBytes) reasons.push("heavy swap use");
-    perfDot.hidden = reasons.length === 0;
-    perfTab.title = reasons.length
-      ? `Performance — ${reasons.join(", ")}`
-      : "Performance";
-  }
+  document.addEventListener("visibilitychange", () => tick());
 
   // ---- centre notch: the dashboard / wallpapers / performance hub ---------
-  let metricsTimer: number | undefined;
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
-  // Collapsed notch width, updated by renderNotch. Read on collapse so the pill
-  // returns to the width for its *current* content, not the one it had on open.
-  let notchCollapsedW: number = NOTCH.idleW;
-  const notchPanel = makePanel({
+  const notchBox = notchEl.querySelector<HTMLElement>(".notch-drawer")!;
+  const notchBody = notchBox.querySelector<HTMLElement>(".notch-panel")!;
+  let notchW: number = NOTCH.idleW;
+  const notchDrawer = makeDrawer({
     id: "notch",
-    pill: notchEl,
-    header: notchEl.querySelector<HTMLElement>(".notch-row")!,
-    panel: notchEl.querySelector<HTMLElement>(".notch-panel")!,
-    width: VIEW.default.w,
-    height: VIEW.default.h,
-    collapsedWidth: () => notchCollapsedW,
-    onOpen: () => {
-      showView("default"); // always open on the dashboard, as ambxst does
-      sampleMetrics(); // one read, so the rail's alert dot is right on arrival
-    },
-    onClose: () => {
-      stopMetrics();
-      // Back to the popup height, so the controls/launcher popups don't
-      // inherit the notch's taller window.
-      expandedWindowH = LAYOUT.windowExpandedH;
-    },
+    root: notchEl,
+    toggle: notchEl.querySelector<HTMLElement>(".notch-row")!,
+    box: notchBox,
+    body: notchBody,
+    onOpen: openViews,
+    onClose: closeViews,
   });
 
   // ---- controls: volume / mic / brightness sliders -----------------------
@@ -534,140 +267,77 @@ function initBar(
   const briRange = controlsEl.querySelector<HTMLInputElement>(
     '.slider-row[data-k="brightness"] .s-range',
   )!;
+  const ranges = [volRange, micRange, briRange];
+
+  const paintRange = (r: HTMLInputElement) => r.style.setProperty("--fill", `${r.value}%`);
+  for (const r of ranges) r.addEventListener("input", () => paintRange(r));
 
   async function loadControls() {
     try {
-      const v = await invoke<Volume>("get_volume");
+      const v = await call("get_volume");
       volRange.value = String(v.output);
-      micRange.value = String(v.input);
-      const br = await invoke<number>("get_brightness"); // 0..1
+      micRange.value = String(v.inputRestore ?? v.input);
+      const br = await call("get_brightness");
       briRange.value = String(Math.round(br * 100));
     } catch {
       /* ignore */
     }
+    ranges.forEach(paintRange);
   }
   volRange.addEventListener(
     "input",
-    debounce(() => invoke("set_volume", { output: +volRange.value }), DEBOUNCE.volume),
+    debounce(() => call("set_volume", { output: +volRange.value }), DEBOUNCE.volume),
   );
   micRange.addEventListener(
     "input",
-    debounce(() => invoke("set_input_volume", { input: +micRange.value }), DEBOUNCE.mic),
+    debounce(() => call("set_input_volume", { input: +micRange.value }), DEBOUNCE.mic),
   );
   briRange.addEventListener(
     "input",
     debounce(
-      () => invoke("set_brightness", { value: +briRange.value / 100 }),
+      () => call("set_brightness", { value: +briRange.value / 100 }),
       DEBOUNCE.brightness,
     ),
   );
 
-  // A floating dropdown with its own width, so the pill stays a small cog
-  // button. Mirrors the launcher menu.
-  const ctlBtn = document.querySelector<HTMLElement>("#ctl-btn")!;
-  const ctlPanelEl = controlsEl.querySelector<HTMLElement>(".ctl-panel")!;
-  let controlsOpen = false;
-  animate(ctlPanelEl, { y: LAYOUT.popupTuck }, { duration: 0 }); // start tucked up (hidden)
-
-  async function openControls() {
-    if (controlsOpen) return;
-    controlsOpen = true;
-    openPanels.add("controls");
-    await syncWindowHeight();
-    await loadControls();
-    ctlPanelEl.style.pointerEvents = "auto";
-    animate(
-      ctlPanelEl,
-      { opacity: 1, y: 0 },
-      SPRING.popup,
-    );
-  }
-  async function closeControls() {
-    if (!controlsOpen) return;
-    controlsOpen = false;
-    ctlPanelEl.style.pointerEvents = "none";
-    await animate(
-      ctlPanelEl,
-      { opacity: 0, y: LAYOUT.popupTuck },
-      { duration: FADE.out },
-    ).finished;
-    openPanels.delete("controls");
-    await syncWindowHeight();
-  }
-  ctlBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    controlsOpen ? closeControls() : openControls();
+  const ctlBox = controlsEl.querySelector<HTMLElement>(".ctl-panel")!;
+  const controlsDrawer = makeDrawer({
+    id: "controls",
+    root: controlsEl,
+    toggle: document.querySelector<HTMLElement>("#ctl-btn")!,
+    box: ctlBox,
+    body: ctlBox.querySelector<HTMLElement>(".drawer-body")!,
+    onOpen: loadControls,
   });
-  // Same shape as makePanel() so outside-click / mouse-leave close it.
-  const controlsPanel = {
-    pill: controlsEl,
-    isOpen: () => controlsOpen,
-    collapse: closeControls,
-  };
 
-  // ---- launcher: ⌘ quick-actions menu (drops down from the workspaces pill)
-  const wsPill = document.querySelector<HTMLElement>("#workspaces")!;
-  const launcherBtn = document.querySelector<HTMLElement>("#launcher-btn")!;
-  const menuPanel = wsPill.querySelector<HTMLElement>(".menu-panel")!;
-  let launcherOpen = false;
-  animate(menuPanel, { y: LAYOUT.popupTuck }, { duration: 0 }); // start tucked up (hidden)
-
-  async function openLauncher() {
-    if (launcherOpen) return;
-    launcherOpen = true;
-    openPanels.add("launcher");
-    await syncWindowHeight();
-    menuPanel.style.pointerEvents = "auto";
-    animate(
-      menuPanel,
-      { opacity: 1, y: 0 },
-      SPRING.popup,
-    );
-  }
-  async function closeLauncher() {
-    if (!launcherOpen) return;
-    launcherOpen = false;
-    menuPanel.style.pointerEvents = "none";
-    await animate(
-      menuPanel,
-      { opacity: 0, y: LAYOUT.popupTuck },
-      { duration: FADE.out },
-    ).finished;
-    openPanels.delete("launcher");
-    await syncWindowHeight();
-  }
-  launcherBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    launcherOpen ? closeLauncher() : openLauncher();
+  const wsEl = document.querySelector<HTMLElement>("#workspaces")!;
+  const menuBox = wsEl.querySelector<HTMLElement>(".menu-panel")!;
+  const launcherDrawer = makeDrawer({
+    id: "launcher",
+    root: wsEl,
+    toggle: document.querySelector<HTMLElement>("#launcher-btn")!,
+    box: menuBox,
+    body: menuBox.querySelector<HTMLElement>(".drawer-body")!,
   });
-  for (const btn of menuPanel.querySelectorAll<HTMLElement>(".menu-item")) {
+  for (const btn of menuBox.querySelectorAll<HTMLElement>(".menu-item")) {
     btn.addEventListener("click", () => {
-      invoke("launcher_action", { action: btn.dataset.action });
-      closeLauncher();
+      call("launcher_action", { action: btn.dataset.action! });
+      void launcherDrawer.close();
     });
   }
-  // Same shape as makePanel() so outside-click / mouse-leave close it.
-  const launcherPanel = {
-    pill: wsPill,
-    isOpen: () => launcherOpen,
-    collapse: closeLauncher,
-  };
 
-  const panels = [notchPanel, controlsPanel, launcherPanel];
+  const drawers = [notchDrawer, controlsDrawer, launcherDrawer];
 
-  // Click outside an open panel collapses it.
   document.addEventListener("click", (e) => {
-    const t = e.target as Node;
-    for (const p of panels) {
-      if (p.isOpen() && !p.pill.contains(t)) p.collapse();
+    const path = e.composedPath();
+    for (const d of drawers) {
+      if (d.isOpen() && !path.includes(d.root)) void d.close();
     }
   });
 
   // ---- battery (polled; changes slowly) ----------------------------------
   // Inline Lucide battery SVGs, swapped by charge level / charging state. The
   // exact percentage is shown as text, so discrete level icons are enough.
-  const lucide = (paths: string) =>
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   const BAT_SVG = {
     charging: lucide(
       '<path d="m11 7-3 5h4l-3 5"/><path d="M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935"/><path d="M22 14v-4"/><path d="M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936"/>',
@@ -682,7 +352,7 @@ function initBar(
   let batTimer = 0;
   async function updateBattery() {
     try {
-      const b = await invoke<Battery>("battery");
+      const b = await call("battery");
       // No battery (e.g. Mac mini): hide the group and stop polling.
       if (!b.present) {
         batPill.hidden = true;
@@ -790,8 +460,8 @@ function initBar(
   // Rust's reachability watcher pushes on every route change (connect,
   // disconnect, IP, VPN), re-checking online state each time. The initial fetch
   // covers a listener that attaches after Rust's startup push.
-  invoke<Network>("network").then(renderNetwork).catch(() => {});
-  listen<Network>("network", (e) => renderNetwork(e.payload));
+  call("network").then(renderNetwork).catch(() => {});
+  on("network", renderNetwork);
 
   // ---- CPU pill: load graph + hungriest process (always on) --------------
   // Rust pushes a "cpu" event every CPU_POLL whether or not a panel is open.
@@ -805,6 +475,7 @@ function initBar(
   const cpuCanvas = cpuPill.querySelector<HTMLCanvasElement>(".cpu-graph")!;
   const cpuCtx = cpuCanvas.getContext("2d");
   const cpuHistory: CpuSample[] = [];
+  let cpuCapacity = 0;
 
   const cssVar = (name: string) =>
     getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -826,7 +497,7 @@ function initBar(
 
     // One stacked column per sample: system from the baseline, user above it,
     // so a column's full height is total load.
-    const colW = w / CPU_GRAPH.samples; // 1px, butted up with no gap
+    const colW = w / cpuCapacity;
     const sysColor = cssVar("--cpu-sys");
     const userColor = cssVar("--cpu-user");
 
@@ -846,7 +517,7 @@ function initBar(
 
   function renderCpu(stat: CpuStat) {
     cpuNameEl.textContent = stat.topProc || "—";
-    cpuPidEl.textContent = stat.topPid ? String(stat.topPid) : "";
+    cpuPidEl.textContent = stat.topPid === null ? "" : String(stat.topPid);
     cpuTopEl.title = stat.topProc
       ? `${stat.topProc} (pid ${stat.topPid}) — ${Math.round(stat.topProcPct)}% of one core`
       : "";
@@ -857,21 +528,30 @@ function initBar(
     cpuPill.classList.toggle("mild", stat.total >= t.mild && stat.total < t.warm);
   }
 
-  listen<CpuStat>("cpu", (e) => {
-    cpuHistory.push({ sys: e.payload.sys, user: e.payload.user });
-    if (cpuHistory.length > CPU_GRAPH.samples) cpuHistory.shift();
-    renderCpu(e.payload);
+  on("cpu", (stat) => {
+    if (cpuPill.hidden || !cpuCapacity) return;
+    cpuHistory.push({ sys: stat.sys, user: stat.user });
+    if (cpuHistory.length > cpuCapacity) cpuHistory.shift();
+    renderCpu(stat);
     drawCpuGraph();
   });
-  invoke<CpuSnapshot>("cpu_state")
-    .then((s) => {
-      // Skip if the sampler's first push beat this reply; the event is newer.
-      if (cpuHistory.length > 0 || s.history.length === 0) return;
-      cpuHistory.push(...s.history.slice(-CPU_GRAPH.samples));
-      renderCpu(s.latest);
-      drawCpuGraph();
-    })
-    .catch(() => {});
+  function seedCpu() {
+    call("cpu_state")
+      .then((s) => {
+        cpuCapacity = s.capacity;
+        if (s.history.length === 0) return;
+        cpuHistory.splice(0, cpuHistory.length, ...s.history.slice(-cpuCapacity));
+        renderCpu(s.latest);
+        drawCpuGraph();
+      })
+      .catch(() => {});
+  }
+  seedCpu();
+  function showCpuSegment(shown: boolean) {
+    if (shown === !cpuPill.hidden) return;
+    cpuPill.hidden = !shown;
+    if (shown) seedCpu();
+  }
 
   // ---- workspaces: event-driven (Rust pushes on AeroSpace changes) -------
   const wsContainer = document.querySelector<HTMLElement>("#workspaces .ws-dots")!;
@@ -894,7 +574,7 @@ function initBar(
         img.alt = "";
         el.appendChild(img);
         el.addEventListener("click", () =>
-          invoke("aerospace_focus", { name: w.name }),
+          call("aerospace_focus", { name: w.name }),
         );
         wsEls.set(w.name, el);
         wsContainer.appendChild(el);
@@ -913,8 +593,8 @@ function initBar(
     reportInteractiveRects(); // dot count/width changes the workspaces pill
   }
 
-  listen<Workspace[]>("workspaces", (e) => renderWorkspaces(e.payload));
-  invoke<Workspace[]>("aerospace_workspaces") // initial state
+  on("workspaces", renderWorkspaces);
+  call("aerospace_workspaces")
     .then(renderWorkspaces)
     .catch(() => {});
 
@@ -949,30 +629,6 @@ function initBar(
   const niSecondary = notchItem.querySelector<HTMLElement>(".ni-secondary")!;
   const niProgress = notchItem.querySelector<HTMLElement>(".ni-progress i")!;
 
-  // Set a line's text and marquee it if it overflows the fixed box; an
-  // ellipsis would hide the half of a title that tells tracks apart.
-  function setLine(box: HTMLElement, text: string) {
-    const inner = box.firstElementChild as HTMLElement;
-    if (inner.textContent !== text) inner.textContent = text;
-    box.classList.remove("scroll");
-    box.style.removeProperty("--ni-shift");
-    box.style.removeProperty("--ni-dur");
-    // Measured after the text lands; scrollWidth is the unclipped content.
-    const overflow = inner.scrollWidth - box.clientWidth;
-    if (overflow <= 1) return;
-    const travel = Math.max(
-      NOTCH.marquee.minSec,
-      overflow / NOTCH.marquee.pxPerSec,
-    );
-    box.style.setProperty("--ni-shift", `${overflow}px`);
-    // Two passes plus a dwell at each end, so one cycle is there-and-back.
-    box.style.setProperty(
-      "--ni-dur",
-      `${(travel + NOTCH.marquee.pause * travel) * 2}s`,
-    );
-    box.classList.add("scroll");
-  }
-
   // The idle look is a synthetic item, so one renderer covers both cases.
   function idleItem(): NotchItem | null {
     if (notchIdle === "handle") return null;
@@ -983,9 +639,7 @@ function initBar(
       glyph: clock ? "clock" : "",
       icon: "",
       art: "",
-      primary: clock
-        ? now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
-        : notchIdle,
+      primary: clock ? timeText(now, false) : notchIdle,
       secondary: clock
         ? now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
         : "",
@@ -1006,12 +660,6 @@ function initBar(
   // Playhead colours are set on .nm-wave, not :root, so read them from there.
   const mediaVar = (name: string) =>
     getComputedStyle(nmWave).getPropertyValue(name).trim();
-  // Solid glyphs: Lucide's outlines read as hollow at this size.
-  const TRANSPORT_SVG = {
-    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.1-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"/></svg>',
-    pause:
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h3.2v16H7zm6.8 0H17v16h-3.2z"/></svg>',
-  };
 
   // Playhead state. `progress` is the last position Rust published and `t0`
   // when it arrived, so the head advances between the 2s polls. `amp`/`phase`
@@ -1074,10 +722,10 @@ function initBar(
       const len = waveTo - pad;
       // Swell the amplitude over the first stretch, so the squiggle grows out
       // of the left edge.
-      const grow = Math.min(1, len / WAVE.rampPx);
+      const grow = swell(len);
       // Fade it in over a shorter run: round caps paint even a hairline-long
       // stroke as a line-width blob, which would otherwise pop in.
-      const fade = Math.min(1, len / WAVE.fadeInPx);
+      const fade = fadeIn(len);
       const waveY = (x: number) =>
         y + media.amp * grow * Math.sin((2 * Math.PI * x) / WAVE.wavelength + media.phase);
       waveCtx.globalAlpha = fade;
@@ -1102,11 +750,7 @@ function initBar(
   let waveRaf = 0;
   function waveFrame(now: number) {
     waveRaf = 0;
-    const dt = media.last ? Math.min(0.05, (now - media.last) / 1000) : 0;
-    media.last = now;
-    media.amp += ((media.playing ? WAVE.amp : 0) - media.amp) * WAVE.ease;
-    if (!media.playing && media.amp < 0.05) media.amp = 0; // settle, don't wobble
-    if (media.playing) media.phase += WAVE.speed * dt;
+    stepWave(media, now, media.playing, WAVE.amp);
     paintWave();
     // Loop only while something moves: playing, or flattening after a pause.
     if (!niMedia.hidden && (media.playing || media.amp > 0)) {
@@ -1136,7 +780,7 @@ function initBar(
     media.duration = item.duration;
     media.playing = item.active;
     media.t0 = performance.now();
-    nmPlay.innerHTML = item.active ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
+    nmPlay.innerHTML = item.active ? TRANSPORT.pause : TRANSPORT.play;
     startWave();
   }
 
@@ -1147,9 +791,9 @@ function initBar(
     media.progress = playedFraction();
     media.playing = !media.playing;
     media.t0 = performance.now();
-    nmPlay.innerHTML = media.playing ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
+    nmPlay.innerHTML = media.playing ? TRANSPORT.pause : TRANSPORT.play;
     startWave();
-    invoke("media_toggle").catch(() => {});
+    call("media_toggle").catch(() => {});
   });
 
   // Scrubbing: map the pointer through the same inset travel paintWave draws
@@ -1167,7 +811,7 @@ function initBar(
     media.t0 = performance.now();
     // A paused player has no animation loop, so paint by hand.
     paintWave();
-    if (commit) invoke("media_seek", { fraction: media.progress }).catch(() => {});
+    if (commit) call("media_seek", { fraction: media.progress }).catch(() => {});
   }
 
   nmWave.addEventListener("pointerdown", (e) => {
@@ -1251,16 +895,11 @@ function initBar(
     }
 
     const width = shown ? NOTCH.itemW : NOTCH.idleW;
-    if (width === notchCollapsedW) return;
-    notchCollapsedW = width;
-    // While a panel is open the view owns the width; collapse picks the new
-    // value up via `collapsedWidth`. Report rects once the spring settles, not
-    // mid-flight.
-    if (!notchPanel.isOpen()) {
-      animate(notchEl, { width }, SPRING.panelOpen)
-        .finished.then(reportInteractiveRects)
-        .catch(() => {}); // superseded by a newer item; that one reports instead
-    }
+    if (width === notchW) return;
+    notchW = width;
+    animate(notchEl, { width }, SPRING.move)
+      .finished.then(reportInteractiveRects)
+      .catch(() => {});
   }
 
   function pushNotch(item: NotchItem | null) {
@@ -1276,211 +915,145 @@ function initBar(
     // so fade out whichever is visible now and fade in whichever is visible
     // after the render; fading a fixed one would strand the other at opacity 0.
     const outgoing = niMedia.hidden ? notchItem : niMedia;
-    animate(outgoing, { opacity: 0 }, { duration: FADE.out })
+    animate(outgoing, { opacity: 0 }, SPRING.fade)
       .finished.then(() => {
         renderNotch(item);
         const incoming = niMedia.hidden ? notchItem : niMedia;
         if (outgoing !== incoming) outgoing.style.opacity = "1"; // it's hidden now
         incoming.style.opacity = "0"; // start the fade from a known state
-        animate(incoming, { opacity: 1 }, { duration: FADE.in });
+        animate(incoming, { opacity: 1 }, SPRING.fade);
       })
       .catch(() => {});
   }
 
-  listen<NotchItem | null>("notch", (e) => pushNotch(e.payload));
-  invoke<NotchItem | null>("notch_state") // whatever was already winning
+  on("notch", pushNotch);
+  call("notch_state")
     .then((item) => renderNotch(item))
     .catch(() => renderNotch(null));
 
-  // ---- notch views: switching, appearance, wallpaper picker, scheme -------
-  const notchPanelEl = notchEl.querySelector<HTMLElement>(".notch-panel")!;
-  // One element per VIEW key. A new view needs an entry here, a `.view-<name>`
-  // div, a VIEW size and a rail tab.
-  const viewEls: Record<ViewName, HTMLElement> = {
-    default: notchPanelEl.querySelector<HTMLElement>(".view-default")!,
-    theme: notchPanelEl.querySelector<HTMLElement>(".view-theme")!,
-    metrics: notchPanelEl.querySelector<HTMLElement>(".view-metrics")!,
+  const tabBody = notchBody.querySelector<HTMLElement>(".tab-body")!;
+  const railEl = notchBody.querySelector<HTMLElement>(".dash-rail")!;
+  const railTabs = new Map<string, HTMLElement>();
+  const viewEls = new Map<string, HTMLElement>();
+  const handles = new Map<string, ViewHandle>();
+  let shownView: string | null = null;
+
+  function railTab(view: NotchView): HTMLElement {
+    const tab = document.createElement("button");
+    tab.className = "rail-tab";
+    tab.classList.toggle("rail-foot", view.rail === "foot");
+    tab.innerHTML = `<span class="icon">${view.icon}</span>`;
+    tab.title = view.title;
+    tab.dataset.to = view.id;
+    tab.addEventListener("click", (e) => {
+      e.stopPropagation();
+      switchView(view.id);
+    });
+    return tab;
+  }
+  for (const view of views) {
+    const tab = railTab(view);
+    railTabs.set(view.id, tab);
+    railEl.append(tab);
+  }
+
+  const panelStyle = getComputedStyle(notchBody);
+  const px = (...props: string[]) =>
+    props.reduce((sum, p) => sum + parseFloat(panelStyle.getPropertyValue(p)), 0);
+  const notchChrome = {
+    w: px("padding-left", "padding-right", "column-gap") + railEl.offsetWidth,
+    h: px("padding-top", "padding-bottom"),
   };
-  const tabBody = notchPanelEl.querySelector<HTMLElement>(".tab-body")!;
-  const railTabs = [
-    ...notchPanelEl.querySelectorAll<HTMLElement>(".rail-tab[data-to]"),
-  ];
-  const filmstrip = document.querySelector<HTMLElement>("#filmstrip")!;
-  const schemeSelect = document.querySelector<HTMLSelectElement>("#scheme-select")!;
-  let currentView: ViewName = "default";
-  let themeLoaded = false;
 
-  function showView(view: ViewName) {
-    currentView = view;
-    // Pin the body to the view's final width before the pill springs, or fluid
-    // layouts inside (the wallpaper grid's auto-fill) reflow every frame.
-    // .notch-panel-clip crops it while the pill catches up.
-    tabBody.style.width = `${VIEW[view].w - PANEL_CHROME}px`;
-    for (const name of Object.keys(viewEls) as ViewName[]) {
-      viewEls[name].hidden = name !== view;
+  function setAlert(view: NotchView, reason: string | null) {
+    const tab = railTabs.get(view.id)!;
+    let dot = tab.querySelector<HTMLElement>(".rail-dot");
+    if (!dot) {
+      dot = document.createElement("span");
+      dot.className = "rail-dot";
+      tab.append(dot);
     }
-    // The rail survives the view swap, so move its highlight.
-    for (const tab of railTabs) {
-      tab.classList.toggle("active", tab.dataset.to === view);
-    }
-    expandedWindowH = VIEW[view].win;
-    // Sampling follows the view, not the panel: ambxst polls SystemResources
-    // only while its metrics tab is the open one.
-    if (view === "metrics") startMetrics();
-    else stopMetrics();
+    dot.hidden = reason === null;
+    tab.title = reason === null ? view.title : `${view.title} — ${reason}`;
   }
 
-  async function switchView(view: ViewName) {
-    if (currentView === view) return;
+  function mountViews() {
+    if (handles.size > 0) return;
+    for (const view of views) {
+      const el = document.createElement("div");
+      el.className = `view view-${view.id}`;
+      el.hidden = true;
+      tabBody.append(el);
+      viewEls.set(view.id, el);
+      handles.set(view.id, view.mount(el, { setAlert: (reason) => setAlert(view, reason) }));
+    }
+  }
+
+  function showView(view: NotchView) {
+    if (shownView && shownView !== view.id) handles.get(shownView)?.hide?.();
+    shownView = view.id;
+    tabBody.style.width = `${view.size.w}px`;
+    notchBody.style.height = `${view.size.h + notchChrome.h}px`;
+    for (const [id, el] of viewEls) el.hidden = id !== view.id;
+    for (const [id, tab] of railTabs) tab.classList.toggle("active", id === view.id);
+    handles.get(view.id)?.show?.();
+  }
+
+  function switchView(id: string) {
+    const view = views.find((v) => v.id === id);
+    if (!view || shownView === id) return;
     showView(view);
-    animate(notchEl, { width: VIEW[view].w, height: VIEW[view].h }, SPRING.panelOpen);
-    await syncWindowHeight();
-    if (view === "theme") loadThemeView();
+    // From the width on screen: openViews sets it without Motion, which would
+    // otherwise start from the last switch's target and, back on that view,
+    // leave the box at the dashboard's width.
+    animate(
+      notchBox,
+      { width: [notchBox.offsetWidth, view.size.w + notchChrome.w] },
+      SPRING.drawer,
+    );
+    notchDrawer.resize();
   }
 
-  for (const btn of notchPanelEl.querySelectorAll<HTMLElement>(".view-switch")) {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      switchView(btn.dataset.to as ViewName);
-    });
+  function openViews() {
+    mountViews();
+    showView(home);
+    notchBox.style.width = `${home.size.w + notchChrome.w}px`;
+    for (const handle of handles.values()) handle.open?.();
   }
 
-  // Appearance: set_appearance persists the choice, re-resolves colours and
-  // emits "theme". Auto follows the macOS setting (Rust observes it).
-  const themeOpts = [...document.querySelectorAll<HTMLElement>(".theme-opt")];
-  function setActiveMode(mode: string) {
-    for (const b of themeOpts)
-      b.classList.toggle("active", b.dataset.mode === mode);
+  function closeViews() {
+    if (shownView) handles.get(shownView)?.hide?.();
+    shownView = null;
+    releaseKeyboard();
   }
-  setActiveMode(appearance);
-  for (const b of themeOpts) {
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const mode = b.dataset.mode!;
-      setActiveMode(mode);
-      invoke("set_appearance", { mode });
-    });
-  }
-
-  // Ink: the colour drawn on the pills. Auto is Rust's contrast-checked pick;
-  // the swatch opens the system colour picker and pins an ink for the current
-  // light/dark scheme. Both report back through the "theme" event.
-  const inkAuto = document.querySelector<HTMLElement>("#ink-auto")!;
-  const inkCustom = document.querySelector<HTMLElement>("#ink-custom")!;
-  const inkSwatch = inkCustom.querySelector<HTMLElement>(".ink-swatch")!;
-  function renderInk(info: InkInfo, colour: string) {
-    inkColour = colour;
-    const pinned = info.source === "override";
-    inkAuto.classList.toggle("active", !pinned);
-    inkCustom.classList.toggle("active", pinned);
-    inkSwatch.style.background = colour;
-    const ratio = (r: number) => `${r.toFixed(1)}:1`;
-    inkAuto.title = pinned
-      ? "Back to auto (contrast-checked)"
-      : info.source === "contrast"
-        ? `Auto: ${colour}, ${ratio(info.ratio)} on the pill ` +
-          `(the scheme's ${info.configured} was only ${ratio(info.configuredRatio)})`
-        : `Auto: ${colour}, ${ratio(info.ratio)} on the pill`;
-    inkCustom.title = pinned
-      ? `Custom ${info.mode} ink: ${colour}, ${ratio(info.ratio)} on the pill`
-      : `Pick a ${info.mode} ink…`;
-  }
-  if (ink) renderInk(ink, inkColour);
-  inkAuto.addEventListener("click", (e) => {
-    e.stopPropagation();
-    invoke("set_ink", { colour: null });
-  });
-  inkCustom.addEventListener("click", (e) => {
-    e.stopPropagation();
-    invoke<string | null>("pick_colour", { initial: inkColour }).then((colour) => {
-      if (colour) invoke("set_ink", { colour });
-    });
-  });
-
-  // Wallpaper grid: a thumb sets the desktop and re-themes the bar (Rust runs
-  // desktoppr and generate-edgebar-theme).
-  function renderFilmstrip(wallpapers: Wallpaper[], current: string) {
-    filmstrip.replaceChildren();
-    for (const w of wallpapers) {
-      const b = document.createElement("button");
-      b.className = "thumb";
-      b.classList.toggle("active", w.path === current);
-      b.title = w.name;
-      const img = document.createElement("img");
-      img.src = w.thumb;
-      img.alt = w.name;
-      b.appendChild(img);
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        invoke("set_wallpaper", { path: w.path });
-        for (const t of filmstrip.children) t.classList.remove("active");
-        b.classList.add("active");
-      });
-      filmstrip.appendChild(b);
-    }
-  }
-
-  let schemesBuilt = false;
-  function renderSchemes(active: string) {
-    if (!schemesBuilt) {
-      for (const s of SCHEMES) {
-        const o = document.createElement("option");
-        o.value = s;
-        o.textContent = s.replace("scheme-", "").replace(/-/g, " ");
-        schemeSelect.appendChild(o);
-      }
-      schemeSelect.addEventListener("change", (e) => {
-        e.stopPropagation();
-        invoke("set_scheme", { scheme: schemeSelect.value });
-      });
-      schemesBuilt = true;
-    }
-    schemeSelect.value = active;
-  }
-
-  async function loadThemeView() {
-    const [wallpapers, current, cfg] = await Promise.all([
-      invoke<Wallpaper[]>("list_wallpapers"),
-      invoke<string>("current_wallpaper"),
-      invoke<Config>("get_config"),
-    ]);
-    renderFilmstrip(wallpapers, current);
-    renderSchemes(cfg.scheme);
-    setActiveMode(cfg.appearance);
-    renderInk(cfg.ink, cfg.colors.base);
-    themeLoaded = true;
-    // warm the per-wallpaper palette caches so thumbnail clicks are instant
-    invoke("precompute_palettes").catch(() => {});
-  }
-
-  // Browse… → native Finder picker → set + theme the chosen file in place.
-  document
-    .querySelector<HTMLElement>("#browse-btn")!
-    .addEventListener("click", (e) => {
-      e.stopPropagation();
-      invoke<string | null>("pick_wallpaper_file").then((path) => {
-        if (!path) return;
-        invoke("set_wallpaper", { path });
-        for (const t of filmstrip.children) t.classList.remove("active");
-      });
-    });
 
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
-  listen<ThemePayload>("theme", (e) => {
-    applyColors(e.payload.colors);
-    setActiveMode(e.payload.appearance);
-    renderInk(e.payload.ink, e.payload.colors.base);
-    if (themeLoaded && e.payload.scheme) renderSchemes(e.payload.scheme);
-    // Canvas pixels don't follow CSS vars — repaint them by hand.
+  on("theme", (theme) => {
+    applyConfig(theme);
+    for (const handle of handles.values()) handle.theme?.();
     drawCpuGraph();
     paintWave();
+    if (theme.notchIdle !== notchIdle) {
+      notchIdle = theme.notchIdle;
+      if (!notchLive) renderNotch(null);
+    }
   });
 
+  function applyBarSettings() {
+    showCpuSegment(current().segments.cpu);
+    tick({ force: true });
+    reportInteractiveRects();
+  }
+  onChange(applyBarSettings);
+
+  function resetNativeAfterReload() {
+    releaseKeyboard();
+    void syncWindowHeight();
+  }
+
   // ---- init ---------------------------------------------------------------
-  tickMinute(); // start the per-minute clock (updates immediately)
-  animate(pills, { y: LAYOUT.hiddenY, opacity: 0 }, { duration: 0 });
-  requestAnimationFrame(showBar);
-  // Seed the click-through rects once the reveal spring has settled (pill
-  // transforms skew getBoundingClientRect mid-animation).
+  resetNativeAfterReload();
+  applyBarSettings();
+  reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
 }

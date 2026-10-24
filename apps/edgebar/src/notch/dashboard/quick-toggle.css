@@ -1,0 +1,58 @@
+.qt {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-radius var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.qt:hover {
+  background: var(--surface-container-high);
+}
+.qt:active {
+  transform: scale(0.92);
+}
+.qt.on,
+.qt.on:hover {
+  border-radius: 30%;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.qt.unavailable {
+  opacity: var(--dim-more);
+}
+.qt.busy {
+  cursor: progress;
+}
+
+.tg-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-card);
+  background: var(--surface-container-high);
+  box-shadow: var(--shadow-drawer);
+}
+.tg-note-text {
+  font-size: var(--font-sm);
+  line-height: 1.35;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.tg-note-open {
+  height: 26px;
+  padding: 0 var(--space-6);
+}

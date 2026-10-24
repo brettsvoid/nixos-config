@@ -1,0 +1,24 @@
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marquee > span {
+  display: inline-block;
+  white-space: nowrap;
+}
+@keyframes marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  50%,
+  62% {
+    transform: translateX(calc(-1 * var(--marquee-shift)));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+.marquee.scroll > span {
+  animation: marquee var(--marquee-dur) ease-in-out infinite;
+}

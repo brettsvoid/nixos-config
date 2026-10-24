@@ -1,0 +1,27 @@
+.scheme-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.scheme-picker > select {
+  -webkit-appearance: none;
+  appearance: none;
+  height: var(--control-h);
+  padding: 0 calc(var(--space-4) + 20px) 0 var(--space-6);
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.scheme-picker > select:hover {
+  background: var(--surface-container-high);
+}
+.scheme-picker > .icon {
+  position: absolute;
+  right: var(--space-4);
+  pointer-events: none;
+}

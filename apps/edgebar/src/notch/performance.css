@@ -1,0 +1,47 @@
+.view-performance {
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.metric {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-xs);
+}
+.metric .m-icon {
+  font-size: var(--font-lg);
+  opacity: var(--dim-icon);
+}
+.metric .m-label {
+  width: 52px;
+  font-weight: 600;
+}
+.metric .m-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-container-high);
+  overflow: hidden;
+}
+.metric .m-bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width var(--dur-slow) var(--ease-out);
+}
+.metric .m-val {
+  width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

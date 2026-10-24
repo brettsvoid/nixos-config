@@ -1,5 +1,6 @@
 {
   "dark": {
+    "primary": "#89b4fa",
     "rosewater": "#f5e0dc",
     "flamingo": "#f2cdcd",
     "pink": "#f5c2e7",
@@ -28,6 +29,7 @@
     "crust": "#11111b"
   },
   "light": {
+    "primary": "#1e66f5",
     "rosewater": "#dc8a78",
     "flamingo": "#dd7878",
     "pink": "#ea76cb",
