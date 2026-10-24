@@ -1,6 +1,6 @@
 # edgebar: fill the notch, add settings, take the custom shell's look
 
-Status: in progress (2026-10-24)
+Status: done (2026-10-24), in review. The UI units ran one at a time on the live tree, not in worktrees (decisions.tsv, 23:52:48Z).
 
 The ask: fill every placeholder in edgebar's notch with real UI, add a settings view with
 what edgebar needs to be set up, and make the bar look a bit more like the brett-desktop
