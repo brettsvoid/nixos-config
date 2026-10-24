@@ -44,7 +44,7 @@ changes nothing must not be shown.
      action opens the Shortcuts app.
    - Tools found on PATH: `aerospace`, the theme command, the wallpaper command
      (`desktoppr`), the Claude CLI (`assistant.command`), each with the path found.
-2. **Appearance.** Mode (light/dark/auto), scheme, OLED, and the frame's geometry keys the
+2. **Appearance.** Mode (light/dark/auto), scheme, OLED (the top-level `oled` key), and the frame's geometry keys the
    restyle made configurable (thickness, corner radius). Mode and scheme have their own
    stores today (`~/.config/edgebar/appearance`, `scheme`) with commands that scripts also
    use; decisions.tsv records that the settings backend left appearance in two stores.
@@ -62,10 +62,13 @@ changes nothing must not be shown.
    interval for command rules), add and remove. README.md's "The notch" section documents
    the rule shape.
 5. **Wallpapers.** Folder (`wallpaper.folder`, with Browse: add a folder picker command
-   next to `pick_wallpaper_file`), Tint.
+   next to `pick_wallpaper_file`), Tint. The Nix scripts `select-wallpaper.sh` and
+   `cycle-wallpaper.sh` still hardcode `~/Pictures/Wallpapers`; make them read the folder
+   from the effective settings or say why not.
 6. **Calendar.** Week starts on.
 7. **Assistant.** Model (haiku, sonnet, opus), CLI command.
-8. **Quick toggles.** The Focus shortcut's name.
+8. **Quick toggles.** The Focus shortcut's name (`toggles.focusShortcut`; the settings
+   converge doesn't refresh `toggles.rs` yet, so add that).
 9. **About.** The version, where each layer lives (bundled default, the Nix config.json,
    settings.json) and a button that opens settings.json in the default editor.
 

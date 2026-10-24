@@ -3,9 +3,11 @@
 Read `briefs/_ui-common.md` first; its rules apply. Unit name: `ui-views`. You replace
 the ResourceChart placeholder in `src/notch/performance.ts` and the SearchBar, FilterBar,
 OLED and Tint placeholders in `src/notch/wallpapers.ts` (and their CSS). Backends merged:
-`metrics_history`, `CpuStat.mem`; `Wallpaper.folder`/`kind`, settings keys
-`appearance.oled`, `wallpaper.tint`, `wallpaper.folder` (see config.default.json and the
-module docs in lib.rs).
+`metrics_history`, `CpuStat.mem`; `Wallpaper.folder`/`kind`, settings keys `oled`
+(top level: `appearance` is already a string), `wallpaper.tint`, `wallpaper.folder` (see
+config.default.json and `src-tauri/src/wallpapers.rs`). The settings layer's converge step
+doesn't yet react to those three keys: make `set_setting` call `reload_theme` when any of
+them changes (that refreshes OLED and runs the tint converge), and prove it live.
 
 ## ResourceChart (Performance view, above the metric rows)
 
@@ -32,9 +34,11 @@ Re-paint on a `theme` event (canvas colours don't follow CSS).
   per top-level subfolder; multi-select, OR'd together, none selected = all. Inactive
   chips `--surface-container`, active `--primary` with a check that grows in. Hidden when
   there's only one kind and no subfolders.
-- OLED and Tint chips: switches bound to `appearance.oled` and `wallpaper.tint` through
-  settings.ts. OLED is disabled in light mode (it only changes the dark surface). Tint
-  shows a busy state until the new desktop is set (the backend answers when done).
+- OLED and Tint chips: switches bound to `oled` and `wallpaper.tint` through
+  settings.ts. OLED is disabled in light mode (it only changes the dark surface). Picking
+  or toggling with Tint on returns at once and the desktop changes about 2 s later
+  (`current_wallpaper` answers the old original until then), so highlight the clicked
+  thumbnail optimistically and show Tint busy until the desktop changes.
 - The scheme select, ink control and Browse stay; restyle them to match if the restyle
   didn't.
 
