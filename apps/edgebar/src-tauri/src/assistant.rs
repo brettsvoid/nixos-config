@@ -16,16 +16,6 @@ pub struct AssistantConfig {
     pub model: String,
 }
 
-impl Default for AssistantConfig {
-    fn default() -> Self {
-        let bundled: serde_json::Value =
-            serde_json::from_str(include_str!("../config.default.json"))
-                .expect("bundled config.default.json is valid");
-        serde_json::from_value(bundled["assistant"].clone())
-            .expect("bundled config.default.json has an assistant block")
-    }
-}
-
 #[derive(Debug, PartialEq)]
 enum Failure {
     CliMissing(String),
@@ -754,30 +744,6 @@ mod tests {
         assert_eq!(new[model + 1], "haiku");
     }
 
-    #[test]
-    fn config_reads_camel_case_and_the_bundled_block_is_complete() {
-        let config: AssistantConfig =
-            serde_json::from_str(r#"{"command":"/opt/claude","model":"opus"}"#).unwrap();
-        assert_eq!(config.command, "/opt/claude");
-        assert_eq!(config.model, "opus");
-        let bundled = AssistantConfig::default();
-        assert!(!bundled.command.is_empty() && !bundled.model.is_empty());
-    }
-
-    #[test]
-    fn a_config_json_from_before_the_assistant_block_still_loads() {
-        let mut json: serde_json::Value =
-            serde_json::from_str(include_str!("../config.default.json")).unwrap();
-        let bundled = json["assistant"].clone();
-        json.as_object_mut().unwrap().remove("assistant");
-        let config: crate::Config = serde_json::from_value(json).unwrap();
-        assert_eq!(
-            config.assistant.command,
-            bundled["command"].as_str().unwrap()
-        );
-        assert_eq!(config.assistant.model, bundled["model"].as_str().unwrap());
-    }
-
     struct Scratch(PathBuf);
 
     impl Scratch {
@@ -1140,7 +1106,9 @@ printf '%s\n' '{RESULT_OK}'"#
     #[test]
     #[ignore]
     fn live_conversation_remembers_and_survives_a_cancel() {
-        let config = AssistantConfig::default();
+        let config = crate::settings::load(crate::settings::dir().as_deref())
+            .config
+            .assistant;
         let cwd =
             std::env::temp_dir().join(format!("edgebar-assistant-live-{}", std::process::id()));
         let session = uuid::Uuid::new_v4().to_string();

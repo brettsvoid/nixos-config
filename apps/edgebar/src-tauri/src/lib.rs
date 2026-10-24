@@ -38,10 +38,6 @@ enum Appearance {
     Auto,
 }
 
-fn default_appearance() -> Appearance {
-    Appearance::Auto
-}
-
 /// The scheme in effect once `Auto` is resolved against the system; picks the
 /// palette and role map.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,29 +84,20 @@ impl Palettes {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Config {
-    #[serde(default = "default_appearance")]
     appearance: Appearance,
     colors: Themes,
     geometry: Geometry,
     /// Binaries the theme picker shells out to (this and `wallpaper_command`).
     /// Nix injects store paths; when absent (bundled default, dev) a bare name
     /// is resolved on PATH.
-    #[serde(default)]
     theme_command: Option<String>,
-    #[serde(default)]
     wallpaper_command: Option<String>,
     /// Per-workspace notch rules + the idle fallback. See `notch.rs`.
-    #[serde(default)]
     notch: notch::NotchConfig,
-    #[serde(default)]
     toggles: toggles::TogglesConfig,
-    #[serde(default)]
     wallpaper: wallpapers::WallpaperConfig,
-    #[serde(default = "wallpapers::default_oled")]
     oled: bool,
-    #[serde(default)]
     assistant: assistant::AssistantConfig,
-    #[serde(default)]
     notifications: notifications::NotificationsConfig,
 }
 
@@ -265,35 +252,12 @@ struct Colors {
     text: String,
     subtext: String,
     accent: String,
-    /// Battery-state accents. Serde defaults keep an older config.json (rendered
-    /// before these existed) parsing instead of dropping to the bundled default.
-    #[serde(default = "default_battery_charging")]
     battery_charging: String,
-    #[serde(default = "default_battery_low")]
     battery_low: String,
-    #[serde(default = "default_vpn")]
     vpn: String,
     /// The CPU graph's two stacked segments (system load, user load).
-    #[serde(default = "default_cpu_sys")]
     cpu_sys: String,
-    #[serde(default = "default_cpu_user")]
     cpu_user: String,
-}
-
-fn default_battery_charging() -> String {
-    "#40a02b".to_string()
-}
-fn default_battery_low() -> String {
-    "#d20f39".to_string()
-}
-fn default_vpn() -> String {
-    "#179299".to_string()
-}
-fn default_cpu_sys() -> String {
-    "#d20f39".to_string()
-}
-fn default_cpu_user() -> String {
-    "#1e66f5".to_string()
 }
 
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
@@ -302,14 +266,7 @@ struct Geometry {
     bar_height: f64,
     frame_thickness: f64,
     frame_radius: f64,
-    #[serde(default = "default_window_height")]
     window_height: f64,
-}
-
-/// Fallback for configs rendered before `windowHeight` existed, so they still
-/// parse instead of dropping to the bundled default.
-fn default_window_height() -> f64 {
-    64.0
 }
 
 fn load_config() -> Config {

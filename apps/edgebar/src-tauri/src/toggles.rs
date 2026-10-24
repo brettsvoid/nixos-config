@@ -19,7 +19,7 @@ pub const ASSERTIONS: &str = "Library/DoNotDisturb/DB/Assertions.json";
 const MODE_CONFIGURATIONS: &str = "Library/DoNotDisturb/DB/ModeConfigurations.json";
 
 #[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", default)]
+#[serde(rename_all = "camelCase")]
 pub struct TogglesConfig {
     pub focus_shortcut: String,
 }

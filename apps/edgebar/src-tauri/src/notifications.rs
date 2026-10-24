@@ -19,8 +19,7 @@ pub enum Access {
     Off,
 }
 
-#[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
-#[serde(default)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub struct NotificationsConfig {
     pub history: bool,
 }

@@ -15,41 +15,8 @@ const IMAGE_KINDS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "heic"];
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WallpaperConfig {
-    #[serde(default = "default_folder")]
     pub folder: String,
-    #[serde(default = "default_tint")]
     pub tint: bool,
-}
-
-impl Default for WallpaperConfig {
-    fn default() -> Self {
-        Self {
-            folder: default_folder(),
-            tint: default_tint(),
-        }
-    }
-}
-
-fn bundled(pointer: &str) -> Option<serde_json::Value> {
-    let root: serde_json::Value =
-        serde_json::from_str(include_str!("../config.default.json")).ok()?;
-    root.pointer(pointer).cloned()
-}
-
-fn default_folder() -> String {
-    bundled("/wallpaper/folder")
-        .and_then(|v| v.as_str().map(str::to_owned))
-        .unwrap_or_default()
-}
-
-fn default_tint() -> bool {
-    bundled("/wallpaper/tint")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-}
-
-pub fn default_oled() -> bool {
-    bundled("/oled").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 fn expand_home(folder: &str, home: &Path) -> PathBuf {
@@ -516,24 +483,6 @@ mod tests {
         assert_eq!(
             expand_home("~brett/walls", home),
             PathBuf::from("~brett/walls")
-        );
-    }
-
-    #[test]
-    fn an_absent_key_takes_its_default_from_the_bundled_file_and_a_present_one_wins() {
-        let bundled: serde_json::Value =
-            serde_json::from_str(include_str!("../config.default.json")).unwrap();
-        let from = |json: &str| -> serde_json::Value {
-            serde_json::to_value(serde_json::from_str::<WallpaperConfig>(json).unwrap()).unwrap()
-        };
-        assert_eq!(from("{}"), bundled["wallpaper"]);
-        assert_eq!(
-            from(r#"{"folder": "/srv/walls"}"#),
-            serde_json::json!({"folder": "/srv/walls", "tint": bundled["wallpaper"]["tint"]})
-        );
-        assert_eq!(
-            from(r#"{"tint": true}"#),
-            serde_json::json!({"folder": bundled["wallpaper"]["folder"], "tint": true})
         );
     }
 

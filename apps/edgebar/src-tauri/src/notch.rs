@@ -38,11 +38,10 @@ const DEFAULT_TRANSIENT_MS: u64 = 1600;
 
 // ───────────────────────── config ───────────────────────────────────
 
-/// The `notch` block of config.json. Absent means all defaults: the idle
-/// handle, the media readout and no workspace rules.
+/// The `notch` block of the settings.
 // Serialize rides along because the whole `Config` is serializable.
-#[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NotchConfig {
     /// Per-workspace rules keyed by AeroSpace workspace name. `"*"` is the
     /// fallback for any workspace without its own entry.
