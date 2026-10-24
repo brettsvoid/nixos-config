@@ -1,6 +1,3 @@
-// System metrics: the notch's memory, swap and disk rows, the always-on sampler
-// behind the bar's CPU pill, and the history the performance chart plots.
-
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -73,8 +70,6 @@ pub async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let mut sys = state.sys.lock().unwrap();
-        // Lock order: AppState.sys then MetricsState. The sampler thread never takes
-        // AppState.sys, so the two can't invert on each other.
         let cpu = cpu_percent(&app, &mut sys);
         sample_metrics(&mut sys, cpu)
     })
@@ -82,21 +77,8 @@ pub async fn metrics_sample(app: tauri::AppHandle) -> Metrics {
     .unwrap_or_default()
 }
 
-// ───────────────────────── sampler and history ──────────────────────────
-// Always on, unlike the metrics view: the bar's CPU pill draws a rolling CPU
-// history and the performance chart plots CPU and RAM over ten minutes. One
-// tick of one sampler feeds both. Ported from the sketchybar mach helper: the
-// same system/user split from `host_statistics(HOST_CPU_LOAD_INFO)` and the same
-// top-process readout.
-
-/// Sampling period, matching the notch metrics' cadence. The bar's graph spans
-/// CPU_HISTORY × SAMPLE_PERIOD, the performance chart HISTORY_LEN × SAMPLE_PERIOD.
 const SAMPLE_PERIOD: Duration = Duration::from_secs(2);
-/// Columns of the bar's CPU graph, one entry each, each 1px wide. Must match
-/// CPU_GRAPH.samples in main.ts, which is in turn pinned to the graph's pixel
-/// width so columns land on whole pixels.
 const CPU_HISTORY: usize = 108;
-/// Ticks kept for the performance chart: ten minutes at SAMPLE_PERIOD.
 const HISTORY_LEN: usize = 300;
 /// Ticks between top-process lookups. A tick's `host_statistics` read is ~11µs,
 /// but naming the hungriest process walks every PID (~13ms with 600
@@ -113,7 +95,6 @@ pub struct CpuSample {
 
 /// The pill's current readout. `top_proc_pct` is percent of a single core (so it
 /// can exceed 100 on a threaded process) — the same convention `ps pcpu` used.
-/// `mem` is the used fraction of RAM (0..1) read with the same tick.
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CpuStat {
@@ -127,9 +108,6 @@ pub struct CpuStat {
     top_pid: u32,
 }
 
-/// Seed for a bar that just loaded: the graph's columns plus the latest
-/// readout. Bars are rebuilt on every display change, and without this a new
-/// one would start with an empty graph.
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CpuSnapshot {
@@ -137,27 +115,20 @@ pub struct CpuSnapshot {
     latest: CpuStat,
 }
 
-/// The performance chart's series, oldest first, one entry per tick.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricsHistory {
     interval_ms: u64,
     cpu: Vec<CpuSample>,
-    /// Used fraction of RAM, 0..1: the same figure as `Metrics`' `mem_used` over
-    /// `mem_total`.
     mem: Vec<f32>,
 }
 
-/// One tick as the chart plots it: the CPU split and the RAM fraction read
-/// together.
 #[derive(Clone, Copy, Default)]
 struct Point {
     cpu: CpuSample,
     mem: f32,
 }
 
-/// The last HISTORY_LEN ticks, newest last. The bar's graph reads the
-/// CPU_HISTORY newest, the chart reads all of them.
 #[derive(Default)]
 struct History(VecDeque<Point>);
 
@@ -207,14 +178,11 @@ pub fn cpu_state(app: tauri::AppHandle) -> CpuSnapshot {
     app.state::<MetricsState>().snapshot()
 }
 
-/// The chart's seed. Live points arrive on the `cpu` event, which carries `mem`.
 #[tauri::command]
 pub fn metrics_history(app: tauri::AppHandle) -> MetricsHistory {
     app.state::<MetricsState>().history.lock().unwrap().series()
 }
 
-/// Used RAM over total, 0..1. A failed total read (0) gives 0 rather than NaN,
-/// which JSON would turn into null.
 fn mem_fraction(used: u64, total: u64) -> f32 {
     if total == 0 {
         return 0.0;
@@ -248,7 +216,6 @@ fn trim_proc_name(name: &str) -> &str {
     name.strip_prefix("com.apple.").unwrap_or(name)
 }
 
-/// What one sampler thread carries between ticks.
 #[cfg(target_os = "macos")]
 struct Sampler {
     host: libc::host_t,
@@ -258,8 +225,6 @@ struct Sampler {
     sys: sysinfo::System,
     proc_cpu: sysinfo::ProcessRefreshKind,
     prev: Option<[u32; libc::CPU_STATE_MAX as usize]>,
-    /// Last known hungriest process (name, percent, pid), carried across the
-    /// ticks that skip the walk so every emitted stat still names one.
     top: (String, f32, u32),
     tick: u32,
 }
@@ -288,8 +253,6 @@ impl Sampler {
         }
     }
 
-    /// Used fraction of RAM now. Reads RAM only (no swap sysctl) but through the
-    /// same sysinfo fields as `sample_metrics`, so the chart and the rows agree.
     fn read_mem(&mut self) -> f32 {
         use sysinfo::MemoryRefreshKind;
 
@@ -298,9 +261,6 @@ impl Sampler {
         mem_fraction(self.sys.used_memory(), self.sys.total_memory())
     }
 
-    /// One tick: the CPU split since the previous call, RAM now, and the pill's
-    /// readout. `None` when there is nothing to plot (a failed read, the first
-    /// call, or no elapsed ticks).
     fn step(&mut self) -> Option<(Point, CpuStat)> {
         use sysinfo::ProcessesToUpdate;
 
@@ -364,10 +324,6 @@ impl Sampler {
     }
 }
 
-/// Manages the state, then starts the sampler on its own thread. Call it before
-/// the bar windows are built, so `cpu_state` and `metrics_history` can answer a
-/// bar that asks before the first tick. A display-config rebuild replaces the
-/// bar windows but leaves the sampler and its history untouched.
 pub fn install(app: tauri::AppHandle) {
     app.manage(MetricsState::default());
 
@@ -510,7 +466,6 @@ mod tests {
         );
     }
 
-    /// Microseconds per call over `n` calls: (min, median, p99).
     #[cfg(target_os = "macos")]
     fn time_us(n: usize, mut f: impl FnMut()) -> (f64, f64, f64) {
         let mut us: Vec<f64> = (0..n)
@@ -524,8 +479,6 @@ mod tests {
         (us[0], us[n / 2], us[n * 99 / 100])
     }
 
-    /// Runs the real sampler against this Mac: `cargo test metrics -- --ignored
-    /// --nocapture`.
     #[cfg(target_os = "macos")]
     #[test]
     #[ignore = "reads the live machine"]
@@ -572,7 +525,6 @@ mod tests {
         assert!(series.mem.iter().all(|m| *m > 0.0 && *m < 1.0));
         assert_eq!(series.cpu.len(), 12);
 
-        // The chart's figure against the rows' figure, read back to back.
         let chart = sampler.read_mem();
         let rows = sample_metrics(&mut sysinfo::System::new(), 0.0);
         let rows_frac = rows.mem_used as f64 / rows.mem_total as f64;
@@ -582,7 +534,6 @@ mod tests {
         );
         assert!((chart as f64 - rows_frac).abs() < 0.02);
 
-        // What the memory read adds to a tick.
         let (lo, med, p99) = time_us(2000, || {
             sampler.read_mem();
         });

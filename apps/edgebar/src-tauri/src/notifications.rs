@@ -1,19 +1,3 @@
-//! Notification history for the dashboard.
-//!
-//! macOS keeps delivered notifications in a SQLite store inside the
-//! `group.com.apple.usernoted` group container. Reading it needs Full Disk
-//! Access, and writing it is out of bounds, so every read works on a private
-//! copy of the store (`db`, `db-wal`, `db-shm`, copied together so the WAL is
-//! consistent with the main file) opened read-only, and the copy is deleted
-//! afterwards.
-//!
-//! "Dismiss" and "clear" therefore cannot remove anything from macOS. They
-//! record what the user hid in `~/.cache/edgebar/notifications-hidden.json`,
-//! which every read applies.
-//!
-//! Reading is opt-in: while `notifications.history` is false (the bundled
-//! default), `notification_history` answers `off` without touching the store.
-
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::io::{self, Cursor};
@@ -22,32 +6,22 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Newest entries the dashboard gets, after hiding.
 const MAX_ITEMS: usize = 100;
-/// How far back the history reaches.
 const WINDOW_SECS: f64 = 7.0 * 24.0 * 3600.0;
-/// Seconds between the Unix epoch and Cocoa's (2001-01-01), the epoch of the
-/// store's `delivered_date`.
 const COCOA_EPOCH_UNIX: f64 = 978_307_200.0;
 
-// ───────────────────────── the wire shape (ipc.ts) ──────────────────
-
-/// Access to the store, as ipc.ts spells it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Access {
     Granted,
     Denied,
     Unavailable,
-    /// `notifications.history` is off, so the store was not opened.
     Off,
 }
 
-/// The `notifications` block of config.json.
 #[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct NotificationsConfig {
-    /// Whether edgebar may read macOS's notification store at all.
     pub history: bool,
 }
 
@@ -68,33 +42,23 @@ pub struct NotificationHistory {
     items: Vec<NotificationEntry>,
 }
 
-// ───────────────────────── the domain ───────────────────────────────
-
-/// One delivered notification, as read from a record.
 #[derive(Clone, Debug, PartialEq)]
 struct Record {
-    /// The row's id in the store. Stable for as long as the row exists, which
-    /// is all a hidden entry needs.
     id: String,
     bundle_id: String,
     title: String,
     subtitle: String,
     body: String,
-    /// Delivery time, seconds since the Unix epoch.
     unix_secs: f64,
 }
 
-/// A row of the store before its plist is opened.
 struct RawRow {
     id: i64,
     bundle_id: Option<String>,
     data: Option<Vec<u8>>,
-    /// Seconds since the Cocoa epoch.
     delivered: f64,
 }
 
-/// What the user hid. `cleared_before` hides everything delivered up to that
-/// time; `ids` hides single entries delivered after it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct Hidden {
@@ -108,10 +72,6 @@ impl Hidden {
     }
 }
 
-/// Open a record's plist. The notification lives under `req` (`titl`, `subt`,
-/// `body`). The bundle id normally comes from the store's `app` table; the
-/// plist's own `app` key stands in when that join found nothing. A blob that is
-/// not a plist, or has no `req`, is skipped.
 fn parse_row(row: RawRow) -> Option<Record> {
     let value = plist::Value::from_reader(Cursor::new(row.data?)).ok()?;
     let root = value.as_dictionary()?;
@@ -137,7 +97,6 @@ fn parse_row(row: RawRow) -> Option<Record> {
     })
 }
 
-/// The entries to show: inside the window, not hidden, newest first, capped.
 fn select(mut records: Vec<Record>, hidden: &Hidden, now: f64) -> Vec<Record> {
     records.retain(|r| r.unix_secs >= now - WINDOW_SECS && !hidden.hides(r));
     records.sort_by(|a, b| b.unix_secs.total_cmp(&a.unix_secs));
@@ -145,7 +104,6 @@ fn select(mut records: Vec<Record>, hidden: &Hidden, now: f64) -> Vec<Record> {
     records
 }
 
-/// RFC 3339 in UTC, to the whole second.
 fn iso_utc(unix_secs: f64) -> String {
     let whole = Duration::from_secs(unix_secs.max(0.0).floor() as u64);
     plist::Date::from(UNIX_EPOCH + whole).to_xml_format()
@@ -157,8 +115,6 @@ fn now_unix() -> f64 {
         .map_or(0.0, |d| d.as_secs_f64())
 }
 
-/// The last dot-separated part of a bundle id, for an app that is no longer
-/// installed: `com.example.Chat` shows as "Chat".
 fn name_from_bundle_id(bundle_id: &str) -> String {
     bundle_id
         .rsplit('.')
@@ -168,9 +124,6 @@ fn name_from_bundle_id(bundle_id: &str) -> String {
         .to_string()
 }
 
-// ───────────────────────── reading the store ────────────────────────
-
-/// The store's directory.
 pub fn store_dir() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
     Some(Path::new(&home).join("Library/Group Containers/group.com.apple.usernoted/db2"))
@@ -183,14 +136,11 @@ fn access_for(e: &io::Error) -> Access {
     }
 }
 
-/// A private, owner-only copy of the store, removed on drop.
 struct Snapshot {
     dir: PathBuf,
 }
 
 impl Snapshot {
-    /// Copy `db`, then its `-wal` and `-shm` if they exist. A missing `db` is
-    /// "unavailable"; any permission refusal is "denied".
     fn take(src: &Path) -> Result<Snapshot, Access> {
         use std::os::unix::fs::DirBuilderExt;
         static SEQ: AtomicU64 = AtomicU64::new(0);
@@ -225,8 +175,6 @@ impl Drop for Snapshot {
     }
 }
 
-/// Tables and their columns, no rows: what to print when the store's layout is
-/// not the one this module reads.
 fn schema_summary(conn: &rusqlite::Connection) -> String {
     let tables = conn
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
@@ -251,10 +199,8 @@ fn schema_summary(conn: &rusqlite::Connection) -> String {
         .join(" ")
 }
 
-/// What one read of the store produced.
 struct Read {
     records: Vec<Record>,
-    /// Rows in the window whose plist could not be opened.
     unparsed: usize,
 }
 
@@ -276,8 +222,6 @@ fn query_rows(conn: &rusqlite::Connection, since_cocoa: f64) -> rusqlite::Result
     rows.collect()
 }
 
-/// Read every record delivered in the last `WINDOW_SECS` from a copy of the
-/// store in `src`.
 fn read_records(src: &Path, now: f64) -> Result<Read, Access> {
     use rusqlite::{Connection, OpenFlags};
 
@@ -306,9 +250,6 @@ fn read_records(src: &Path, now: f64) -> Result<Read, Access> {
     })
 }
 
-// ───────────────────────── what was hidden ──────────────────────────
-
-/// Serialises read-modify-write of the hidden file across command threads.
 static HIDDEN_LOCK: Mutex<()> = Mutex::new(());
 
 fn hidden_path() -> Option<PathBuf> {
@@ -316,7 +257,6 @@ fn hidden_path() -> Option<PathBuf> {
     Some(Path::new(&home).join(".cache/edgebar/notifications-hidden.json"))
 }
 
-/// A missing or unreadable file hides nothing.
 fn load_hidden(path: &Path) -> Hidden {
     std::fs::read(path)
         .ok()
@@ -324,8 +264,6 @@ fn load_hidden(path: &Path) -> Hidden {
         .unwrap_or_default()
 }
 
-/// Write to a sibling file and rename it over `path`, so a reader never sees a
-/// half-written file.
 fn save_hidden(path: &Path, hidden: &Hidden) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -348,8 +286,6 @@ fn dismiss_in(path: &Path, ids: Vec<String>) {
     update_hidden(path, |h| h.ids.extend(ids));
 }
 
-/// Everything delivered up to `now` is hidden, so the single ids are no longer
-/// needed.
 fn clear_in(path: &Path, now: f64) {
     update_hidden(path, |h| {
         h.ids.clear();
@@ -357,9 +293,6 @@ fn clear_in(path: &Path, now: f64) {
     });
 }
 
-// ───────────────────────── app names and icons ──────────────────────
-
-/// The path of the installed app with this bundle id.
 #[cfg(target_os = "macos")]
 fn app_path(bundle_id: &str) -> Option<objc2::rc::Retained<objc2_foundation::NSString>> {
     use objc2_app_kit::NSWorkspace;
@@ -370,7 +303,6 @@ fn app_path(bundle_id: &str) -> Option<objc2::rc::Retained<objc2_foundation::NSS
     url.path()
 }
 
-/// The installed app's name: its bundle's file name without `.app`.
 #[cfg(target_os = "macos")]
 fn installed_app_name(bundle_id: &str) -> Option<String> {
     let path = app_path(bundle_id)?.to_string();
@@ -384,8 +316,6 @@ fn installed_app_name(_bundle_id: &str) -> Option<String> {
     None
 }
 
-/// The installed app's icon as a PNG data URL, installed or not running (the
-/// workspace dots only know running apps). Main thread.
 #[cfg(target_os = "macos")]
 fn installed_app_icon(bundle_id: &str) -> Option<String> {
     use objc2_app_kit::NSWorkspace;
@@ -395,9 +325,6 @@ fn installed_app_icon(bundle_id: &str) -> Option<String> {
     crate::icon_png_data_url(&image)
 }
 
-/// Icons for these bundle ids, through the same cache as the workspace dots.
-/// One hop to the main thread for all the misses; an app with no icon is not
-/// cached, so the dots can still fill it in once the app runs.
 #[cfg(target_os = "macos")]
 fn icons_for(app: &tauri::AppHandle, bundle_ids: &BTreeSet<String>) -> HashMap<String, String> {
     use tauri::Manager;
@@ -445,8 +372,6 @@ fn icons_for(app: &tauri::AppHandle, bundle_ids: &BTreeSet<String>) -> HashMap<S
 fn icons_for(_app: &tauri::AppHandle, _bundle_ids: &BTreeSet<String>) -> HashMap<String, String> {
     HashMap::new()
 }
-
-// ───────────────────────── commands ─────────────────────────────────
 
 fn history(app: &tauri::AppHandle) -> NotificationHistory {
     let denied = |access| NotificationHistory {
@@ -498,7 +423,6 @@ fn history(app: &tauri::AppHandle) -> NotificationHistory {
     }
 }
 
-/// Reads and copies a file, so it runs off the main thread.
 #[tauri::command]
 pub async fn notification_history(app: tauri::AppHandle) -> NotificationHistory {
     tauri::async_runtime::spawn_blocking(move || {
@@ -528,8 +452,6 @@ pub async fn notification_clear() {
     let Some(path) = hidden_path() else { return };
     let _ = tauri::async_runtime::spawn_blocking(move || clear_in(&path, now_unix())).await;
 }
-
-// ───────────────────────── tests ────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -733,8 +655,6 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
-    /// A store in WAL mode with the writer still open, so the rows sit in
-    /// `db-wal` and not in `db`: the state the real store is in while macOS runs.
     fn fake_store(dir: &Path, now: f64) -> Connection {
         let conn = Connection::open(dir.join("db")).unwrap();
         conn.pragma_update(None, "journal_mode", "WAL").unwrap();
@@ -879,9 +799,6 @@ mod tests {
         assert_eq!(installed_app_name("com.example.not.installed"), None);
     }
 
-    /// The real store on this Mac. Prints counts and which fields parsed, never
-    /// a notification's text. Run with:
-    /// `cargo test notifications -- --ignored --nocapture`
     #[test]
     #[ignore = "reads the real notification store (needs Full Disk Access)"]
     fn live_store_summary() {

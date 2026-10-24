@@ -1,12 +1,3 @@
-//! The Settings view's Setup checklist: what edgebar needs from this Mac to
-//! work fully. Each thing is one row of `CHECKS`, a probe that reports its
-//! state together with the one action that can move it on: a System Settings
-//! pane, the Shortcuts app, or a harmless AppleScript read that makes macOS ask
-//! for Automation. A probe never asks for anything; only an action does.
-//!
-//! edgebar runs under herdr, which tccd attributes to kitty, so every
-//! permission here is kitty's (see toggles.rs).
-
 use crate::toggles::{self, BluetoothPermission, Toggles};
 use crate::{SettingsPane, ThemeState};
 use serde::Serialize;
@@ -20,22 +11,18 @@ use tauri::{AppHandle, Manager};
 pub enum State {
     Ready,
     Missing,
-    /// edgebar can't tell without asking, or hasn't asked yet.
     Unknown,
 }
 
-/// One row as the WebView sees it (`SetupItem` in ipc.ts).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct SetupItem {
     id: &'static str,
     label: &'static str,
     state: State,
     detail: String,
-    /// The action button's label; None when edgebar can do nothing about it.
     action: Option<&'static str>,
 }
 
-/// The two players edgebar reads over AppleScript (notch.rs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Player {
     Spotify,
@@ -58,11 +45,9 @@ impl Player {
     }
 }
 
-/// What can move a check on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
     Open(SettingsPane),
-    /// One harmless read of the player, so macOS asks for Automation.
     Ask(Player),
 }
 
@@ -189,7 +174,6 @@ const CHECKS: [Check; 9] = [
     },
 ];
 
-/// Managed state: what each player's Automation ask found, by `Player`.
 #[derive(Default)]
 pub struct Setup {
     asked: Mutex<[Option<State>; 2]>,
@@ -219,8 +203,6 @@ pub async fn setup_status(app: AppHandle) -> Vec<SetupItem> {
         .unwrap_or_default()
 }
 
-/// Run the action check `id` offers right now, then probe everything again.
-/// Blocks while macOS shows an Automation prompt, hence `spawn_blocking`.
 #[tauri::command]
 pub async fn setup_run(app: AppHandle, id: String) -> Result<Vec<SetupItem>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -238,17 +220,13 @@ pub async fn setup_run(app: AppHandle, id: String) -> Result<Vec<SetupItem>, Str
     .map_err(|e| e.to_string())?
 }
 
-// ───────────────────────── Full Disk Access ─────────────────────────
-
 const INHERITED: &str = "edgebar has the permissions of the app that started it \
 (kitty today, through herdr), so the grant goes to that app.";
 
-/// What opening one protected file showed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Opened {
     Yes,
     Refused,
-    /// Missing or unreadable for some other reason: no evidence either way.
     Untested,
 }
 
@@ -260,9 +238,6 @@ fn try_open(path: &Path) -> Opened {
     }
 }
 
-/// Judged by opening, never reading, the Focus file and macOS's notification
-/// store. The store is opened only while `notifications.history` is on: off
-/// means edgebar never touches it.
 fn full_disk_access(_: &AppHandle) -> Status {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
         return Status::new(State::Unknown, "HOME is not set", None);
@@ -307,8 +282,6 @@ fn full_disk_access(_: &AppHandle) -> Status {
     }
 }
 
-// ───────────────────────── Bluetooth ────────────────────────────────
-
 fn bluetooth(_: &AppHandle) -> Status {
     let pane = Some(Action::Open(SettingsPane::PrivacyBluetooth));
     match toggles::bluetooth_permission() {
@@ -336,8 +309,6 @@ fn bluetooth(_: &AppHandle) -> Status {
     }
 }
 
-// ───────────────────────── Automation ───────────────────────────────
-
 #[cfg(target_os = "macos")]
 fn installed(player: Player) -> bool {
     use objc2_app_kit::NSWorkspace;
@@ -352,9 +323,6 @@ fn installed(_: Player) -> bool {
     false
 }
 
-/// Unknown until asked: telling without asking needs an AppleEvents call that
-/// blocks for an unbundled process like the dev build (measured: it never
-/// returned for a running Spotify). The answer of the last ask is kept.
 fn automation(app: &AppHandle, player: Player) -> Status {
     let name = player.name();
     if !installed(player) {
@@ -379,7 +347,6 @@ fn automation(app: &AppHandle, player: Player) -> Status {
     }
 }
 
-/// The read is guarded by `is running`, so it never starts the player.
 fn ask(app: &AppHandle, player: Player) -> Result<(), String> {
     let name = player.name();
     let script = format!(
@@ -400,7 +367,6 @@ fn ask(app: &AppHandle, player: Player) -> Result<(), String> {
     } else if out.status.success() {
         return Err(format!("{name} isn't running. Start it, then ask again."));
     } else if stderr.contains("-1743") {
-        // errAEEventNotPermitted: the user, or an earlier answer, refused.
         State::Missing
     } else {
         return Err(format!("{name} didn't answer: {stderr}"));
@@ -408,8 +374,6 @@ fn ask(app: &AppHandle, player: Player) -> Result<(), String> {
     app.state::<Setup>().asked.lock().unwrap()[player as usize] = Some(state);
     Ok(())
 }
-
-// ───────────────────────── the Focus Shortcut ───────────────────────
 
 fn focus_shortcut(app: &AppHandle) -> Status {
     let toggles = app.state::<Toggles>();
@@ -440,10 +404,6 @@ fn focus_shortcut(app: &AppHandle) -> Status {
     }
 }
 
-// ───────────────────────── tools ────────────────────────────────────
-
-/// Found the way edgebar runs it: a path as it is, a bare name on PATH (and in
-/// `~/.local/bin` when `local_bin`, as the Assistant looks for the CLI).
 fn tool(command: &str, local_bin: bool, missing: &str) -> Status {
     let path = std::env::var_os("PATH");
     let home = local_bin

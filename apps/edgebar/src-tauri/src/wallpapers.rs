@@ -1,20 +1,3 @@
-//! The wallpaper folder, the OLED palette and Tint.
-//!
-//! Tint repaints the desktop picture in the theme's own colours, after
-//! ambxst's `palette.frag`: each pixel is replaced by the average of the
-//! palette colours weighted `exp(-K * distance^2)`, a soft snap to the nearest
-//! colour. The palette comes from the ORIGINAL picture (matugen, as before);
-//! the tinted copy only ever lands on the desktop. So the app has to tell the
-//! two apart:
-//!
-//!   * a tinted copy sits in `~/.cache/edgebar/tinted/` beside a `.src` sidecar
-//!     naming its original, and `original_of` undoes the swap wherever
-//!     something asks "which wallpaper is this?";
-//!   * `converge` is the one place that touches the desktop. It looks at what
-//!     is on screen, works out what should be, and changes it only if they
-//!     differ, so every trigger (a pick, a scheme or OLED change, the launchd
-//!     watcher firing on our own change) can run it again harmlessly.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -23,28 +6,17 @@ use std::sync::Mutex;
 
 pub type Rgb = [u8; 3];
 
-/// How sharply a pixel sticks to its nearest palette colour. ambxst uses 20 over
-/// about 26 colours; this palette is a handful plus a neutral ramp, so the
-/// same value gives the same posterised-but-smooth look.
 const SHARPNESS: f32 = 20.0;
 
-/// Bumped when the tint's look changes, so cached copies are rebuilt.
 const TINT_VERSION: u8 = 1;
 
-/// Picture types the wallpapers view lists. Tint decodes all but HEIC.
 const IMAGE_KINDS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "heic"];
 
-// ───────────────────────── config ───────────────────────────────────
-
-/// The `wallpaper` block of config.json. Defaults live in
-/// config.default.json only; an absent key reads them from there.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WallpaperConfig {
-    /// Where the pictures are, `~` allowed. Subfolders one level down are listed too.
     #[serde(default = "default_folder")]
     pub folder: String,
-    /// Repaint the desktop picture in the theme's colours.
     #[serde(default = "default_tint")]
     pub tint: bool,
 }
@@ -58,8 +30,6 @@ impl Default for WallpaperConfig {
     }
 }
 
-/// A value from the bundled config.default.json, by JSON pointer. Read as raw
-/// JSON, not through `Config`, so a missing key can't recurse into a default.
 fn bundled(pointer: &str) -> Option<serde_json::Value> {
     let root: serde_json::Value =
         serde_json::from_str(include_str!("../config.default.json")).ok()?;
@@ -82,7 +52,6 @@ pub fn default_oled() -> bool {
     bundled("/oled").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
-/// `~` and `~/x` against `home`; anything else is taken as it is.
 fn expand_home(folder: &str, home: &Path) -> PathBuf {
     match folder.strip_prefix('~') {
         Some("") => home.to_path_buf(),
@@ -91,27 +60,19 @@ fn expand_home(folder: &str, home: &Path) -> PathBuf {
     }
 }
 
-/// The configured wallpaper folder, read fresh so a settings change shows on
-/// the next listing.
 pub fn folder() -> Option<PathBuf> {
     let home = PathBuf::from(std::env::var_os("HOME")?);
     Some(expand_home(&super::load_config().wallpaper.folder, &home))
 }
 
-/// Whether `wallpaper.tint` is on, read fresh like `folder`.
 pub fn tint_on() -> bool {
     super::load_config().wallpaper.tint
 }
 
-// ───────────────────────── the folder ───────────────────────────────
-
-/// One picture found under the wallpaper folder.
 pub struct Found {
     pub path: PathBuf,
     pub name: String,
-    /// The top-level subfolder it sits in, "" at the folder's root.
     pub folder: String,
-    /// Lower-case file extension.
     pub kind: String,
 }
 
@@ -126,8 +87,6 @@ fn is_hidden(path: &Path) -> bool {
         .is_none_or(|n| n.starts_with('.'))
 }
 
-/// The pictures in `root` and one level of subfolders, root first, then by
-/// subfolder and name. Anything unreadable is skipped.
 pub fn scan(root: &Path) -> Vec<Found> {
     let mut found = Vec::new();
     let mut collect = |dir: &Path, folder: &str| {
@@ -168,10 +127,6 @@ pub fn scan(root: &Path) -> Vec<Found> {
     found
 }
 
-// ───────────────────────── OLED ─────────────────────────────────────
-
-/// The dark palette with its surface (`base`) pure black. Roles resolve from
-/// the palette afterwards, so everything built on the surface follows.
 pub fn blacken_base(palette: &HashMap<String, String>) -> HashMap<String, String> {
     let mut out = palette.clone();
     if let Some(base) = out.get_mut("base") {
@@ -179,8 +134,6 @@ pub fn blacken_base(palette: &HashMap<String, String>) -> HashMap<String, String
     }
     out
 }
-
-// ───────────────────────── the tint ─────────────────────────────────
 
 fn parse_hex(hex: &str) -> Option<Rgb> {
     let h = hex.trim().strip_prefix('#')?;
@@ -195,10 +148,6 @@ fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
     std::array::from_fn(|i| (a[i] as f32 + (b[i] as f32 - a[i] as f32) * t).round() as u8)
 }
 
-/// The colours a picture is repainted with: the palette's own, plus a ramp from
-/// its surface to its text colour so the picture keeps its light and dark. The
-/// palette alone is about six colours, mostly accents, and would flatten every
-/// mid-tone into one of them.
 pub fn tint_colours(palette: &HashMap<String, String>) -> Vec<Rgb> {
     let mut colours: Vec<Rgb> = palette.values().filter_map(|v| parse_hex(v)).collect();
     if let (Some(base), Some(text)) = (
@@ -212,9 +161,6 @@ pub fn tint_colours(palette: &HashMap<String, String>) -> Vec<Rgb> {
     colours
 }
 
-/// Replace every pixel of an RGB8 buffer by the palette-weighted average of
-/// `colours`. Split across the machine's cores: at 2880 px wide it is
-/// millions of pixels times a dozen `exp` calls.
 pub fn tint_rgb(buf: &mut [u8], colours: &[Rgb], sharpness: f32) {
     if colours.is_empty() {
         return;
@@ -245,8 +191,6 @@ pub fn tint_rgb(buf: &mut [u8], colours: &[Rgb], sharpness: f32) {
                         sum[2] += p[2] * w;
                         total += w;
                     }
-                    // The exp underflows to 0 for every colour on a pixel far from the
-                    // whole palette; keep the pixel rather than divide by nothing.
                     if total > 1e-12 {
                         for i in 0..3 {
                             px[i] = (sum[i] / total * 255.0).round().clamp(0.0, 255.0) as u8;
@@ -258,9 +202,6 @@ pub fn tint_rgb(buf: &mut [u8], colours: &[Rgb], sharpness: f32) {
     });
 }
 
-/// The size to render a picture at: just enough to cover the largest screen,
-/// and never an upscale. A 6400 px source needs no more pixels than the panel
-/// has, and the tint's cost is per pixel.
 fn cover_size(src: (u32, u32), screen: (u32, u32)) -> (u32, u32) {
     let scale = (screen.0 as f64 / src.0 as f64).max(screen.1 as f64 / src.1 as f64);
     if scale >= 1.0 {
@@ -272,8 +213,8 @@ fn cover_size(src: (u32, u32), screen: (u32, u32)) -> (u32, u32) {
     )
 }
 
-/// 64-bit FNV-1a, stable across runs and Rust versions (unlike `DefaultHasher`),
-/// so a copy made last session is found again.
+/// Stable across runs and Rust versions, unlike `DefaultHasher`, so a copy made
+/// last session is found again.
 fn fnv1a(parts: &[&[u8]]) -> u64 {
     let mut hash = 0xcbf29ce484222325u64;
     for part in parts {
@@ -281,17 +222,12 @@ fn fnv1a(parts: &[&[u8]]) -> u64 {
             hash ^= *byte as u64;
             hash = hash.wrapping_mul(0x100000001b3);
         }
-        hash ^= 0xff; // keep ("ab", "c") apart from ("a", "bc")
+        hash ^= 0xff;
         hash = hash.wrapping_mul(0x100000001b3);
     }
     hash
 }
 
-/// A name that changes with everything that changes the result: the picture
-/// (path, mtime, size), the palette, the screen it is sized for and the
-/// algorithm. macOS keeps a wallpaper it has already loaded for a path, so a
-/// repainted copy must never reuse a name. It also means a copy already on disk
-/// is found without decoding the picture again.
 fn tinted_name(
     original: &Path,
     mtime: u64,
@@ -322,8 +258,6 @@ fn sidecar(tinted: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// What a desktop picture really is: the original of a tinted copy in `dir`,
-/// else the picture itself.
 fn original_in(dir: &Path, picture: &str) -> String {
     let path = Path::new(picture);
     if path.parent() == Some(dir) {
@@ -337,9 +271,6 @@ fn original_in(dir: &Path, picture: &str) -> String {
     picture.to_string()
 }
 
-/// `picture` with a tinted copy mapped back to its original. Everything that
-/// asks which wallpaper is current (the grid's highlight, the matugen run for
-/// a new scheme) goes through this, so none of them sees the tinted copy.
 pub fn original_of(picture: &str) -> String {
     match tinted_dir() {
         Some(dir) => original_in(&dir, picture),
@@ -347,7 +278,6 @@ pub fn original_of(picture: &str) -> String {
     }
 }
 
-/// Delete everything in `dir` except `keep` and its sidecar.
 fn prune(dir: &Path, keep: Option<&Path>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -374,9 +304,6 @@ fn mtime_secs(path: &Path) -> (u64, u64) {
     (secs, meta.len())
 }
 
-/// Write the tinted copy of `original` into `dir` and return its path. A copy
-/// already there for this picture and palette is reused. `Err` says why the
-/// picture can't be tinted.
 fn ensure_tinted(
     dir: &Path,
     original: &Path,
@@ -427,11 +354,6 @@ fn ensure_tinted(
     Ok(target)
 }
 
-// ───────────────────────── the desktop ──────────────────────────────
-
-/// What to set on the desktop, if anything. `shown` is the picture on screen,
-/// `original` the picture it stands for, `tinted` the copy to show when tint
-/// is on (None when it couldn't be made). Pure, so the cases are testable.
 fn desktop_target(
     tint: bool,
     shown: &str,
@@ -445,14 +367,9 @@ fn desktop_target(
     (Path::new(shown) != want).then_some(want)
 }
 
-/// One desktop change at a time, so a pick and the re-tints that its own
-/// palette change triggers can't interleave.
 static DESKTOP: Mutex<()> = Mutex::new(());
-/// A converge is already waiting for `DESKTOP`; another would find the same
-/// state.
 static QUEUED: AtomicBool = AtomicBool::new(false);
 
-/// The pixel size of the largest screen. NSScreen is read on the main thread.
 #[cfg(target_os = "macos")]
 fn largest_screen<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> (u32, u32) {
     const FALLBACK: (u32, u32) = (3840, 2160);
@@ -487,11 +404,6 @@ fn largest_screen<R: tauri::Runtime>(_app: &tauri::AppHandle<R>) -> (u32, u32) {
     (3840, 2160)
 }
 
-/// Make the desktop show what config says: the tinted copy of the original
-/// picture with `tint` on, the original with it off. `dir` holds the copies.
-/// `pick` is a picture the user has just chosen, not yet on screen. Returns
-/// the original the desktop now stands for, or None when it didn't look or
-/// couldn't set it. Caller holds `DESKTOP`.
 fn converge<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     tint: bool,
@@ -500,7 +412,6 @@ fn converge<R: tauri::Runtime>(
 ) -> Option<String> {
     use tauri::Manager;
 
-    // Tint off and none of our copies about: nothing on the desktop to undo.
     let has_copies = std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_some());
     if !tint && pick.is_none() && !has_copies {
         return None;
@@ -528,14 +439,11 @@ fn converge<R: tauri::Runtime>(
         None
     };
     if let Some(target) = desktop_target(tint, &shown, &original, tinted.as_deref()) {
-        // The launchd watcher re-themes from whatever the desktop shows when its
-        // plist changes; the marker tells it this change is ours.
         super::touch_inapp_marker();
         let set = std::process::Command::new(&command)
             .arg("all")
             .arg(&target)
             .status();
-        // Still showing the old copy: keep it.
         if !set.is_ok_and(|s| s.success()) {
             return None;
         }
@@ -544,16 +452,11 @@ fn converge<R: tauri::Runtime>(
     Some(original)
 }
 
-/// Tell the WebView a desktop pass has finished, with the original the desktop
-/// now stands for (null when unknown), so the wallpapers view can end its busy
-/// state: a tinted change lands seconds after the call that asked for it.
 fn announce(app: &tauri::AppHandle, shown: Option<String>) {
     use tauri::Emitter;
     let _ = app.emit("desktop", shown);
 }
 
-/// Re-run `converge` in the background: the palette, `wallpaper.tint` or the
-/// OLED switch may have changed. Cheap when nothing did.
 pub fn spawn_converge(app: &tauri::AppHandle) {
     if QUEUED.swap(true, Ordering::SeqCst) {
         return;
@@ -567,9 +470,6 @@ pub fn spawn_converge(app: &tauri::AppHandle) {
     });
 }
 
-/// Pick `path` with tint on: take its palette first, so the copy is painted
-/// from the colours this picture gets, then put the tinted copy on the
-/// desktop. The original is never shown, so the desktop doesn't flash it.
 pub fn spawn_pick(app: &tauri::AppHandle, theme_command: String, path: String) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -686,7 +586,6 @@ mod tests {
         );
     }
 
-    /// The bundled config and palette, as `setup` would load them.
     fn theme_state(oled: bool, scheme: super::super::Scheme) -> super::super::ThemeState {
         let config: super::super::Config =
             serde_json::from_str(include_str!("../config.default.json")).unwrap();
@@ -707,7 +606,6 @@ mod tests {
     #[test]
     fn oled_turns_the_dark_surface_black_through_every_role_built_on_it() {
         use super::super::Scheme::{Dark, Light};
-        // The `surface` role reads the palette's `base`
         assert_eq!(theme_state(false, Dark).resolve().0.surface, "#1e1e2e");
         assert_eq!(theme_state(true, Dark).resolve().0.surface, "#000000");
         assert_eq!(
@@ -752,7 +650,6 @@ mod tests {
 
     #[test]
     fn a_pixel_between_two_colours_blends_them_by_distance() {
-        // 128 is a hair nearer white, so white takes a 55.9 % share: 0.559 * 255 = 142
         let mut px = [128u8, 128, 128];
         tint_rgb(&mut px, &[[0, 0, 0], [255, 255, 255]], 20.0);
         assert_eq!(px, [142, 142, 142]);
@@ -760,7 +657,6 @@ mod tests {
 
     #[test]
     fn a_pixel_far_from_the_whole_palette_is_kept() {
-        // distance^2 to both is above 3, so every weight underflows to 0
         let mut px = [255u8, 0, 0];
         tint_rgb(&mut px, &[[0, 255, 255]], 1000.0);
         assert_eq!(px, [255, 0, 0]);
@@ -857,14 +753,11 @@ mod tests {
     fn the_desktop_changes_only_when_it_differs_from_what_config_wants() {
         let copy = Path::new("/c/tint-1.png");
         let cases = [
-            // tint on
             (true, "/w/a.jpg", Some(copy), Some("/c/tint-1.png")),
             (true, "/c/tint-1.png", Some(copy), None),
             (true, "/c/tint-0.png", Some(copy), Some("/c/tint-1.png")),
-            // tint on but the picture can't be tinted: show the original
             (true, "/w/a.jpg", None, None),
             (true, "/c/tint-0.png", None, Some("/w/a.jpg")),
-            // tint off
             (false, "/w/a.jpg", None, None),
             (false, "/c/tint-1.png", None, Some("/w/a.jpg")),
         ];
@@ -877,8 +770,6 @@ mod tests {
         }
     }
 
-    /// Tints a real wallpaper with a real palette and prints the time. Set
-    /// EDGEBAR_LIVE_IMAGE to the picture and EDGEBAR_LIVE_OUT to where the PNG goes.
     #[test]
     #[ignore = "live: reads a real wallpaper"]
     fn live_tint_a_real_wallpaper() {
@@ -936,8 +827,6 @@ mod tests {
         );
     }
 
-    /// Reads Brett's real config.json, which predates the `wallpaper` block, and
-    /// lists his real folder: the bundled default has to fill the gap.
     #[test]
     #[ignore = "live: reads ~/.config/edgebar/config.json and the wallpaper folder"]
     fn live_scan_the_real_folder() {
@@ -957,10 +846,6 @@ mod tests {
         assert!(!found.is_empty());
     }
 
-    /// Runs `converge` on the real desktop against a mock app: tint on puts a
-    /// copy of the current wallpaper on screen, a second run changes nothing, and
-    /// tint off puts the original back and clears the copy. The guard restores the
-    /// desktop even when an assertion fails.
     #[test]
     #[ignore = "live: changes the desktop picture and puts it back"]
     fn live_converge_follows_the_tint_setting() {
@@ -1015,9 +900,6 @@ mod tests {
         );
     }
 
-    /// Puts the current wallpaper's tinted copy on the real desktop with desktoppr,
-    /// reads it back, maps it to its original, then puts the original back. The
-    /// guard restores the desktop even when an assertion fails.
     #[test]
     #[ignore = "live: changes the desktop picture and puts it back"]
     fn live_desktop_round_trip() {

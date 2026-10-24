@@ -1,22 +1,3 @@
-//! User-changeable settings, layered over the Nix config.
-//!
-//! `~/.config/edgebar/config.json` is a read-only symlink into the Nix store, so
-//! what the user changes in the app lives in `~/.config/edgebar/settings.json`,
-//! which only edgebar writes. The running `Config` is deserialised from three JSON
-//! layers, deep-merged in this order:
-//!
-//!   1. the bundled `config.default.json`, so a key added to it works before the
-//!      Nix config is rebuilt;
-//!   2. `config.json`, rendered from that same file plus Nix-side values;
-//!   3. `settings.json`, holding only the keys the user changed.
-//!
-//! `config.default.json` is also the schema. An override is accepted only at a path
-//! that file has, with the JSON type it has there, and only if the result still
-//! deserialises into `Config`. An empty object in it (`notch.workspaces`) is an
-//! open map: any key and any value may sit under it. Validation happens where user
-//! input enters, in `load` (a hand edit) and `set` (the settings view), and nowhere
-//! else.
-
 use crate::{apply_theme, reload_theme, resolve_notch_idle, Appearance, Config, ThemeState};
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -27,11 +8,7 @@ use tauri::{Emitter, Manager};
 const BUNDLED: &str = include_str!("../config.default.json");
 const NIX_FILE: &str = "config.json";
 const USER_FILE: &str = "settings.json";
-/// Where the bar's light/dark/auto toggle kept the mode before it became the
-/// `appearance` setting. Only `import_legacy_appearance` reads it.
 const LEGACY_APPEARANCE_FILE: &str = "appearance";
-
-// ───────────────────────── pure JSON helpers ────────────────────────
 
 fn empty() -> Value {
     Value::Object(Map::new())
@@ -52,7 +29,6 @@ fn kind(v: &Value) -> &'static str {
     }
 }
 
-/// Deep merge: objects merge key by key, anything else in `over` replaces `base`.
 fn merge(base: Value, over: Value) -> Value {
     match (base, over) {
         (Value::Object(mut base), Value::Object(over)) => {
@@ -69,8 +45,6 @@ fn merge(base: Value, over: Value) -> Value {
     }
 }
 
-/// Set `value` at `path`, creating parents on the way and replacing any parent
-/// that is not an object.
 fn set_path(root: &mut Value, path: &[String], value: Value) {
     let mut node = root;
     for key in path {
@@ -84,7 +58,6 @@ fn set_path(root: &mut Value, path: &[String], value: Value) {
     *node = value;
 }
 
-/// Remove the value at `path`, then every parent object that removal left empty.
 fn remove_path(root: &mut Value, path: &[String]) {
     let (Some((first, rest)), Value::Object(map)) = (path.split_first(), root) else {
         return;
@@ -102,9 +75,6 @@ fn remove_path(root: &mut Value, path: &[String]) {
     }
 }
 
-/// Whether `value` may be the override at `path`, judged against the bundled
-/// defaults: the path must exist there (or sit under an open map) and the JSON
-/// types must match.
 fn check(defaults: &Value, path: &[String], value: &Value) -> Result<(), String> {
     let mut node = defaults;
     for (depth, key) in path.iter().enumerate() {
@@ -146,9 +116,6 @@ fn check_value(default: &Value, value: &Value, name: &str) -> Result<(), String>
     }
 }
 
-/// The overrides in `user` one by one, each as its path and value. Objects are
-/// entered only where `defaults` has settings; an open map's entries and anything
-/// unknown count as one override each.
 fn leaves(defaults: &Value, user: &Value) -> Vec<(Vec<String>, Value)> {
     fn walk(
         default: Option<&Value>,
@@ -175,9 +142,6 @@ fn leaves(defaults: &Value, user: &Value) -> Vec<(Vec<String>, Value)> {
     out
 }
 
-/// The overrides in `user` that are valid, and why each of the rest is not.
-/// `accepts` has the last word on a candidate set of overrides, after the type
-/// check against `defaults`.
 fn sanitise(
     defaults: &Value,
     user: &Value,
@@ -207,15 +171,10 @@ fn split_key(key: &str) -> Result<Vec<String>, String> {
     Ok(path)
 }
 
-// ───────────────────────── files ────────────────────────────────────
-
-/// `~/.config/edgebar`, or None without a `HOME`.
 pub fn dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| Path::new(&home).join(".config/edgebar"))
 }
 
-/// The JSON object in `file`; Ok(None) when it is missing or blank. The error
-/// reads as the end of a sentence that starts with the file's name.
 fn read_object(file: &Path) -> Result<Option<Value>, String> {
     let text = match std::fs::read_to_string(file) {
         Ok(text) if text.trim().is_empty() => return Ok(None),
@@ -230,8 +189,6 @@ fn read_object(file: &Path) -> Result<Option<Value>, String> {
     }
 }
 
-/// Write beside the target and rename over it, so a reader (or a crash) never
-/// sees half a file.
 fn write_atomic(file: &Path, doc: &Value) -> Result<(), String> {
     let text = serde_json::to_string_pretty(doc).map_err(|e| e.to_string())? + "\n";
     if let Some(parent) = file.parent() {
@@ -247,16 +204,12 @@ fn write_atomic(file: &Path, doc: &Value) -> Result<(), String> {
         })
 }
 
-/// Whether `user` over `base` still deserialises into a `Config`. The typed model
-/// has the last word on a value: an unknown `appearance`, a negative `transientMs`.
 fn trial(base: &Value, user: &Value) -> Result<(), String> {
     serde_json::from_value::<Config>(merge(base.clone(), user.clone()))
         .map(drop)
         .map_err(|e| e.to_string())
 }
 
-/// The bundled defaults under `config.json`. A config.json that no longer fits
-/// `Config` is ignored, as it was before settings existed, never a reason to fail.
 fn base_layer(defaults: &Value, dir: Option<&Path>) -> Value {
     let nix = dir
         .and_then(|d| read_object(&d.join(NIX_FILE)).ok().flatten())
@@ -269,16 +222,10 @@ fn base_layer(defaults: &Value, dir: Option<&Path>) -> Value {
     }
 }
 
-// ───────────────────────── loading ──────────────────────────────────
-
-/// What the WebView sees; the shape of `SettingsSnapshot` in ipc.ts.
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
-    /// Defaults, Nix config and valid overrides, merged.
     effective: Value,
-    /// The valid overrides alone.
     user: Value,
-    /// Why some of settings.json was not used, one problem per line.
     error: Option<String>,
 }
 
@@ -288,9 +235,6 @@ pub struct Loaded {
     snapshot: Snapshot,
 }
 
-/// Merge the three layers. Never fails and never writes: a settings.json that
-/// does not parse is ignored whole, and an override that fails validation is left
-/// out, each reported in the snapshot's `error`.
 pub fn load(dir: Option<&Path>) -> Loaded {
     let defaults = bundled();
     let base = base_layer(&defaults, dir);
@@ -322,10 +266,6 @@ pub fn load(dir: Option<&Path>) -> Loaded {
     }
 }
 
-/// Apply one change to settings.json: `value` at the dotted `key`, or with
-/// `null` no override at all. Returns whether the file changed. A file that does
-/// not parse is left alone, so a hand edit is never overwritten; overrides that
-/// fail validation stay in the file, untouched.
 fn write_override(dir: &Path, key: &str, value: Value) -> Result<bool, String> {
     let path = split_key(key)?;
     let file = dir.join(USER_FILE);
@@ -353,13 +293,6 @@ fn write_override(dir: &Path, key: &str, value: Value) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Move the mode out of the file the bar's toggle used to keep it in and into
-/// settings.json, then delete the file, so the mode has one store. Before, the
-/// file's mode won at startup, so it wins here too: an override when it differs
-/// from the layers below, none when it matches them. A file that doesn't name a
-/// mode is deleted with nothing imported. Runs at every startup and does nothing
-/// once the file is gone. When settings.json can't take the override (a hand
-/// edit that doesn't parse) the file stays, and the next startup tries again.
 pub fn import_legacy_appearance(dir: &Path) -> Result<(), String> {
     let file = dir.join(LEGACY_APPEARANCE_FILE);
     let text = match std::fs::read_to_string(&file) {
@@ -380,23 +313,15 @@ pub fn import_legacy_appearance(dir: &Path) -> Result<(), String> {
     std::fs::remove_file(&file).map_err(|e| format!("cannot delete {}: {e}", file.display()))
 }
 
-// ───────────────────────── converging the running app ───────────────
-
-/// Which subsystem's config differs between two loads.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Changes {
     colors: bool,
     appearance: bool,
     geometry: bool,
-    /// `notch.idle`
     idle: bool,
-    /// `notch.workspaces`
     rules: bool,
-    /// `notch.transientMs`
     flash_hold: bool,
-    /// `oled` or `wallpaper.tint`
     wallpaper: bool,
-    /// `toggles.focusShortcut`
     toggles: bool,
 }
 
@@ -413,14 +338,9 @@ fn changes(prev: &Config, next: &Config) -> Changes {
     }
 }
 
-/// Bring the running app in line with `next`, re-applying only the subsystems
-/// whose config differs from `prev`. Blocking (it may run a rule's command or
-/// ask for the host name), so call it off the main thread; UI work hops over.
 fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
     let c = changes(prev, next);
 
-    // Everything the `theme` event carries: role maps, the appearance, the
-    // geometry the WebView reads as CSS, and the notch's idle look.
     if c.colors || c.appearance || c.geometry || c.idle {
         let idle = c
             .idle
@@ -441,7 +361,6 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
         apply_theme(app, next.appearance);
     }
 
-    // The native frame and the bar windows are sized from the geometry.
     #[cfg(target_os = "macos")]
     if c.geometry {
         let handle = app.clone();
@@ -456,9 +375,6 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
         crate::notch::refresh_workspace(app);
     }
 
-    // The re-theme resolves the surface with OLED applied and re-runs the Tint
-    // converge, so the desktop follows both. `wallpaper.folder` needs nothing:
-    // each listing reads it fresh.
     if c.wallpaper {
         reload_theme(app);
     }
@@ -469,14 +385,8 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
     }
 }
 
-// ───────────────────────── commands ─────────────────────────────────
-
-/// Managed state: what the running app was last brought in line with.
 pub struct Store {
     applied: Mutex<Loaded>,
-    /// Held for a whole `set`, so two bars changing settings at once can't
-    /// interleave their read-modify-write or their converge steps. Reads take
-    /// only `applied`, which is never held for long.
     writer: Mutex<()>,
 }
 
@@ -508,10 +418,6 @@ pub async fn get_settings(app: tauri::AppHandle) -> Snapshot {
     snapshot
 }
 
-/// Set the override at the dotted `key`, or drop it with `null`, then converge
-/// the running app and emit `settings`. Setting a value twice is a no-op apart
-/// from the event. The file write and the converge step block, hence
-/// `spawn_blocking`.
 #[tauri::command]
 pub async fn set_setting(
     app: tauri::AppHandle,
@@ -523,7 +429,6 @@ pub async fn set_setting(
         .map_err(|e| e.to_string())?
 }
 
-/// One layer, for the Settings view's About section (`SettingsLayer` in ipc.ts).
 #[derive(Serialize)]
 pub struct Layer {
     name: &'static str,
@@ -537,7 +442,6 @@ pub struct Files {
     layers: Vec<Layer>,
 }
 
-/// `~/…` for a path under the home folder, else the path as it is.
 pub fn tilde(path: &Path) -> String {
     match std::env::var_os("HOME") {
         Some(home) if !home.is_empty() => under_home(path, Path::new(&home)),
@@ -553,7 +457,6 @@ fn under_home(path: &Path, home: &Path) -> String {
     }
 }
 
-/// edgebar's version and where each of the three layers lives.
 #[tauri::command]
 pub fn settings_files(app: tauri::AppHandle) -> Files {
     let dir = dir();
@@ -598,8 +501,6 @@ pub fn settings_files(app: tauri::AppHandle) -> Files {
     }
 }
 
-/// Open settings.json in the default text editor, creating it as `{}` first if
-/// it doesn't exist (a missing file and `{}` mean the same).
 #[tauri::command]
 pub fn open_settings_file(app: tauri::AppHandle) -> Result<(), String> {
     let file = dir().ok_or("HOME is not set")?.join(USER_FILE);
@@ -627,7 +528,6 @@ mod tests {
         split_key(key).unwrap()
     }
 
-    /// A scratch directory standing in for ~/.config/edgebar, removed on drop.
     struct Scratch(PathBuf);
 
     impl Scratch {

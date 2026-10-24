@@ -11,7 +11,6 @@ fn main() {
         // The notch's media readout asks CoreAudio which processes are playing
         // (see notch.rs for why not MediaRemote).
         println!("cargo:rustc-link-lib=framework=CoreAudio");
-        // The Wi-Fi toggle reads CoreWLAN's power flag (toggles.rs).
         println!("cargo:rustc-link-lib=framework=CoreWLAN");
     }
 

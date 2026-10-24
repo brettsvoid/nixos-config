@@ -1,19 +1,3 @@
-//! Debug-only developer socket: lets an agent drive and see the live bar
-//! without screen-recording permission (`screencapture` needs it; nothing here
-//! does).
-//!
-//! `~/.cache/edgebar/dev.sock` takes one request per connection, read to EOF,
-//! and answers with one line on the same connection:
-//!
-//!   * `eval <js>` runs `<js>` in the main bar WebView (label `bar`) and replies
-//!     with the JSON of what it evaluates to, promises awaited.
-//!   * `snap <abs-path.png>` writes the main display as edgebar draws it (see
-//!     `start_snap`) and replies `ok <path>`.
-//!   * `type <text>` posts `<text>` to edgebar as key presses (see `post_keys`)
-//!     and replies with whether edgebar is active and has a key window.
-//!
-//! Failures reply `ERR <message>`. `scripts/dev.sh` is the client.
-
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -39,14 +23,10 @@ use objc2_quartz_core::CALayer;
 use objc2_web_kit::WKWebView;
 use tauri::{AppHandle, Manager};
 
-/// How long a request may take (reading it, the page's answer, the snapshot)
-/// before it fails.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
-/// A request's answer: the reply line, or the message after `ERR `.
 type Reply = Result<String, String>;
 
-/// One parsed request.
 enum Request {
     Eval(String),
     Snap(PathBuf),
@@ -72,14 +52,12 @@ impl Request {
     }
 }
 
-/// Evals waiting for their page to answer through `dev_result`, keyed by id.
 #[derive(Default)]
 pub struct Evals {
     next_id: AtomicU64,
     waiting: Mutex<HashMap<u64, Sender<Reply>>>,
 }
 
-/// What the page reports for one eval: the value's JSON, or the error thrown.
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Outcome {
@@ -87,8 +65,6 @@ pub enum Outcome {
     Err(String),
 }
 
-/// The bar WebView's answer to an `eval`, posted by the wrapper `eval` sends.
-/// An answer after its eval timed out finds no waiter and is dropped.
 #[tauri::command]
 pub fn dev_result(evals: tauri::State<Evals>, id: u64, outcome: Outcome) {
     let Some(tx) = evals.waiting.lock().unwrap().remove(&id) else {
@@ -100,8 +76,6 @@ pub fn dev_result(evals: tauri::State<Evals>, id: u64, outcome: Outcome) {
     });
 }
 
-/// Bind `~/.cache/edgebar/dev.sock` and serve it on its own thread, one
-/// connection at a time.
 pub fn start(app: &tauri::App) {
     app.manage(Evals::default());
     let handle = app.handle().clone();
@@ -112,7 +86,7 @@ pub fn start(app: &tauri::App) {
         let dir = Path::new(&home).join(".cache/edgebar");
         let _ = std::fs::create_dir_all(&dir);
         let sock = dir.join("dev.sock");
-        let _ = std::fs::remove_file(&sock); // clear any stale socket
+        let _ = std::fs::remove_file(&sock);
         let Ok(listener) = UnixListener::bind(&sock) else {
             return;
         };
@@ -122,7 +96,6 @@ pub fn start(app: &tauri::App) {
     });
 }
 
-/// Read one request to EOF, run it, write the reply line.
 fn serve(app: &AppHandle, conn: &mut UnixStream) {
     let _ = conn.set_read_timeout(Some(TIMEOUT));
     let mut text = String::new();
@@ -138,7 +111,6 @@ fn serve(app: &AppHandle, conn: &mut UnixStream) {
     let _ = writeln!(conn, "{line}");
 }
 
-/// Wraps an eval so the page answers through `dev_result` whatever happens.
 /// The source goes in as a string for indirect `eval`, so a syntax error
 /// becomes a catchable SyntaxError rather than a script that never answers.
 const EVAL_WRAPPER: &str = r#"(async () => {
@@ -151,7 +123,6 @@ const EVAL_WRAPPER: &str = r#"(async () => {
   await window.__TAURI_INTERNALS__.invoke("dev_result", { id: __ID__, outcome });
 })();"#;
 
-/// Run `js` in the main bar WebView and wait for its answer.
 fn eval(app: &AppHandle, js: &str) -> Reply {
     let Some(bar) = app.get_webview_window("bar") else {
         return Err("no bar window".to_string());
@@ -173,7 +144,6 @@ fn eval(app: &AppHandle, js: &str) -> Reply {
     reply
 }
 
-/// Hop to the main thread for the snapshot and wait for it.
 fn snap(app: &AppHandle, path: PathBuf) -> Reply {
     let (tx, rx) = mpsc::channel();
     let handle = app.clone();
@@ -183,7 +153,6 @@ fn snap(app: &AppHandle, path: PathBuf) -> Reply {
         .unwrap_or_else(|_| Err(format!("no snapshot within {}s", TIMEOUT.as_secs())))
 }
 
-/// Hop to the main thread to post the key presses.
 fn type_keys(app: &AppHandle, text: String) -> Reply {
     let (tx, rx) = mpsc::channel();
     app.run_on_main_thread(move || {
@@ -194,12 +163,6 @@ fn type_keys(app: &AppHandle, text: String) -> Reply {
         .unwrap_or_else(|_| Err(format!("no answer within {}s", TIMEOUT.as_secs())))
 }
 
-/// Queue a key down and up per character of `text` (ESC types Escape, DEL
-/// Backspace), addressed as the window server addresses typing: to the key
-/// window, or to none. No process here may post system-wide events
-/// (Accessibility), so this stands in for the keyboard from the point where
-/// macOS hands a key press to the app; whether it would hand it over at all is
-/// the `active` and `key-window` the reply reports. Main thread only.
 fn post_keys(text: &str) -> Reply {
     use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
     use objc2_foundation::{NSPoint, NSString};
@@ -210,8 +173,8 @@ fn post_keys(text: &str) -> Reply {
     let number = key_window.as_ref().map_or(0, |w| w.windowNumber());
     for ch in text.chars() {
         let code = match ch {
-            '\u{1b}' => 53, // kVK_Escape
-            '\u{7f}' => 51, // kVK_Delete
+            '\u{1b}' => 53,
+            '\u{7f}' => 51,
             _ => 0,
         };
         let chars = NSString::from_str(&ch.to_string());
@@ -239,16 +202,12 @@ fn post_keys(text: &str) -> Reply {
     ))
 }
 
-/// One edgebar window's pixels, placed in global screen points (bottom-left
-/// origin). `image` is None while its WebView snapshot is in flight, or once
-/// it has failed to render.
 struct Plane {
     level: isize,
     rect: CGRect,
     image: Option<CFRetained<CGImage>>,
 }
 
-/// A snapshot waiting on its WebViews.
 struct Snap {
     screen: CGRect,
     scale: f64,
@@ -258,11 +217,6 @@ struct Snap {
     reply: Sender<Reply>,
 }
 
-/// Composite the main display (the primary, `NSScreen::screens()[0]`) at its
-/// backing scale: a mid-grey stand-in for the wallpaper, then every visible
-/// edgebar window on it in level order. Native frames are drawn from their
-/// layer trees here; bar WebViews snapshot asynchronously, and the last one in
-/// writes the PNG. Main thread only.
 fn start_snap(app: &AppHandle, path: PathBuf, reply: Sender<Reply>) {
     let Some(mtm) = MainThreadMarker::new() else {
         let _ = reply.send(Err("not on the main thread".to_string()));
@@ -342,7 +296,6 @@ fn start_snap(app: &AppHandle, path: PathBuf, reply: Sender<Reply>) {
     }
 }
 
-/// Composite, encode and write the PNG, then send the reply.
 fn finish(job: &Snap) {
     let reply = compose(job)
         .and_then(|image| write_png(&image, &job.path))
@@ -350,8 +303,6 @@ fn finish(job: &Snap) {
     let _ = job.reply.send(reply);
 }
 
-/// The display as one image: grey backdrop, then each plane in window-level
-/// order. Fails if any window did not render, rather than leave it out.
 fn compose(job: &Snap) -> Result<CFRetained<CGImage>, String> {
     let mut planes: Vec<&Plane> = job.planes.iter().collect();
     planes.sort_by_key(|p| p.level);
@@ -371,8 +322,6 @@ fn compose(job: &Snap) -> Result<CFRetained<CGImage>, String> {
     CGBitmapContextCreateImage(Some(&ctx)).ok_or_else(|| "compositing failed".to_string())
 }
 
-/// A transparent sRGB bitmap context of `size` points at `scale` pixels per
-/// point, its CTM in points.
 fn bitmap(size: CGSize, scale: f64) -> Option<CFRetained<CGContext>> {
     let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
     let ctx = unsafe {
@@ -390,16 +339,14 @@ fn bitmap(size: CGSize, scale: f64) -> Option<CFRetained<CGContext>> {
     Some(ctx)
 }
 
-/// Render a layer tree (a native frame) into an image of `size` points.
 fn render_layer(layer: &CALayer, size: CGSize, scale: f64) -> Option<CFRetained<CGImage>> {
     let ctx = bitmap(size, scale)?;
     layer.renderInContext(&ctx);
     CGBitmapContextCreateImage(Some(&ctx))
 }
 
-/// The WKWebView behind a Tauri window. `with_webview` runs its closure inline
-/// when called on the main thread, so the pointer is waiting in the channel by
-/// the time it returns.
+/// `with_webview` runs its closure inline when called on the main thread, so the
+/// pointer is waiting in the channel by the time it returns.
 fn wk_webview(window: &tauri::WebviewWindow) -> Option<Retained<WKWebView>> {
     let (tx, rx) = mpsc::channel();
     window
@@ -411,8 +358,6 @@ fn wk_webview(window: &tauri::WebviewWindow) -> Option<Retained<WKWebView>> {
     unsafe { Retained::retain(ptr) }
 }
 
-/// Snapshot a WebView's visible bounds, calling `done` on the main thread with
-/// the image (None if WebKit fails).
 fn snapshot_webview(wk: &WKWebView, done: impl Fn(Option<CFRetained<CGImage>>) + 'static) {
     let block = block2::RcBlock::new(move |image: *mut NSImage, _error: *mut NSError| {
         let image = unsafe { image.as_ref() }.and_then(|image| unsafe {
@@ -423,7 +368,6 @@ fn snapshot_webview(wk: &WKWebView, done: impl Fn(Option<CFRetained<CGImage>>) +
     unsafe { wk.takeSnapshotWithConfiguration_completionHandler(None, &block) };
 }
 
-/// Encode as PNG and write to `path`.
 fn write_png(image: &CGImage, path: &Path) -> Result<(), String> {
     let rep = NSBitmapImageRep::initWithCGImage(NSBitmapImageRep::alloc(), image);
     let png = unsafe {

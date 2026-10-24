@@ -1,13 +1,3 @@
-//! The Assistant tab's chat: Claude through the Claude Code CLI.
-//!
-//! The CLI is already installed and logged in on the machine, so the chat needs
-//! no API key. A turn is one `claude -p` process in print mode, fed the prompt on
-//! stdin, that streams its reply as stream-json lines. Conversation memory is the
-//! CLI's own session: the first turn names a fresh session id, later turns resume
-//! it. The CLI writes the session as soon as its `init` line is out (measured:
-//! a turn killed after `init` resumes with its prompt in context, one killed
-//! before it leaves nothing), so that line is what establishes the conversation.
-
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -16,22 +6,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-/// Appended to the CLI's own system prompt.
 const SYSTEM_PROMPT: &str = "You are answering in a small chat panel inside a macOS menu bar. \
 Keep replies short. Light Markdown is fine (bold, lists, inline code and fenced code blocks).";
 
-/// The `assistant` block of config.json.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssistantConfig {
-    /// The CLI to run. A bare name is looked up on PATH, then in `~/.local/bin`.
     pub command: String,
-    /// Passed to `--model`: an alias such as "haiku", or a full model id.
     pub model: String,
 }
 
-// The defaults live in config.default.json alone. An older config.json that
-// predates the block lands here and takes the bundled copy.
 impl Default for AssistantConfig {
     fn default() -> Self {
         let bundled: serde_json::Value =
@@ -42,21 +26,15 @@ impl Default for AssistantConfig {
     }
 }
 
-/// Why a turn failed, in terms the Assistant tab can show as they are.
 #[derive(Debug, PartialEq)]
 enum Failure {
-    /// The configured command is on neither PATH nor `~/.local/bin`.
     CliMissing(String),
     NotLoggedIn,
-    /// The session a later turn resumes is no longer stored.
     SessionGone,
-    /// Anything else, in the CLI's own words.
     Cli(String),
 }
 
 impl Failure {
-    /// Sorts the CLI's own error text into the cases that deserve their own
-    /// wording. The two phrases are what `claude` 2.1.309 prints.
     fn classify(text: &str) -> Failure {
         if text.contains("Not logged in") {
             Failure::NotLoggedIn
@@ -85,18 +63,12 @@ impl Failure {
     }
 }
 
-/// What one line of the CLI's stdout means for the turn.
 #[derive(Debug, PartialEq)]
 enum Line {
-    /// The session exists on disk from here on.
     Init,
-    /// A new piece of the reply.
     Delta(String),
-    /// The final line of a successful turn.
     Done,
     Failed(Failure),
-    /// Everything else: thinking, usage, the whole-message echo of what the
-    /// deltas already carried, rate-limit notices.
     Other,
 }
 
@@ -104,8 +76,6 @@ fn str_at<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     value.get(key)?.as_str()
 }
 
-/// Reads one stream-json line. Anything that isn't JSON, or isn't one of the
-/// shapes below, is `Other`.
 fn parse_line(line: &str) -> Line {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
         return Line::Other;
@@ -128,7 +98,6 @@ fn parse_line(line: &str) -> Line {
         }
         Some("result") => {
             let is_error = value["is_error"].as_bool().unwrap_or(false);
-            // `is_error` is the signal: a failed login also reports subtype "success".
             if !is_error && str_at(&value, "subtype") == Some("success") {
                 return Line::Done;
             }
@@ -150,26 +119,19 @@ fn parse_line(line: &str) -> Line {
     }
 }
 
-/// How a turn names its CLI session.
 #[derive(Clone, Debug, PartialEq)]
 enum SessionFlag {
-    /// `--session-id`: the first turn of a conversation.
     New(String),
-    /// `--resume`: every later turn.
     Resume(String),
 }
 
-/// Where the conversation stands between turns.
 #[derive(Default)]
 enum Session {
-    /// No session exists on disk yet. The next turn creates one.
     #[default]
     Fresh,
     Started(String),
 }
 
-/// One send. Cancelling it kills its process; the flag also stops it from
-/// touching the conversation afterwards.
 struct Turn {
     id: String,
     session: SessionFlag,
@@ -198,8 +160,6 @@ impl Turn {
         }
     }
 
-    /// Hands over the spawned process. A cancel that landed before the spawn
-    /// finished kills it here.
     fn attach(&self, child: Child) {
         *lock(&self.child) = Some(child);
         if self.is_cancelled() {
@@ -207,7 +167,6 @@ impl Turn {
         }
     }
 
-    /// Waits for the process to exit; true when it exited cleanly.
     fn reap(&self) -> bool {
         let child = lock(&self.child).take();
         match child {
@@ -217,9 +176,6 @@ impl Turn {
     }
 }
 
-/// The state machine behind the commands. All transitions happen under one
-/// lock, so a turn that was cancelled can never change the conversation after
-/// whoever cancelled it has moved on.
 #[derive(Default)]
 struct Conversation {
     session: Session,
@@ -227,7 +183,6 @@ struct Conversation {
 }
 
 impl Conversation {
-    /// Cancels whatever runs and registers the next turn.
     fn begin_turn(&mut self) -> Arc<Turn> {
         self.cancel();
         let session = match &self.session {
@@ -245,13 +200,11 @@ impl Conversation {
         }
     }
 
-    /// The next message starts a new conversation.
     fn reset(&mut self) {
         self.cancel();
         self.session = Session::Fresh;
     }
 
-    /// The turn's `init` line arrived, so its session exists.
     fn established(&mut self, turn: &Turn) {
         if turn.is_cancelled() {
             return;
@@ -261,7 +214,6 @@ impl Conversation {
         }
     }
 
-    /// A resumed session turned out to be gone: start over next time.
     fn lost(&mut self, turn: &Turn) {
         if !turn.is_cancelled() && matches!(turn.session, SessionFlag::Resume(_)) {
             self.session = Session::Fresh;
@@ -278,8 +230,6 @@ impl Conversation {
 #[derive(Default)]
 pub struct AssistantState {
     conversation: Mutex<Conversation>,
-    /// Held for the life of a CLI process, so a turn that replaces another waits
-    /// for the old process to be gone before it touches the same session.
     slot: Mutex<()>,
 }
 
@@ -292,9 +242,6 @@ fn is_executable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
-/// Finds the CLI. A command with a slash is taken as a path. A bare name is
-/// looked up on PATH, then in `~/.local/bin`, where the native installer puts
-/// `claude` and a launchd-started app's PATH rarely reaches.
 pub fn resolve_command(
     command: &str,
     path_var: Option<&std::ffi::OsStr>,
@@ -346,9 +293,6 @@ enum Outcome {
     Failed(Failure),
 }
 
-/// Decides how a turn ended from what the CLI reported and how it exited. A
-/// `result` line wins over the exit code: a failed login exits 1 but explains
-/// itself on stdout.
 fn settle(
     cancelled: bool,
     verdict: Option<Result<(), Failure>>,
@@ -375,8 +319,6 @@ fn settle(
     }
 }
 
-/// Runs one turn's CLI process to the end, handing each meaningful line to
-/// `on_line` as it arrives. Blocks until the process has exited.
 fn run_cli(
     config: &AssistantConfig,
     cwd: &Path,
@@ -420,9 +362,6 @@ fn run_cli(
     let stderr = child.stderr.take();
     turn.attach(child);
 
-    // The prompt goes in on stdin: no length limit, and a prompt that starts
-    // with a dash can't be read as a flag. The CLI reads it all before it
-    // answers, so this write can't stall against its output.
     if let Some(mut stdin) = stdin {
         let _ = stdin.write_all(prompt.as_bytes());
     }
@@ -463,7 +402,6 @@ enum ChunkKind {
     Error,
 }
 
-/// The `assistant` event's payload; see `AssistantChunk` in ipc.ts.
 #[derive(Clone, Serialize)]
 struct AssistantChunk {
     turn: String,
@@ -482,8 +420,6 @@ fn emit_chunk<R: Runtime>(app: &AppHandle<R>, turn: &Turn, kind: ChunkKind, text
     );
 }
 
-/// The CLI's working directory, its own so its sessions stay apart from
-/// Brett's projects.
 fn cache_dir() -> PathBuf {
     match std::env::var_os("HOME") {
         Some(home) => Path::new(&home).join(".cache/edgebar/assistant"),
@@ -491,8 +427,6 @@ fn cache_dir() -> PathBuf {
     }
 }
 
-/// Runs a registered turn and streams it to the WebView. Every turn ends with
-/// exactly one `done` or `error`.
 fn run_turn<R: Runtime>(
     app: &AppHandle<R>,
     turn: &Arc<Turn>,
@@ -517,7 +451,6 @@ fn run_turn<R: Runtime>(
         }
     }
     match outcome {
-        // A cancelled reply stops where it was; the turn still ends with `done`.
         Outcome::Done | Outcome::Cancelled => {
             emit_chunk(app, turn, ChunkKind::Done, String::new());
         }
@@ -525,9 +458,6 @@ fn run_turn<R: Runtime>(
     }
 }
 
-/// Starts a turn and returns its id at once. The reply streams as `assistant`
-/// events; a send while a turn runs cancels that turn. The config is read per
-/// turn, so a changed setting applies to the next message.
 #[tauri::command]
 pub async fn assistant_send<R: Runtime>(app: AppHandle<R>, prompt: String) -> String {
     let turn = lock(&app.state::<AssistantState>().conversation).begin_turn();
@@ -539,20 +469,16 @@ pub async fn assistant_send<R: Runtime>(app: AppHandle<R>, prompt: String) -> St
     id
 }
 
-/// Stops the running turn, if any. It ends with `done`.
 #[tauri::command]
 pub async fn assistant_cancel<R: Runtime>(app: AppHandle<R>) {
     lock(&app.state::<AssistantState>().conversation).cancel();
 }
 
-/// Stops the running turn and forgets the conversation.
 #[tauri::command]
 pub async fn assistant_reset<R: Runtime>(app: AppHandle<R>) {
     lock(&app.state::<AssistantState>().conversation).reset();
 }
 
-/// A link from a reply, if it is a web link. Replies are model output, and
-/// `open` would hand any other scheme to whichever app claims it.
 fn web_link(url: &str) -> Result<tauri::Url, String> {
     let link = tauri::Url::parse(url).map_err(|e| format!("{url} is not a link: {e}"))?;
     match link.scheme() {
@@ -561,7 +487,6 @@ fn web_link(url: &str) -> Result<tauri::Url, String> {
     }
 }
 
-/// Opens a link from a reply in the default browser.
 #[tauri::command]
 pub fn assistant_open_link(url: String) -> Result<(), String> {
     let link = web_link(&url)?;
@@ -578,9 +503,6 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::time::{Duration, Instant};
 
-    // Lines captured from `claude` 2.1.309 (haiku), a two-line prompt trimmed to
-    // "Remember the word teapot.". Fields that only carry paths, memory
-    // locations, usage and signatures are cut; the shapes are unchanged.
     const INIT: &str = r#"{"type":"system","subtype":"init","session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62","mcp_servers":[],"model":"claude-haiku-5-5","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.309","output_style":"default"}"#;
     const STATUS: &str = r#"{"type":"system","subtype":"status","status":"requesting","session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62","uuid":"4d4d0510-4956-4571-a87d-5b866ed82211"}"#;
     const THINKING_START: &str = r#"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}},"session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62","parent_tool_use_id":null,"uuid":"a07e03b4-ef29-4102-a9c7-5f0390d4c156","thinking_display":"updates","api_message_id":"msg_01"}"#;
@@ -594,8 +516,6 @@ mod tests {
     const RATE_LIMIT: &str = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour"},"session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62"}"#;
     const RESULT_OK: &str = r#"{"type":"result","subtype":"success","is_error":false,"duration_ms":3190,"num_turns":1,"stop_reason":"end_turn","session_id":"47a4e5c8-13f3-4a41-9f96-f10dcdd43e62","terminal_reason":"completed","result":"Got it: **teapot**."}"#;
 
-    // The failures, from the same CLI: an empty CLAUDE_CONFIG_DIR (not logged
-    // in), a session id it has never seen, and a model name it doesn't know.
     const RESULT_NOT_LOGGED_IN: &str = r#"{"type":"result","subtype":"success","is_error":true,"num_turns":1,"stop_reason":"stop_sequence","terminal_reason":"api_error","api_error_status":null,"result":"Not logged in · Please run /login","session_id":"11111111-2222-4333-8444-555555555555"}"#;
     const RESULT_NO_SESSION: &str = r#"{"type":"result","subtype":"error_during_execution","duration_ms":0,"duration_api_ms":0,"is_error":true,"num_turns":0,"stop_reason":null,"session_id":"99999999-2222-4333-8444-555555555555","total_cost_usd":0,"permission_denials":[],"errors":["No conversation found with session ID: 99999999-2222-4333-8444-555555555555"],"result_index":0}"#;
     const RESULT_BAD_MODEL: &str = r#"{"type":"result","subtype":"success","is_error":true,"api_error_status":404,"result":"There's an issue with the selected model (nosuchmodel). It may not exist or you may not have access to it. Run --model to pick a different model."}"#;
@@ -693,7 +613,6 @@ mod tests {
         assert_eq!(parse_line(""), Line::Other);
         assert_eq!(parse_line("claude: warming up"), Line::Other);
         assert_eq!(parse_line(r#"{"type":"user","message":{}}"#), Line::Other);
-        // A text delta with no text carries nothing to show.
         let empty = r#"{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":""}}}"#;
         assert_eq!(parse_line(empty), Line::Other);
     }
@@ -751,7 +670,6 @@ mod tests {
         assert!(first.is_cancelled());
         assert!(!second.is_cancelled());
 
-        // The old turn's init line arrives late; it must not claim the conversation.
         conversation.established(&first);
         let third = conversation.begin_turn();
         assert!(matches!(third.session, SessionFlag::New(_)));
@@ -859,8 +777,6 @@ mod tests {
         );
         assert_eq!(config.assistant.model, bundled["model"].as_str().unwrap());
     }
-
-    // ── a stand-in CLI, so spawning, streaming and cancelling run for real ──
 
     struct Scratch(PathBuf);
 
@@ -1066,7 +982,6 @@ printf '%s\n' '{RESULT_OK}'"#
         std::fs::create_dir_all(home.join(".local/bin")).unwrap();
         let path_var = std::env::join_paths([scratch.0.join("empty"), on_path.clone()]).unwrap();
 
-        // Only in ~/.local/bin.
         let local = home.join(".local/bin/claude");
         std::fs::write(&local, "#!/bin/sh\n").unwrap();
         std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -1075,7 +990,6 @@ printf '%s\n' '{RESULT_OK}'"#
             Some(local.clone())
         );
 
-        // PATH wins once it has one.
         let first = on_path.join("claude");
         std::fs::write(&first, "#!/bin/sh\n").unwrap();
         std::fs::set_permissions(&first, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -1084,14 +998,12 @@ printf '%s\n' '{RESULT_OK}'"#
             Some(first.clone())
         );
 
-        // A file that isn't executable doesn't count.
         std::fs::set_permissions(&first, std::fs::Permissions::from_mode(0o644)).unwrap();
         assert_eq!(
             resolve_command("claude", Some(&path_var), Some(&home)),
             Some(local.clone())
         );
 
-        // A command with a slash is a path, looked up nowhere else.
         let given = local.display().to_string();
         assert_eq!(resolve_command(&given, None, None), Some(local));
         assert_eq!(
@@ -1101,16 +1013,12 @@ printf '%s\n' '{RESULT_OK}'"#
         assert_eq!(resolve_command("claude", None, None), None);
     }
 
-    // ── the commands' wiring, on tauri's mock runtime ──
-
     fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
         let app = tauri::test::mock_app();
         app.manage(AssistantState::default());
         app
     }
 
-    /// Everything the app emits as an `assistant` event, as the WebView would
-    /// receive it.
     fn record(app: &tauri::App<tauri::test::MockRuntime>) -> Arc<Mutex<Vec<serde_json::Value>>> {
         use tauri::Listener;
         let events = Arc::new(Mutex::new(Vec::new()));
@@ -1218,25 +1126,17 @@ printf '%s\n' '{RESULT_OK}'"#
             ]
         );
 
-        // The init line arrived before the cancel, so the next turn resumes it ...
         let SessionFlag::New(id) = session else {
             panic!("the first turn must create a session");
         };
         let resumed = lock(&state.conversation).begin_turn();
         assert_eq!(resumed.session, SessionFlag::Resume(id.clone()));
-        // ... until the conversation is reset.
         tauri::async_runtime::block_on(assistant_reset(handle.clone()));
         assert!(resumed.is_cancelled());
         let fresh = lock(&state.conversation).begin_turn();
         assert!(matches!(&fresh.session, SessionFlag::New(new) if *new != id));
     }
 
-    // ── the real CLI ──
-
-    /// Real turns against the logged-in CLI: the second remembers the first, a
-    /// reply cancelled mid-stream ends at once, and the conversation still
-    /// resumes after it. Costs a few tokens of the plan, so it only runs on
-    /// request: `cargo test assistant::tests::live -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn live_conversation_remembers_and_survives_a_cancel() {

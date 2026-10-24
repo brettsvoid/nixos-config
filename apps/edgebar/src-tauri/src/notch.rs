@@ -16,11 +16,6 @@
 //!
 //! So Spotify and Music get the full media pill (art, playhead, transport);
 //! any other audible app shows its name and icon over "playing".
-//!
-//! One read of that source feeds two consumers. The notch folds it into its
-//! single `NotchItem` (and loses to a flash or a workspace rule); the
-//! dashboard's player gets the same read untouched as the `media` event, with the
-//! cover fetched separately by `media_art` so a position tick carries no image.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -142,8 +137,6 @@ impl NotchItem {
 
 // ───────────────────────── the store ────────────────────────────────
 
-/// One read of the media source: the dashboard's state and the notch line
-/// derived from it. Kept together so the two can't disagree.
 struct Media {
     state: MediaState,
     item: NotchItem,
@@ -158,21 +151,18 @@ struct Slots {
     transient_gen: u64,
     /// Last winner emitted, so an unchanged recompute stays off the wire.
     emitted: Option<NotchItem>,
-    /// Last `media` event emitted, for the same reason.
     emitted_media: Option<MediaState>,
 }
 
 /// Managed state: the published slots plus the config the providers read.
 pub struct NotchState {
     slots: Mutex<Slots>,
-    /// Replaced when a setting changes the rules or the flash hold.
     config: Mutex<NotchConfig>,
     /// Workspace the rules are currently resolved against, and when its
     /// `everyMs` command last ran.
     current: Mutex<(String, Option<Instant>)>,
     /// Cover art data URLs, keyed by the player's artwork URL.
     art: Mutex<HashMap<String, String>>,
-    /// Player-size covers served by `media_art`, keyed by `MediaState::art_key`.
     covers: Mutex<CoverCache>,
     /// Bundle id currently owning the media slot — where transport commands go.
     media_bundle: Mutex<String>,
@@ -190,8 +180,6 @@ impl NotchState {
         }
     }
 
-    /// Swap in new rules and flash hold. The caller re-runs the focused
-    /// workspace's rule (`refresh_workspace`) when the rules changed.
     pub fn set_config(&self, config: NotchConfig) {
         *self.config.lock().unwrap() = config;
     }
@@ -228,10 +216,7 @@ fn set_workspace(app: &tauri::AppHandle, item: Option<NotchItem>) {
     publish(app);
 }
 
-/// Store a media read and push whichever of the two outputs it changed: the
-/// notch's winner, and the dashboard's `media` event.
 fn set_media(app: &tauri::AppHandle, read: Option<MediaState>) {
-    // Built before the lock: the notch's backdrop may fetch an image.
     let media = read.map(|state| {
         let art = artwork(app, &state.art_key);
         Media {
@@ -247,9 +232,6 @@ fn set_media(app: &tauri::AppHandle, read: Option<MediaState>) {
     publish_media(app);
 }
 
-/// Emit the media state if it differs from the last one emitted. Position moves
-/// every poll while playing, so a playing track emits per poll and a paused one
-/// stays quiet.
 fn publish_media(app: &tauri::AppHandle) {
     let state = app.state::<NotchState>();
     let next = {
@@ -481,22 +463,16 @@ pub fn install_rule_ticker(app: tauri::AppHandle) {
 
 // ───────────────────────── media provider ───────────────────────────
 
-/// A player whose AppleScript dictionary we can read and drive. Everything that
-/// differs between them lives here, so no other code branches on a bundle id.
 struct Player {
     bundle_id: &'static str,
-    /// The name `tell application` takes.
     name: &'static str,
     /// Whether `duration` is in milliseconds. Spotify's sdef says seconds, but the
     /// running app answers 373333 for a 6 min 13 s track.
     duration_ms: bool,
-    /// AppleScript expression for the cover's key (see `parse_cover_key`).
-    /// Spotify publishes the image URL; Music only a persistent track id.
     cover_key: &'static str,
-    /// Transport verbs, as each sdef names them. Music's `back track` is its own
-    /// back button (restart the track, or go back if already at the start);
-    /// Spotify's sdef has `previous track` only.
     next: &'static str,
+    /// Music's `back track` is its own back button (restart the track, or go
+    /// back if already at the start); Spotify's sdef has `previous track` only.
     previous: &'static str,
 }
 
@@ -524,32 +500,22 @@ fn player(bundle_id: &str) -> Option<&'static Player> {
     PLAYERS.iter().find(|p| p.bundle_id == bundle_id)
 }
 
-/// The media slot as the dashboard's player shows it, whatever wins the
-/// collapsed notch.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaState {
     pub app: String,
-    /// App icon as a PNG data URL, or "".
     pub icon: String,
     pub title: String,
     pub artist: String,
     pub album: String,
-    /// Changes when the cover does, "" when there is none. `media_art` turns it
-    /// into the image, once per key.
     pub art_key: String,
-    /// Seconds, as of this read.
     pub position: f64,
-    /// Seconds, 0 when unknown.
     pub duration: f64,
     pub playing: bool,
-    /// Whether transport commands reach this source: only the scriptable players.
     pub controls: bool,
 }
 
 impl MediaState {
-    /// A scriptable player with a track, or any other audible app (CoreAudio
-    /// knows who is loud but not what they play, and no verb reaches them).
     fn new(app: String, icon: String, track: Option<Track>) -> Self {
         let Some(t) = track else {
             return Self {
@@ -579,8 +545,6 @@ impl MediaState {
         }
     }
 
-    /// The collapsed notch's line for this read. `art` is the small backdrop the
-    /// pill draws, not the player-size cover.
     fn notch_item(&self, art: String) -> NotchItem {
         let mut item = NotchItem::new(Tier::Media, "music", self.title.clone());
         item.icon.clone_from(&self.icon);
@@ -604,7 +568,6 @@ impl MediaState {
     }
 }
 
-/// Current media state, for a WebView that attached after the last event.
 #[tauri::command]
 pub fn media_state(app: tauri::AppHandle) -> Option<MediaState> {
     let state = app.state::<NotchState>();
@@ -612,8 +575,6 @@ pub fn media_state(app: tauri::AppHandle) -> Option<MediaState> {
     s.media.as_ref().map(|m| m.state.clone())
 }
 
-/// Host Spotify serves cover art from. The URL is fetched, so only this exact
-/// prefix ever is. An AppleScript reply is not a trusted string.
 const ART_HOST: &str = "https://i.scdn.co/image/";
 /// Cover art cache cap, so a long listening session can't grow it unbounded.
 const ART_CACHE_MAX: usize = 32;
@@ -626,17 +587,13 @@ pub fn install_media_watcher(app: tauri::AppHandle) {
     });
 }
 
-/// What a player says about its current track.
 struct Track {
     title: String,
     artist: String,
     album: String,
     playing: bool,
-    /// Seconds.
     position: f64,
-    /// Seconds.
     duration: f64,
-    /// See `parse_cover_key`; "" when the track has no cover we can fetch.
     cover_key: String,
 }
 
@@ -723,15 +680,12 @@ fn read_media(_app: &tauri::AppHandle) -> Option<MediaState> {
     None
 }
 
-/// Bundle id currently owning the media slot.
 fn current_bundle(app: &tauri::AppHandle) -> String {
     let state = app.state::<NotchState>();
     let bundle = state.media_bundle.lock().unwrap();
     bundle.clone()
 }
 
-/// Separates the fields of a metadata reply. A control character, so a title
-/// with a newline in it can't shift the fields after it.
 const FIELD_SEP: char = '\u{1f}';
 
 /// Ask a scriptable player for the current track. Guarded by `is running` so
@@ -743,8 +697,6 @@ fn track_metadata(bundle_id: &str) -> Option<Track> {
     parse_track(player, &out)
 }
 
-/// `try` around the fields a track may lack: ads and local files have no cover,
-/// and a stream may have no album.
 fn metadata_script(player: &Player) -> String {
     let (name, cover_key) = (player.name, player.cover_key);
     format!(
@@ -769,9 +721,6 @@ fn metadata_script(player: &Player) -> String {
     )
 }
 
-/// Parse `metadata_script`'s reply: state, title, artist, album, position,
-/// duration and cover key, separated by `FIELD_SEP`. "" means the player is
-/// stopped (or not running), which has no track.
 fn parse_track(player: &Player, out: &str) -> Option<Track> {
     let mut fields = out.split(FIELD_SEP);
     let state = fields.next()?;
@@ -808,7 +757,7 @@ fn parse_track(player: &Player, out: &str) -> Option<Track> {
 
 /// Send one transport command to the player that owns the media slot, then
 /// re-read it so the bar updates now rather than at the next poll. No-op for a
-/// non-scriptable app. `command` gets the player so it can use its own verb.
+/// non-scriptable app.
 fn transport(app: &tauri::AppHandle, command: impl FnOnce(&Player) -> String) {
     let Some(p) = player(&current_bundle(app)) else {
         return;
@@ -829,15 +778,12 @@ pub async fn media_toggle(app: tauri::AppHandle) {
             .await;
 }
 
-/// Skip to the next track.
 #[tauri::command]
 pub async fn media_next(app: tauri::AppHandle) {
     let _ =
         tauri::async_runtime::spawn_blocking(move || transport(&app, |p| p.next.to_string())).await;
 }
 
-/// Go back: Music's back button restarts the track, or goes to the previous one
-/// when already at its start; Spotify goes to the previous track.
 #[tauri::command]
 pub async fn media_previous(app: tauri::AppHandle) {
     let _ =
@@ -854,33 +800,19 @@ pub async fn media_seek(app: tauri::AppHandle, fraction: f64) {
         tauri::async_runtime::spawn_blocking(move || transport(&app, |p| seek_command(p, f))).await;
 }
 
-/// Let the player compute the target from its own track length, rather than
-/// trusting a duration the WebView may hold from the last track.
 fn seek_command(player: &Player, fraction: f64) -> String {
     let unit = if player.duration_ms { 1000.0 } else { 1.0 };
     format!("set player position to (duration of current track) * {fraction} / {unit}")
 }
 
-// ───────────────────────── covers ───────────────────────────────────
-
-/// Longest side of a player-size cover. The dashboard disc is about 128 px at
-/// 2x, so 300 px leaves room for a 3x display.
 const COVER_PX: u32 = 300;
-/// Covers held for `media_art`. A few, so skipping back to the last track
-/// doesn't refetch it.
 const COVER_CACHE_MAX: usize = 8;
-/// The image ids Spotify uses for one cover at 640 px and at 300 px. A
-/// convention, not a contract, so the URL as given is the fallback.
 const COVER_ID_640: &str = "ab67616d0000b273";
 const COVER_ID_300: &str = "ab67616d00001e02";
 
-/// What a cover key refers to. The key is the only thing the WebView passes
-/// back, and it ends up in a URL and a script, so it is parsed strictly.
 #[derive(Debug, PartialEq)]
 enum CoverSource<'a> {
-    /// A Spotify image URL, whole.
     Spotify(&'a str),
-    /// A Music persistent track id, in hex.
     Music(&'a str),
 }
 
@@ -893,7 +825,6 @@ fn parse_cover_key(key: &str) -> Option<CoverSource<'_>> {
     (!id.is_empty() && id.bytes().all(|b| b.is_ascii_hexdigit())).then_some(CoverSource::Music(id))
 }
 
-/// Covers already fetched, oldest first.
 #[derive(Default)]
 struct CoverCache(Vec<(String, String)>);
 
@@ -916,9 +847,6 @@ impl CoverCache {
     }
 }
 
-/// The cover for a `MediaState::art_key`, as a `data:` URL the page can use
-/// without a network. "" when the key is unknown, the fetch failed or the cover
-/// has gone (Music moved to another track); a held key is never fetched twice.
 #[tauri::command]
 pub async fn media_art(app: tauri::AppHandle, key: String) -> String {
     tauri::async_runtime::spawn_blocking(move || cover(&app, &key))
@@ -951,7 +879,6 @@ fn cover(app: &tauri::AppHandle, key: &str) -> String {
     url
 }
 
-/// The 300 px image of the cover `url` names.
 fn spotify_cover_url(url: &str) -> String {
     url.replace(COVER_ID_640, COVER_ID_300)
 }
@@ -962,7 +889,6 @@ fn spotify_cover(url: &str) -> Option<Vec<u8>> {
     std::iter::once(small.as_str())
         .chain(original)
         .find_map(|u| {
-            // Arguments, not a shell line: the URL came from a player.
             std::process::Command::new("/usr/bin/curl")
                 .args(["-sfL", "--max-time", "3", u])
                 .output()
@@ -972,12 +898,6 @@ fn spotify_cover(url: &str) -> Option<Vec<u8>> {
         })
 }
 
-/// Music's cover for the track whose persistent id is `id`, as a JPEG no larger
-/// than `COVER_PX`. AppleScript can't return the image as text, so Music hands
-/// it over as raw data that osascript writes to a file; `sips` then scales it,
-/// whatever format the file embeds. The script checks the current track is still
-/// `id` first, so a skip between the poll and this call yields no cover rather
-/// than the next track's under the old key.
 fn music_cover(id: &str) -> Option<Vec<u8>> {
     let dir = std::env::temp_dir();
     let raw = dir.join(format!("edgebar-cover-{id}.bin"));
@@ -995,8 +915,6 @@ fn music_cover(id: &str) -> Option<Vec<u8>> {
     bytes
 }
 
-/// `raw` (any image format) as a JPEG of at most `COVER_PX` on its longest side,
-/// via `sips`, which has no AppKit main-thread requirement. `small` is scratch.
 fn scale_cover(raw: &std::path::Path, small: &std::path::Path) -> Option<Vec<u8>> {
     let scaled = std::process::Command::new("/usr/bin/sips")
         .args(["-Z", &COVER_PX.to_string(), "-s", "format", "jpeg"])
@@ -1409,7 +1327,6 @@ mod tests {
         std::env::temp_dir().join(format!("edgebar-media-test-{name}"))
     }
 
-    /// Pixel width and height of an image file, read by `sips`.
     fn dimensions(path: &std::path::Path) -> (u32, u32) {
         let out = std::process::Command::new("/usr/bin/sips")
             .args(["-g", "pixelWidth", "-g", "pixelHeight"])

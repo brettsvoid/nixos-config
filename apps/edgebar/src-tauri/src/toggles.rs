@@ -1,12 +1,3 @@
-//! The dashboard's five quick toggles: Wi-Fi, Bluetooth, Focus, Night Shift and
-//! Caffeine. Each is one row of `TABLE`, a reader and a writer, and
-//! `Toggles::converge` is the one policy every write goes through.
-//!
-//! edgebar runs under herdr, which tccd attributes to kitty, so these calls run
-//! with kitty's permissions (Full Disk Access among them) and kitty's usage
-//! strings. That is why the Focus file is readable, and why switching Bluetooth
-//! asks for Bluetooth permission for kitty.
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::ErrorKind;
@@ -17,33 +8,22 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
-/// How long a write may take to show in its reader before the toggle reports
-/// that it didn't take. blueutil waits for Bluetooth power the same way.
 const SETTLE: Duration = Duration::from_secs(3);
 const SETTLE_STEP: Duration = Duration::from_millis(100);
-/// How long a `shortcuts list` answer is trusted, so a Shortcut made after
-/// edgebar started enables the Focus toggle within half a minute.
 const SHORTCUTS_TTL: Duration = Duration::from_secs(30);
-/// Longest a helper command (networksetup, shortcuts) may run before it is killed.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
-/// IOBluetooth's setter can block on kitty's Bluetooth permission prompt; past
-/// this the write counts as refused.
 const BLUETOOTH_TIMEOUT: Duration = Duration::from_secs(3);
 const BLUETOOTH_PERMISSION: &str = "Needs Bluetooth permission for kitty";
 
 pub const ASSERTIONS: &str = "Library/DoNotDisturb/DB/Assertions.json";
 const MODE_CONFIGURATIONS: &str = "Library/DoNotDisturb/DB/ModeConfigurations.json";
 
-/// The `toggles` block of config.json.
 #[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TogglesConfig {
-    /// The Shortcut the Focus toggle runs. Empty leaves the toggle read-only.
     pub focus_shortcut: String,
 }
 
-/// The toggles in the order the dashboard draws them. Each discriminant is the
-/// toggle's row in `TABLE`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ToggleId {
@@ -54,7 +34,6 @@ pub enum ToggleId {
     Caffeine,
 }
 
-/// One toggle as the WebView sees it (`ToggleState` in ipc.ts).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ToggleState {
     pub id: ToggleId,
@@ -63,11 +42,9 @@ pub struct ToggleState {
     pub detail: String,
 }
 
-/// What a row's reader sees, before `read_all` pins the row's id on.
 #[derive(Debug, PartialEq)]
 struct Reading {
     on: bool,
-    /// False when edgebar has no way to set it; `detail` then says why.
     available: bool,
     detail: String,
 }
@@ -102,7 +79,6 @@ struct Toggle {
     id: ToggleId,
     read: fn(&Toggles) -> Reading,
     write: fn(&Toggles, bool) -> Result<(), String>,
-    /// The detail shown when a write returned but the reader never followed it.
     unconfirmed: &'static str,
 }
 
@@ -117,8 +93,6 @@ const TABLE: [Toggle; 5] = [
         id: ToggleId::Bluetooth,
         read: read_bluetooth,
         write: write_bluetooth,
-        // The setter returns nothing, so a refusal can only show as power that
-        // didn't change.
         unconfirmed: BLUETOOTH_PERMISSION,
     },
     Toggle {
@@ -152,15 +126,10 @@ const _: () = {
     }
 };
 
-/// Managed state: the config the rows read and what they keep between calls.
 pub struct Toggles {
-    /// Replaced when a setting changes it (`set_config`).
     config: Mutex<TogglesConfig>,
-    /// `shortcuts list`'s output, and when it was read.
     shortcuts: Mutex<Option<(Instant, String)>>,
-    /// The device networksetup names for Wi-Fi ("en0"), once a write has found it.
     wifi_device: OnceLock<String>,
-    /// The caffeinate child while Caffeine is on.
     caffeine: Mutex<Option<Child>>,
 }
 
@@ -174,14 +143,11 @@ impl Toggles {
         }
     }
 
-    /// Swap in a changed config, then push all five as `toggles` so the
-    /// dashboard shows what the Focus toggle can do now.
     pub fn set_config(&self, app: &tauri::AppHandle, config: TogglesConfig) {
         *self.config.lock().unwrap() = config;
         let _ = app.emit("toggles", self.read_all());
     }
 
-    /// The Shortcut the Focus toggle runs; empty when none is named.
     pub fn focus_shortcut(&self) -> String {
         self.config.lock().unwrap().focus_shortcut.clone()
     }
@@ -201,7 +167,6 @@ impl Toggles {
             .collect()
     }
 
-    /// Set one toggle, then read all five. If it didn't take, its detail says why.
     fn set(&self, id: ToggleId, on: bool) -> Vec<ToggleState> {
         let failure = self.converge(&TABLE[id as usize], on, SETTLE);
         let mut all = self.read_all();
@@ -211,9 +176,6 @@ impl Toggles {
         all
     }
 
-    /// Drive `row` to `on` and return why it didn't get there. Writes nothing
-    /// when it is already there (the Focus Shortcut toggles, so a second run
-    /// would undo the first) or when the row has no way to set it.
     fn converge(&self, row: &Toggle, on: bool, settle: Duration) -> Option<String> {
         let now = (row.read)(self);
         if !now.available || now.on == on {
@@ -232,7 +194,6 @@ impl Toggles {
         None
     }
 
-    /// Whether a Shortcut called `name` exists, or None if `shortcuts list` failed.
     pub fn has_shortcut(&self, name: &str) -> Option<bool> {
         let mut cache = self.shortcuts.lock().unwrap();
         let fresh = cache
@@ -254,9 +215,6 @@ pub async fn toggles(app: tauri::AppHandle) -> Vec<ToggleState> {
         .unwrap_or_default()
 }
 
-/// Set one toggle and return its new state, then push all five as `toggles`.
-/// Blocks until the change shows (up to `SETTLE`, plus `BLUETOOTH_TIMEOUT` for
-/// Bluetooth), hence `spawn_blocking`.
 #[tauri::command]
 pub async fn set_toggle(
     app: tauri::AppHandle,
@@ -271,8 +229,6 @@ pub async fn set_toggle(
     .await
     .map_err(|e| e.to_string())
 }
-
-// ───────────────────────── Wi-Fi ────────────────────────────────────
 
 fn read_wifi(_: &Toggles) -> Reading {
     match sys::wifi_power() {
@@ -304,7 +260,6 @@ fn write_wifi(t: &Toggles, on: bool) -> Result<(), String> {
         .ok_or_else(|| "networksetup couldn't switch Wi-Fi".to_string())
 }
 
-/// The device of the "Wi-Fi" port in `networksetup -listallhardwareports`.
 fn wifi_device(listing: &str) -> Option<String> {
     let mut lines = listing.lines();
     lines.find(|l| l.trim() == "Hardware Port: Wi-Fi")?;
@@ -315,19 +270,13 @@ fn wifi_device(listing: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-// ───────────────────────── Bluetooth ────────────────────────────────
-
 fn read_bluetooth(_: &Toggles) -> Reading {
-    // 1 is on (seen live). Off has never been observed, so any other value
-    // reads as off.
     match sys::bluetooth_power() {
         Some(state) => Reading::settable(state == 1, on_off(state == 1)),
         None => Reading::unavailable(false, "Bluetooth state unreadable"),
     }
 }
 
-/// Set while a setter call is in flight. One blocked on the permission prompt
-/// keeps its thread, and a second click shouldn't pile another on top.
 static BLUETOOTH_WRITING: AtomicBool = AtomicBool::new(false);
 
 fn write_bluetooth(_: &Toggles, on: bool) -> Result<(), String> {
@@ -344,9 +293,6 @@ fn write_bluetooth(_: &Toggles, on: bool) -> Result<(), String> {
         .unwrap_or_else(|_| Err(BLUETOOTH_PERMISSION.into()))
 }
 
-/// What macOS has decided about Bluetooth for the app edgebar's permissions
-/// belong to (kitty today). Switching Bluetooth needs `Granted`; `NotAsked`
-/// means the first switch will ask.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BluetoothPermission {
     NotAsked,
@@ -355,10 +301,7 @@ pub enum BluetoothPermission {
     Granted,
 }
 
-/// Read with CoreBluetooth's `CBManager.authorization`, a preflight that never
-/// asks (tccd logs it as `preflight=yes`). None when CoreBluetooth can't say.
 pub fn bluetooth_permission() -> Option<BluetoothPermission> {
-    // CBManagerAuthorization's raw values.
     match sys::bluetooth_authorization()? {
         0 => Some(BluetoothPermission::NotAsked),
         1 => Some(BluetoothPermission::Restricted),
@@ -367,8 +310,6 @@ pub fn bluetooth_permission() -> Option<BluetoothPermission> {
         _ => None,
     }
 }
-
-// ───────────────────────── Focus ────────────────────────────────────
 
 fn read_focus(t: &Toggles) -> Reading {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
@@ -412,8 +353,6 @@ fn read_focus(t: &Toggles) -> Reading {
     Reading::settable(on, detail)
 }
 
-/// The Shortcut toggles Focus, so `on` is not passed on: `converge` only calls
-/// this when Focus is in the other state.
 fn write_focus(t: &Toggles, _on: bool) -> Result<(), String> {
     let name = t.focus_shortcut();
     let mut cmd = Command::new("/usr/bin/shortcuts");
@@ -423,9 +362,6 @@ fn write_focus(t: &Toggles, _on: bool) -> Result<(), String> {
         .ok_or_else(|| format!("The \"{name}\" Shortcut failed"))
 }
 
-/// The mode id of the Focus turned on by hand, None when none is. Assertions.json
-/// keeps each live one under `data[].storeAssertionRecords` (a key the
-/// DoNotDisturb framework names) and ended ones under `storeInvalidationRecords`.
 fn active_focus(assertions: &str) -> Result<Option<String>, serde_json::Error> {
     let doc: Value = serde_json::from_str(assertions)?;
     let record = doc["data"]
@@ -443,7 +379,6 @@ fn active_focus(assertions: &str) -> Result<Option<String>, serde_json::Error> {
     }))
 }
 
-/// A Focus mode's display name from ModeConfigurations.json.
 fn mode_name(configs: &str, id: &str) -> Option<String> {
     let doc: Value = serde_json::from_str(configs).ok()?;
     doc["data"]
@@ -453,25 +388,20 @@ fn mode_name(configs: &str, id: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Whether `shortcuts list` output names `name` exactly (one name per line).
 fn lists_shortcut(list: &str, name: &str) -> bool {
     list.lines().any(|line| line == name)
 }
 
-// ───────────────────────── Night Shift ──────────────────────────────
-
 /// CoreBrightness's status struct, in the layout of the nightlight crate's
 /// `BlueLightStatus` (smudge/nightlight 1.0, src/macos/status.rs). On macOS
 /// 26.7.1 the runtime encoding of `getBlueLightStatus:`'s argument,
-/// `^{?=BBBi{?={?=ii}{?=ii}}QB}`, matches it field for field. The underscored
-/// fields are unread; they keep their place in the layout.
+/// `^{?=BBBi{?={?=ii}{?=ii}}QB}`, matches it field for field.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct BlueLightStatus {
     _active: bool,
     enabled: bool,
     _sun_schedule_permitted: bool,
-    /// 0 no schedule, 1 sunset to sunrise, 2 custom.
     mode: i32,
     from_hour: i32,
     from_minute: i32,
@@ -511,11 +441,8 @@ fn write_night_shift(_: &Toggles, on: bool) -> Result<(), String> {
         .ok_or_else(|| "CoreBrightness refused".to_string())
 }
 
-// ───────────────────────── Caffeine ─────────────────────────────────
-
 fn read_caffeine(t: &Toggles) -> Reading {
     let mut child = t.caffeine.lock().unwrap();
-    // try_wait reaps a child that has exited, so a dead one reads as off.
     let on = child
         .as_mut()
         .is_some_and(|c| matches!(c.try_wait(), Ok(None)));
@@ -532,7 +459,6 @@ fn write_caffeine(t: &Toggles, on: bool) -> Result<(), String> {
         let _ = old.wait();
     }
     if on {
-        // -w ties it to edgebar's pid, so it ends with edgebar however edgebar ends.
         let spawned = Command::new("/usr/bin/caffeinate")
             .args(["-di", "-w", &std::process::id().to_string()])
             .stdin(Stdio::null())
@@ -545,7 +471,6 @@ fn write_caffeine(t: &Toggles, on: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// stdout of `cmd` if it exits 0 within `COMMAND_TIMEOUT`; killed past that.
 fn run(mut cmd: Command) -> Option<String> {
     use std::io::Read;
     let mut child = cmd
@@ -554,8 +479,6 @@ fn run(mut cmd: Command) -> Option<String> {
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
-    // Drained on a side thread so a full pipe can't wedge the child; the kill
-    // on timeout ends the read.
     let mut stdout = child.stdout.take()?;
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -571,8 +494,6 @@ fn run(mut cmd: Command) -> Option<String> {
     child.wait().ok()?.success().then_some(text)
 }
 
-// ───────────────────────── macOS calls ──────────────────────────────
-
 #[cfg(target_os = "macos")]
 mod sys {
     use super::BlueLightStatus;
@@ -582,14 +503,11 @@ mod sys {
     use std::ffi::{c_char, c_int, c_void, CStr};
     use std::sync::OnceLock;
 
-    /// CoreWLAN's power flag for the default Wi-Fi interface, None without one.
     pub fn wifi_power() -> Option<bool> {
         autoreleasepool(|_| {
             let class = AnyClass::get(c"CWWiFiClient")?;
-            // SAFETY: documented CoreWLAN getters that return an object or nil.
             let client: Option<Retained<AnyObject>> = unsafe { msg_send![class, sharedWiFiClient] };
             let interface: Option<Retained<AnyObject>> = unsafe { msg_send![&*client?, interface] };
-            // SAFETY: CWInterface's BOOL getter.
             let on: bool = unsafe { msg_send![&*interface?, powerOn] };
             Some(on)
         })
@@ -601,37 +519,30 @@ mod sys {
         fn notify_cancel(token: c_int) -> u32;
     }
 
-    /// The state on the `com.apple.bluetooth.power` notify key. Unlike
-    /// IOBluetooth's getters, reading it raises no permission prompt.
+    /// Unlike IOBluetooth's getters, reading this notify key raises no
+    /// permission prompt.
     pub fn bluetooth_power() -> Option<u64> {
         let mut token: c_int = 0;
-        // SAFETY: a NUL-terminated name and a live out-pointer.
         if unsafe { notify_register_check(c"com.apple.bluetooth.power".as_ptr(), &mut token) } != 0
         {
             return None;
         }
         let mut state = 0;
-        // SAFETY: `token` was just registered; it is cancelled straight after.
         let status = unsafe { notify_get_state(token, &mut state) };
         unsafe { notify_cancel(token) };
         (status == 0).then_some(state)
     }
 
     fn open(library: &CStr) -> Option<*mut c_void> {
-        // SAFETY: a NUL-terminated path; a null handle is checked.
         let handle = unsafe { libc::dlopen(library.as_ptr(), libc::RTLD_NOW) };
         (!handle.is_null()).then_some(handle)
     }
 
     fn symbol(library: &CStr, name: &CStr) -> Option<*mut c_void> {
-        // SAFETY: a live handle and a NUL-terminated name; a null symbol is checked.
         let sym = unsafe { libc::dlsym(open(library)?, name.as_ptr()) };
         (!sym.is_null()).then_some(sym)
     }
 
-    /// IOBluetooth's private power setter, looked up at call time so nothing
-    /// loads IOBluetooth until Bluetooth is switched. It can block on kitty's
-    /// Bluetooth permission prompt.
     pub fn set_bluetooth_power(on: bool) -> Result<(), String> {
         let sym = symbol(
             c"/System/Library/Frameworks/IOBluetooth.framework/IOBluetooth",
@@ -644,7 +555,6 @@ mod sys {
         Ok(())
     }
 
-    /// `+[CBManager authorization]`, loading CoreBluetooth on first use.
     pub fn bluetooth_authorization() -> Option<isize> {
         static LOADED: OnceLock<bool> = OnceLock::new();
         let loaded = *LOADED.get_or_init(|| {
@@ -655,8 +565,6 @@ mod sys {
         }
         let class = AnyClass::get(c"CBManager")?;
         let sel = sel!(authorization);
-        // SAFETY: NSObject's class-side respondsToSelector:, then the documented
-        // class property (macOS 10.15+), which returns an NSInteger.
         let responds: bool = unsafe { msg_send![class, respondsToSelector: sel] };
         responds.then(|| unsafe { msg_send![class, authorization] })
     }
@@ -671,14 +579,10 @@ mod sys {
             return None;
         }
         let class = AnyClass::get(c"CBBlueLightClient")?;
-        // SAFETY: an NSObject subclass; `new` returns a +1 instance or nil.
         unsafe { msg_send![class, new] }
     }
 
-    /// An unknown selector raises an Objective-C exception that nothing here
-    /// catches, so each private selector is checked before it is sent.
     fn responds(obj: &AnyObject, sel: Sel) -> bool {
-        // SAFETY: NSObject's respondsToSelector:.
         unsafe { msg_send![obj, respondsToSelector: sel] }
     }
 
@@ -690,9 +594,6 @@ mod sys {
                 return None;
             }
             let mut status = BlueLightStatus::default();
-            // The struct has no objc2 `Encode` impl, so this goes through
-            // objc_msgSend directly. SAFETY: the selector takes a pointer to the
-            // 40-byte struct `BlueLightStatus` mirrors and returns BOOL.
             let get: unsafe extern "C-unwind" fn(
                 *const AnyObject,
                 Sel,
@@ -714,7 +615,6 @@ mod sys {
             if !responds(&client, sel) {
                 return false;
             }
-            // SAFETY: `- (BOOL)setEnabled:(BOOL)`.
             let set: unsafe extern "C-unwind" fn(*const AnyObject, Sel, Bool) -> Bool = unsafe {
                 std::mem::transmute(objc2::ffi::objc_msgSend as unsafe extern "C-unwind" fn())
             };
@@ -777,7 +677,6 @@ mod tests {
 
     #[test]
     fn an_ended_assertion_is_no_focus() {
-        // The shape this Mac's file has with no Focus on.
         let file = r#"{"data":[{"storeInvalidationRecords":[{"invalidationAssertion":
             {"assertionDetails":{"assertionDetailsModeIdentifier":"com.apple.focus.work"}},
             "invalidationReason":"user"}],"storeInvalidationRequestRecords":[]}],
@@ -880,7 +779,6 @@ mod tests {
         )
     }
 
-    /// Reads all five on this Mac; writes nothing.
     #[test]
     #[ignore]
     fn live_reads_all_five() {
@@ -947,7 +845,6 @@ mod tests {
         }
     }
 
-    /// Night Shift is harmless and reversible: flips it, reads it, flips it back.
     #[test]
     #[ignore]
     fn live_night_shift_flips_and_back() {
@@ -963,7 +860,6 @@ mod tests {
         assert_eq!(back, before);
     }
 
-    /// Starts and stops caffeinate, checking pmset sees its assertion.
     #[test]
     #[ignore]
     fn live_caffeine_both_ways() {

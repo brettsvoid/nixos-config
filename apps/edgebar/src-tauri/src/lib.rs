@@ -1,11 +1,3 @@
-// edgebar: a top bar for macOS in the look of the brett-desktop shell.
-//
-// Each display gets two windows: a native frame (one surface-coloured shape
-// round the screen, permanently click-through; see `create_native_frame`) and,
-// above it, a transparent WebView bar (the band along the top, and the drawers
-// that grow out of it). The bar is click-through except over the rects its
-// WebView reports, switched by NSEvent cursor monitors (see "click-through bar
-// window" below).
 // Don't toggle `ignore_cursor_events` from a polling loop instead: Tauri's
 // getters block on the main event loop, which stops servicing them while the
 // cursor is tracked over a window, so the loop deadlocks.
@@ -14,41 +6,30 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
 
-/// The Assistant tab's chat, through the Claude Code CLI.
 mod assistant;
 
 /// Dynamic content for the collapsed notch (media / per-workspace / OSD).
 mod notch;
 
-/// Memory, swap and disk rows, and the always-on CPU sampler.
 mod metrics;
 
-/// Notification history, read from a copy of macOS's store.
 mod notifications;
 
-/// The dashboard's quick toggles: Wi-Fi, Bluetooth, Focus, Night Shift, Caffeine.
 mod toggles;
 
-/// The wallpaper folder, the OLED palette and Tint.
 mod wallpapers;
 
-/// Typing into the open notch: a bar window takes the keyboard on request.
 mod keyboard;
 
-/// Debug-only socket that drives and snapshots the live bar.
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod devtools;
 
-/// The user's overrides layered over the Nix config, and the two commands that
-/// read and change them.
 mod settings;
 
-/// The Settings view's checklist of what edgebar needs from this Mac.
 mod setup;
 
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
-/// `Light`/`Dark` pin it. The `appearance` setting, so the user's choice lives
-/// in settings.json like any other.
+/// `Light`/`Dark` pin it.
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum Appearance {
@@ -69,9 +50,6 @@ enum Scheme {
     Dark,
 }
 
-/// Per-scheme colour-role maps, so day and night can map a role differently.
-/// Each value is a palette key, a literal `#hex`, or fallbacks (`a|b`, see
-/// `resolve_colors`).
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 struct Themes {
     dark: Colors,
@@ -106,9 +84,7 @@ impl Palettes {
 }
 
 /// Single source of truth for colours and geometry, read by both the native
-/// frame and the bar WebView (as CSS custom properties). Built by
-/// `settings::load` from three layers: the bundled default, then
-/// `~/.config/edgebar/config.json`, then the user's `settings.json`.
+/// frame and the bar WebView (as CSS custom properties).
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Config {
@@ -126,20 +102,14 @@ struct Config {
     /// Per-workspace notch rules + the idle fallback. See `notch.rs`.
     #[serde(default)]
     notch: notch::NotchConfig,
-    /// The quick toggles' settings. See `toggles.rs`.
     #[serde(default)]
     toggles: toggles::TogglesConfig,
-    /// The wallpaper folder and Tint. See `wallpapers.rs`.
     #[serde(default)]
     wallpaper: wallpapers::WallpaperConfig,
-    /// Dark mode on a pure black surface.
     #[serde(default = "wallpapers::default_oled")]
     oled: bool,
-    /// The Assistant tab's CLI and model. See `assistant.rs`.
     #[serde(default)]
     assistant: assistant::AssistantConfig,
-    /// Whether the dashboard may read macOS's notification history. See
-    /// `notifications.rs`.
     #[serde(default)]
     notifications: notifications::NotificationsConfig,
 }
@@ -154,7 +124,6 @@ struct ResolvedConfig {
     geometry: Geometry,
     appearance: Appearance,
     scheme: String,
-    /// How `colors.text` (the ink on the surface) was chosen.
     ink: InkInfo,
     /// What the notch shows when no provider has anything to say. Rendered
     /// entirely in the WebView (a clock ticks, and that shouldn't cost an event
@@ -162,10 +131,6 @@ struct ResolvedConfig {
     notch_idle: String,
 }
 
-/// Resolve a role map against a palette: palette name → hex. A literal `#hex`
-/// passes through. `a|b` names fallbacks, and the first the palette has wins,
-/// so a role can ask for a key that older palettes lack. A value with no match
-/// passes through unchanged.
 fn resolve_colors(
     colors: &Colors,
     palette: &std::collections::HashMap<String, String>,
@@ -194,11 +159,8 @@ fn resolve_colors(
     }
 }
 
-/// WCAG AA for body text. The bar's 13px labels are body text, so this is the
-/// floor the ink on the surface has to clear.
 const MIN_INK_CONTRAST: f64 = 4.5;
 
-/// WCAG's floor for graphical indicators (1.4.11), which the accent marks are.
 const MIN_ACCENT_CONTRAST: f64 = 3.0;
 
 /// WCAG 2 relative luminance of an sRGB `#hex` colour (alpha ignored).
@@ -220,10 +182,6 @@ fn contrast(a: &str, b: &str) -> f64 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
-/// Explicit ink (the `text` role) per scheme, set from the theme view. Wins over
-/// both the role map and the contrast check. Per scheme because an ink picked
-/// for a dark surface would vanish on the light one the moment the appearance
-/// flips.
 #[derive(Clone, Default, Deserialize, Serialize)]
 struct InkOverride {
     #[serde(default)]
@@ -248,14 +206,12 @@ impl InkOverride {
     }
 }
 
-/// How the ink in effect was arrived at, for the theme view's control.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InkInfo {
     /// "config" (the role map's ink cleared the floor), "contrast" (the check
     /// replaced it) or "override" (set explicitly from the theme view).
     source: &'static str,
-    /// Contrast of the ink in effect against the surface.
     ratio: f64,
     /// The role map's ink and its contrast, before any correction.
     configured: String,
@@ -264,10 +220,6 @@ struct InkInfo {
     mode: &'static str,
 }
 
-/// A replacement for `configured` that reads on `ground`, or None if it already
-/// clears `floor`. Prefers the palette colour with the most contrast, which
-/// keeps the wallpaper's tint; if even that falls short (a mid-tone surface),
-/// the best of it, `configured`, black and white.
 fn readable_on(
     ground: &str,
     configured: &str,
@@ -306,9 +258,6 @@ fn normalise_hex(s: &str) -> Option<String> {
         .then(|| format!("#{}", h.to_ascii_lowercase()))
 }
 
-/// The colour roles. The bar band, the frame, the notch and every drawer are
-/// one `surface`; `text` and `subtext` are drawn on it and `accent` marks every
-/// active or selected state. Ink on an accent fill is the surface again.
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Colors {
@@ -347,19 +296,12 @@ fn default_cpu_user() -> String {
     "#1e66f5".to_string()
 }
 
-/// The frame's shape, in logical px. The frame is one shape in the surface
-/// colour: the bar's band along the top, `frameThickness` down the sides and
-/// along the bottom, around a hole with `frameRadius` corners.
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Geometry {
-    /// The band: the frame's top edge and the strip AeroSpace keeps clear (Nix
-    /// sets it from `flake.lib.barGeometry`).
     bar_height: f64,
     frame_thickness: f64,
     frame_radius: f64,
-    /// Height of the bar window while no drawer is open: the band, plus
-    /// transparent click-through room below it.
     #[serde(default = "default_window_height")]
     window_height: f64,
 }
@@ -429,7 +371,6 @@ fn persist_scheme(scheme: &str) {
     }
 }
 
-/// The theme view's ink override, next to the scheme file.
 fn ink_state_path() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .map(|home| std::path::Path::new(&home).join(".config/edgebar/ink.json"))
@@ -465,15 +406,11 @@ struct ThemeState {
     wallpaper_command: String,
     /// `notch.idle` from config, passed through to the WebView.
     notch_idle: String,
-    /// The theme view's explicit ink, per scheme.
     ink: InkOverride,
-    /// Dark scheme on a pure black surface (`oled` in config).
     oled: bool,
 }
 
 impl ThemeState {
-    /// The active scheme's palette: OLED makes the dark one's surface black
-    /// before any role resolves from it.
     fn palette(&self) -> std::collections::HashMap<String, String> {
         let palette = self.palettes.for_scheme(self.scheme);
         if self.oled && self.scheme == Scheme::Dark {
@@ -483,8 +420,6 @@ impl ThemeState {
         }
     }
 
-    /// Colours for the active scheme, with the ink on the surface settled: the
-    /// override if one is set, else the role map's ink after the contrast check.
     fn resolve(&self) -> (Colors, InkInfo) {
         let palette = &self.palette();
         let mut colors = resolve_colors(self.colors.for_scheme(self.scheme), palette);
@@ -496,8 +431,6 @@ impl ThemeState {
                 None => (configured.clone(), "config"),
             },
         };
-        // The accent gets the same check: a palette without `primary` falls back
-        // to a key that may be the surface's own tone.
         if let Some(better) =
             readable_on(&colors.surface, &colors.accent, palette, MIN_ACCENT_CONTRAST)
         {
@@ -562,8 +495,6 @@ fn resolve_scheme(appearance: Appearance) -> Scheme {
     }
 }
 
-/// Switch the active appearance: re-resolve colours for the new scheme, push
-/// them to the WebView and recolour the native frame in place.
 fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     let resolved: ResolvedConfig = {
         let state = app.state::<Mutex<ThemeState>>();
@@ -578,7 +509,6 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
         let surface = resolved.colors.surface.clone();
         let _ = app.run_on_main_thread(move || recolor_native_frame(&surface));
     }
-    // The palette changed, so a tinted desktop picture is out of date.
     wallpapers::spawn_converge(app);
 }
 
@@ -627,8 +557,6 @@ fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
     state.lock().unwrap().resolved_config()
 }
 
-/// Set (or, with None, clear) the ink for the active scheme from the theme
-/// view. Persists it and re-themes live.
 #[tauri::command]
 fn set_ink(app: tauri::AppHandle, colour: Option<String>) {
     let ink = colour.as_deref().and_then(normalise_hex);
@@ -676,10 +604,6 @@ async fn pick_colour(initial: String) -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", r / 257, g / 257, b / 257))
 }
 
-/// The Wallpapers view's light / dark / auto toggle. The mode is the
-/// `appearance` setting, so this is `set_setting` for that key under its own
-/// name; the settings converge re-themes. Rejects a mode that isn't one of the
-/// three.
 #[tauri::command]
 async fn set_appearance(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     settings::set_setting(
@@ -848,11 +772,10 @@ fn make_overlay(window: &tauri::WebviewWindow) {
 type RectMap = std::sync::Arc<Mutex<std::collections::HashMap<String, Vec<[f64; 4]>>>>;
 
 // ───────────────────────── click-through bar window ─────────────────
-// The bar window is taller than the bar band (and taller still while a drawer
-// is open) and overlaps the tiled windows' top edge. A transparent window still
-// swallows clicks across its whole rect, and returning nil from a view's hitTest
-// doesn't pass them through; only the window's `ignoresMouseEvents` does. So bars stay
-// click-through except while the cursor is over a rect the WebView reported.
+// A transparent window still swallows clicks across its whole rect, and
+// returning nil from a view's hitTest doesn't pass them through; only the
+// window's `ignoresMouseEvents` does. So bars stay click-through except while
+// the cursor is over a rect the WebView reported.
 
 // The bar NSWindows the shared cursor monitors hit-test, keyed by window
 // label. Main-thread only (NSWindow isn't Send); bars register here when
@@ -864,12 +787,9 @@ thread_local! {
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-/// Set one bar's `ignoresMouseEvents` from the cursor position: interactive when
-/// it's over one of the reported rects (the band's segments, or a full-window
-/// rect while a drawer is open), click-through otherwise. `mouseLocation` and
-/// the window frame are screen coords (bottom-left origin); the rects are
-/// window-relative CSS px from the top-left, so we map each rect into screen
-/// space to compare.
+/// `mouseLocation` and the window frame are screen coords (bottom-left origin);
+/// the rects are window-relative CSS px from the top-left, so we map each rect
+/// into screen space to compare.
 #[cfg(target_os = "macos")]
 fn sync_ignore_mouse(ns_window: &objc2_app_kit::NSWindow, rects: &[[f64; 4]]) {
     let loc = objc2_app_kit::NSEvent::mouseLocation();
@@ -927,8 +847,7 @@ fn install_cursor_monitors(rects: RectMap) {
     }
 }
 
-/// Register a bar window with the cursor monitors (idempotent). Starts
-/// click-through; the monitors flip it on when the cursor reaches a segment.
+/// Register a bar window with the cursor monitors (idempotent).
 #[cfg(target_os = "macos")]
 fn track_bar_window(label: &str, window: &tauri::WebviewWindow) {
     use objc2::rc::Retained;
@@ -974,12 +893,8 @@ fn set_interactive_rects(
         .insert(window.label().to_string(), rects);
 }
 
-/// Create one screen's frame as a borderless NSWindow drawn with layers (no
-/// WebView, so no web-content process): one opaque shape in the surface colour,
-/// the screen minus the hole inside the frame, over a shadow that falls inward
-/// from the hole's edge. Click-through, all-spaces, stationary. Called once per
-/// NSScreen; the window is kept in FRAME_WINDOWS so a display change can close
-/// and rebuild it.
+/// Click-through, all-spaces, stationary. Called once per NSScreen; the window
+/// is kept in FRAME_WINDOWS so a display change can close and rebuild it.
 #[cfg(target_os = "macos")]
 fn create_native_frame(
     mtm: objc2::MainThreadMarker,
@@ -1012,8 +927,7 @@ fn create_native_frame(
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
     // tao puts always-on-top windows (the bar) at kCGFloatingWindowLevelKey (5),
-    // not NSFloatingWindowLevel (3). One below keeps the bar's band and drawers
-    // over the frame they join.
+    // not NSFloatingWindowLevel (3).
     const FRAME_WINDOW_LEVEL: isize = 4;
     window.setLevel(FRAME_WINDOW_LEVEL);
     window.setIgnoresMouseEvents(true);
@@ -1042,22 +956,17 @@ fn create_native_frame(
     root.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
     root.setMasksToBounds(false);
 
-    // Whole device pixels, so the hole's straight edges stay crisp and its top
-    // meets the bar window's band exactly.
     let scale = screen.backingScaleFactor();
     let snap = |pt: f64| (pt * scale).round() / scale;
     let side = snap(geometry.frame_thickness);
     let top = snap(geometry.bar_height);
     let radius = snap(geometry.frame_radius);
-    // The layer's origin is bottom-left, so the band's lower edge is at h - top.
     let hole_rect = CGRect::new(
         CGPoint::new(side, side),
         CGSize::new(w - 2.0 * side, h - side - top),
     );
     let hole = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(hole_rect, radius, radius);
 
-    // The shadow over the windows: a strip along each straight edge of the
-    // hole and a quarter ring in each corner, under the frame's fill.
     let (hw, hh) = (hole_rect.size.width, hole_rect.size.height);
     let s = FRAME_SHADOW_SIZE;
     let along = |l: f64| frame_shadow_at(l * s);
@@ -1074,8 +983,6 @@ fn create_native_frame(
         root.addSublayer(&strip);
     }
     if radius > 0.0 {
-        // Location 0 is the corner arc's centre and 1 the arc itself, so a point
-        // at location l is radius × (1 - l) from the frame.
         let around = |l: f64| frame_shadow_at(radius * (1.0 - l));
         for (x, y, cx, cy) in [
             (side, h - top - radius, radius, 0.0),
@@ -1110,36 +1017,26 @@ fn create_native_frame(
 
     window.orderFrontRegardless();
 
-    // Keep the window and its fill: theme changes recolour the fill in place,
-    // and a display change closes the window and rebuilds.
     FRAME_WINDOWS.with(|cell| cell.borrow_mut().push(FrameWindow { window, fill }));
 }
 
-/// The frame's shadow over the windows, as the custom shell draws it: this deep,
-/// black at this opacity at the frame's edge, fading out quadratically. Drawn as
-/// gradients rather than a layer shadow: they follow that falloff exactly, and the
-/// dev snapshot shows them as the screen does, which it does not for a layer
-/// shadow's blur. The drawers' CSS shadow (`--shadow-drawer`) matches it.
 #[cfg(target_os = "macos")]
 const FRAME_SHADOW_SIZE: f64 = 12.0;
 #[cfg(target_os = "macos")]
 const FRAME_SHADOW_OPACITY: f64 = 0.3;
 
-/// How dark the frame's shadow is `d` px from the frame.
 #[cfg(target_os = "macos")]
 fn frame_shadow_at(d: f64) -> f64 {
     let t = (1.0 - d / FRAME_SHADOW_SIZE).max(0.0);
     FRAME_SHADOW_OPACITY * t * t
 }
 
-/// A gradient of the frame's shadow, black at `darkness(location)` alpha.
 #[cfg(target_os = "macos")]
 fn shadow_gradient(
     darkness: &dyn Fn(f64) -> f64,
 ) -> objc2::rc::Retained<objc2_quartz_core::CAGradientLayer> {
     use objc2::runtime::AnyObject;
     use objc2_foundation::{NSArray, NSNumber};
-    // Enough stops that straight lines between them trace the curve.
     const STOPS: usize = 13;
     let at = |i: usize| i as f64 / (STOPS - 1) as f64;
     let colours: Vec<_> = (0..STOPS)
@@ -1160,16 +1057,12 @@ fn shadow_gradient(
     layer
 }
 
-/// `#hex` as an sRGB NSColor, the colour space CSS paints the band in.
 #[cfg(target_os = "macos")]
 fn srgb(hex: &str) -> objc2::rc::Retained<objc2_app_kit::NSColor> {
     let [r, g, b, a] = hex_to_rgba(hex);
     objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, a)
 }
 
-/// One screen's native frame: the NSWindow plus its fill layer. CALayer and
-/// NSWindow aren't `Send`, so these live in a main-thread `thread_local!`, not
-/// Tauri's managed state.
 #[cfg(target_os = "macos")]
 struct FrameWindow {
     window: objc2::rc::Retained<objc2_app_kit::NSWindow>,
@@ -1193,8 +1086,6 @@ fn remove_native_frames() {
     });
 }
 
-/// Recolour every native frame. Main thread only; callers hop via
-/// `run_on_main_thread`.
 #[cfg(target_os = "macos")]
 fn recolor_native_frame(surface: &str) {
     if objc2::MainThreadMarker::new().is_none() {
@@ -1553,9 +1444,7 @@ fn launcher_action(action: String) {
     };
 }
 
-/// The System Settings panes the dashboard links to: a toggle's own pane, and
-/// the privacy lists that grant what a toggle or the notification history
-/// needs. The ids are the panes' extension bundle ids and the anchors their
+/// The ids are the panes' extension bundle ids and the anchors their
 /// `revealElementKeyName`s (SecurityPrivacyExtension.appex TCCServiceList.plist).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1563,12 +1452,10 @@ enum SettingsPane {
     Wifi,
     Bluetooth,
     Focus,
-    /// Night Shift lives under Displays.
     Displays,
     FullDiskAccess,
     PrivacyBluetooth,
     PrivacyAutomation,
-    /// Not a pane: the Shortcuts app, where the Focus toggle's Shortcut is made.
     Shortcuts,
 }
 
@@ -1603,7 +1490,6 @@ fn open_pane(pane: SettingsPane) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Open one of `SettingsPane`'s panes; any other name fails to deserialise.
 #[tauri::command]
 fn open_settings_pane(pane: SettingsPane) -> Result<(), String> {
     open_pane(pane)
@@ -1621,9 +1507,7 @@ struct Wallpaper {
     name: String,
     path: String,
     thumb: String, // "data:image/png;base64,…"
-    /// Subfolder under the wallpapers folder, "" at its root.
     folder: String,
-    /// Lower-case file extension.
     kind: String,
 }
 
@@ -1707,8 +1591,6 @@ async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     .unwrap_or_default()
 }
 
-/// The wallpaper command's answer: the first display's picture path, which is
-/// a tinted copy while Tint is on.
 fn query_desktop_picture(cmd: &str) -> String {
     std::process::Command::new(cmd)
         .output()
@@ -1724,7 +1606,6 @@ fn query_desktop_picture(cmd: &str) -> String {
         .unwrap_or_default()
 }
 
-/// The wallpaper the desktop stands for: a tinted copy answers with its original.
 fn query_current_wallpaper(cmd: &str) -> String {
     wallpapers::original_of(&query_desktop_picture(cmd))
 }
@@ -1822,10 +1703,6 @@ fn precompute_palettes(state: tauri::State<Mutex<ThemeState>>) {
     spawn_precompute(theme_cmd, persisted_scheme());
 }
 
-/// Re-theme the bar from `path`'s palette: instant when it is already
-/// precomputed (atomic copy + in-process reload), otherwise generated now.
-/// `wait` holds the caller until the new palette is live; without it a
-/// generation is left to ping the socket when it finishes.
 fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, wait: bool) {
     if let Some(cache) = palette_cache_path(path, &persisted_scheme()) {
         if cache.exists() && install_palette(&cache) {
@@ -1843,10 +1720,6 @@ fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, wai
     }
 }
 
-/// Set the desktop on every display and re-theme the bar. The in-app marker
-/// stops the watcher from double-running. With Tint on the desktop gets a
-/// repainted copy instead, which `wallpapers::spawn_pick` sets once the palette
-/// is known.
 #[tauri::command]
 fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, path: String) {
     let (wallpaper_cmd, theme_cmd) = {
@@ -1884,9 +1757,6 @@ async fn pick_wallpaper_file() -> Option<String> {
     }
 }
 
-/// Open a Finder folder picker for the wallpaper folder and return the choice,
-/// `~/…` when it is under the home folder, or None on cancel. osascript owns
-/// the dialog, as with `pick_wallpaper_file`.
 #[tauri::command]
 async fn pick_folder() -> Option<String> {
     let path = tauri::async_runtime::spawn_blocking(|| {
@@ -1934,8 +1804,7 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
 // ───────────────────────── shared app state ─────────────────────────
 struct AppState {
     /// Kept alive because sysinfo's CPU reading is a delta since the last
-    /// refresh (a fresh System reports 0%). On macOS CPU comes from
-    /// metrics::MetricsState, so this serves memory and swap.
+    /// refresh (a fresh System reports 0%).
     sys: Mutex<sysinfo::System>,
     /// App icons as PNG data URLs, by bundle id.
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
@@ -2016,14 +1885,11 @@ async fn battery() -> Battery {
 #[serde(rename_all = "camelCase")]
 struct Volume {
     output: u8,
-    /// While edgebar holds the mic muted, the level unmuting restores.
     input: u8,
     output_muted: bool,
     input_muted: bool,
 }
 
-/// The mic level edgebar's mute took away. macOS has no input mute, so muting
-/// sets the input volume to 0 and unmuting puts this back.
 static MIC_HELD: Mutex<Option<u8>> = Mutex::new(None);
 
 pub(crate) fn run_osa(script: &str) -> Option<String> {
@@ -2034,9 +1900,6 @@ pub(crate) fn run_osa(script: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Parse the reply to `get volume settings`, e.g. "output volume:100, input
-/// volume:100, alert volume:100, output muted:false". A device without a
-/// control answers "missing value" for it, read as 0 or unmuted.
 fn parse_volume_settings(reply: &str) -> Volume {
     let mut v = Volume::default();
     for field in reply.split(", ") {
@@ -2053,8 +1916,6 @@ fn parse_volume_settings(reply: &str) -> Volume {
     v
 }
 
-/// Fold edgebar's mic mute into a fresh read. The mute lasts while the mic
-/// stays at 0; a level set anywhere else ends it.
 fn apply_mic_hold(mut v: Volume, held: &mut Option<u8>) -> Volume {
     if v.input > 0 {
         *held = None;
@@ -2066,8 +1927,6 @@ fn apply_mic_hold(mut v: Volume, held: &mut Option<u8>) -> Volume {
     v
 }
 
-/// The input volume that muting or unmuting the mic sets, given a read already
-/// folded through `apply_mic_hold`; None when it is already in that state.
 fn mic_mute_target(muted: bool, read: &Volume, held: &mut Option<u8>) -> Option<u8> {
     match (muted, *held) {
         (true, None) => {
@@ -2095,7 +1954,6 @@ async fn get_volume() -> Volume {
     .unwrap_or_default()
 }
 
-/// Sets the speaker's level and unmutes it, as the volume keys do.
 #[tauri::command]
 async fn set_volume(app: tauri::AppHandle, output: u8) {
     let level = output.min(100);
@@ -2113,7 +1971,6 @@ async fn set_volume(app: tauri::AppHandle, output: u8) {
     .await;
 }
 
-/// Sets the mic's level, which also ends edgebar's mute.
 #[tauri::command]
 async fn set_input_volume(app: tauri::AppHandle, input: u8) {
     let level = input.min(100);
@@ -2171,7 +2028,7 @@ fn flash_mute(app: &tauri::AppHandle, glyph: &str, name: &str, muted: bool, leve
 }
 
 // ───────────────────────── brightness (DisplayServices) ─────────────
-// Private framework; linked in build.rs. It dims only the built-in display.
+// Private framework; linked in build.rs.
 #[cfg(target_os = "macos")]
 mod brightness {
     type CGDirectDisplayID = u32;
@@ -2189,7 +2046,6 @@ mod brightness {
     fn builtin() -> Option<CGDirectDisplayID> {
         let mut ids = [0; 16];
         let mut count = 0;
-        // SAFETY: CoreGraphics writes at most `ids.len()` ids into the buffer.
         let err = unsafe { CGGetOnlineDisplayList(ids.len() as u32, ids.as_mut_ptr(), &mut count) };
         if err != 0 {
             return None;
@@ -2219,8 +2075,6 @@ mod brightness {
     }
 }
 
-/// The built-in display's brightness, 0..1. Fails with the reason when there is
-/// none (a desktop Mac, or a closed lid) or macOS won't read it.
 #[tauri::command]
 fn get_brightness() -> Result<f32, String> {
     #[cfg(target_os = "macos")]
@@ -2520,10 +2374,6 @@ fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &Rec
                 .ok()
         });
         let Some(bar) = bar else { continue };
-        // Once a bar is placed, its height is the WebView's (taller while a
-        // drawer is open, see syncWindowHeight in main.ts), so a rebuild keeps
-        // it: a settings change to the geometry would otherwise cut an open
-        // drawer off at `window_height`.
         let placed = TRACKED_BARS.with(|bars| bars.borrow().contains_key(&label));
         let height = placed
             .then(|| {
@@ -2932,7 +2782,6 @@ pub fn run() {
             app.manage(settings::Store::new(loaded));
             app.manage(keyboard::Keyboard::default());
             let palettes = load_palettes();
-            // Auto resolves against the live system setting.
             let appearance = config.appearance;
             let scheme = resolve_scheme(appearance);
 
@@ -2951,7 +2800,6 @@ pub fn run() {
                 thumb_cache: Mutex::new(std::collections::HashMap::new()),
                 interactive_rects: interactive_rects.clone(),
             });
-            // Before the bars exist, so their first `cpu_state` finds its state.
             metrics::install(app.handle().clone());
             app.manage(Mutex::new(ThemeState {
                 colors: config.colors,
@@ -3050,8 +2898,6 @@ pub fn run() {
                 }
             });
 
-            // Put the desktop picture right for `wallpaper.tint`: a copy left by
-            // a previous run may be stale, or tint may have been turned off.
             wallpapers::spawn_converge(app.handle());
 
             // Re-push workspaces on every app activation.
