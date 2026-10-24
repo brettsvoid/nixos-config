@@ -393,17 +393,6 @@ body {
   flex: 1 1 auto;
   min-width: 0;
 }
-/* Each line is a clipping window; the inner span is what scrolls. */
-.ni-primary,
-.ni-secondary {
-  overflow: hidden;
-  white-space: nowrap;
-}
-.ni-primary > span,
-.ni-secondary > span {
-  display: inline-block;
-  white-space: nowrap;
-}
 .ni-primary {
   font-size: var(--font-xs);
   font-weight: 600;
@@ -411,25 +400,6 @@ body {
 .ni-secondary {
   font-size: var(--font-3xs);
   color: var(--on-surface-variant);
-}
-/* Marquee: dwell, travel, dwell, travel back. Distance and duration come from
-   main.ts, which knows how far the text actually overflows. */
-@keyframes ni-marquee {
-  0%,
-  12% {
-    transform: translateX(0);
-  }
-  50%,
-  62% {
-    transform: translateX(calc(-1 * var(--ni-shift)));
-  }
-  100% {
-    transform: translateX(0);
-  }
-}
-.ni-primary.scroll > span,
-.ni-secondary.scroll > span {
-  animation: ni-marquee var(--ni-dur) ease-in-out infinite;
 }
 /* Progress (e.g. a volume level): a hairline along the bottom. Shown only when
    the item has progress; the text lifts to make room. */

@@ -12,6 +12,7 @@ import {
   type Workspace,
 } from "./ipc";
 import { lucide } from "./icons";
+import { setLine } from "./marquee";
 import { SPRING } from "./motion";
 import {
   isView,
@@ -50,7 +51,6 @@ const LAYOUT = {
 const NOTCH = {
   idleW: 200, // the bare handle
   itemW: 320, // any published item
-  marquee: { pxPerSec: 26, minSec: 4, pause: 0.18 }, // scroll speed / dwell at each end
 } as const;
 // The media playhead, after Android's lock-screen player: a travelling sine
 // over the played part, a rounded thumb, a flat rule for the rest. The sine
@@ -647,30 +647,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const niPrimary = notchItem.querySelector<HTMLElement>(".ni-primary")!;
   const niSecondary = notchItem.querySelector<HTMLElement>(".ni-secondary")!;
   const niProgress = notchItem.querySelector<HTMLElement>(".ni-progress i")!;
-
-  // Set a line's text and marquee it if it overflows the fixed box; an
-  // ellipsis would hide the half of a title that tells tracks apart.
-  function setLine(box: HTMLElement, text: string) {
-    const inner = box.firstElementChild as HTMLElement;
-    if (inner.textContent !== text) inner.textContent = text;
-    box.classList.remove("scroll");
-    box.style.removeProperty("--ni-shift");
-    box.style.removeProperty("--ni-dur");
-    // Measured after the text lands; scrollWidth is the unclipped content.
-    const overflow = inner.scrollWidth - box.clientWidth;
-    if (overflow <= 1) return;
-    const travel = Math.max(
-      NOTCH.marquee.minSec,
-      overflow / NOTCH.marquee.pxPerSec,
-    );
-    box.style.setProperty("--ni-shift", `${overflow}px`);
-    // Two passes plus a dwell at each end, so one cycle is there-and-back.
-    box.style.setProperty(
-      "--ni-dur",
-      `${(travel + NOTCH.marquee.pause * travel) * 2}s`,
-    );
-    box.classList.add("scroll");
-  }
 
   // The idle look is a synthetic item, so one renderer covers both cases.
   function idleItem(): NotchItem | null {
