@@ -37,7 +37,7 @@ function rgbOf(css: string): Rgb {
 }
 const rgba = ([r, g, b]: Rgb, a: number) => `rgba(${r}, ${g}, ${b}, ${a})`;
 
-export function resourceChart(root: HTMLElement): { show(): void; hide(): void } {
+export function resourceChart(root: HTMLElement): { show(): void; hide(): void; theme(): void } {
   root.classList.add("rc");
   root.innerHTML =
     '<div class="rc-head"><div class="rc-legend">' +
@@ -189,7 +189,6 @@ export function resourceChart(root: HTMLElement): { show(): void; hide(): void }
     },
     { passive: false },
   );
-  on("theme", () => requestAnimationFrame(paint));
 
   showZoom();
 
@@ -224,5 +223,6 @@ export function resourceChart(root: HTMLElement): { show(): void; hide(): void }
       unlisten?.();
       unlisten = null;
     },
+    theme: paint,
   };
 }

@@ -104,6 +104,7 @@ export const performanceView: NotchView = {
         sample();
         timer = window.setInterval(sample, POLL_MS);
       },
+      theme: chart.theme,
       hide() {
         chart.hide();
         clearInterval(timer);

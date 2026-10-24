@@ -11,6 +11,7 @@ export interface ViewHandle {
   open?(): void;
   show?(): void;
   hide?(): void;
+  theme?(): void;
 }
 
 export type Widget = (root: HTMLElement) => ViewHandle;

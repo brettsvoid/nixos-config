@@ -1030,6 +1030,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
   on("theme", (theme) => {
     applyConfig(theme);
+    for (const handle of handles.values()) handle.theme?.();
     drawCpuGraph();
     paintWave();
     if (theme.notchIdle !== notchIdle) {
