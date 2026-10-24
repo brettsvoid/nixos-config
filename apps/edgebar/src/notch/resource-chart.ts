@@ -2,7 +2,6 @@ import "./resource-chart.css";
 import { call, on, type MetricsHistory } from "../ipc";
 import { lucide } from "../icons";
 import { fingersUp, wheelStepper } from "../wheel";
-import type { Widget } from "./view";
 
 const SPANS_S = [30, 60, 120, 300, 600] as const;
 const START_SPAN = 2;
@@ -38,7 +37,7 @@ function rgbOf(css: string): Rgb {
 }
 const rgba = ([r, g, b]: Rgb, a: number) => `rgba(${r}, ${g}, ${b}, ${a})`;
 
-export const resourceChart: Widget = (root) => {
+export function resourceChart(root: HTMLElement): { show(): void; hide(): void } {
   root.classList.add("rc");
   root.innerHTML =
     '<div class="rc-head"><div class="rc-legend">' +
@@ -226,4 +225,4 @@ export const resourceChart: Widget = (root) => {
       unlisten = null;
     },
   };
-};
+}

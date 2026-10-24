@@ -13,10 +13,8 @@ export interface ViewHandle {
   hide?(): void;
 }
 
-export type Widget = (root: HTMLElement, ctx: ViewContext) => ViewHandle;
+export type Widget = (root: HTMLElement) => ViewHandle;
 
 export interface ViewContext {
-  reportInteractiveRects(): void;
-  setAlert(id: string, reason: string | null): void;
-  showView(id: string): void;
+  setAlert(reason: string | null): void;
 }

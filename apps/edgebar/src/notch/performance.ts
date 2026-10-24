@@ -63,7 +63,7 @@ export const performanceView: NotchView = {
   size: { w: 380, h: 352 },
   mount(root, ctx) {
     root.innerHTML = TEMPLATE;
-    const chart = resourceChart(root.querySelector<HTMLElement>(".perf-chart")!, ctx);
+    const chart = resourceChart(root.querySelector<HTMLElement>(".perf-chart")!);
     const bars = new Map<MetricKey, HTMLElement>();
     const values = new Map<MetricKey, HTMLElement>();
     for (const { key } of METRICS) {
@@ -90,7 +90,7 @@ export const performanceView: NotchView = {
           reasons.push("disk almost full");
         }
         if (m.swapUsed >= HEALTH.swapUsedBytes) reasons.push("heavy swap use");
-        ctx.setAlert(performanceView.id, reasons.length ? reasons.join(", ") : null);
+        ctx.setAlert(reasons.length ? reasons.join(", ") : null);
       } catch {
       }
     }
@@ -99,13 +99,13 @@ export const performanceView: NotchView = {
     return {
       open: sample,
       show() {
-        chart.show?.();
+        chart.show();
         if (timer !== undefined) return;
         sample();
         timer = window.setInterval(sample, POLL_MS);
       },
       hide() {
-        chart.hide?.();
+        chart.hide();
         clearInterval(timer);
         timer = undefined;
       },

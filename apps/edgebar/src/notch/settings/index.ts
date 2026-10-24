@@ -159,7 +159,7 @@ export const settingsView: NotchView = {
   rail: "foot",
   size: { w: 640, h: 352 },
   mount(root, ctx) {
-    const setAlert = (items: SetupItem[]) => ctx.setAlert(settingsView.id, alertFor(items));
+    const setAlert = (items: SetupItem[]) => ctx.setAlert(alertFor(items));
 
     const sections: Section[] = [
       { id: "setup", title: "Setup", icon: ICON.setup, build: () => [setupPart(setAlert)] },

@@ -16,7 +16,7 @@ import { releaseKeyboard } from "./keyboard";
 import { setLine } from "./marquee";
 import { SPRING } from "./motion";
 import { current, onChange } from "./settings";
-import type { NotchView, ViewContext, ViewHandle } from "./notch/view";
+import type { NotchView, ViewHandle } from "./notch/view";
 import { home, views } from "./notch/views";
 
 // ---- tuned constants (named so each value lives in one place) ----
@@ -946,12 +946,6 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const handles = new Map<string, ViewHandle>();
   let shownView: string | null = null;
 
-  const viewCtx: ViewContext = {
-    reportInteractiveRects,
-    setAlert,
-    showView: switchView,
-  };
-
   function railTab(view: NotchView): HTMLElement {
     const tab = document.createElement("button");
     tab.className = "rail-tab";
@@ -971,10 +965,8 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     railEl.append(tab);
   }
 
-  function setAlert(id: string, reason: string | null) {
-    const tab = railTabs.get(id);
-    const entry = views.find((v) => v.id === id);
-    if (!tab || !entry) return;
+  function setAlert(view: NotchView, reason: string | null) {
+    const tab = railTabs.get(view.id)!;
     let dot = tab.querySelector<HTMLElement>(".rail-dot");
     if (!dot) {
       dot = document.createElement("span");
@@ -982,7 +974,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       tab.append(dot);
     }
     dot.hidden = reason === null;
-    tab.title = reason === null ? entry.title : `${entry.title} — ${reason}`;
+    tab.title = reason === null ? view.title : `${view.title} — ${reason}`;
   }
 
   function mountViews() {
@@ -993,7 +985,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       el.hidden = true;
       tabBody.append(el);
       viewEls.set(view.id, el);
-      handles.set(view.id, view.mount(el, viewCtx));
+      handles.set(view.id, view.mount(el, { setAlert: (reason) => setAlert(view, reason) }));
     }
   }
 
