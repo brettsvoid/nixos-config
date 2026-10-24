@@ -17,7 +17,9 @@
 //! input enters, in `load` (a hand edit) and `set` (the settings view), and nowhere
 //! else.
 
-use crate::{apply_theme, persist_appearance, resolve_notch_idle, Config, ThemeState};
+use crate::{
+    apply_theme, persist_appearance, reload_theme, resolve_notch_idle, Config, ThemeState,
+};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
@@ -364,6 +366,8 @@ struct Changes {
     rules: bool,
     /// `notch.transientMs`
     flash_hold: bool,
+    /// `oled` or `wallpaper.tint`
+    wallpaper: bool,
 }
 
 fn changes(prev: &Config, next: &Config) -> Changes {
@@ -374,6 +378,7 @@ fn changes(prev: &Config, next: &Config) -> Changes {
         idle: prev.notch.idle != next.notch.idle,
         rules: prev.notch.workspaces != next.notch.workspaces,
         flash_hold: prev.notch.transient_ms != next.notch.transient_ms,
+        wallpaper: prev.oled != next.oled || prev.wallpaper.tint != next.wallpaper.tint,
     }
 }
 
@@ -427,6 +432,13 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
     }
     if c.rules {
         crate::notch::refresh_workspace(app);
+    }
+
+    // The re-theme resolves the surface with OLED applied and re-runs the Tint
+    // converge, so the desktop follows both. `wallpaper.folder` needs nothing:
+    // each listing reads it fresh.
+    if c.wallpaper {
+        reload_theme(app);
     }
 }
 
@@ -886,6 +898,20 @@ mod tests {
                 flash_hold: true,
                 ..Changes::default()
             }
+        );
+        for (key, value) in [("oled", json!(true)), ("wallpaper.tint", json!(true))] {
+            assert_eq!(
+                changes(&base, &config_with(key, value)),
+                Changes {
+                    wallpaper: true,
+                    ..Changes::default()
+                },
+                "{key}"
+            );
+        }
+        assert_eq!(
+            changes(&base, &config_with("wallpaper.folder", json!("~/Pictures"))),
+            Changes::default()
         );
     }
 }
