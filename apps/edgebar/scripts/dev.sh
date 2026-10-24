@@ -4,7 +4,13 @@ set -eu
 sock="$HOME/.cache/edgebar/dev.sock"
 
 usage() {
-  echo "usage: dev.sh eval '<js>' | dev.sh snap <out.png> | dev.sh type '<text>'" >&2
+  cat >&2 <<'EOF'
+usage:
+  dev.sh eval '<js>'     run <js> in the bar's WebView and print its result as JSON
+  dev.sh snap <out.png>  write a PNG of the bar's WebView over its native frame
+  dev.sh type '<text>'   post <text> as key presses to edgebar's key window;
+                         ESC (\033) is Escape and DEL (\177) is Backspace
+EOF
   exit 2
 }
 

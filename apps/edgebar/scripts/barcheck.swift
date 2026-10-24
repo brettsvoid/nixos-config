@@ -10,6 +10,10 @@
 import AppKit
 import CoreGraphics
 
+// lib.rs's BAR_WINDOW_LEVEL and FRAME_WINDOW_LEVEL.
+let BAR_LAYER = 5
+let FRAME_LAYER = BAR_LAYER - 1
+
 let pid = Int32(CommandLine.arguments[1])!
 let barH = CommandLine.arguments.count > 2 ? Double(CommandLine.arguments[2])! : 64.0
 
@@ -38,17 +42,17 @@ for s in NSScreen.screens {
     let cgTop = Double(primaryMaxY - f.maxY)
     let x = Double(f.origin.x), w = Double(f.size.width), h = Double(f.size.height)
 
-    let bar = wins.first(where: { $0.layer == 5 && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
+    let bar = wins.first(where: { $0.layer == BAR_LAYER && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
         && abs($0.w - w) < eps && abs($0.h - barH) < eps })
-    let frame = wins.first(where: { $0.layer == 4 && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
+    let frame = wins.first(where: { $0.layer == FRAME_LAYER && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
         && abs($0.w - w) < eps && abs($0.h - h) < eps })
     let barOK = bar != nil, frameOK = frame != nil
     if !barOK || !frameOK { ok = false }
     print("\(s.localizedName) [\(Int(w))x\(Int(h)) @\(s.backingScaleFactor)x top=(\(Int(x)),\(Int(cgTop)))]: "
         + "bar=\(barOK ? "OK" : "MISSING") frame=\(frameOK ? "OK" : "MISSING")")
 }
-let bars = wins.filter { $0.layer == 5 }.count
-let frames = wins.filter { $0.layer == 4 }.count
+let bars = wins.filter { $0.layer == BAR_LAYER }.count
+let frames = wins.filter { $0.layer == FRAME_LAYER }.count
 print("totals: \(bars) bar / \(frames) frame windows for \(NSScreen.screens.count) screens")
 if bars != NSScreen.screens.count || frames != NSScreen.screens.count { ok = false }
 print(ok ? "PASS" : "FAIL")
