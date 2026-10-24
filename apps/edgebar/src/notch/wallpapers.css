@@ -10,7 +10,7 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   background: var(--surface-container);
 }
 .theme-opt {
@@ -20,7 +20,7 @@
   border: none;
   background: transparent;
   color: var(--on-surface);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   cursor: pointer;
   opacity: var(--dim-more);
   font-size: var(--font-lg);
@@ -29,7 +29,8 @@
   opacity: var(--dim);
 }
 .theme-opt.active {
-  background: var(--surface);
+  background: var(--primary);
+  color: var(--on-primary);
   opacity: 1;
 }
 
@@ -51,7 +52,7 @@
   height: 100%;
   padding: 0 var(--space-4);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: transparent;
   color: var(--on-surface);
   font: inherit;
@@ -63,16 +64,17 @@
   opacity: var(--dim);
 }
 .ink-opt.active {
-  background: var(--surface);
+  background: var(--primary);
+  color: var(--on-primary);
   opacity: 1;
 }
 .ink-swatch {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  /* the ink contrasts with the pill by construction, but not always with the
-     track the swatch sits on, so the ring keeps its edge either way */
-  box-shadow: 0 0 0 1px var(--separator);
+  /* the ink contrasts with the surface by construction, but not always with
+     the fill the swatch sits on, so the ring keeps its edge either way */
+  box-shadow: 0 0 0 1px var(--surface-bright);
 }
 
 .view-head .theme-toggle {
@@ -92,9 +94,9 @@
   gap: var(--space-2);
   height: var(--control-h);
   padding: 0 var(--space-4);
-  border: 1px dashed var(--wip-line);
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-container);
   font: inherit;
   font-size: var(--font-2xs);
 }

@@ -27,15 +27,6 @@
   --cpu-warm: #fe640b; /* catppuccin latte peach */
   --cpu-mild: #df8e1d; /* catppuccin latte yellow */
 
-  /* Pill-era names the rail, the placeholders and the sliders still read. */
-  --base: var(--on-surface);
-  --pill-bg: var(--surface);
-  --track: var(--surface-container);
-  --hover: var(--surface-container-high);
-  --separator: var(--surface-bright);
-  --wip-ink: var(--on-surface-variant);
-  --wip-line: var(--surface-bright);
-
   /* ---- the band and the frame (geometry from config.json) ---- */
   --bar-h: 32px; /* geometry.barHeight: the band, also the frame's top edge */
   --frame-t: 8px; /* geometry.frameThickness: the frame's sides */
@@ -609,13 +600,13 @@ body {
 /* Doubled class so `.wip` beats the single-class rule styling the control it
    marks (e.g. .rail-tab, declared later) on specificity, not source order. */
 .wip.wip {
-  color: var(--wip-ink);
-  opacity: 1;
+  color: var(--on-surface-variant);
+  opacity: 0.6;
 }
-/* no hover highlight or pointer on something that doesn't work */
+/* no hover highlight or pointer on something that doesn't work: it keeps the
+   container tint every control it marks rests on */
 .wip.wip:hover {
-  background: transparent;
-  color: var(--wip-ink);
+  background: var(--surface-container);
 }
 .wip,
 .ph {
@@ -631,9 +622,9 @@ body {
   padding: var(--space-4);
   min-width: 0;
   min-height: 0;
-  border: 1px dashed var(--wip-line);
+  border: 1px dashed var(--surface-bright);
   border-radius: var(--radius-sm);
-  color: var(--wip-ink);
+  color: var(--on-surface-variant);
   text-align: center;
 }
 .ph-icon {
@@ -649,16 +640,19 @@ body {
 }
 
 /* ---- notch rail ----
-   Ported from ambxst's Dashboard.qml. Icon buttons with the foot-pinned ones
-   (Settings) at the bottom. A sibling of the tab body, so it stays put across
-   view switches. */
+   The views' buttons, with the foot-pinned ones (Settings) at the bottom, as
+   in ambxst's Dashboard.qml. A sibling of the tab body, so it stays put across
+   view switches. Each button is the custom shell's (components/Pill.qml):
+   full-round, a container tint at rest, a higher one on hover, --primary when
+   active. */
 .dash-rail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
   flex: none;
 }
 .rail-tab {
+  --tab-bg: var(--surface-container); /* the alert dot's ring matches it */
   position: relative; /* anchors .rail-dot */
   display: grid;
   place-items: center;
@@ -666,20 +660,21 @@ body {
   height: 48px;
   padding: 0;
   border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--base);
+  border-radius: 50%;
+  background: var(--tab-bg);
+  color: var(--on-surface);
   font-size: var(--font-xl);
   cursor: pointer;
-  opacity: var(--dim);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 .rail-tab:hover {
-  background: var(--hover);
-  opacity: 1;
+  --tab-bg: var(--surface-container-high);
 }
 .rail-tab.active {
-  background: var(--track);
-  opacity: 1;
+  --tab-bg: var(--primary);
+  color: var(--on-primary);
 }
 .rail-foot {
   margin-top: auto; /* separated at the foot of the rail, as in ambxst */
@@ -695,7 +690,7 @@ body {
   height: 7px;
   border-radius: 50%;
   background: var(--warn);
-  box-shadow: 0 0 0 2px var(--pill-bg);
+  box-shadow: 0 0 0 2px var(--tab-bg);
 }
 .rail-dot[hidden] {
   display: none;

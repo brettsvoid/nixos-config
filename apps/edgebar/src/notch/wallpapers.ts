@@ -36,7 +36,7 @@ const TEMPLATE =
     '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
   )}</span><span class="ph-name">Search</span></div>` +
   '<select class="scheme-select" id="scheme-select" title="matugen scheme"></select>' +
-  '<div class="theme-toggle ink-toggle" role="group" aria-label="Pill ink">' +
+  '<div class="theme-toggle ink-toggle" role="group" aria-label="Ink">' +
   '<span class="ink-label">Ink</span>' +
   '<button class="ink-opt" id="ink-auto">Auto</button>' +
   '<button class="ink-opt" id="ink-custom"><span class="ink-swatch"></span></button>' +

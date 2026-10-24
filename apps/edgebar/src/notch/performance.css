@@ -33,14 +33,14 @@
   flex: 1;
   height: 6px; /* bar thickness (component-intrinsic) */
   border-radius: 3px; /* round the thin bar's ends */
-  background: var(--surface-container);
+  background: var(--surface-container-high);
   overflow: hidden;
 }
 .metric .m-bar i {
   display: block;
   height: 100%;
   width: 0%;
-  background: var(--on-surface);
+  background: var(--primary);
   border-radius: 3px;
   transition: width var(--dur-slow) var(--ease-out);
 }

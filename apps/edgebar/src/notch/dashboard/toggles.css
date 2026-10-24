@@ -10,7 +10,7 @@
   flex: 1 1 0;
   aspect-ratio: 1;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 50%;
   background: var(--surface-container);
   font-size: var(--font-lg);
 }
