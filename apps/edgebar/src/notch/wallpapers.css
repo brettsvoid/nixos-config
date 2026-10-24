@@ -9,6 +9,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  height: var(--control-h);
   padding: var(--space-1);
   border-radius: 999px;
   background: var(--surface-container);
@@ -16,7 +17,8 @@
 .theme-opt {
   display: grid;
   place-items: center;
-  padding: var(--space-2) var(--space-5);
+  height: 100%;
+  padding: 0 var(--space-5);
   border: none;
   background: transparent;
   color: var(--on-surface);
@@ -34,10 +36,179 @@
   opacity: 1;
 }
 
-/* ---- ink picker (toolbar): auto / custom swatch ----
-   The appearance toggle's segmented look, at the toolbar's control height. */
-.ink-toggle {
+/* ---- OLED and Tint: switches in the header, beside the appearance ---- */
+.wp-switches {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+.wp-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   height: var(--control-h);
+  padding: 0 var(--space-5) 0 var(--space-4);
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.wp-switch .icon {
+  font-size: var(--font-md);
+}
+.wp-switch:hover:not(:disabled) {
+  background: var(--surface-container-high);
+}
+.wp-switch.active,
+.wp-switch.active:hover:not(:disabled) {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+/* OLED while light: it would change nothing */
+.wp-switch:disabled {
+  opacity: var(--dim-more);
+  cursor: default;
+}
+/* Tint repainting the desktop: the droplet gives way to a turning ring,
+   which runs only while this class is on */
+.wp-switch.busy {
+  cursor: progress;
+}
+.wp-switch.busy .wp-tint-icon svg {
+  display: none;
+}
+.wp-switch.busy .wp-tint-icon::before {
+  content: "";
+  width: 0.8em;
+  height: 0.8em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: wp-spin 0.8s linear infinite;
+}
+@keyframes wp-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* ---- toolbar above the grid: search, scheme, ink, Browse… ---- */
+.theme-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+/* every icon in the row at one size, or the tallest one sets the row's
+   optical weight even when the boxes match */
+.theme-bar .icon {
+  font-size: var(--font-md);
+}
+
+.wp-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--space-2) 0 var(--space-5);
+  border-radius: 999px;
+  background: var(--surface-container);
+  cursor: text;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.wp-search > .icon {
+  color: var(--on-surface-variant);
+}
+.wp-search:focus-within {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.wp-query {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--on-surface);
+  caret-color: var(--primary);
+  font: inherit;
+  font-size: var(--font-sm);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.wp-query::placeholder {
+  color: var(--on-surface-variant);
+}
+.wp-clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+}
+.wp-clear:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+.wp-clear[hidden] {
+  display: none;
+}
+.wp-clear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* the select draws no arrow of its own, so the chevron sits over its end */
+.wp-select {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.wp-select > .icon {
+  position: absolute;
+  top: 50%;
+  right: var(--space-4);
+  translate: 0 -50%;
+  pointer-events: none;
+}
+.scheme-select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 132px;
+  height: var(--control-h);
+  padding: 0 calc(var(--space-4) + 20px) 0 var(--space-6);
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-sm);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.scheme-select:hover {
+  background: var(--surface-container-high);
+}
+
+/* ---- ink picker (toolbar): auto / custom swatch ----
+   The appearance toggle's segmented look. */
+.ink-toggle {
   flex: none;
 }
 .ink-label {
@@ -77,33 +248,89 @@
   box-shadow: 0 0 0 1px var(--surface-bright);
 }
 
-.view-head .theme-toggle {
-  margin-left: auto; /* appearance toggle sits at the right of the header */
-}
-
-/* toolbar above the grid: search, scheme, ink, OLED/Tint chips, Browse… */
-.theme-bar {
+.browse-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
   flex: none;
-}
-.chip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   height: var(--control-h);
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-6) 0 var(--space-5);
   border: none;
   border-radius: 999px;
   background: var(--surface-container);
+  color: var(--on-surface);
   font: inherit;
-  font-size: var(--font-2xs);
+  font-size: var(--font-sm);
+  cursor: pointer;
 }
-/* every icon in the row at one size, or the tallest one sets the row's
-   optical weight even when the boxes match */
-.theme-bar .icon {
-  font-size: var(--font-md);
+.browse-btn:hover {
+  background: var(--surface-container-high);
+}
+
+/* ---- filter chips (ambxst FilterBar): kinds and subfolders ---- */
+.wp-filters {
+  display: flex;
+  gap: var(--space-3);
+  flex: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.wp-filters[hidden] {
+  display: none;
+}
+.wp-filters::-webkit-scrollbar {
+  display: none;
+}
+.wp-chip {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 26px;
+  padding: 0 var(--space-5);
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.wp-chip:hover {
+  background: var(--surface-container-high);
+}
+.wp-chip.active {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+/* the check grows in from nothing, pushing the label over */
+.wp-check {
+  display: grid;
+  place-items: center;
+  width: 0;
+  margin-right: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    width var(--dur-med) var(--ease-out),
+    margin-right var(--dur-med) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.wp-check svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.5;
+}
+.wp-chip.active .wp-check {
+  width: 13px;
+  margin-right: var(--space-2);
+  opacity: 1;
 }
 
 /* A grid despite the name, like ambxst's WallpapersTab; wallpapers.ts fills it with
@@ -123,6 +350,9 @@
   min-height: 0;
   padding-right: var(--space-2);
 }
+.filmstrip[hidden] {
+  display: none;
+}
 .filmstrip::-webkit-scrollbar {
   width: 6px;
 }
@@ -140,6 +370,9 @@
   background: var(--surface-container);
   padding: 0;
 }
+.thumb[hidden] {
+  display: none;
+}
 .thumb img {
   width: 100%;
   height: 100%;
@@ -150,51 +383,25 @@
   border-color: var(--primary);
 }
 
-.browse-btn {
+/* no pictures, or none that match: a quiet icon over a line, in the grid's
+   place */
+.wp-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  flex: none;
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-sm);
-  cursor: pointer;
-}
-.browse-btn:hover {
-  background: var(--surface-container-high);
-}
-
-.scheme-select {
-  min-width: 140px;
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--surface-container);
-  color: var(--on-surface);
-  font: inherit;
-  font-size: var(--font-sm);
-  text-transform: capitalize;
-  cursor: pointer;
-}
-
-/* a placeholder that reads as one inline control */
-.ph-inline {
-  flex-direction: row;
-  justify-content: flex-start;
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  flex: none;
-}
-.theme-bar .ph-inline {
+  gap: var(--space-4);
   flex: 1 1 auto;
+  padding: 0 var(--space-8);
+  color: var(--on-surface-variant);
+  font-size: var(--font-xs);
+  line-height: 1.4;
+  text-align: center;
 }
-.ph-inline .ph-icon {
-  font-size: var(--font-md);
+.wp-empty[hidden] {
+  display: none;
+}
+.wp-empty > .icon {
+  font-size: var(--font-3xl);
+  opacity: var(--dim-icon);
 }

@@ -1,6 +1,8 @@
 import "./wallpapers.css";
 import { call, on, type Config, type InkInfo, type Wallpaper } from "../ipc";
 import { lucide } from "../icons";
+import { keyboardField } from "../keyboard";
+import { current, onChange, set as setSetting } from "../settings";
 import type { NotchView } from "./view";
 
 // matugen scheme types, in select-scheme.sh's order.
@@ -16,8 +18,34 @@ const SCHEMES = [
   "scheme-fruit-salad",
 ] as const;
 
+// How long Tint may stay busy without a finished desktop pass before the
+// view stops waiting for one (a pass that never ran, or failed).
+const TINT_PATIENCE_MS = 20000;
+
+const ICON = {
+  search: lucide('<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>'),
+  clear: lucide('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  chevron: lucide('<path d="m6 9 6 6 6-6"/>'),
+  check: lucide('<path d="M20 6 9 17l-5-5"/>'),
+  oled: lucide('<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12z"/>'),
+  // A droplet, not a palette: the rail's wallpapers tab already uses that icon.
+  tint: lucide(
+    '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  ),
+  folder: lucide(
+    '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  ),
+  empty: lucide(
+    '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  ),
+} as const;
+
 const TEMPLATE =
   '<div class="view-head"><span class="view-title">Wallpapers</span>' +
+  '<div class="wp-switches">' +
+  `<button class="wp-switch" type="button" data-k="oled" aria-pressed="false"><span class="icon">${ICON.oled}</span><span>OLED</span></button>` +
+  `<button class="wp-switch" type="button" data-k="tint" aria-pressed="false"><span class="icon wp-tint-icon">${ICON.tint}</span><span>Tint</span></button>` +
+  "</div>" +
   '<div class="theme-toggle" role="group" aria-label="Appearance">' +
   `<button class="theme-opt" data-mode="light" title="Light"><span class="icon">${lucide(
     '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
@@ -30,33 +58,48 @@ const TEMPLATE =
   )}</span></button>` +
   "</div></div>" +
   // ambxst's WallpapersTab puts search, OLED mode, tint and the scheme picker
-  // in one 48px row above the grid.
+  // in one row above the grid; OLED and Tint sit in the header here, by the
+  // appearance they change, so the search keeps room to type.
   '<div class="theme-bar">' +
-  `<div class="ph ph-inline" data-for="SearchBar"><span class="ph-icon icon">${lucide(
-    '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
-  )}</span><span class="ph-name">Search</span></div>` +
-  '<select class="scheme-select" id="scheme-select" title="matugen scheme"></select>' +
+  `<label class="wp-search"><span class="icon">${ICON.search}</span>` +
+  '<input class="wp-query" type="text" placeholder="Search wallpapers…" spellcheck="false" autocomplete="off">' +
+  `<button class="wp-clear" type="button" aria-label="Clear the search" hidden>${ICON.clear}</button></label>` +
+  '<span class="wp-select"><select class="scheme-select" id="scheme-select" title="matugen scheme"></select>' +
+  `<span class="icon">${ICON.chevron}</span></span>` +
   '<div class="theme-toggle ink-toggle" role="group" aria-label="Ink">' +
   '<span class="ink-label">Ink</span>' +
   '<button class="ink-opt" id="ink-auto">Auto</button>' +
   '<button class="ink-opt" id="ink-custom"><span class="ink-swatch"></span></button>' +
   "</div>" +
-  `<button class="chip wip" title="OLED mode — not implemented"><span class="icon">${lucide(
-    '<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12z"/>',
-  )}</span><span>OLED</span></button>` +
-  // A droplet, not a palette: the rail's wallpapers tab already uses that icon.
-  `<button class="chip wip" title="Tint — not implemented"><span class="icon">${lucide(
-    '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
-  )}</span><span>Tint</span></button>` +
-  `<button class="browse-btn" id="browse-btn"><span class="icon">${lucide(
-    '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
-  )}</span><span>Browse…</span></button>` +
+  `<button class="browse-btn" id="browse-btn"><span class="icon">${ICON.folder}</span><span>Browse…</span></button>` +
   "</div>" +
-  // FilterBar: file-type chips and the subfolder crumbs that narrow the grid.
-  `<div class="ph ph-inline" data-for="FilterBar"><span class="ph-icon icon">${lucide(
-    '<path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/>',
-  )}</span><span class="ph-name">FilterBar</span><span class="ph-note">type chips · subfolders</span></div>` +
-  '<div class="filmstrip" id="filmstrip"></div>';
+  // ambxst's FilterBar: a chip per file kind and per subfolder.
+  '<div class="wp-filters" hidden></div>' +
+  '<div class="filmstrip" id="filmstrip"></div>' +
+  `<div class="wp-empty" hidden><span class="icon">${ICON.empty}</span><span class="wp-empty-text"></span></div>`;
+
+// A filter chip: a file kind or a top-level subfolder.
+interface Chip {
+  key: string;
+  label: string;
+  matches: (w: Wallpaper) => boolean;
+}
+
+// One chip per kind present and per subfolder; none when they couldn't narrow
+// anything (a single kind at the root).
+function chipsFor(list: Wallpaper[]): Chip[] {
+  const kinds = [...new Set(list.map((w) => w.kind))].sort();
+  const folders = [...new Set(list.map((w) => w.folder).filter(Boolean))].sort();
+  if (kinds.length <= 1 && folders.length === 0) return [];
+  return [
+    ...kinds.map((k) => ({ key: `kind:${k}`, label: k.toUpperCase(), matches: (w: Wallpaper) => w.kind === k })),
+    ...folders.map((f) => ({ key: `folder:${f}`, label: f, matches: (w: Wallpaper) => w.folder === f })),
+  ];
+}
+
+// What Tint is waiting for: the pass that puts a picked picture on the
+// desktop, or the next pass after a palette or Tint change.
+type TintWait = { until: "pick"; path: string } | { until: "pass" } | null;
 
 export const wallpapersView: NotchView = {
   id: "wallpapers",
@@ -68,6 +111,13 @@ export const wallpapersView: NotchView = {
   mount(root) {
     root.innerHTML = TEMPLATE;
     const filmstrip = root.querySelector<HTMLElement>("#filmstrip")!;
+    const filtersEl = root.querySelector<HTMLElement>(".wp-filters")!;
+    const emptyEl = root.querySelector<HTMLElement>(".wp-empty")!;
+    const emptyText = emptyEl.querySelector<HTMLElement>(".wp-empty-text")!;
+    const query = root.querySelector<HTMLInputElement>(".wp-query")!;
+    const clear = root.querySelector<HTMLButtonElement>(".wp-clear")!;
+    const oledBtn = root.querySelector<HTMLButtonElement>('.wp-switch[data-k="oled"]')!;
+    const tintBtn = root.querySelector<HTMLButtonElement>('.wp-switch[data-k="tint"]')!;
     const schemeSelect = root.querySelector<HTMLSelectElement>("#scheme-select")!;
     const modeButtons = [...root.querySelectorAll<HTMLElement>(".theme-opt")];
     const inkAuto = root.querySelector<HTMLElement>("#ink-auto")!;
@@ -75,17 +125,181 @@ export const wallpapersView: NotchView = {
     const inkSwatch = inkCustom.querySelector<HTMLElement>(".ink-swatch")!;
     let inkColour = "";
 
-    // Appearance: set_appearance persists the choice, re-resolves colours and
-    // emits "theme". Auto follows the macOS setting (Rust observes it).
-    function setActiveMode(mode: string) {
-      for (const b of modeButtons) b.classList.toggle("active", b.dataset.mode === mode);
+    // ---- the grid, the search and the filter chips ----
+    let all: Wallpaper[] = [];
+    let chips: Chip[] = [];
+    const selected = new Set<string>(); // chip keys; none selected shows all
+    const thumbs = new Map<string, HTMLButtonElement>(); // by path
+    let tintWait: TintWait = null;
+
+    function visible(w: Wallpaper): boolean {
+      const q = query.value.trim().toLowerCase();
+      if (q && !w.name.toLowerCase().includes(q)) return false;
+      return selected.size === 0 || chips.some((c) => selected.has(c.key) && c.matches(w));
+    }
+
+    function applyFilter() {
+      let shown = 0;
+      for (const w of all) {
+        const ok = visible(w);
+        thumbs.get(w.path)!.hidden = !ok;
+        if (ok) shown++;
+      }
+      clear.hidden = !query.value;
+      const q = query.value.trim();
+      filmstrip.hidden = shown === 0;
+      emptyEl.hidden = shown > 0;
+      emptyText.textContent =
+        all.length === 0
+          ? `No pictures in ${current().wallpaper.folder}. Browse… picks one from anywhere.`
+          : q
+            ? `Nothing matches “${q}”.`
+            : "Nothing matches these filters.";
+    }
+
+    // The thumb standing for the desktop's picture.
+    function setActive(path: string) {
+      for (const [p, t] of thumbs) t.classList.toggle("active", p === path);
+    }
+
+    function renderChips() {
+      for (const key of [...selected]) if (!chips.some((c) => c.key === key)) selected.delete(key);
+      filtersEl.hidden = chips.length === 0;
+      filtersEl.replaceChildren(
+        ...chips.map((c) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "wp-chip";
+          b.classList.toggle("active", selected.has(c.key));
+          b.setAttribute("aria-pressed", String(selected.has(c.key)));
+          b.innerHTML = `<span class="wp-check">${ICON.check}</span><span></span>`;
+          b.lastElementChild!.textContent = c.label;
+          b.addEventListener("click", () => {
+            if (selected.has(c.key)) selected.delete(c.key);
+            else selected.add(c.key);
+            b.classList.toggle("active", selected.has(c.key));
+            b.setAttribute("aria-pressed", String(selected.has(c.key)));
+            applyFilter();
+          });
+          return b;
+        }),
+      );
+    }
+
+    // A thumb sets the desktop and re-themes the bar (Rust runs desktoppr and
+    // generate-edgebar-theme; with Tint on, the tinted copy lands seconds later).
+    function renderGrid(list: Wallpaper[], desktop: string) {
+      all = list;
+      chips = chipsFor(list);
+      thumbs.clear();
+      filmstrip.replaceChildren(
+        ...list.map((w) => {
+          const b = document.createElement("button");
+          b.className = "thumb";
+          b.title = w.name;
+          const img = document.createElement("img");
+          img.src = w.thumb;
+          img.alt = w.name;
+          b.appendChild(img);
+          b.addEventListener("click", (e) => {
+            e.stopPropagation();
+            setActive(w.path);
+            if (current().wallpaper.tint) waitForTint({ until: "pick", path: w.path });
+            call("set_wallpaper", { path: w.path });
+          });
+          thumbs.set(w.path, b);
+          return b;
+        }),
+      );
+      renderChips();
+      setActive(tintWait?.until === "pick" ? tintWait.path : desktop);
+      applyFilter();
+    }
+
+    keyboardField(root.querySelector<HTMLElement>(".wp-search")!);
+    query.addEventListener("input", applyFilter);
+    query.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !query.value) return;
+      e.preventDefault();
+      query.value = "";
+      applyFilter();
+    });
+    clear.addEventListener("click", (e) => {
+      e.preventDefault(); // the label would otherwise focus the field
+      query.value = "";
+      applyFilter();
+    });
+
+    // ---- OLED and Tint ----
+    let tintTimer = 0;
+    let mode: InkInfo["mode"] = "dark";
+
+    function showSwitches() {
+      const s = current();
+      const tintBusy = tintWait !== null;
+      oledBtn.classList.toggle("active", s.oled);
+      oledBtn.setAttribute("aria-pressed", String(s.oled));
+      // OLED only blackens the dark scheme's surface.
+      oledBtn.disabled = mode === "light";
+      oledBtn.title =
+        mode === "light" ? "OLED: a black surface in dark mode (off while light)" : "OLED: a black surface";
+      tintBtn.classList.toggle("active", s.wallpaper.tint);
+      tintBtn.setAttribute("aria-pressed", String(s.wallpaper.tint));
+      tintBtn.classList.toggle("busy", tintBusy);
+      tintBtn.title = tintBusy ? "Tint: repainting the desktop…" : "Tint: repaint the desktop in the theme's colours";
+    }
+
+    function waitForTint(wait: TintWait) {
+      tintWait = wait;
+      clearTimeout(tintTimer);
+      if (wait) tintTimer = window.setTimeout(() => waitForTint(null), TINT_PATIENCE_MS);
+      showSwitches();
+    }
+
+    // Anything that changes the palette while Tint is on repaints the desktop.
+    const retint = () => {
+      if (current().wallpaper.tint) waitForTint({ until: "pass" });
+    };
+
+    async function flip(key: "oled" | "wallpaper.tint", on: boolean) {
+      try {
+        await setSetting(key, on);
+      } catch {
+        waitForTint(null); // nothing will repaint
+      }
+      showSwitches();
+    }
+    oledBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      retint();
+      void flip("oled", !current().oled);
+    });
+    tintBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Either way the desktop changes: to the tinted copy, or back.
+      waitForTint({ until: "pass" });
+      void flip("wallpaper.tint", !current().wallpaper.tint);
+    });
+
+    on("desktop", (shown) => {
+      if (tintWait?.until === "pick" && shown !== tintWait.path) return; // an earlier pass
+      if (shown) setActive(shown);
+      if (tintWait) waitForTint(null);
+    });
+
+    // ---- appearance, scheme and ink ----
+    // set_appearance persists the choice, re-resolves colours and emits
+    // "theme". Auto follows the macOS setting (Rust observes it).
+    function setActiveMode(m: string) {
+      for (const b of modeButtons) b.classList.toggle("active", b.dataset.mode === m);
     }
     for (const b of modeButtons) {
       b.addEventListener("click", (e) => {
         e.stopPropagation();
-        const mode = b.dataset.mode!;
-        setActiveMode(mode);
-        call("set_appearance", { mode });
+        const m = b.dataset.mode!;
+        setActiveMode(m);
+        retint();
+        call("set_appearance", { mode: m });
       });
     }
 
@@ -120,29 +334,6 @@ export const wallpapersView: NotchView = {
       });
     });
 
-    // A thumb sets the desktop and re-themes the bar (Rust runs desktoppr and
-    // generate-edgebar-theme).
-    function renderFilmstrip(wallpapers: Wallpaper[], current: string) {
-      filmstrip.replaceChildren();
-      for (const w of wallpapers) {
-        const b = document.createElement("button");
-        b.className = "thumb";
-        b.classList.toggle("active", w.path === current);
-        b.title = w.name;
-        const img = document.createElement("img");
-        img.src = w.thumb;
-        img.alt = w.name;
-        b.appendChild(img);
-        b.addEventListener("click", (e) => {
-          e.stopPropagation();
-          call("set_wallpaper", { path: w.path });
-          for (const t of filmstrip.children) t.classList.remove("active");
-          b.classList.add("active");
-        });
-        filmstrip.appendChild(b);
-      }
-    }
-
     for (const s of SCHEMES) {
       const o = document.createElement("option");
       o.value = s;
@@ -151,22 +342,25 @@ export const wallpapersView: NotchView = {
     }
     schemeSelect.addEventListener("change", (e) => {
       e.stopPropagation();
+      retint();
       call("set_scheme", { scheme: schemeSelect.value });
     });
 
     function showConfig(cfg: Config) {
-      schemeSelect.value = cfg.scheme;
+      if (cfg.scheme) schemeSelect.value = cfg.scheme;
       setActiveMode(cfg.appearance);
       renderInk(cfg.ink, cfg.colors.text);
+      mode = cfg.ink.mode;
+      showSwitches();
     }
 
     async function load() {
-      const [wallpapers, current, cfg] = await Promise.all([
+      const [wallpapers, desktop, cfg] = await Promise.all([
         call("list_wallpapers"),
         call("current_wallpaper"),
         call("get_config"),
       ]);
-      renderFilmstrip(wallpapers, current);
+      renderGrid(wallpapers, desktop);
       showConfig(cfg);
       // warm the per-wallpaper palette caches so thumbnail clicks are instant
       call("precompute_palettes").catch(() => {});
@@ -177,16 +371,22 @@ export const wallpapersView: NotchView = {
       e.stopPropagation();
       call("pick_wallpaper_file").then((path) => {
         if (!path) return;
+        setActive(path);
+        if (current().wallpaper.tint) waitForTint({ until: "pick", path });
         call("set_wallpaper", { path });
-        for (const t of filmstrip.children) t.classList.remove("active");
       });
     });
 
     // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
-    on("theme", (theme) => {
-      setActiveMode(theme.appearance);
-      renderInk(theme.ink, theme.colors.text);
-      if (theme.scheme) schemeSelect.value = theme.scheme;
+    on("theme", showConfig);
+
+    let shown = false;
+    let folder = current().wallpaper.folder;
+    onChange((s) => {
+      showSwitches();
+      if (s.wallpaper.folder === folder) return;
+      folder = s.wallpaper.folder;
+      if (shown) void load();
     });
 
     // Seeds the toggles and the ink swatch, so they are right before the first
@@ -195,7 +395,11 @@ export const wallpapersView: NotchView = {
 
     return {
       show() {
+        shown = true;
         void load();
+      },
+      hide() {
+        shown = false;
       },
     };
   },
