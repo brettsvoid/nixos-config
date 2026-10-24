@@ -730,6 +730,10 @@ body {
 #cpu {
   gap: var(--space-4);
 }
+/* `segments.cpu` off; `.seg`'s display would beat the UA's [hidden] rule */
+#cpu[hidden] {
+  display: none;
+}
 #cpu .cpu-icon {
   font-size: var(--font-xl);
   opacity: var(--dim-icon);

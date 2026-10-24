@@ -29,6 +29,14 @@
     "transientMs": 1600,
     "workspaces": {}
   },
+  "clock": {
+    "hour24": true,
+    "seconds": false,
+    "date": true
+  },
+  "segments": {
+    "cpu": true
+  },
   "toggles": {
     "focusShortcut": "Toggle Focus"
   },

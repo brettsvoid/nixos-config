@@ -15,6 +15,7 @@ import { lucide, TRANSPORT } from "./icons";
 import { releaseKeyboard } from "./keyboard";
 import { setLine } from "./marquee";
 import { SPRING } from "./motion";
+import { current, onChange } from "./settings";
 import {
   isView,
   type NotchView,
@@ -242,30 +243,46 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   });
 
   // ---- clock --------------------------------------------------------------
-  // HH:MM, so it updates once a minute on the minute boundary.
+  // Shaped by the `clock` settings. It ticks on the minute, or on the second
+  // while `clock.seconds` is on and the bar is on screen.
   const timeEl = document.querySelector<HTMLElement>("#clock .time")!;
+  const sepEl = document.querySelector<HTMLElement>("#clock .sep")!;
   const dateEl = document.querySelector<HTMLElement>("#clock .date")!;
 
-  function updateCompactClock() {
-    const now = new Date();
-    timeEl.textContent = now.toLocaleTimeString([], {
+  const timeText = (now: Date, seconds: boolean) =>
+    now.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      second: seconds ? "2-digit" : undefined,
+      hour12: !current().clock.hour24,
     });
+
+  function updateCompactClock(now: Date) {
+    const c = current().clock;
+    timeEl.textContent = timeText(now, c.seconds);
+    sepEl.hidden = dateEl.hidden = !c.date;
     dateEl.textContent = now.toLocaleDateString([], {
       weekday: "short",
       month: "short",
       day: "numeric",
     });
   }
-  function tickMinute() {
-    updateCompactClock();
-    // The notch's idle clock too, while no provider owns the slot.
-    if (notchIdle === "clock" && !notchLive) renderNotch(null);
-    // reschedule for the next minute boundary (no drift)
-    window.setTimeout(tickMinute, 60000 - (Date.now() % 60000));
+  let clockTimer = 0;
+  let clockMinute = -1;
+  function tick() {
+    const now = new Date();
+    updateCompactClock(now);
+    // The notch's idle clock too, while no provider owns the slot. It shows no
+    // seconds, so it repaints once a minute.
+    const minute = Math.floor(now.getTime() / 60000);
+    if (minute !== clockMinute && notchIdle === "clock" && !notchLive) renderNotch(null);
+    clockMinute = minute;
+    // reschedule for the next boundary (no drift)
+    const step = current().clock.seconds && !document.hidden ? 1000 : 60000;
+    window.clearTimeout(clockTimer);
+    clockTimer = window.setTimeout(tick, step - (Date.now() % step));
   }
+  document.addEventListener("visibilitychange", tick);
 
   // ---- centre notch: the dashboard / wallpapers / performance hub ---------
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
@@ -557,21 +574,33 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     cpuPill.classList.toggle("mild", stat.total >= t.mild && stat.total < t.warm);
   }
 
+  // A hidden segment (`segments.cpu` off) ignores the event; the sampler runs
+  // on for the notch's Performance chart.
   on("cpu", (stat) => {
+    if (cpuPill.hidden) return;
     cpuHistory.push({ sys: stat.sys, user: stat.user });
     if (cpuHistory.length > CPU_GRAPH.samples) cpuHistory.shift();
     renderCpu(stat);
     drawCpuGraph();
   });
-  call("cpu_state")
-    .then((s) => {
-      // Skip if the sampler's first push beat this reply; the event is newer.
-      if (cpuHistory.length > 0 || s.history.length === 0) return;
-      cpuHistory.push(...s.history.slice(-CPU_GRAPH.samples));
-      renderCpu(s.latest);
-      drawCpuGraph();
-    })
-    .catch(() => {});
+  // Rust's history is the whole record, so it replaces what is here: at
+  // startup, and when the segment shows again after missing events.
+  function seedCpu() {
+    call("cpu_state")
+      .then((s) => {
+        if (s.history.length === 0) return;
+        cpuHistory.splice(0, cpuHistory.length, ...s.history.slice(-CPU_GRAPH.samples));
+        renderCpu(s.latest);
+        drawCpuGraph();
+      })
+      .catch(() => {});
+  }
+  seedCpu();
+  function showCpuSegment(shown: boolean) {
+    if (shown === !cpuPill.hidden) return;
+    cpuPill.hidden = !shown;
+    if (shown) seedCpu();
+  }
 
   // ---- workspaces: event-driven (Rust pushes on AeroSpace changes) -------
   const wsContainer = document.querySelector<HTMLElement>("#workspaces .ws-dots")!;
@@ -659,9 +688,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
       glyph: clock ? "clock" : "",
       icon: "",
       art: "",
-      primary: clock
-        ? now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
-        : notchIdle,
+      primary: clock ? timeText(now, false) : notchIdle,
       secondary: clock
         ? now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
         : "",
@@ -1074,12 +1101,26 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     // Canvas pixels don't follow CSS vars, so repaint them by hand.
     drawCpuGraph();
     paintWave();
+    // `notch.idle` travels with the theme (see ResolvedConfig in lib.rs).
+    if (theme.notchIdle !== notchIdle) {
+      notchIdle = theme.notchIdle;
+      if (!notchLive) renderNotch(null);
+    }
   });
+
+  // The bar's own settings: the clock's shape and which segments show.
+  function applyBarSettings() {
+    showCpuSegment(current().segments.cpu);
+    clockMinute = -1; // so the notch's idle clock takes a changed hour24 too
+    tick();
+    reportInteractiveRects();
+  }
+  onChange(applyBarSettings);
 
   // ---- init ---------------------------------------------------------------
   // A reload while a view held the keyboard would otherwise leave it held.
   releaseKeyboard();
-  tickMinute(); // start the per-minute clock (updates immediately)
+  applyBarSettings(); // starts the clock
   reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
 }
