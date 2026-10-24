@@ -48,17 +48,18 @@
 
 .pl-area {
   flex: none;
-  width: 156px;
-  height: 138px;
+  width: var(--pl-area-w);
+  height: var(--pl-area-h);
 }
 .pl-disc {
+  --size: 120px;
   position: absolute;
-  left: 18px;
-  top: 18px;
+  left: calc(var(--pl-cx) - var(--size) / 2);
+  top: calc(var(--pl-cy) - var(--size) / 2);
   display: grid;
   place-items: center;
-  width: 120px;
-  height: 120px;
+  width: var(--size);
+  height: var(--size);
   border-radius: 50%;
   background: var(--surface-container-high);
   overflow: hidden;
@@ -95,7 +96,7 @@
 }
 .pl-ring path {
   fill: none;
-  stroke-width: 4px;
+  stroke-width: var(--pl-line);
   stroke-linecap: round;
   stroke-linejoin: round;
 }

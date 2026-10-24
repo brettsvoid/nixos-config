@@ -72,6 +72,14 @@ async function washOf(url: string): Promise<string> {
 
 export const player: Widget = (root) => {
   root.innerHTML = TEMPLATE;
+  const geometry = {
+    "--pl-area-w": AREA.w,
+    "--pl-area-h": AREA.h,
+    "--pl-cx": C.x,
+    "--pl-cy": C.y,
+    "--pl-line": RING.line,
+  };
+  for (const [name, px] of Object.entries(geometry)) root.style.setProperty(name, `${px}px`);
   const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
   const artEl = $<HTMLElement>(".pl-art");
   const face = $<HTMLElement>(".pl-face");
