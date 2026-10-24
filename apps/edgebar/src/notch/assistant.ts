@@ -7,7 +7,11 @@ import { current, onChange, set as setSetting } from "../settings";
 import { renderMarkdown } from "./markdown";
 import type { NotchView } from "./view";
 
-const MODELS: readonly string[] = ["haiku", "sonnet", "opus"];
+export const MODELS = [
+  { value: "haiku", label: "Haiku" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+];
 const COPIED_MS = 1500;
 const FOLLOW_PX = 24;
 
@@ -55,7 +59,7 @@ const newTurnId = () =>
   Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16).padStart(8, "0"))
     .join("");
 
-const modelName = (id: string) => (MODELS.includes(id) ? id[0].toUpperCase() + id.slice(1) : id);
+const modelName = (id: string) => MODELS.find((m) => m.value === id)?.label ?? id;
 
 function typingDots(): HTMLElement {
   const dots = el("span", "as-typing", el("i"), el("i"), el("i"));
@@ -262,7 +266,8 @@ export const assistantView: NotchView = {
       modelBtn.title = `Replies come from ${id}. Click for the next model.`;
     }
     modelBtn.addEventListener("click", () => {
-      const next = MODELS[(MODELS.indexOf(current().assistant.model) + 1) % MODELS.length];
+      const at = MODELS.findIndex((m) => m.value === current().assistant.model);
+      const next = MODELS[(at + 1) % MODELS.length].value;
       setSetting("assistant.model", next).catch(() => {});
     });
     onChange(showModel);

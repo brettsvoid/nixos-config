@@ -3,7 +3,7 @@ import { el } from "../../dom";
 import { call, on, type Config, type SettingsFiles, type SetupItem } from "../../ipc";
 import { lucide } from "../../icons";
 import { current, errors, onChange, type Settings } from "../../settings";
-import { assistantView } from "../assistant";
+import { assistantView, MODELS } from "../assistant";
 import { dashboardView } from "../dashboard";
 import type { NotchView } from "../view";
 import { schemePicker } from "../scheme-picker";
@@ -22,6 +22,7 @@ import {
   switchRow,
   textRow,
   type Frame,
+  type Option,
   type Part,
 } from "./rows";
 import { rulesPart } from "./rules";
@@ -61,18 +62,17 @@ function schemeRow(): Part {
   return { el: f.el };
 }
 
-const IDLE_PRESETS = ["handle", "clock", "userHost"];
+const IDLE_PRESETS: Option[] = [
+  { value: "handle", label: "Handle" },
+  { value: "clock", label: "Clock" },
+  { value: "userHost", label: "user@host" },
+];
 
 function idleRow(): Part {
   let f: Frame;
   let custom = "edgebar";
   const seg = segmented(
-    [
-      { value: "handle", label: "Handle" },
-      { value: "clock", label: "Clock" },
-      { value: "userHost", label: "user@host" },
-      { value: "custom", label: "Text" },
-    ],
+    [...IDLE_PRESETS, { value: "custom", label: "Text" }],
     (kind) => void f.commit("notch.idle", kind === "custom" ? custom : kind),
   );
   const text = field({ placeholder: "Shown as it is" }, (t) => void f.commit("notch.idle", t === "" ? null : t));
@@ -83,7 +83,7 @@ function idleRow(): Part {
     el: f.el,
     update(s) {
       const idle = s.notch.idle;
-      const preset = IDLE_PRESETS.includes(idle);
+      const preset = IDLE_PRESETS.some((p) => p.value === idle);
       if (!preset) custom = idle;
       seg.mark(preset ? idle : "custom");
       text.el.hidden = preset;
@@ -254,11 +254,7 @@ export const settingsView: NotchView = {
         icon: assistantView.icon,
         build: () => [
           group("", [
-            choiceRow("assistant.model", "Model", [
-              { value: "haiku", label: "Haiku" },
-              { value: "sonnet", label: "Sonnet" },
-              { value: "opus", label: "Opus" },
-            ]),
+            choiceRow("assistant.model", "Model", MODELS),
             textRow("assistant.command", "CLI command", {
               note: "Claude Code. A bare name is looked up on PATH, then in ~/.local/bin.",
               placeholder: "claude",
