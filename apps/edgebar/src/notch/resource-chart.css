@@ -1,0 +1,106 @@
+/* The Performance view's history card (resource-chart.ts): a legend and the
+   zoom over a canvas that takes the rest of the card. */
+.rc {
+  /* The line colours, read back by the canvas through the legend swatches.
+     Memory is --primary pulled toward the surface rather than a second hue:
+     a monochrome scheme's --primary has none, so only lightness can tell
+     the two lines apart in every scheme, light or dark. */
+  --rc-cpu: var(--primary);
+  --rc-mem: color-mix(in oklab, var(--primary) 60%, var(--surface));
+  --rc-grid: var(--surface-bright);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  border-radius: var(--radius-card);
+  background: var(--surface-container);
+}
+
+.rc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  height: 26px;
+}
+.rc-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rc-key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-xs);
+  white-space: nowrap;
+}
+.rc-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.rc-key[data-k="cpu"] .rc-swatch {
+  background: var(--rc-cpu);
+}
+.rc-key[data-k="mem"] .rc-swatch {
+  background: var(--rc-mem);
+}
+.rc-name {
+  color: var(--on-surface-variant);
+}
+.rc-val {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* − span + : the calendar header's round steppers */
+.rc-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  height: 100%;
+}
+.rc-span {
+  min-width: 44px; /* "10 min" without the steppers shifting */
+  font-size: var(--font-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.rc-step {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--on-surface);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.rc-step:hover:not(:disabled) {
+  background: var(--surface-container-high);
+}
+.rc-step:disabled {
+  opacity: var(--dim-more);
+  cursor: default;
+}
+.rc-step svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rc-canvas {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}

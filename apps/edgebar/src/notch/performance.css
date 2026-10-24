@@ -3,10 +3,6 @@
   align-items: stretch;
   gap: var(--space-4);
 }
-/* the chart placeholder takes whatever the header and the rows leave */
-.view-performance .ph {
-  flex: 1 1 auto;
-}
 
 /* ---- metrics rows ---- */
 .metrics {

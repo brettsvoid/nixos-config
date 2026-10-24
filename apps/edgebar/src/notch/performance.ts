@@ -1,6 +1,7 @@
 import "./performance.css";
 import { call } from "../ipc";
 import { lucide } from "../icons";
+import { resourceChart } from "./resource-chart";
 import type { NotchView } from "./view";
 
 const POLL_MS = 2000;
@@ -45,9 +46,7 @@ type MetricKey = (typeof METRICS)[number]["key"];
 const TEMPLATE =
   '<div class="view-head"><span class="view-title">Performance</span></div>' +
   // ambxst draws a zoomable history canvas over the rows (MetricsTab.qml chartCanvas).
-  `<div class="ph" data-for="ResourceChart"><span class="ph-icon icon">${lucide(
-    '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
-  )}</span><span class="ph-name">ResourceChart</span><span class="ph-note">history canvas · zoom</span></div>` +
+  '<div class="perf-chart"></div>' +
   '<div class="metrics">' +
   METRICS.map(
     (m) =>
@@ -71,6 +70,7 @@ export const performanceView: NotchView = {
   size: { w: 380, h: 352 },
   mount(root, ctx) {
     root.innerHTML = TEMPLATE;
+    const chart = resourceChart(root.querySelector<HTMLElement>(".perf-chart")!, ctx);
     const bars = new Map<MetricKey, HTMLElement>();
     const values = new Map<MetricKey, HTMLElement>();
     for (const { key } of METRICS) {
@@ -109,11 +109,13 @@ export const performanceView: NotchView = {
       // background poll: one sample on open, then the view's own cadence.
       open: sample,
       show() {
+        chart.show?.();
         if (timer !== undefined) return;
         sample();
         timer = window.setInterval(sample, POLL_MS);
       },
       hide() {
+        chart.hide?.();
         clearInterval(timer);
         timer = undefined;
       },
