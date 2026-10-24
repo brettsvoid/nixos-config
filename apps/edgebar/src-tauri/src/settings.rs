@@ -373,14 +373,14 @@ fn converge(app: &tauri::AppHandle, prev: &Config, next: &Config) {
 
     if c.rules || c.flash_hold {
         app.state::<crate::notch::NotchState>()
-            .set_config(next.notch.clone());
-    }
-    if c.rules {
-        crate::notch::refresh_workspace(app);
+            .set_config(app, next.notch.clone());
     }
 
     if c.wallpaper {
         reload_theme(app);
+    }
+    if c.appearance || c.wallpaper {
+        crate::wallpapers::spawn_converge(app);
     }
 
     if c.toggles {

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 pub type Rgb = [u8; 3];
 
@@ -238,10 +238,30 @@ fn original_in(dir: &Path, picture: &str) -> String {
     picture.to_string()
 }
 
-pub fn original_of(picture: &str) -> String {
+/// The first display's picture as `command` (desktoppr) reports it, which may
+/// be one of edgebar's tinted copies.
+pub fn shown_picture(command: &str) -> String {
+    std::process::Command::new(command)
+        .output()
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+/// The picture the user chose for the first display: a tinted copy is traced
+/// back to its original.
+pub fn original_picture(command: &str) -> String {
+    let shown = shown_picture(command);
     match tinted_dir() {
-        Some(dir) => original_in(&dir, picture),
-        None => picture.to_string(),
+        Some(dir) => original_in(&dir, &shown),
+        None => shown,
     }
 }
 
@@ -372,6 +392,7 @@ fn largest_screen<R: tauri::Runtime>(_app: &tauri::AppHandle<R>) -> (u32, u32) {
 }
 
 fn converge<R: tauri::Runtime>(
+    _desktop: &MutexGuard<'static, ()>,
     app: &tauri::AppHandle<R>,
     tint: bool,
     dir: &Path,
@@ -388,7 +409,7 @@ fn converge<R: tauri::Runtime>(
         let ts = state.lock().unwrap();
         (ts.wallpaper_command.clone(), tint_colours(&ts.palette()))
     };
-    let shown = super::query_desktop_picture(&command);
+    let shown = shown_picture(&command);
     let original = pick.map_or_else(|| original_in(dir, &shown), str::to_owned);
     if original.is_empty() {
         return None;
@@ -430,19 +451,19 @@ pub fn spawn_converge(app: &tauri::AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let _desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
+        let desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         QUEUED.store(false, Ordering::SeqCst);
-        let shown = tinted_dir().and_then(|dir| converge(&app, tint_on(), &dir, None));
+        let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, tint_on(), &dir, None));
         announce(&app, shown);
     });
 }
 
-pub fn spawn_pick(app: &tauri::AppHandle, theme_command: String, path: String) {
+pub fn spawn_tinted_pick(app: &tauri::AppHandle, theme_command: String, path: String) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let _desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
+        let desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         super::theme_from_wallpaper(&app, &theme_command, &path, true);
-        let shown = tinted_dir().and_then(|dir| converge(&app, true, &dir, Some(&path)));
+        let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, true, &dir, Some(&path)));
         announce(&app, shown);
     });
 }
@@ -789,7 +810,7 @@ mod tests {
                     .status();
             }
         }
-        let before = crate::query_desktop_picture("desktoppr");
+        let before = shown_picture("desktoppr");
         assert!(Path::new(&before).is_file(), "desktoppr said {before:?}");
         let _restore = Restore(before.clone());
 
@@ -799,10 +820,11 @@ mod tests {
         app.manage(Mutex::new(state));
         let handle = app.handle();
         let dir = Scratch::new("converge");
-        let shown = || crate::query_desktop_picture("desktoppr");
+        let shown = || shown_picture("desktoppr");
         let files = || std::fs::read_dir(dir.path()).unwrap().count();
+        let desktop = DESKTOP.lock().unwrap();
 
-        converge(handle, true, dir.path(), None);
+        converge(&desktop, handle, true, dir.path(), None);
         let tinted = shown();
         let on = (
             Path::new(&tinted).parent() == Some(dir.path()),
@@ -810,10 +832,10 @@ mod tests {
             files(),
         );
 
-        converge(handle, true, dir.path(), None);
+        converge(&desktop, handle, true, dir.path(), None);
         let again = (shown() == tinted, files());
 
-        converge(handle, false, dir.path(), None);
+        converge(&desktop, handle, false, dir.path(), None);
         let off = (shown() == before, files());
         println!("tint on {on:?}, a second run {again:?}, tint off {off:?}");
         assert_eq!(
@@ -845,7 +867,7 @@ mod tests {
             std::fs::read_to_string("/tmp/edgebar-wallpaper-theme.log")
                 .map_or(0, |t| t.lines().count())
         };
-        let before = crate::query_desktop_picture("desktoppr");
+        let before = shown_picture("desktoppr");
         assert!(Path::new(&before).is_file(), "desktoppr said {before:?}");
         let _restore = Restore(before.clone());
         let log_before = log();
@@ -857,8 +879,7 @@ mod tests {
             ("text", "#e4e1e9"),
             ("blue", "#e7b9d6"),
         ]));
-        let tinted =
-            ensure_tinted(dir.path(), Path::new(&before), &colours, (2560, 1600)).unwrap();
+        let tinted = ensure_tinted(dir.path(), Path::new(&before), &colours, (2560, 1600)).unwrap();
 
         crate::touch_inapp_marker();
         let status = std::process::Command::new("desktoppr")
@@ -868,7 +889,7 @@ mod tests {
             .unwrap();
         assert!(status.success());
         std::thread::sleep(std::time::Duration::from_millis(1500));
-        let shown = crate::query_desktop_picture("desktoppr");
+        let shown = shown_picture("desktoppr");
         let original = original_in(dir.path(), &shown);
         println!("desktop showed {shown}");
         println!("which stands for {original}");
@@ -876,7 +897,7 @@ mod tests {
 
         drop(_restore);
         std::thread::sleep(std::time::Duration::from_millis(1500));
-        let after = crate::query_desktop_picture("desktoppr");
+        let after = shown_picture("desktoppr");
         let log_after = log();
         println!(
             "before {before}, after {after}; watcher log lines {log_before} -> {log_tinted} -> {log_after}"

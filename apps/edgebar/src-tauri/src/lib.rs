@@ -466,7 +466,6 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
         let surface = resolved.colors.surface.clone();
         let _ = app.run_on_main_thread(move || recolor_native_frame(&surface));
     }
-    wallpapers::spawn_converge(app);
 }
 
 /// Reload palettes and role maps from disk and re-apply the current appearance.
@@ -1573,25 +1572,6 @@ async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
     .unwrap_or_default()
 }
 
-fn query_desktop_picture(cmd: &str) -> String {
-    std::process::Command::new(cmd)
-        .output()
-        .ok()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string()
-        })
-        .unwrap_or_default()
-}
-
-fn query_current_wallpaper(cmd: &str) -> String {
-    wallpapers::original_of(&query_desktop_picture(cmd))
-}
-
 /// The current desktop picture (first display) — to highlight the active thumb.
 #[tauri::command]
 async fn current_wallpaper(app: tauri::AppHandle) -> String {
@@ -1602,7 +1582,7 @@ async fn current_wallpaper(app: tauri::AppHandle) -> String {
             .unwrap()
             .wallpaper_command
             .clone();
-        query_current_wallpaper(&cmd)
+        wallpapers::original_picture(&cmd)
     })
     .await
     .unwrap_or_default()
@@ -1707,7 +1687,7 @@ fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, 
         (ts.wallpaper_command.clone(), ts.theme_command.clone())
     };
     if wallpapers::tint_on() {
-        wallpapers::spawn_pick(&app, theme_cmd, path);
+        wallpapers::spawn_tinted_pick(&app, theme_cmd, path);
         return;
     }
     touch_inapp_marker();
@@ -1762,7 +1742,7 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
             let ts = state.lock().unwrap();
             (ts.wallpaper_command.clone(), ts.theme_command.clone())
         };
-        let current = query_current_wallpaper(&wallpaper_cmd);
+        let current = wallpapers::original_picture(&wallpaper_cmd);
         spawn_precompute(theme_cmd.clone(), scheme.clone());
         // re-theme the current wallpaper now (cache is cold for the new scheme, so
         // this usually generates once; precompute warms the rest in the background)
@@ -1770,6 +1750,7 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
             if let Some(cache) = palette_cache_path(&current, &scheme) {
                 if cache.exists() && install_palette(&cache) {
                     reload_theme(&app);
+                    wallpapers::spawn_converge(&app);
                     return;
                 }
             }
@@ -2217,6 +2198,7 @@ objc2::define_class!(
             };
             if is_auto {
                 apply_theme(&app, Appearance::Auto);
+                wallpapers::spawn_converge(&app);
             }
         }
     }
@@ -2869,6 +2851,7 @@ pub fn run() {
                         continue;
                     }
                     reload_theme(&theme_handle);
+                    wallpapers::spawn_converge(&theme_handle);
                 }
             });
 

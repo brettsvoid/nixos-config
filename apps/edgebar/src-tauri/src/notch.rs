@@ -176,8 +176,9 @@ impl NotchState {
         }
     }
 
-    pub fn set_config(&self, config: NotchConfig) {
+    pub fn set_config(&self, app: &tauri::AppHandle, config: NotchConfig) {
         *self.config.lock().unwrap() = config;
+        refresh_workspace(app);
     }
 }
 
