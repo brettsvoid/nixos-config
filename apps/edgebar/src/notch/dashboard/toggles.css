@@ -1,0 +1,16 @@
+/* five square toggles across the widgets column */
+.dash-toggles {
+  display: flex;
+  gap: var(--space-2);
+  flex: none;
+}
+.qc-btn {
+  display: grid;
+  place-items: center;
+  flex: 1 1 0;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--surface-container);
+  font-size: var(--font-lg);
+}

@@ -1,0 +1,23 @@
+/* a tall brightness slider over two dials */
+.dash-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 0;
+}
+.ph-vslider {
+  flex: 1 1 auto;
+  width: 48px;
+  padding: var(--space-3) 0;
+}
+.ph-vslider .ph-name {
+  writing-mode: vertical-rl; /* the label runs with the slider's travel */
+}
+.ph-dial {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%; /* the dial it stands in for is a ring */
+}

@@ -1,0 +1,4 @@
+.dash-calendar {
+  flex: none;
+  aspect-ratio: 1; /* the month grid is square, so reserve a square */
+}

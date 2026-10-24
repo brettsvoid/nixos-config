@@ -1,0 +1,16 @@
+import "./notifications.css";
+import { lucide } from "../../icons";
+import type { Widget } from "../view";
+
+// Column 3 (ambxst NotificationHistory).
+export const notifications: Widget = (root) => {
+  root.classList.add("ph");
+  root.dataset.for = "NotificationHistory";
+  root.innerHTML =
+    `<span class="ph-icon icon">${lucide(
+      '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+    )}</span>` +
+    '<span class="ph-name">NotificationHistory</span>' +
+    '<span class="ph-note">grouped · dismissable</span>';
+  return {};
+};

@@ -6,30 +6,26 @@ import {
   type Config,
   type CpuSample,
   type CpuStat,
-  type InkInfo,
-  type Metrics,
   type Network,
   type NotchItem,
-  type Wallpaper,
   type Workspace,
 } from "./ipc";
 import { lucide } from "./icons";
 import { FADE, SPRING, STAGGER } from "./motion";
+import {
+  isView,
+  type NotchView,
+  type RailEntry,
+  type ViewContext,
+  type ViewHandle,
+} from "./notch/view";
+import { home, rail, views } from "./notch/views";
 
 // ---- tuned constants (named so each value lives in one place) ----
 const POLL = {
-  metrics: 2000,
   battery: 60000,
 } as const; // ms (network is event-driven, so it has no poll)
 const DEBOUNCE = { volume: 60, mic: 60, brightness: 40 } as const; // ms
-// Thresholds for the performance tab's alert dot. Only disk and swap: CPU and
-// memory swing too fast for a dot to mean anything.
-const HEALTH = {
-  diskUsedPct: 90,
-  // Bytes, not a percentage: macOS grows swap files on demand, so a small file
-  // on a healthy machine reads as near-full.
-  swapUsedBytes: 2 * 1024 ** 3,
-} as const;
 // CPU histogram. `samples` must match CPU_HISTORY in lib.rs and equal `w`, so
 // each column is exactly 1px (otherwise they blur); at CPU_POLL's 2s that's
 // 3.6 min of history. `w`/`h` must match .cpu-graph in styles.css.
@@ -76,18 +72,9 @@ const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 call("get_config")
   .then((cfg) => {
     applyConfig(cfg);
-    initBar(
-      cfg.geometry.pillHeight,
-      cfg.geometry.windowHeight,
-      cfg.appearance,
-      cfg.notchIdle,
-      cfg.ink,
-      cfg.colors.base,
-    );
+    initBar(cfg.geometry.pillHeight, cfg.geometry.windowHeight, cfg.notchIdle);
   })
-  .catch(() =>
-    initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "auto", "handle", null, ""),
-  );
+  .catch(() => initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "handle"));
 
 // Colour vars only; re-applied live on theme changes.
 function applyColors(c: Record<string, string>) {
@@ -126,40 +113,14 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
-// Per-view panel geometry. All views share a height, so switching only moves
-// the width. `win` is the bar-window height needed (overshoot included), 7×64.
-// The default view's width is its column grid plus PANEL_CHROME.
-const VIEW = {
-  default: { w: 680, h: 400, win: 448 },
-  theme: { w: 704, h: 400, win: 448 },
-  metrics: { w: 460, h: 400, win: 448 }, // 56 of it is the rail
-} as const;
 // Panel width outside the tab body: side padding (2 × --space-6), the rail
 // (48px) and its gap (--space-4). Keep in step with .notch-panel / .rail-tab.
 const PANEL_CHROME = 12 * 2 + 48 + 8;
-type ViewName = keyof typeof VIEW;
+// An open view's bar window is its height plus this (400 + 48 = 448 for every
+// view the old per-view table listed).
+const WINDOW_PAD = 48;
 
-// matugen scheme types, in select-scheme.sh's order.
-const SCHEMES = [
-  "scheme-tonal-spot",
-  "scheme-vibrant",
-  "scheme-expressive",
-  "scheme-content",
-  "scheme-fidelity",
-  "scheme-neutral",
-  "scheme-monochrome",
-  "scheme-rainbow",
-  "scheme-fruit-salad",
-] as const;
-
-function initBar(
-  pillHeight: number,
-  windowHeight: number,
-  appearance: string,
-  notchIdle: string,
-  ink: InkInfo | null,
-  inkColour: string,
-) {
+function initBar(pillHeight: number, windowHeight: number, notchIdle: string) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
   let shown = false;
@@ -339,62 +300,7 @@ function initBar(
     window.setTimeout(tickMinute, 60000 - (Date.now() % 60000));
   }
 
-  // ---- metrics (lazy: only sampled while the performance view is open) ----
-  const metricBars = new Map<string, HTMLElement>();
-  const metricVals = new Map<string, HTMLElement>();
-  for (const el of document.querySelectorAll<HTMLElement>("#notch .metric")) {
-    const k = el.dataset.k!;
-    metricBars.set(k, el.querySelector<HTMLElement>(".m-bar i")!);
-    metricVals.set(k, el.querySelector<HTMLElement>(".m-val")!);
-  }
-  function setMetric(k: string, pct: number) {
-    const clamped = Math.max(0, Math.min(100, pct));
-    metricBars.get(k)!.style.width = `${clamped}%`;
-    metricVals.get(k)!.textContent = `${Math.round(clamped)}%`;
-  }
-  const pctOf = (used: number, total: number) =>
-    total > 0 ? (used / total) * 100 : 0;
-  function startMetrics() {
-    if (metricsTimer !== undefined) return;
-    sampleMetrics();
-    metricsTimer = window.setInterval(sampleMetrics, POLL.metrics);
-  }
-  function stopMetrics() {
-    clearInterval(metricsTimer);
-    metricsTimer = undefined;
-  }
-  async function sampleMetrics() {
-    try {
-      const m = await call("metrics_sample");
-      setMetric("cpu", m.cpu);
-      setMetric("mem", pctOf(m.memUsed, m.memTotal));
-      setMetric("disk", pctOf(m.diskUsed, m.diskTotal));
-      setMetric("swap", pctOf(m.swapUsed, m.swapTotal));
-      setHealth(m);
-    } catch {
-      /* sampling can fail mid-teardown; ignore */
-    }
-  }
-
-  // Alert dot on the performance tab. The rail is only visible while the notch
-  // is open, so there's no background poll: one sample on open, then the
-  // metrics view's own cadence.
-  const perfTab = document.querySelector<HTMLElement>('.rail-tab[data-to="metrics"]')!;
-  const perfDot = document.querySelector<HTMLElement>("#perf-dot")!;
-  function setHealth(m: Metrics) {
-    const reasons: string[] = [];
-    if (pctOf(m.diskUsed, m.diskTotal) >= HEALTH.diskUsedPct) {
-      reasons.push("disk almost full");
-    }
-    if (m.swapUsed >= HEALTH.swapUsedBytes) reasons.push("heavy swap use");
-    perfDot.hidden = reasons.length === 0;
-    perfTab.title = reasons.length
-      ? `Performance — ${reasons.join(", ")}`
-      : "Performance";
-  }
-
   // ---- centre notch: the dashboard / wallpapers / performance hub ---------
-  let metricsTimer: number | undefined;
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
   // Collapsed notch width, updated by renderNotch. Read on collapse so the pill
   // returns to the width for its *current* content, not the one it had on open.
@@ -404,19 +310,11 @@ function initBar(
     pill: notchEl,
     header: notchEl.querySelector<HTMLElement>(".notch-row")!,
     panel: notchEl.querySelector<HTMLElement>(".notch-panel")!,
-    width: VIEW.default.w,
-    height: VIEW.default.h,
+    width: home.size.w,
+    height: home.size.h,
     collapsedWidth: () => notchCollapsedW,
-    onOpen: () => {
-      showView("default"); // always open on the dashboard, as ambxst does
-      sampleMetrics(); // one read, so the rail's alert dot is right on arrival
-    },
-    onClose: () => {
-      stopMetrics();
-      // Back to the popup height, so the controls/launcher popups don't
-      // inherit the notch's taller window.
-      expandedWindowH = LAYOUT.windowExpandedH;
-    },
+    onOpen: openViews,
+    onClose: closeViews,
   });
 
   // ---- controls: volume / mic / brightness sliders -----------------------
@@ -1186,186 +1084,115 @@ function initBar(
     .then((item) => renderNotch(item))
     .catch(() => renderNotch(null));
 
-  // ---- notch views: switching, appearance, wallpaper picker, scheme -------
+  // ---- notch views: the rail, switching and window sizing -----------------
+  // notch/views.ts lists what the rail shows. Each view owns its DOM, state and
+  // CSS and is built when the notch first opens; this section only places them.
   const notchPanelEl = notchEl.querySelector<HTMLElement>(".notch-panel")!;
-  // One element per VIEW key. A new view needs an entry here, a `.view-<name>`
-  // div, a VIEW size and a rail tab.
-  const viewEls: Record<ViewName, HTMLElement> = {
-    default: notchPanelEl.querySelector<HTMLElement>(".view-default")!,
-    theme: notchPanelEl.querySelector<HTMLElement>(".view-theme")!,
-    metrics: notchPanelEl.querySelector<HTMLElement>(".view-metrics")!,
-  };
   const tabBody = notchPanelEl.querySelector<HTMLElement>(".tab-body")!;
-  const railTabs = [
-    ...notchPanelEl.querySelectorAll<HTMLElement>(".rail-tab[data-to]"),
-  ];
-  const filmstrip = document.querySelector<HTMLElement>("#filmstrip")!;
-  const schemeSelect = document.querySelector<HTMLSelectElement>("#scheme-select")!;
-  let currentView: ViewName = "default";
-  let themeLoaded = false;
+  const railEl = notchPanelEl.querySelector<HTMLElement>(".dash-rail")!;
+  const railTabs = new Map<string, HTMLElement>();
+  const viewEls = new Map<string, HTMLElement>();
+  const handles = new Map<string, ViewHandle>();
+  let shownView: string | null = null; // null while the notch is closed
 
-  function showView(view: ViewName) {
-    currentView = view;
+  const viewCtx: ViewContext = {
+    reportInteractiveRects,
+    setAlert,
+    showView: switchView,
+  };
+
+  function railTab(entry: RailEntry): HTMLElement {
+    const tab = document.createElement("button");
+    tab.className = "rail-tab";
+    tab.classList.toggle("rail-foot", entry.rail === "foot");
+    tab.innerHTML = `<span class="icon">${entry.icon}</span>`;
+    if (isView(entry)) {
+      tab.classList.add("view-switch");
+      tab.title = entry.title;
+      tab.dataset.to = entry.id;
+      tab.addEventListener("click", (e) => {
+        e.stopPropagation();
+        switchView(entry.id);
+      });
+    } else {
+      tab.classList.add("wip");
+      tab.title = `${entry.title} — not implemented`;
+    }
+    return tab;
+  }
+  for (const entry of rail) {
+    const tab = railTab(entry);
+    railTabs.set(entry.id, tab);
+    railEl.append(tab);
+  }
+
+  // The amber dot on a rail button, with the reason in its tooltip.
+  function setAlert(id: string, reason: string | null) {
+    const tab = railTabs.get(id);
+    const entry = rail.find((e) => e.id === id);
+    if (!tab || !entry) return;
+    let dot = tab.querySelector<HTMLElement>(".rail-dot");
+    if (!dot) {
+      dot = document.createElement("span");
+      dot.className = "rail-dot";
+      tab.append(dot);
+    }
+    dot.hidden = reason === null;
+    tab.title = reason === null ? entry.title : `${entry.title} — ${reason}`;
+  }
+
+  function mountViews() {
+    if (handles.size > 0) return;
+    for (const view of views) {
+      const el = document.createElement("div");
+      el.className = `view view-${view.id}`;
+      el.hidden = true;
+      tabBody.append(el);
+      viewEls.set(view.id, el);
+      handles.set(view.id, view.mount(el, viewCtx));
+    }
+  }
+
+  function showView(view: NotchView) {
+    if (shownView && shownView !== view.id) handles.get(shownView)?.hide?.();
+    shownView = view.id;
     // Pin the body to the view's final width before the pill springs, or fluid
     // layouts inside (the wallpaper grid's auto-fill) reflow every frame.
     // .notch-panel-clip crops it while the pill catches up.
-    tabBody.style.width = `${VIEW[view].w - PANEL_CHROME}px`;
-    for (const name of Object.keys(viewEls) as ViewName[]) {
-      viewEls[name].hidden = name !== view;
-    }
+    tabBody.style.width = `${view.size.w - PANEL_CHROME}px`;
+    for (const [id, el] of viewEls) el.hidden = id !== view.id;
     // The rail survives the view swap, so move its highlight.
-    for (const tab of railTabs) {
-      tab.classList.toggle("active", tab.dataset.to === view);
-    }
-    expandedWindowH = VIEW[view].win;
-    // Sampling follows the view, not the panel: ambxst polls SystemResources
-    // only while its metrics tab is the open one.
-    if (view === "metrics") startMetrics();
-    else stopMetrics();
+    for (const [id, tab] of railTabs) tab.classList.toggle("active", id === view.id);
+    expandedWindowH = view.size.h + WINDOW_PAD;
+    handles.get(view.id)?.show?.();
   }
 
-  async function switchView(view: ViewName) {
-    if (currentView === view) return;
+  async function switchView(id: string) {
+    const view = views.find((v) => v.id === id);
+    if (!view || shownView === id) return;
     showView(view);
-    animate(notchEl, { width: VIEW[view].w, height: VIEW[view].h }, SPRING.panelOpen);
+    animate(notchEl, { width: view.size.w, height: view.size.h }, SPRING.panelOpen);
     await syncWindowHeight();
-    if (view === "theme") loadThemeView();
   }
 
-  for (const btn of notchPanelEl.querySelectorAll<HTMLElement>(".view-switch")) {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      switchView(btn.dataset.to as ViewName);
-    });
+  function openViews() {
+    mountViews();
+    showView(home); // always open on the dashboard, as ambxst does
+    for (const handle of handles.values()) handle.open?.();
   }
 
-  // Appearance: set_appearance persists the choice, re-resolves colours and
-  // emits "theme". Auto follows the macOS setting (Rust observes it).
-  const themeOpts = [...document.querySelectorAll<HTMLElement>(".theme-opt")];
-  function setActiveMode(mode: string) {
-    for (const b of themeOpts)
-      b.classList.toggle("active", b.dataset.mode === mode);
+  function closeViews() {
+    if (shownView) handles.get(shownView)?.hide?.();
+    shownView = null;
+    // Back to the popup height, so the controls/launcher popups don't inherit
+    // the notch's taller window.
+    expandedWindowH = LAYOUT.windowExpandedH;
   }
-  setActiveMode(appearance);
-  for (const b of themeOpts) {
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const mode = b.dataset.mode!;
-      setActiveMode(mode);
-      call("set_appearance", { mode });
-    });
-  }
-
-  // Ink: the colour drawn on the pills. Auto is Rust's contrast-checked pick;
-  // the swatch opens the system colour picker and pins an ink for the current
-  // light/dark scheme. Both report back through the "theme" event.
-  const inkAuto = document.querySelector<HTMLElement>("#ink-auto")!;
-  const inkCustom = document.querySelector<HTMLElement>("#ink-custom")!;
-  const inkSwatch = inkCustom.querySelector<HTMLElement>(".ink-swatch")!;
-  function renderInk(info: InkInfo, colour: string) {
-    inkColour = colour;
-    const pinned = info.source === "override";
-    inkAuto.classList.toggle("active", !pinned);
-    inkCustom.classList.toggle("active", pinned);
-    inkSwatch.style.background = colour;
-    const ratio = (r: number) => `${r.toFixed(1)}:1`;
-    inkAuto.title = pinned
-      ? "Back to auto (contrast-checked)"
-      : info.source === "contrast"
-        ? `Auto: ${colour}, ${ratio(info.ratio)} on the pill ` +
-          `(the scheme's ${info.configured} was only ${ratio(info.configuredRatio)})`
-        : `Auto: ${colour}, ${ratio(info.ratio)} on the pill`;
-    inkCustom.title = pinned
-      ? `Custom ${info.mode} ink: ${colour}, ${ratio(info.ratio)} on the pill`
-      : `Pick a ${info.mode} ink…`;
-  }
-  if (ink) renderInk(ink, inkColour);
-  inkAuto.addEventListener("click", (e) => {
-    e.stopPropagation();
-    call("set_ink", { colour: null });
-  });
-  inkCustom.addEventListener("click", (e) => {
-    e.stopPropagation();
-    call("pick_colour", { initial: inkColour }).then((colour) => {
-      if (colour) call("set_ink", { colour });
-    });
-  });
-
-  // Wallpaper grid: a thumb sets the desktop and re-themes the bar (Rust runs
-  // desktoppr and generate-edgebar-theme).
-  function renderFilmstrip(wallpapers: Wallpaper[], current: string) {
-    filmstrip.replaceChildren();
-    for (const w of wallpapers) {
-      const b = document.createElement("button");
-      b.className = "thumb";
-      b.classList.toggle("active", w.path === current);
-      b.title = w.name;
-      const img = document.createElement("img");
-      img.src = w.thumb;
-      img.alt = w.name;
-      b.appendChild(img);
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        call("set_wallpaper", { path: w.path });
-        for (const t of filmstrip.children) t.classList.remove("active");
-        b.classList.add("active");
-      });
-      filmstrip.appendChild(b);
-    }
-  }
-
-  let schemesBuilt = false;
-  function renderSchemes(active: string) {
-    if (!schemesBuilt) {
-      for (const s of SCHEMES) {
-        const o = document.createElement("option");
-        o.value = s;
-        o.textContent = s.replace("scheme-", "").replace(/-/g, " ");
-        schemeSelect.appendChild(o);
-      }
-      schemeSelect.addEventListener("change", (e) => {
-        e.stopPropagation();
-        call("set_scheme", { scheme: schemeSelect.value });
-      });
-      schemesBuilt = true;
-    }
-    schemeSelect.value = active;
-  }
-
-  async function loadThemeView() {
-    const [wallpapers, current, cfg] = await Promise.all([
-      call("list_wallpapers"),
-      call("current_wallpaper"),
-      call("get_config"),
-    ]);
-    renderFilmstrip(wallpapers, current);
-    renderSchemes(cfg.scheme);
-    setActiveMode(cfg.appearance);
-    renderInk(cfg.ink, cfg.colors.base);
-    themeLoaded = true;
-    // warm the per-wallpaper palette caches so thumbnail clicks are instant
-    call("precompute_palettes").catch(() => {});
-  }
-
-  // Browse… → native Finder picker → set + theme the chosen file in place.
-  document
-    .querySelector<HTMLElement>("#browse-btn")!
-    .addEventListener("click", (e) => {
-      e.stopPropagation();
-      call("pick_wallpaper_file").then((path) => {
-        if (!path) return;
-        call("set_wallpaper", { path });
-        for (const t of filmstrip.children) t.classList.remove("active");
-      });
-    });
 
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
   on("theme", (theme) => {
     applyColors(theme.colors);
-    setActiveMode(theme.appearance);
-    renderInk(theme.ink, theme.colors.base);
-    if (themeLoaded && theme.scheme) renderSchemes(theme.scheme);
-    // Canvas pixels don't follow CSS vars — repaint them by hand.
+    // Canvas pixels don't follow CSS vars, so repaint them by hand.
     drawCpuGraph();
     paintWave();
   });

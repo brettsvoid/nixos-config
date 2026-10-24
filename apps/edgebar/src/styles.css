@@ -355,7 +355,7 @@ body {
      than the gap between the clusters, so it must cover the pills it overlaps
      and win clicks there. */
   z-index: 2;
-  /* Room for the widest open view (VIEW.theme in main.ts, 704px). A screen
+  /* Room for the widest open view (the wallpapers view's size, 704px). A screen
      narrower than max-width + 2 × --bezel-line-thickness (~728px) couldn't keep
      it centred; no Mac display is. */
   max-width: 720px;
@@ -518,7 +518,7 @@ body {
   flex: none;
   min-height: 0;
 }
-/* one view visible at a time in the tab body (dashboard / wallpapers / perf) */
+/* one view visible at a time in the tab body */
 .view {
   display: flex;
   flex-direction: column;
@@ -528,28 +528,7 @@ body {
 .view[hidden] {
   display: none;
 }
-/* The dashboard: four columns after ambxst's WidgetsTab (player, widgets,
-   notification history, control rail). `.view[hidden]` is more specific, so
-   it still wins over this display. */
-.view-default {
-  display: grid;
-  grid-template-columns: 180px 208px minmax(140px, 1fr) 48px;
-  gap: var(--space-4);
-  align-items: stretch;
-  /* fills the panel rather than sizing to its tallest column, so the columns
-     keep their full height whatever is in them */
-  flex: 1 1 auto;
-}
-.view-theme,
-.view-metrics {
-  flex: 1 1 auto;
-  align-items: stretch;
-  gap: var(--space-4);
-}
-/* the chart placeholder takes whatever the header and the rows leave */
-.view-metrics .ph {
-  flex: 1 1 auto;
-}
+
 /* ---- media pill: art backdrop + wavy playhead + transport ----
    An inset pill inside the notch. The album art is a soft backdrop behind a
    scrim, not a thumbnail: a cover this small reads as noise, a wash of its
@@ -653,78 +632,7 @@ body {
   border-radius: 50%;
 }
 
-/* ---- appearance toggle (light / dark / auto), in the theme-view header ---- */
-.theme-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border-radius: var(--radius-md);
-  background: var(--track);
-}
-.theme-opt {
-  display: grid;
-  place-items: center;
-  padding: var(--space-2) var(--space-5);
-  border: none;
-  background: transparent;
-  color: var(--base);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  opacity: var(--dim-more);
-  font-size: var(--font-lg);
-}
-.theme-opt:hover {
-  opacity: var(--dim);
-}
-.theme-opt.active {
-  background: var(--pill-bg);
-  opacity: 1;
-}
-
-/* ---- ink picker (theme bar): auto / custom swatch ----
-   The appearance toggle's segmented look, at the toolbar's control height. */
-.ink-toggle {
-  height: var(--control-h);
-  flex: none;
-}
-.ink-label {
-  padding: 0 var(--space-2) 0 var(--space-3);
-  color: var(--base);
-  font-size: var(--font-2xs);
-  opacity: var(--dim);
-}
-.ink-opt {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--base);
-  font: inherit;
-  font-size: var(--font-2xs);
-  cursor: pointer;
-  opacity: var(--dim-more);
-}
-.ink-opt:hover {
-  opacity: var(--dim);
-}
-.ink-opt.active {
-  background: var(--pill-bg);
-  opacity: 1;
-}
-.ink-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  /* the ink contrasts with the pill by construction, but not always with the
-     track the swatch sits on — the ring keeps its edge either way */
-  box-shadow: 0 0 0 1px var(--separator);
-}
-
-/* ---- theme view: header, wallpaper filmstrip, browse, scheme picker ---- */
+/* ---- view chrome: the rail's view-switch button and the header views share ---- */
 .view-switch {
   display: flex;
   align-items: center;
@@ -740,7 +648,6 @@ body {
 .view-switch:hover {
   opacity: 1;
 }
-/* the view is entered from the rail's wallpapers tab (.rail-tab.view-switch) */
 .view-head {
   display: flex;
   align-items: center;
@@ -749,112 +656,6 @@ body {
 .view-title {
   font-size: var(--font-sm);
   font-weight: 600;
-}
-.view-head .theme-toggle {
-  margin-left: auto; /* appearance toggle sits at the right of the header */
-}
-
-/* toolbar above the grid: search, scheme, ink, OLED/Tint chips, Browse… */
-.theme-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex: none;
-}
-.chip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  border: 1px dashed var(--wip-line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font: inherit;
-  font-size: var(--font-2xs);
-}
-/* every icon in the row at one size, or the tallest one sets the row's
-   optical weight even when the boxes match */
-.theme-bar .icon {
-  font-size: var(--font-md);
-}
-
-/* A grid despite the name, like ambxst's WallpapersTab; main.ts fills it with
-   .thumb buttons. */
-.filmstrip {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  /* Rows size to the thumbs and stack from the top; otherwise the grid's
-     definite height is shared between the rows and each 16:9 thumb overflows
-     its row. */
-  grid-auto-rows: max-content;
-  align-content: start;
-  gap: var(--space-3);
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1 1 auto;
-  min-height: 0;
-  padding-right: var(--space-2);
-}
-.filmstrip::-webkit-scrollbar {
-  width: 6px;
-}
-.filmstrip::-webkit-scrollbar-thumb {
-  background: var(--track);
-  border-radius: 3px;
-}
-.thumb {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  cursor: pointer;
-  border: 2px solid transparent;
-  background: var(--track);
-  padding: 0;
-}
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.thumb.active {
-  border-color: var(--accent);
-}
-
-.browse-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  flex: none;
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--track);
-  color: var(--base);
-  font: inherit;
-  font-size: var(--font-sm);
-  cursor: pointer;
-}
-.browse-btn:hover {
-  background: var(--hover);
-}
-
-.scheme-select {
-  min-width: 140px;
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--track);
-  color: var(--base);
-  font: inherit;
-  font-size: var(--font-sm);
-  text-transform: capitalize;
-  cursor: pointer;
 }
 
 /* ---- not-implemented placeholders ----
@@ -902,31 +703,11 @@ body {
 .ph-note {
   font-size: var(--font-3xs);
 }
-/* a placeholder that owns a whole dashboard column */
-.ph-col {
-  height: 100%;
-}
-/* a placeholder that reads as one inline control */
-.ph-inline {
-  flex-direction: row;
-  justify-content: flex-start;
-  height: var(--control-h);
-  padding: 0 var(--space-4);
-  flex: none;
-}
-.theme-bar .ph-inline {
-  flex: 1 1 auto;
-}
-.ph-inline .ph-icon {
-  font-size: var(--font-md);
-}
 
-/* ---- dashboard view: the notch's default open view ----
-   Ported from ambxst's Dashboard.qml + WidgetsTab.qml. Column widths live in
-   `.view-default`'s grid; this section styles what sits in them. */
-
-/* Tab rail — icon buttons, settings pinned to the bottom. A sibling of the
-   tab body, so it stays put across view switches. */
+/* ---- notch rail ----
+   Ported from ambxst's Dashboard.qml. Icon buttons with the foot-pinned ones
+   (Settings) at the bottom. A sibling of the tab body, so it stays put across
+   view switches. */
 .dash-rail {
   display: flex;
   flex-direction: column;
@@ -956,7 +737,7 @@ body {
   background: var(--track);
   opacity: 1;
 }
-.rail-settings {
+.rail-foot {
   margin-top: auto; /* separated at the foot of the rail, as in ambxst */
 }
 /* Alert dot: a tab wants attention. Amber --warn (as Wi-Fi's no-internet
@@ -974,70 +755,6 @@ body {
 }
 .rail-dot[hidden] {
   display: none;
-}
-
-/* 2. widgets column — scrolls, like ambxst's Flickable */
-.dash-col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-height: 0;
-  min-width: 0;
-}
-.dash-widgets {
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.dash-widgets::-webkit-scrollbar {
-  width: 6px;
-}
-.dash-widgets::-webkit-scrollbar-thumb {
-  background: var(--track);
-  border-radius: 3px;
-}
-/* five square toggles across the widgets column */
-.quick-controls {
-  display: flex;
-  gap: var(--space-2);
-  flex: none;
-}
-.qc-btn {
-  display: grid;
-  place-items: center;
-  flex: 1 1 0;
-  aspect-ratio: 1;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--track);
-  font-size: var(--font-lg);
-}
-.ph-cal {
-  flex: none;
-  aspect-ratio: 1; /* the month grid is square, so reserve a square */
-}
-
-/* 4. control rail — a tall brightness slider over two dials */
-.dash-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
-  min-height: 0;
-}
-.ph-vslider {
-  flex: 1 1 auto;
-  width: 48px;
-  padding: var(--space-3) 0;
-}
-.ph-vslider .ph-name {
-  writing-mode: vertical-rl; /* the label runs with the slider's travel */
-}
-.ph-dial {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border-radius: 50%; /* the dial it stands in for is a ring */
 }
 
 /* ---- status pill: Wi-Fi / network + battery, merged ---- */
@@ -1234,49 +951,6 @@ body {
      rounded square rather than a tall sliver (-2px matches .detached height) */
   width: calc(var(--pill-h) - 2px);
   height: calc(var(--pill-h) - 2px);
-}
-
-/* ---- metrics rows inside the notch panel ---- */
-.metrics {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: 100%;
-}
-.metric {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  font-size: var(--font-xs);
-}
-.metric .m-icon {
-  font-size: var(--font-lg);
-  opacity: var(--dim-icon);
-}
-.metric .m-label {
-  width: 52px; /* label column — keeps every bar starting on the same x */
-  font-weight: 600;
-}
-.metric .m-bar {
-  flex: 1;
-  height: 6px; /* bar thickness (component-intrinsic) */
-  border-radius: 3px; /* round the thin bar's ends */
-  background: var(--track);
-  overflow: hidden;
-}
-.metric .m-bar i {
-  display: block;
-  height: 100%;
-  width: 0%;
-  background: var(--base);
-  border-radius: 3px;
-  transition: width var(--dur-slow) var(--ease-out);
-}
-.metric .m-val {
-  width: 34px; /* value column (component-intrinsic) */
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
 }
 
 /* ---- controls panel (volume / mic / brightness sliders) ----

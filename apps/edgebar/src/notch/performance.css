@@ -1,0 +1,52 @@
+.view-performance {
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+/* the chart placeholder takes whatever the header and the rows leave */
+.view-performance .ph {
+  flex: 1 1 auto;
+}
+
+/* ---- metrics rows ---- */
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.metric {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-xs);
+}
+.metric .m-icon {
+  font-size: var(--font-lg);
+  opacity: var(--dim-icon);
+}
+.metric .m-label {
+  width: 52px; /* label column, so every bar starts on the same x */
+  font-weight: 600;
+}
+.metric .m-bar {
+  flex: 1;
+  height: 6px; /* bar thickness (component-intrinsic) */
+  border-radius: 3px; /* round the thin bar's ends */
+  background: var(--surface-container);
+  overflow: hidden;
+}
+.metric .m-bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--on-surface);
+  border-radius: 3px;
+  transition: width var(--dur-slow) var(--ease-out);
+}
+.metric .m-val {
+  width: 34px; /* value column (component-intrinsic) */
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

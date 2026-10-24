@@ -1,0 +1,198 @@
+.view-wallpapers {
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+/* ---- appearance toggle (light / dark / auto), in the header ---- */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--surface-container);
+}
+.theme-opt {
+  display: grid;
+  place-items: center;
+  padding: var(--space-2) var(--space-5);
+  border: none;
+  background: transparent;
+  color: var(--on-surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: var(--dim-more);
+  font-size: var(--font-lg);
+}
+.theme-opt:hover {
+  opacity: var(--dim);
+}
+.theme-opt.active {
+  background: var(--surface);
+  opacity: 1;
+}
+
+/* ---- ink picker (toolbar): auto / custom swatch ----
+   The appearance toggle's segmented look, at the toolbar's control height. */
+.ink-toggle {
+  height: var(--control-h);
+  flex: none;
+}
+.ink-label {
+  padding: 0 var(--space-2) 0 var(--space-3);
+  color: var(--on-surface);
+  font-size: var(--font-2xs);
+  opacity: var(--dim);
+}
+.ink-opt {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-2xs);
+  cursor: pointer;
+  opacity: var(--dim-more);
+}
+.ink-opt:hover {
+  opacity: var(--dim);
+}
+.ink-opt.active {
+  background: var(--surface);
+  opacity: 1;
+}
+.ink-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  /* the ink contrasts with the pill by construction, but not always with the
+     track the swatch sits on, so the ring keeps its edge either way */
+  box-shadow: 0 0 0 1px var(--separator);
+}
+
+.view-head .theme-toggle {
+  margin-left: auto; /* appearance toggle sits at the right of the header */
+}
+
+/* toolbar above the grid: search, scheme, ink, OLED/Tint chips, Browse… */
+.theme-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  border: 1px dashed var(--wip-line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-2xs);
+}
+/* every icon in the row at one size, or the tallest one sets the row's
+   optical weight even when the boxes match */
+.theme-bar .icon {
+  font-size: var(--font-md);
+}
+
+/* A grid despite the name, like ambxst's WallpapersTab; wallpapers.ts fills it with
+   .thumb buttons. */
+.filmstrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  /* Rows size to the thumbs and stack from the top; otherwise the grid's
+     definite height is shared between the rows and each 16:9 thumb overflows
+     its row. */
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--space-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: var(--space-2);
+}
+.filmstrip::-webkit-scrollbar {
+  width: 6px;
+}
+.filmstrip::-webkit-scrollbar-thumb {
+  background: var(--surface-container);
+  border-radius: 3px;
+}
+.thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: var(--surface-container);
+  padding: 0;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.thumb.active {
+  border-color: var(--primary);
+}
+
+.browse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex: none;
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.browse-btn:hover {
+  background: var(--surface-container-high);
+}
+
+.scheme-select {
+  min-width: 140px;
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: var(--font-sm);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+/* a placeholder that reads as one inline control */
+.ph-inline {
+  flex-direction: row;
+  justify-content: flex-start;
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  flex: none;
+}
+.theme-bar .ph-inline {
+  flex: 1 1 auto;
+}
+.ph-inline .ph-icon {
+  font-size: var(--font-md);
+}
