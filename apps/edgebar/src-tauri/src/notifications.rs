@@ -455,6 +455,7 @@ pub async fn notification_clear() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scratch::Scratch;
     use rusqlite::Connection;
 
     fn plist_blob(root: plist::Dictionary) -> Vec<u8> {
@@ -615,18 +616,10 @@ mod tests {
         assert_eq!((kept[0].id.as_str(), kept[99].id.as_str()), ("0", "99"));
     }
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("edgebar-notif-test-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
     #[test]
     fn hidden_file_round_trips_dismiss_then_clear() {
-        let dir = scratch("hidden");
-        let path = dir.join("notifications-hidden.json");
+        let dir = Scratch::new("hidden");
+        let path = dir.path().join("notifications-hidden.json");
         assert_eq!(load_hidden(&path), Hidden::default());
 
         dismiss_in(&path, vec!["7".into(), "3".into()]);
@@ -641,17 +634,14 @@ mod tests {
             std::fs::read_to_string(&path).unwrap(),
             r#"{"ids":[],"clearedBefore":1234.5}"#
         );
-        assert!(!dir.join("notifications-hidden.json.tmp").exists());
-        std::fs::remove_dir_all(dir).unwrap();
+        assert!(!dir.path().join("notifications-hidden.json.tmp").exists());
     }
 
     #[test]
     fn a_corrupt_hidden_file_hides_nothing() {
-        let dir = scratch("corrupt");
-        let path = dir.join("notifications-hidden.json");
-        std::fs::write(&path, b"{ not json").unwrap();
+        let dir = Scratch::new("corrupt");
+        let path = dir.write("notifications-hidden.json", b"{ not json");
         assert_eq!(load_hidden(&path), Hidden::default());
-        std::fs::remove_dir_all(dir).unwrap();
     }
 
     fn fake_store(dir: &Path, now: f64) -> Connection {
@@ -693,15 +683,15 @@ mod tests {
 
     #[test]
     fn read_records_copies_the_wal_and_reads_the_rows_in_the_window() {
-        let src = scratch("store");
+        let src = Scratch::new("store");
         let now = 1_800_000_000.0;
-        let _writer = fake_store(&src, now);
+        let _writer = fake_store(src.path(), now);
         assert!(
-            src.join("db-wal").metadata().unwrap().len() > 0,
+            src.path().join("db-wal").metadata().unwrap().len() > 0,
             "rows must be in the WAL"
         );
 
-        let read = read_records(&src, now).unwrap();
+        let read = read_records(src.path(), now).unwrap();
         let mut got: Vec<(String, String, String, String)> = read
             .records
             .iter()
@@ -733,16 +723,14 @@ mod tests {
             ]
         );
         assert_eq!(read.unparsed, 1);
-        drop(_writer);
-        std::fs::remove_dir_all(src).unwrap();
     }
 
     #[test]
     fn a_snapshot_is_a_private_copy_that_goes_away() {
         use std::os::unix::fs::PermissionsExt;
-        let src = scratch("snapshot");
-        let _writer = fake_store(&src, 1_800_000_000.0);
-        let snap = Snapshot::take(&src).unwrap();
+        let src = Scratch::new("snapshot");
+        let _writer = fake_store(src.path(), 1_800_000_000.0);
+        let snap = Snapshot::take(src.path()).unwrap();
         let dir = snap.dir.clone();
         for name in ["db", "db-wal", "db-shm"] {
             assert!(dir.join(name).is_file(), "{name} copied");
@@ -750,42 +738,41 @@ mod tests {
         assert_eq!(dir.metadata().unwrap().permissions().mode() & 0o777, 0o700);
         drop(snap);
         assert!(!dir.exists());
-        drop(_writer);
-        std::fs::remove_dir_all(src).unwrap();
     }
 
     #[test]
     fn a_missing_store_is_unavailable() {
-        let src = scratch("missing");
-        let err = read_records(&src.join("nope"), 0.0).err().unwrap();
+        let src = Scratch::new("missing");
+        let err = read_records(&src.path().join("nope"), 0.0).err().unwrap();
         assert_eq!(err, Access::Unavailable);
-        std::fs::remove_dir_all(src).unwrap();
     }
 
     #[test]
     fn an_unreadable_store_is_denied() {
         use std::os::unix::fs::PermissionsExt;
-        let src = scratch("denied");
+        let src = Scratch::new("denied");
         let now = 1_800_000_000.0;
-        drop(fake_store(&src, now));
-        std::fs::set_permissions(src.join("db"), std::fs::Permissions::from_mode(0o000)).unwrap();
-        let err = read_records(&src, now).err().unwrap();
+        drop(fake_store(src.path(), now));
+        std::fs::set_permissions(
+            src.path().join("db"),
+            std::fs::Permissions::from_mode(0o000),
+        )
+        .unwrap();
+        let err = read_records(src.path(), now).err().unwrap();
         assert_eq!(err, Access::Denied);
-        std::fs::remove_dir_all(src).unwrap();
     }
 
     #[test]
     fn a_store_with_another_layout_is_unavailable() {
-        let src = scratch("layout");
-        let conn = Connection::open(src.join("db")).unwrap();
+        let src = Scratch::new("layout");
+        let conn = Connection::open(src.path().join("db")).unwrap();
         conn.execute_batch("CREATE TABLE unrelated (x INTEGER);")
             .unwrap();
         drop(conn);
-        let err = read_records(&src, 0.0).err().unwrap();
+        let err = read_records(src.path(), 0.0).err().unwrap();
         assert_eq!(err, Access::Unavailable);
-        let check = Connection::open(src.join("db")).unwrap();
+        let check = Connection::open(src.path().join("db")).unwrap();
         assert_eq!(schema_summary(&check), "unrelated(x)");
-        std::fs::remove_dir_all(src).unwrap();
     }
 
     #[cfg(target_os = "macos")]

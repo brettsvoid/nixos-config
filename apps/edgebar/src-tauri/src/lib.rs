@@ -28,6 +28,9 @@ mod settings;
 
 mod setup;
 
+#[cfg(test)]
+mod scratch;
+
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
 /// `Light`/`Dark` pin it.
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

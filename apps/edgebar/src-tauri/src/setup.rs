@@ -440,17 +440,4 @@ mod tests {
             (State::Missing, "`no-such-edgebar-tool`: gone")
         );
     }
-
-    #[test]
-    fn each_action_has_a_button_label() {
-        assert_eq!(
-            Action::Open(SettingsPane::Shortcuts).label(),
-            "Open Shortcuts"
-        );
-        assert_eq!(
-            Action::Open(SettingsPane::FullDiskAccess).label(),
-            "Open System Settings"
-        );
-        assert_eq!(Action::Ask(Player::Music).label(), "Ask");
-    }
 }

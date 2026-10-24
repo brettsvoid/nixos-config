@@ -450,25 +450,13 @@ pub fn spawn_pick(app: &tauri::AppHandle, theme_command: String, path: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scratch::Scratch;
 
     fn palette(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
-    }
-
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "edgebar-wallpapers-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
     }
 
     #[test]
@@ -488,7 +476,7 @@ mod tests {
 
     #[test]
     fn scan_lists_the_root_and_one_level_down() {
-        let root = scratch("scan");
+        let root = Scratch::new("scan");
         for file in [
             "b.PNG",
             "a.jpg",
@@ -500,15 +488,12 @@ mod tests {
             ".git/x.jpg",
             "city/m.heic",
         ] {
-            let path = root.join(file);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, b"x").unwrap();
+            root.write(file, b"x");
         }
-        let got: Vec<(String, String, String)> = scan(&root)
+        let got: Vec<(String, String, String)> = scan(root.path())
             .into_iter()
             .map(|f| (f.folder, f.name, f.kind))
             .collect();
-        std::fs::remove_dir_all(&root).unwrap();
         let row = |a: &str, b: &str, c: &str| (a.to_string(), b.to_string(), c.to_string());
         assert_eq!(
             got,
@@ -651,18 +636,15 @@ mod tests {
 
     #[test]
     fn a_tinted_copy_is_traced_back_to_its_original() {
-        let dir = scratch("sidecar");
-        let copy = dir.join("tint-1.png");
-        std::fs::write(&copy, b"png").unwrap();
+        let dir = Scratch::new("sidecar");
+        let copy = dir.write("tint-1.png", b"png");
         std::fs::write(sidecar(&copy), b"/w/a.jpg\n").unwrap();
-        let stray = dir.join("tint-2.png");
-        std::fs::write(&stray, b"png").unwrap();
+        let stray = dir.write("tint-2.png", b"png");
         let got = (
-            original_in(&dir, copy.to_str().unwrap()),
-            original_in(&dir, stray.to_str().unwrap()),
-            original_in(&dir, "/w/b.jpg"),
+            original_in(dir.path(), copy.to_str().unwrap()),
+            original_in(dir.path(), stray.to_str().unwrap()),
+            original_in(dir.path(), "/w/b.jpg"),
         );
-        std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(
             got,
             (
@@ -675,7 +657,7 @@ mod tests {
 
     #[test]
     fn prune_keeps_the_copy_in_use_and_its_sidecar() {
-        let dir = scratch("prune");
+        let dir = Scratch::new("prune");
         for f in [
             "tint-1.png",
             "tint-1.png.src",
@@ -683,17 +665,16 @@ mod tests {
             "tint-2.png.src",
             "tint-3.png.tmp",
         ] {
-            std::fs::write(dir.join(f), b"x").unwrap();
+            dir.write(f, b"x");
         }
-        prune(&dir, Some(&dir.join("tint-2.png")));
-        let mut left: Vec<String> = std::fs::read_dir(&dir)
+        prune(dir.path(), Some(&dir.path().join("tint-2.png")));
+        let mut left: Vec<String> = std::fs::read_dir(dir.path())
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
             .collect();
         left.sort();
-        prune(&dir, None);
-        let none_left = std::fs::read_dir(&dir).unwrap().count();
-        std::fs::remove_dir_all(&dir).unwrap();
+        prune(dir.path(), None);
+        let none_left = std::fs::read_dir(dir.path()).unwrap().count();
         assert_eq!(left, vec!["tint-2.png", "tint-2.png.src"]);
         assert_eq!(none_left, 0);
     }
@@ -817,24 +798,23 @@ mod tests {
         state.wallpaper_command = "desktoppr".to_string();
         app.manage(Mutex::new(state));
         let handle = app.handle();
-        let dir = scratch("converge");
+        let dir = Scratch::new("converge");
         let shown = || crate::query_desktop_picture("desktoppr");
-        let files = || std::fs::read_dir(&dir).unwrap().count();
+        let files = || std::fs::read_dir(dir.path()).unwrap().count();
 
-        converge(handle, true, &dir, None);
+        converge(handle, true, dir.path(), None);
         let tinted = shown();
         let on = (
-            Path::new(&tinted).parent() == Some(dir.as_path()),
-            original_in(&dir, &tinted) == before,
+            Path::new(&tinted).parent() == Some(dir.path()),
+            original_in(dir.path(), &tinted) == before,
             files(),
         );
 
-        converge(handle, true, &dir, None);
+        converge(handle, true, dir.path(), None);
         let again = (shown() == tinted, files());
 
-        converge(handle, false, &dir, None);
+        converge(handle, false, dir.path(), None);
         let off = (shown() == before, files());
-        std::fs::remove_dir_all(&dir).unwrap();
         println!("tint on {on:?}, a second run {again:?}, tint off {off:?}");
         assert_eq!(
             on,
@@ -870,14 +850,15 @@ mod tests {
         let _restore = Restore(before.clone());
         let log_before = log();
 
-        let dir = scratch("desktop");
+        let dir = Scratch::new("desktop");
         let colours = tint_colours(&palette(&[
             ("base", "#131318"),
             ("rosewater", "#bdc2ff"),
             ("text", "#e4e1e9"),
             ("blue", "#e7b9d6"),
         ]));
-        let tinted = ensure_tinted(&dir, Path::new(&before), &colours, (2560, 1600)).unwrap();
+        let tinted =
+            ensure_tinted(dir.path(), Path::new(&before), &colours, (2560, 1600)).unwrap();
 
         crate::touch_inapp_marker();
         let status = std::process::Command::new("desktoppr")
@@ -888,7 +869,7 @@ mod tests {
         assert!(status.success());
         std::thread::sleep(std::time::Duration::from_millis(1500));
         let shown = crate::query_desktop_picture("desktoppr");
-        let original = original_in(&dir, &shown);
+        let original = original_in(dir.path(), &shown);
         println!("desktop showed {shown}");
         println!("which stands for {original}");
         let log_tinted = log();
@@ -897,7 +878,6 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(1500));
         let after = crate::query_desktop_picture("desktoppr");
         let log_after = log();
-        std::fs::remove_dir_all(&dir).unwrap();
         println!(
             "before {before}, after {after}; watcher log lines {log_before} -> {log_tinted} -> {log_after}"
         );
