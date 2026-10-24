@@ -1536,7 +1536,7 @@ fn is_image(path: &std::path::Path) -> bool {
 
 /// Standard base64 with padding. Pure Rust, so thumbnails can be encoded off
 /// the main thread.
-fn base64_encode(bytes: &[u8]) -> String {
+pub(crate) fn base64_encode(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
@@ -2637,7 +2637,11 @@ pub fn run() {
             set_scheme,
             precompute_palettes,
             notch::notch_state,
+            notch::media_state,
+            notch::media_art,
             notch::media_toggle,
+            notch::media_next,
+            notch::media_previous,
             notch::media_seek,
             settings::get_settings,
             settings::set_setting,
