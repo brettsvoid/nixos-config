@@ -1094,7 +1094,7 @@ printf '%s\n' '{RESULT_OK}'"#
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "live: three short turns of the real Claude CLI"]
     fn live_conversation_remembers_and_survives_a_cancel() {
         let config = crate::settings::load(crate::settings::dir().as_deref())
             .config

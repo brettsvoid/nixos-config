@@ -1408,7 +1408,7 @@ fn launcher_action(action: String) {
 
 /// The ids are the panes' extension bundle ids and the anchors their
 /// `revealElementKeyName`s (SecurityPrivacyExtension.appex TCCServiceList.plist).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 enum SettingsPane {
     Wifi,

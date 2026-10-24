@@ -141,6 +141,7 @@ export interface ToggleState {
   on: boolean;
   available: boolean;
   detail: string;
+  fix: SettingsPane | null;
 }
 
 export type SettingsPane =

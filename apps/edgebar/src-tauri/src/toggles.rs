@@ -1,5 +1,7 @@
+use crate::SettingsPane;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::borrow::Cow;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -13,7 +15,20 @@ const SETTLE_STEP: Duration = Duration::from_millis(100);
 const SHORTCUTS_TTL: Duration = Duration::from_secs(30);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 const BLUETOOTH_TIMEOUT: Duration = Duration::from_secs(3);
-const BLUETOOTH_PERMISSION: &str = "Needs Bluetooth permission for kitty";
+const BLUETOOTH_PERMISSION: Problem = Problem::fixed_in(
+    "Needs Bluetooth permission for kitty",
+    SettingsPane::PrivacyBluetooth,
+);
+/// The `com.apple.bluetooth.power` notify state while Bluetooth is on.
+const BLUETOOTH_POWER_ON: u64 = 1;
+/// `CBManagerAuthorization`'s raw values.
+const CB_NOT_DETERMINED: isize = 0;
+const CB_RESTRICTED: isize = 1;
+const CB_DENIED: isize = 2;
+const CB_ALLOWED_ALWAYS: isize = 3;
+/// `BlueLightStatus::mode`: Night Shift's schedule. 0 is no schedule.
+const SCHEDULE_SUNSET_TO_SUNRISE: i32 = 1;
+const SCHEDULE_CUSTOM: i32 = 2;
 
 pub const ASSERTIONS: &str = "Library/DoNotDisturb/DB/Assertions.json";
 const MODE_CONFIGURATIONS: &str = "Library/DoNotDisturb/DB/ModeConfigurations.json";
@@ -40,6 +55,8 @@ pub struct ToggleState {
     pub on: bool,
     pub available: bool,
     pub detail: String,
+    /// The pane that fixes what `detail` reports, when it names one.
+    pub fix: Option<SettingsPane>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -47,6 +64,7 @@ struct Reading {
     on: bool,
     available: bool,
     detail: String,
+    fix: Option<SettingsPane>,
 }
 
 impl Reading {
@@ -55,6 +73,7 @@ impl Reading {
             on,
             available: true,
             detail: detail.into(),
+            fix: None,
         }
     }
 
@@ -63,7 +82,53 @@ impl Reading {
             on,
             available: false,
             detail: why.into(),
+            fix: None,
         }
+    }
+
+    fn fixed_in(self, pane: SettingsPane) -> Self {
+        Self {
+            fix: Some(pane),
+            ..self
+        }
+    }
+}
+
+/// Why a switch did not happen, and the pane that fixes it when there is one.
+#[derive(Clone, Debug, PartialEq)]
+struct Problem {
+    detail: Cow<'static, str>,
+    fix: Option<SettingsPane>,
+}
+
+impl Problem {
+    const fn new(detail: &'static str) -> Self {
+        Self {
+            detail: Cow::Borrowed(detail),
+            fix: None,
+        }
+    }
+
+    const fn fixed_in(detail: &'static str, pane: SettingsPane) -> Self {
+        Self {
+            detail: Cow::Borrowed(detail),
+            fix: Some(pane),
+        }
+    }
+}
+
+impl From<String> for Problem {
+    fn from(detail: String) -> Self {
+        Self {
+            detail: Cow::Owned(detail),
+            fix: None,
+        }
+    }
+}
+
+impl From<&'static str> for Problem {
+    fn from(detail: &'static str) -> Self {
+        Self::new(detail)
     }
 }
 
@@ -75,43 +140,49 @@ fn on_off(on: bool) -> &'static str {
     }
 }
 
+enum Write {
+    To(fn(&Toggles, bool) -> Result<(), Problem>),
+    /// Flips the state; only called when the state differs from the one wanted.
+    Flip(fn(&Toggles) -> Result<(), Problem>),
+}
+
 struct Toggle {
     id: ToggleId,
     read: fn(&Toggles) -> Reading,
-    write: fn(&Toggles, bool) -> Result<(), String>,
-    unconfirmed: &'static str,
+    write: Write,
+    unconfirmed: Problem,
 }
 
-const TABLE: [Toggle; 5] = [
+static TABLE: [Toggle; 5] = [
     Toggle {
         id: ToggleId::Wifi,
         read: read_wifi,
-        write: write_wifi,
-        unconfirmed: "Wi-Fi didn't change",
+        write: Write::To(write_wifi),
+        unconfirmed: Problem::new("Wi-Fi didn't change"),
     },
     Toggle {
         id: ToggleId::Bluetooth,
         read: read_bluetooth,
-        write: write_bluetooth,
+        write: Write::To(write_bluetooth),
         unconfirmed: BLUETOOTH_PERMISSION,
     },
     Toggle {
         id: ToggleId::Focus,
         read: read_focus,
-        write: write_focus,
-        unconfirmed: "The Shortcut ran but Focus didn't change",
+        write: Write::Flip(flip_focus),
+        unconfirmed: Problem::new("The Shortcut ran but Focus didn't change"),
     },
     Toggle {
         id: ToggleId::NightShift,
         read: read_night_shift,
-        write: write_night_shift,
-        unconfirmed: "Night Shift didn't change",
+        write: Write::To(write_night_shift),
+        unconfirmed: Problem::new("Night Shift didn't change"),
     },
     Toggle {
         id: ToggleId::Caffeine,
         read: read_caffeine,
-        write: write_caffeine,
-        unconfirmed: "caffeinate exited at once",
+        write: Write::To(write_caffeine),
+        unconfirmed: Problem::new("caffeinate exited at once"),
     },
 ];
 
@@ -162,36 +233,39 @@ impl Toggles {
                     on: r.on,
                     available: r.available,
                     detail: r.detail,
+                    fix: r.fix,
                 }
             })
             .collect()
     }
 
     fn set(&self, id: ToggleId, on: bool) -> Vec<ToggleState> {
-        let failure = self.converge(&TABLE[id as usize], on, SETTLE);
+        let outcome = self.converge(&TABLE[id as usize], on, SETTLE);
         let mut all = self.read_all();
-        if let Some(why) = failure {
-            all[id as usize].detail = why;
+        if let Err(problem) = outcome {
+            all[id as usize].detail = problem.detail.into_owned();
+            all[id as usize].fix = problem.fix;
         }
         all
     }
 
-    fn converge(&self, row: &Toggle, on: bool, settle: Duration) -> Option<String> {
+    fn converge(&self, row: &Toggle, on: bool, settle: Duration) -> Result<(), Problem> {
         let now = (row.read)(self);
         if !now.available || now.on == on {
-            return None;
+            return Ok(());
         }
-        if let Err(why) = (row.write)(self, on) {
-            return Some(why);
+        match row.write {
+            Write::To(write) => write(self, on)?,
+            Write::Flip(flip) => flip(self)?,
         }
         let deadline = Instant::now() + settle;
         while (row.read)(self).on != on {
             if Instant::now() >= deadline {
-                return Some(row.unconfirmed.to_string());
+                return Err(row.unconfirmed.clone());
             }
             std::thread::sleep(SETTLE_STEP);
         }
-        None
+        Ok(())
     }
 
     pub fn has_shortcut(&self, name: &str) -> Option<bool> {
@@ -237,7 +311,7 @@ fn read_wifi(_: &Toggles) -> Reading {
     }
 }
 
-fn write_wifi(t: &Toggles, on: bool) -> Result<(), String> {
+fn write_wifi(t: &Toggles, on: bool) -> Result<(), Problem> {
     if t.wifi_device.get().is_none() {
         let mut cmd = Command::new("/usr/sbin/networksetup");
         cmd.arg("-listallhardwareports");
@@ -257,7 +331,7 @@ fn write_wifi(t: &Toggles, on: bool) -> Result<(), String> {
     ]);
     run(cmd)
         .map(drop)
-        .ok_or_else(|| "networksetup couldn't switch Wi-Fi".to_string())
+        .ok_or_else(|| "networksetup couldn't switch Wi-Fi".into())
 }
 
 fn wifi_device(listing: &str) -> Option<String> {
@@ -272,16 +346,19 @@ fn wifi_device(listing: &str) -> Option<String> {
 
 fn read_bluetooth(_: &Toggles) -> Reading {
     match sys::bluetooth_power() {
-        Some(state) => Reading::settable(state == 1, on_off(state == 1)),
+        Some(state) => {
+            let on = state == BLUETOOTH_POWER_ON;
+            Reading::settable(on, on_off(on))
+        }
         None => Reading::unavailable(false, "Bluetooth state unreadable"),
     }
 }
 
 static BLUETOOTH_WRITING: AtomicBool = AtomicBool::new(false);
 
-fn write_bluetooth(_: &Toggles, on: bool) -> Result<(), String> {
+fn write_bluetooth(_: &Toggles, on: bool) -> Result<(), Problem> {
     if BLUETOOTH_WRITING.swap(true, Ordering::AcqRel) {
-        return Err(BLUETOOTH_PERMISSION.into());
+        return Err("Bluetooth is still switching".into());
     }
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -289,8 +366,10 @@ fn write_bluetooth(_: &Toggles, on: bool) -> Result<(), String> {
         BLUETOOTH_WRITING.store(false, Ordering::Release);
         let _ = tx.send(result);
     });
-    rx.recv_timeout(BLUETOOTH_TIMEOUT)
-        .unwrap_or_else(|_| Err(BLUETOOTH_PERMISSION.into()))
+    match rx.recv_timeout(BLUETOOTH_TIMEOUT) {
+        Ok(result) => result.map_err(Problem::from),
+        Err(_) => Err(BLUETOOTH_PERMISSION),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -303,10 +382,10 @@ pub enum BluetoothPermission {
 
 pub fn bluetooth_permission() -> Option<BluetoothPermission> {
     match sys::bluetooth_authorization()? {
-        0 => Some(BluetoothPermission::NotAsked),
-        1 => Some(BluetoothPermission::Restricted),
-        2 => Some(BluetoothPermission::Denied),
-        3 => Some(BluetoothPermission::Granted),
+        CB_NOT_DETERMINED => Some(BluetoothPermission::NotAsked),
+        CB_RESTRICTED => Some(BluetoothPermission::Restricted),
+        CB_DENIED => Some(BluetoothPermission::Denied),
+        CB_ALLOWED_ALWAYS => Some(BluetoothPermission::Granted),
         _ => None,
     }
 }
@@ -323,6 +402,7 @@ fn read_focus(t: &Toggles) -> Reading {
         Err(e) if e.kind() == ErrorKind::NotFound => None,
         Err(e) if e.kind() == ErrorKind::PermissionDenied => {
             return Reading::unavailable(false, "Needs Full Disk Access to read Focus")
+                .fixed_in(SettingsPane::FullDiskAccess)
         }
         Err(_) => return Reading::unavailable(false, "Focus state unreadable"),
     };
@@ -353,13 +433,13 @@ fn read_focus(t: &Toggles) -> Reading {
     Reading::settable(on, detail)
 }
 
-fn write_focus(t: &Toggles, _on: bool) -> Result<(), String> {
+fn flip_focus(t: &Toggles) -> Result<(), Problem> {
     let name = t.focus_shortcut();
     let mut cmd = Command::new("/usr/bin/shortcuts");
     cmd.args(["run", name.as_str()]);
     run(cmd)
         .map(drop)
-        .ok_or_else(|| format!("The \"{name}\" Shortcut failed"))
+        .ok_or_else(|| format!("The \"{name}\" Shortcut failed").into())
 }
 
 fn active_focus(assertions: &str) -> Result<Option<String>, serde_json::Error> {
@@ -392,10 +472,24 @@ fn lists_shortcut(list: &str, name: &str) -> bool {
     list.lines().any(|line| line == name)
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct Time {
+    hour: i32,
+    minute: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct Schedule {
+    from: Time,
+    to: Time,
+}
+
 /// CoreBrightness's status struct, in the layout of the nightlight crate's
 /// `BlueLightStatus` (smudge/nightlight 1.0, src/macos/status.rs). On macOS
-/// 26.7.1 the runtime encoding of `getBlueLightStatus:`'s argument,
-/// `^{?=BBBi{?={?=ii}{?=ii}}QB}`, matches it field for field.
+/// 26.7.1 the runtime encoding of `getBlueLightStatus:`'s argument is
+/// `^{?=BBBi{?={?=ii}{?=ii}}QB}`, which its `Encode` impl spells out.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct BlueLightStatus {
@@ -403,10 +497,7 @@ struct BlueLightStatus {
     enabled: bool,
     _sun_schedule_permitted: bool,
     mode: i32,
-    from_hour: i32,
-    from_minute: i32,
-    to_hour: i32,
-    to_minute: i32,
+    schedule: Schedule,
     _disable_flags: u64,
     available: bool,
 }
@@ -424,21 +515,22 @@ fn night_shift_reading(s: &BlueLightStatus) -> Reading {
     if !s.available {
         return Reading::unavailable(false, "Night Shift isn't available");
     }
+    let Schedule { from, to } = s.schedule;
     let detail = match s.mode {
-        1 => "Sunset to sunrise".to_string(),
-        2 => format!(
+        SCHEDULE_SUNSET_TO_SUNRISE => "Sunset to sunrise".to_string(),
+        SCHEDULE_CUSTOM => format!(
             "{:02}:{:02} to {:02}:{:02}",
-            s.from_hour, s.from_minute, s.to_hour, s.to_minute
+            from.hour, from.minute, to.hour, to.minute
         ),
         _ => on_off(s.enabled).to_string(),
     };
     Reading::settable(s.enabled, detail)
 }
 
-fn write_night_shift(_: &Toggles, on: bool) -> Result<(), String> {
+fn write_night_shift(_: &Toggles, on: bool) -> Result<(), Problem> {
     sys::set_night_shift(on)
         .then_some(())
-        .ok_or_else(|| "CoreBrightness refused".to_string())
+        .ok_or_else(|| "CoreBrightness refused".into())
 }
 
 fn read_caffeine(t: &Toggles) -> Reading {
@@ -452,7 +544,7 @@ fn read_caffeine(t: &Toggles) -> Reading {
     Reading::settable(on, if on { "Keeping the Mac awake" } else { "Off" })
 }
 
-fn write_caffeine(t: &Toggles, on: bool) -> Result<(), String> {
+fn write_caffeine(t: &Toggles, on: bool) -> Result<(), Problem> {
     let mut child = t.caffeine.lock().unwrap();
     if let Some(mut old) = child.take() {
         let _ = old.kill();
@@ -465,7 +557,7 @@ fn write_caffeine(t: &Toggles, on: bool) -> Result<(), String> {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("caffeinate didn't start: {e}"))?;
+            .map_err(|e| Problem::from(format!("caffeinate didn't start: {e}")))?;
         *child = Some(spawned);
     }
     Ok(())
@@ -480,12 +572,41 @@ fn run(cmd: Command) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 mod sys {
-    use super::BlueLightStatus;
+    use super::{BlueLightStatus, Schedule, Time};
+    use objc2::encode::{Encode, Encoding, RefEncode};
     use objc2::rc::{autoreleasepool, Retained};
     use objc2::runtime::{AnyClass, AnyObject, Bool, Sel};
     use objc2::{msg_send, sel};
     use std::ffi::{c_char, c_int, c_void, CStr};
     use std::sync::OnceLock;
+
+    // SAFETY: each is #[repr(C)] with exactly these fields in this order.
+    unsafe impl Encode for Time {
+        const ENCODING: Encoding = Encoding::Struct("?", &[Encoding::Int, Encoding::Int]);
+    }
+
+    unsafe impl Encode for Schedule {
+        const ENCODING: Encoding = Encoding::Struct("?", &[Time::ENCODING, Time::ENCODING]);
+    }
+
+    unsafe impl Encode for BlueLightStatus {
+        const ENCODING: Encoding = Encoding::Struct(
+            "?",
+            &[
+                Encoding::Bool,
+                Encoding::Bool,
+                Encoding::Bool,
+                Encoding::Int,
+                Schedule::ENCODING,
+                Encoding::ULongLong,
+                Encoding::Bool,
+            ],
+        );
+    }
+
+    unsafe impl RefEncode for BlueLightStatus {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
 
     pub fn wifi_power() -> Option<bool> {
         autoreleasepool(|_| {
@@ -573,19 +694,12 @@ mod sys {
     pub fn night_shift() -> Option<BlueLightStatus> {
         autoreleasepool(|_| {
             let client = blue_light_client()?;
-            let sel = sel!(getBlueLightStatus:);
-            if !responds(&client, sel) {
+            if !responds(&client, sel!(getBlueLightStatus:)) {
                 return None;
             }
             let mut status = BlueLightStatus::default();
-            let get: unsafe extern "C-unwind" fn(
-                *const AnyObject,
-                Sel,
-                *mut BlueLightStatus,
-            ) -> Bool = unsafe {
-                std::mem::transmute(objc2::ffi::objc_msgSend as unsafe extern "C-unwind" fn())
-            };
-            let ok = unsafe { get(Retained::as_ptr(&client), sel, &mut status) };
+            let status_ptr: *mut BlueLightStatus = &mut status;
+            let ok: Bool = unsafe { msg_send![&client, getBlueLightStatus: status_ptr] };
             ok.as_bool().then_some(status)
         })
     }
@@ -595,14 +709,11 @@ mod sys {
             let Some(client) = blue_light_client() else {
                 return false;
             };
-            let sel = sel!(setEnabled:);
-            if !responds(&client, sel) {
+            if !responds(&client, sel!(setEnabled:)) {
                 return false;
             }
-            let set: unsafe extern "C-unwind" fn(*const AnyObject, Sel, Bool) -> Bool = unsafe {
-                std::mem::transmute(objc2::ffi::objc_msgSend as unsafe extern "C-unwind" fn())
-            };
-            unsafe { set(Retained::as_ptr(&client), sel, Bool::new(on)) }.as_bool()
+            let ok: Bool = unsafe { msg_send![&client, setEnabled: Bool::new(on)] };
+            ok.as_bool()
         })
     }
 }
@@ -691,10 +802,17 @@ mod tests {
     fn night_shift_detail_follows_the_schedule() {
         let custom = BlueLightStatus {
             enabled: true,
-            mode: 2,
-            from_hour: 22,
-            to_hour: 7,
-            to_minute: 30,
+            mode: SCHEDULE_CUSTOM,
+            schedule: Schedule {
+                from: Time {
+                    hour: 22,
+                    minute: 0,
+                },
+                to: Time {
+                    hour: 7,
+                    minute: 30,
+                },
+            },
             available: true,
             ..Default::default()
         };
@@ -703,7 +821,7 @@ mod tests {
             Reading::settable(true, "22:00 to 07:30")
         );
         let sunset = BlueLightStatus {
-            mode: 1,
+            mode: SCHEDULE_SUNSET_TO_SUNRISE,
             available: true,
             ..Default::default()
         };
@@ -726,11 +844,11 @@ mod tests {
         let row = Toggle {
             id: ToggleId::Focus,
             read: reads_off,
-            write: |_, _| panic!("wrote a toggle that was already off"),
-            unconfirmed: "",
+            write: Write::Flip(|_| panic!("flipped a toggle that was already off")),
+            unconfirmed: Problem::new(""),
         };
         let t = Toggles::new(TogglesConfig::default());
-        assert_eq!(t.converge(&row, false, Duration::ZERO), None);
+        assert_eq!(t.converge(&row, false, Duration::ZERO), Ok(()));
     }
 
     #[test]
@@ -739,21 +857,32 @@ mod tests {
         let refused = Toggle {
             id: ToggleId::Bluetooth,
             read: reads_off,
-            write: |_, _| Err("refused".into()),
-            unconfirmed: "didn't take",
+            write: Write::To(|_, _| Err("refused".into())),
+            unconfirmed: BLUETOOTH_PERMISSION,
         };
         assert_eq!(
-            t.converge(&refused, true, Duration::ZERO).as_deref(),
-            Some("refused")
+            t.converge(&refused, true, Duration::ZERO),
+            Err(Problem::new("refused"))
         );
         let ignored = Toggle {
-            write: |_, _| Ok(()),
+            write: Write::To(|_, _| Ok(())),
             ..refused
         };
         assert_eq!(
-            t.converge(&ignored, true, Duration::ZERO).as_deref(),
-            Some("didn't take")
+            t.converge(&ignored, true, Duration::ZERO),
+            Err(Problem::fixed_in(
+                "Needs Bluetooth permission for kitty",
+                SettingsPane::PrivacyBluetooth
+            ))
         );
+    }
+
+    #[test]
+    fn a_second_bluetooth_switch_while_one_runs_says_it_is_busy() {
+        BLUETOOTH_WRITING.store(true, Ordering::Release);
+        let reply = write_bluetooth(&Toggles::new(TogglesConfig::default()), true);
+        BLUETOOTH_WRITING.store(false, Ordering::Release);
+        assert_eq!(reply, Err(Problem::new("Bluetooth is still switching")));
     }
 
     fn summary(s: &ToggleState) -> String {
@@ -764,7 +893,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "live: reads the five toggles and CoreBrightness's selectors"]
     fn live_reads_all_five() {
         let t = Toggles::new(TogglesConfig {
             focus_shortcut: "Toggle Focus".into(),
@@ -826,11 +955,18 @@ mod tests {
                     m.argument_type(2)
                 );
             }
+            let get = class.verify_sel::<(*mut BlueLightStatus,), objc2::runtime::Bool>(sel!(
+                getBlueLightStatus:
+            ));
+            let set = class
+                .verify_sel::<(objc2::runtime::Bool,), objc2::runtime::Bool>(sel!(setEnabled:));
+            println!("msg_send encodings: getBlueLightStatus: {get:?}, setEnabled: {set:?}");
+            assert!(get.is_ok() && set.is_ok());
         }
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "live: flips Night Shift and puts it back"]
     fn live_night_shift_flips_and_back() {
         let t = Toggles::new(TogglesConfig::default());
         let id = ToggleId::NightShift;
@@ -845,7 +981,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "live: holds a caffeinate assertion, then releases it"]
     fn live_caffeine_both_ways() {
         let assertions = || {
             let mut cmd = Command::new("/usr/bin/pmset");

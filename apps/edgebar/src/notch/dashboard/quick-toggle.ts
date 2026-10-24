@@ -61,12 +61,7 @@ const PANE_NAMES: Record<SettingsPane, string> = {
   privacyAutomation: "Automation privacy",
 };
 
-const FIXES: [RegExp, SettingsPane][] = [
-  [/Full Disk Access/, "fullDiskAccess"],
-  [/Bluetooth permission/, "privacyBluetooth"],
-];
-const paneFor = (s: ToggleState): SettingsPane | null =>
-  FIXES.find(([re]) => re.test(s.detail))?.[1] ?? TOGGLES[s.id].pane;
+const paneFor = (s: ToggleState): SettingsPane | null => s.fix ?? TOGGLES[s.id].pane;
 
 export const openPane = (pane: SettingsPane) => call("open_settings_pane", { pane }).catch(() => {});
 
@@ -89,7 +84,7 @@ export function refreshToggles() {
   call("toggles").then(apply).catch(() => {});
 }
 
-async function flip(s: ToggleState): Promise<string | null> {
+async function flip(s: ToggleState): Promise<ToggleState | null> {
   const want = !s.on;
   pending.add(s.id);
   states.set(s.id, { ...s, on: want });
@@ -97,10 +92,10 @@ async function flip(s: ToggleState): Promise<string | null> {
   try {
     const reply = await call("set_toggle", { id: s.id, on: want });
     states.set(s.id, reply);
-    return reply.on === want ? null : reply.detail;
+    return reply.on === want ? null : reply;
   } catch (e) {
     states.set(s.id, s);
-    return String(e);
+    return { ...s, detail: String(e), fix: null };
   } finally {
     pending.delete(s.id);
     notify();
@@ -190,8 +185,7 @@ export function toggleButton(
     if (!s.available) return hint.show(btn, s.detail, paneFor(s));
     hint.hide();
     const failed = await flip(s);
-    const now = states.get(id);
-    if (failed && now) hint.show(btn, failed, paneFor({ ...now, detail: failed }));
+    if (failed) hint.show(btn, failed.detail, paneFor(failed));
   });
   btn.addEventListener("contextmenu", (e) => {
     e.preventDefault();
