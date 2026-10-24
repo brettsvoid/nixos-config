@@ -13,6 +13,17 @@ dev="$(dirname "$0")/dev.sh"
 ev() { "$dev" eval "$1" >/dev/null; }
 snap() { "$dev" snap "$(cd "$out" && pwd)/$1.png" >/dev/null && echo "$out/$1.png"; }
 notch_open() { "$dev" eval 'document.querySelector("#notch").offsetHeight > 48'; }
+# Poll a JS condition (up to ~8 s) instead of sleeping a fixed time: opening the
+# controls popup waits on get_volume, which can take seconds.
+wait_for() {
+  i=0
+  while [ "$("$dev" eval "$1")" != "true" ] && [ $i -lt 40 ]; do
+    sleep 0.2
+    i=$((i + 1))
+  done
+  sleep 0.4
+}
+opacity() { echo "getComputedStyle(document.querySelector('$1')).opacity"; }
 
 close_notch() {
   if [ "$(notch_open)" = "true" ]; then
@@ -38,13 +49,13 @@ done
 close_notch
 
 ev 'document.querySelector("#ctl-btn").click(), 1'
-sleep 1.2
+wait_for "$(opacity '#controls .ctl-panel') === '1'"
 snap controls
 ev 'document.querySelector("#ctl-btn").click(), 1'
-sleep 1
+wait_for "$(opacity '#controls .ctl-panel') === '0'"
 
 ev 'document.querySelector("#launcher-btn").click(), 1'
-sleep 1.2
+wait_for "$(opacity '#workspaces .menu-panel') === '1'"
 snap launcher
 ev 'document.querySelector("#launcher-btn").click(), 1'
-sleep 1
+wait_for "$(opacity '#workspaces .menu-panel') === '0'"
