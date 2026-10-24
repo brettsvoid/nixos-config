@@ -9,6 +9,8 @@
 //!     with the JSON of what it evaluates to, promises awaited.
 //!   * `snap <abs-path.png>` writes the main display as edgebar draws it (see
 //!     `start_snap`) and replies `ok <path>`.
+//!   * `type <text>` posts `<text>` to edgebar as key presses (see `post_keys`)
+//!     and replies with whether edgebar is active and has a key window.
 //!
 //! Failures reply `ERR <message>`. `scripts/dev.sh` is the client.
 
@@ -48,6 +50,7 @@ type Reply = Result<String, String>;
 enum Request {
     Eval(String),
     Snap(PathBuf),
+    Type(String),
 }
 
 impl Request {
@@ -63,7 +66,8 @@ impl Request {
                 }
                 Ok(Request::Snap(path))
             }
-            _ => Err("want `eval <js>` or `snap <abs-path.png>`".to_string()),
+            "type" if !arg.is_empty() => Ok(Request::Type(arg.to_string())),
+            _ => Err("want `eval <js>`, `snap <abs-path.png>` or `type <text>`".to_string()),
         }
     }
 }
@@ -126,6 +130,7 @@ fn serve(app: &AppHandle, conn: &mut UnixStream) {
         Ok(_) => Request::parse(&text).and_then(|request| match request {
             Request::Eval(js) => eval(app, &js),
             Request::Snap(path) => snap(app, path),
+            Request::Type(text) => type_keys(app, text),
         }),
         Err(e) => Err(format!("reading the request: {e}")),
     };
@@ -176,6 +181,62 @@ fn snap(app: &AppHandle, path: PathBuf) -> Reply {
         .map_err(|e| format!("main thread: {e}"))?;
     rx.recv_timeout(TIMEOUT)
         .unwrap_or_else(|_| Err(format!("no snapshot within {}s", TIMEOUT.as_secs())))
+}
+
+/// Hop to the main thread to post the key presses.
+fn type_keys(app: &AppHandle, text: String) -> Reply {
+    let (tx, rx) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(post_keys(&text));
+    })
+    .map_err(|e| format!("main thread: {e}"))?;
+    rx.recv_timeout(TIMEOUT)
+        .unwrap_or_else(|_| Err(format!("no answer within {}s", TIMEOUT.as_secs())))
+}
+
+/// Queue a key down and up per character of `text` (ESC types Escape, DEL
+/// Backspace), addressed as the window server addresses typing: to the key
+/// window, or to none. No process here may post system-wide events
+/// (Accessibility), so this stands in for the keyboard from the point where
+/// macOS hands a key press to the app; whether it would hand it over at all is
+/// the `active` and `key-window` the reply reports. Main thread only.
+fn post_keys(text: &str) -> Reply {
+    use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
+    use objc2_foundation::{NSPoint, NSString};
+
+    let mtm = MainThreadMarker::new().ok_or("not on the main thread")?;
+    let ns_app = NSApplication::sharedApplication(mtm);
+    let key_window = ns_app.keyWindow();
+    let number = key_window.as_ref().map_or(0, |w| w.windowNumber());
+    for ch in text.chars() {
+        let code = match ch {
+            '\u{1b}' => 53, // kVK_Escape
+            '\u{7f}' => 51, // kVK_Delete
+            _ => 0,
+        };
+        let chars = NSString::from_str(&ch.to_string());
+        for kind in [NSEventType::KeyDown, NSEventType::KeyUp] {
+            let event = NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
+                kind,
+                NSPoint::ZERO,
+                NSEventModifierFlags::empty(),
+                0.0,
+                number,
+                None,
+                &chars,
+                &chars,
+                false,
+                code,
+            )
+            .ok_or("could not make a key event")?;
+            ns_app.postEvent_atStart(&event, false);
+        }
+    }
+    Ok(format!(
+        "ok active={} key-window={}",
+        ns_app.isActive(),
+        key_window.is_some()
+    ))
 }
 
 /// One edgebar window's pixels, placed in global screen points (bottom-left

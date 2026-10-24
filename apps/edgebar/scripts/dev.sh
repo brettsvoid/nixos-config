@@ -4,6 +4,9 @@
 #   scripts/dev.sh eval '<js>'      print the JSON of what <js> evaluates to in
 #                                   the main bar WebView
 #   scripts/dev.sh snap <out.png>   write the main display as edgebar draws it
+#   scripts/dev.sh type '<text>'    post <text> to edgebar as key presses (ESC
+#                                   is Escape, DEL Backspace), as macOS would
+#                                   deliver typing to it
 #
 # Prints the reply and exits non-zero when it is ERR.
 set -eu
@@ -11,13 +14,14 @@ set -eu
 sock="$HOME/.cache/edgebar/dev.sock"
 
 usage() {
-  echo "usage: dev.sh eval '<js>' | dev.sh snap <out.png>" >&2
+  echo "usage: dev.sh eval '<js>' | dev.sh snap <out.png> | dev.sh type '<text>'" >&2
   exit 2
 }
 
 [ $# -eq 2 ] || usage
 case $1 in
 eval) request="eval $2" ;;
+type) request="type $2" ;;
 snap)
   dir=$(cd "$(dirname "$2")" && pwd)
   request="snap $dir/$(basename "$2")"
