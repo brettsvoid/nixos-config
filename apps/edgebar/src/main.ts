@@ -1,120 +1,22 @@
 import "./styles.css";
 import { animate, stagger } from "motion";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-
-interface Workspace {
-  name: string;
-  focused: boolean;
-  has_windows: boolean;
-  app: string; // app name for the dot's tooltip ("" if empty)
-  icon: string; // PNG data URL, or "" when the workspace is empty
-}
-
-interface Config {
-  colors: Record<string, string>;
-  geometry: {
-    innerRadius: number;
-    lineThickness: number;
-    pillHeight: number;
-    pillRadius: number;
-    concave: number;
-    windowHeight: number;
-  };
-  appearance: string; // "light" | "dark" | "auto"
-  scheme: string; // active matugen scheme (e.g. "scheme-tonal-spot")
-  ink: InkInfo;
-  notchIdle: string; // "handle" | "clock" | literal text
-}
-
-// How the on-pill ink (colors.base) was chosen — see ThemeState::resolve in lib.rs.
-interface InkInfo {
-  source: "config" | "contrast" | "override";
-  ratio: number; // contrast of the ink in effect against the pill
-  configured: string; // the role map's ink, before any correction
-  configuredRatio: number;
-  mode: "light" | "dark"; // the scheme it belongs to; an override edits this one
-}
-
-// One line of collapsed-notch content. Rust picks the winner (an OSD flash
-// beats workspace context beats whatever is playing); null means the idle look.
-interface NotchItem {
-  tier: "transient" | "workspace" | "media";
-  glyph: string; // icon name, used when `icon` is empty
-  icon: string; // app icon PNG data URL, or ""
-  art: string; // album art data URL, or "" — the media pill's backdrop
-  primary: string;
-  secondary: string;
-  progress: number | null; // 0..1 hairline fill
-  duration: number; // track length in seconds, 0 when unknown
-  controls: boolean; // transport commands reach this source
-  active: boolean; // false dims it (paused player)
-}
-
-interface ThemePayload {
-  colors: Record<string, string>;
-  appearance: string;
-  scheme: string;
-  ink: InkInfo;
-}
-
-interface Battery {
-  present: boolean; // false on desktops — the readout is hidden entirely
-  percent: number;
-  state: string;
-  time: string | null;
-}
-
-interface Metrics {
-  cpu: number;
-  memUsed: number;
-  memTotal: number;
-  swapUsed: number;
-  swapTotal: number;
-  diskUsed: number;
-  diskTotal: number;
-}
-
-// One point on the CPU graph: fractions of total capacity, 0..1.
-interface CpuSample {
-  sys: number;
-  user: number;
-}
-
-interface CpuStat extends CpuSample {
-  total: number;
-  topProc: string;
-  topProcPct: number; // percent of one core, so >100 for a threaded process
-  topPid: number; // 0 before the first process walk lands
-}
-
-interface CpuSnapshot {
-  history: CpuSample[];
-  latest: CpuStat;
-}
-
-interface Volume {
-  output: number;
-  input: number;
-}
-
-interface Network {
-  state: string; // "wifi" | "vpn" | "off"
-  label: string;
-  rssi: number | null; // Wi-Fi signal in dBm when connected, else null
-  online: boolean; // false = connected but no internet (only meaningful for "wifi")
-}
+import {
+  call,
+  on,
+  type Config,
+  type CpuSample,
+  type CpuStat,
+  type InkInfo,
+  type Metrics,
+  type Network,
+  type NotchItem,
+  type Wallpaper,
+  type Workspace,
+} from "./ipc";
+import { lucide } from "./icons";
+import { FADE, SPRING, STAGGER } from "./motion";
 
 // ---- tuned constants (named so each value lives in one place) ----
-const SPRING = {
-  panelOpen: { type: "spring", stiffness: 280, damping: 26 },
-  panelClose: { type: "spring", stiffness: 320, damping: 30 },
-  reveal: { type: "spring", stiffness: 420, damping: 26 },
-  hide: { type: "spring", stiffness: 520, damping: 34 },
-  popup: { type: "spring", stiffness: 300, damping: 26 },
-} as const;
-const FADE = { in: 0.25, inDelay: 0.08, out: 0.12 } as const; // seconds
-const STAGGER = { reveal: 0.05, hide: 0.03 } as const; // seconds between pills
 const POLL = {
   metrics: 2000,
   battery: 60000,
@@ -171,7 +73,7 @@ const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
 // Apply the shared config (also read by the native frame) as CSS variables,
 // then start the bar. styles.css holds fallback values.
-invoke<Config>("get_config")
+call("get_config")
   .then((cfg) => {
     applyConfig(cfg);
     initBar(
@@ -222,12 +124,6 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
     window.clearTimeout(t);
     t = window.setTimeout(() => fn(...a), ms);
   };
-}
-
-interface Wallpaper {
-  name: string;
-  path: string;
-  thumb: string; // data:image/png;base64,…
 }
 
 // Per-view panel geometry. All views share a height, so switching only moves
@@ -288,7 +184,7 @@ function initBar(
     const target = openPanels.size > 0 ? expandedWindowH : WINDOW_BASE_H;
     if (target === lastWindowH) return;
     lastWindowH = target;
-    await invoke("set_bar_size", {
+    await call("set_bar_size", {
       width: window.innerWidth,
       height: target,
     });
@@ -317,7 +213,7 @@ function initBar(
                 return [r.left, r.top, r.width, r.height];
               })
               .filter((r) => r[2] > 0 && r[3] > 0);
-      invoke("set_interactive_rects", { rects }).catch(() => {});
+      call("set_interactive_rects", { rects }).catch(() => {});
     });
   }
   window.addEventListener("resize", reportInteractiveRects);
@@ -469,7 +365,7 @@ function initBar(
   }
   async function sampleMetrics() {
     try {
-      const m = await invoke<Metrics>("metrics_sample");
+      const m = await call("metrics_sample");
       setMetric("cpu", m.cpu);
       setMetric("mem", pctOf(m.memUsed, m.memTotal));
       setMetric("disk", pctOf(m.diskUsed, m.diskTotal));
@@ -537,10 +433,10 @@ function initBar(
 
   async function loadControls() {
     try {
-      const v = await invoke<Volume>("get_volume");
+      const v = await call("get_volume");
       volRange.value = String(v.output);
       micRange.value = String(v.input);
-      const br = await invoke<number>("get_brightness"); // 0..1
+      const br = await call("get_brightness"); // 0..1
       briRange.value = String(Math.round(br * 100));
     } catch {
       /* ignore */
@@ -548,16 +444,16 @@ function initBar(
   }
   volRange.addEventListener(
     "input",
-    debounce(() => invoke("set_volume", { output: +volRange.value }), DEBOUNCE.volume),
+    debounce(() => call("set_volume", { output: +volRange.value }), DEBOUNCE.volume),
   );
   micRange.addEventListener(
     "input",
-    debounce(() => invoke("set_input_volume", { input: +micRange.value }), DEBOUNCE.mic),
+    debounce(() => call("set_input_volume", { input: +micRange.value }), DEBOUNCE.mic),
   );
   briRange.addEventListener(
     "input",
     debounce(
-      () => invoke("set_brightness", { value: +briRange.value / 100 }),
+      () => call("set_brightness", { value: +briRange.value / 100 }),
       DEBOUNCE.brightness,
     ),
   );
@@ -642,7 +538,7 @@ function initBar(
   });
   for (const btn of menuPanel.querySelectorAll<HTMLElement>(".menu-item")) {
     btn.addEventListener("click", () => {
-      invoke("launcher_action", { action: btn.dataset.action });
+      call("launcher_action", { action: btn.dataset.action! });
       closeLauncher();
     });
   }
@@ -666,8 +562,6 @@ function initBar(
   // ---- battery (polled; changes slowly) ----------------------------------
   // Inline Lucide battery SVGs, swapped by charge level / charging state. The
   // exact percentage is shown as text, so discrete level icons are enough.
-  const lucide = (paths: string) =>
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   const BAT_SVG = {
     charging: lucide(
       '<path d="m11 7-3 5h4l-3 5"/><path d="M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935"/><path d="M22 14v-4"/><path d="M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936"/>',
@@ -682,7 +576,7 @@ function initBar(
   let batTimer = 0;
   async function updateBattery() {
     try {
-      const b = await invoke<Battery>("battery");
+      const b = await call("battery");
       // No battery (e.g. Mac mini): hide the group and stop polling.
       if (!b.present) {
         batPill.hidden = true;
@@ -790,8 +684,8 @@ function initBar(
   // Rust's reachability watcher pushes on every route change (connect,
   // disconnect, IP, VPN), re-checking online state each time. The initial fetch
   // covers a listener that attaches after Rust's startup push.
-  invoke<Network>("network").then(renderNetwork).catch(() => {});
-  listen<Network>("network", (e) => renderNetwork(e.payload));
+  call("network").then(renderNetwork).catch(() => {});
+  on("network", renderNetwork);
 
   // ---- CPU pill: load graph + hungriest process (always on) --------------
   // Rust pushes a "cpu" event every CPU_POLL whether or not a panel is open.
@@ -857,13 +751,13 @@ function initBar(
     cpuPill.classList.toggle("mild", stat.total >= t.mild && stat.total < t.warm);
   }
 
-  listen<CpuStat>("cpu", (e) => {
-    cpuHistory.push({ sys: e.payload.sys, user: e.payload.user });
+  on("cpu", (stat) => {
+    cpuHistory.push({ sys: stat.sys, user: stat.user });
     if (cpuHistory.length > CPU_GRAPH.samples) cpuHistory.shift();
-    renderCpu(e.payload);
+    renderCpu(stat);
     drawCpuGraph();
   });
-  invoke<CpuSnapshot>("cpu_state")
+  call("cpu_state")
     .then((s) => {
       // Skip if the sampler's first push beat this reply; the event is newer.
       if (cpuHistory.length > 0 || s.history.length === 0) return;
@@ -894,7 +788,7 @@ function initBar(
         img.alt = "";
         el.appendChild(img);
         el.addEventListener("click", () =>
-          invoke("aerospace_focus", { name: w.name }),
+          call("aerospace_focus", { name: w.name }),
         );
         wsEls.set(w.name, el);
         wsContainer.appendChild(el);
@@ -913,8 +807,8 @@ function initBar(
     reportInteractiveRects(); // dot count/width changes the workspaces pill
   }
 
-  listen<Workspace[]>("workspaces", (e) => renderWorkspaces(e.payload));
-  invoke<Workspace[]>("aerospace_workspaces") // initial state
+  on("workspaces", renderWorkspaces);
+  call("aerospace_workspaces") // initial state
     .then(renderWorkspaces)
     .catch(() => {});
 
@@ -1149,7 +1043,7 @@ function initBar(
     media.t0 = performance.now();
     nmPlay.innerHTML = media.playing ? TRANSPORT_SVG.pause : TRANSPORT_SVG.play;
     startWave();
-    invoke("media_toggle").catch(() => {});
+    call("media_toggle").catch(() => {});
   });
 
   // Scrubbing: map the pointer through the same inset travel paintWave draws
@@ -1167,7 +1061,7 @@ function initBar(
     media.t0 = performance.now();
     // A paused player has no animation loop, so paint by hand.
     paintWave();
-    if (commit) invoke("media_seek", { fraction: media.progress }).catch(() => {});
+    if (commit) call("media_seek", { fraction: media.progress }).catch(() => {});
   }
 
   nmWave.addEventListener("pointerdown", (e) => {
@@ -1287,8 +1181,8 @@ function initBar(
       .catch(() => {});
   }
 
-  listen<NotchItem | null>("notch", (e) => pushNotch(e.payload));
-  invoke<NotchItem | null>("notch_state") // whatever was already winning
+  on("notch", pushNotch);
+  call("notch_state") // whatever was already winning
     .then((item) => renderNotch(item))
     .catch(() => renderNotch(null));
 
@@ -1358,7 +1252,7 @@ function initBar(
       e.stopPropagation();
       const mode = b.dataset.mode!;
       setActiveMode(mode);
-      invoke("set_appearance", { mode });
+      call("set_appearance", { mode });
     });
   }
 
@@ -1388,12 +1282,12 @@ function initBar(
   if (ink) renderInk(ink, inkColour);
   inkAuto.addEventListener("click", (e) => {
     e.stopPropagation();
-    invoke("set_ink", { colour: null });
+    call("set_ink", { colour: null });
   });
   inkCustom.addEventListener("click", (e) => {
     e.stopPropagation();
-    invoke<string | null>("pick_colour", { initial: inkColour }).then((colour) => {
-      if (colour) invoke("set_ink", { colour });
+    call("pick_colour", { initial: inkColour }).then((colour) => {
+      if (colour) call("set_ink", { colour });
     });
   });
 
@@ -1412,7 +1306,7 @@ function initBar(
       b.appendChild(img);
       b.addEventListener("click", (e) => {
         e.stopPropagation();
-        invoke("set_wallpaper", { path: w.path });
+        call("set_wallpaper", { path: w.path });
         for (const t of filmstrip.children) t.classList.remove("active");
         b.classList.add("active");
       });
@@ -1431,7 +1325,7 @@ function initBar(
       }
       schemeSelect.addEventListener("change", (e) => {
         e.stopPropagation();
-        invoke("set_scheme", { scheme: schemeSelect.value });
+        call("set_scheme", { scheme: schemeSelect.value });
       });
       schemesBuilt = true;
     }
@@ -1440,9 +1334,9 @@ function initBar(
 
   async function loadThemeView() {
     const [wallpapers, current, cfg] = await Promise.all([
-      invoke<Wallpaper[]>("list_wallpapers"),
-      invoke<string>("current_wallpaper"),
-      invoke<Config>("get_config"),
+      call("list_wallpapers"),
+      call("current_wallpaper"),
+      call("get_config"),
     ]);
     renderFilmstrip(wallpapers, current);
     renderSchemes(cfg.scheme);
@@ -1450,7 +1344,7 @@ function initBar(
     renderInk(cfg.ink, cfg.colors.base);
     themeLoaded = true;
     // warm the per-wallpaper palette caches so thumbnail clicks are instant
-    invoke("precompute_palettes").catch(() => {});
+    call("precompute_palettes").catch(() => {});
   }
 
   // Browse… → native Finder picker → set + theme the chosen file in place.
@@ -1458,19 +1352,19 @@ function initBar(
     .querySelector<HTMLElement>("#browse-btn")!
     .addEventListener("click", (e) => {
       e.stopPropagation();
-      invoke<string | null>("pick_wallpaper_file").then((path) => {
+      call("pick_wallpaper_file").then((path) => {
         if (!path) return;
-        invoke("set_wallpaper", { path });
+        call("set_wallpaper", { path });
         for (const t of filmstrip.children) t.classList.remove("active");
       });
     });
 
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
-  listen<ThemePayload>("theme", (e) => {
-    applyColors(e.payload.colors);
-    setActiveMode(e.payload.appearance);
-    renderInk(e.payload.ink, e.payload.colors.base);
-    if (themeLoaded && e.payload.scheme) renderSchemes(e.payload.scheme);
+  on("theme", (theme) => {
+    applyColors(theme.colors);
+    setActiveMode(theme.appearance);
+    renderInk(theme.ink, theme.colors.base);
+    if (themeLoaded && theme.scheme) renderSchemes(theme.scheme);
     // Canvas pixels don't follow CSS vars — repaint them by hand.
     drawCpuGraph();
     paintWave();
