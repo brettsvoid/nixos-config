@@ -1,14 +1,13 @@
 import "./controls.css";
 import { call } from "../../ipc";
 import { lucide } from "../../icons";
+import { fingersUp, wheelStepper } from "../../wheel";
 import type { Widget } from "../view";
 
 const STEP = 5; // % per wheel step
 const DRAG_PX = 100; // vertical drag across a dial's full range
 const CLICK_SLOP_PX = 3; // a press that moves less than this is a click
-// A mouse wheel steps once per notch, so the first event after a pause steps at
-// once; a trackpad's stream of small deltas steps every `px` of travel.
-const WHEEL = { pauseMs: 250, px: 30 } as const;
+const WHEEL_PX = 30; // trackpad travel per step
 // The dials, after ambxst's CircularControl: a 270° arc open at the bottom,
 // with a radial tick at the value. `clearPx` is the arc left out either side of
 // the tick, along the ring; the tick runs from `r - in` to `r + out`.
@@ -54,28 +53,6 @@ function latest<T>(send: (value: T) => Promise<unknown>): (value: T) => void {
   };
 }
 
-// Wheel steps for one event, + for up. Up is the way the fingers or the wheel
-// moved, so natural scrolling doesn't turn a level down.
-function wheelSteps(): (e: WheelEvent) => number {
-  let travel = 0;
-  let last = -Infinity;
-  return (e) => {
-    const inverted = (e as WheelEvent & { webkitDirectionInvertedFromDevice?: boolean })
-      .webkitDirectionInvertedFromDevice;
-    const up = inverted ? e.deltaY : -e.deltaY;
-    const fresh = e.timeStamp - last > WHEEL.pauseMs;
-    last = e.timeStamp;
-    if (fresh) {
-      travel = 0;
-      return Math.sign(up);
-    }
-    travel += up;
-    const steps = Math.trunc(travel / WHEEL.px);
-    travel -= steps * WHEEL.px;
-    return steps;
-  };
-}
-
 // ---- the dials: volume and mic ----
 
 interface Level {
@@ -112,7 +89,7 @@ function dial(root: HTMLElement, spec: DialSpec) {
   const [rest, fill, tick] = [...el.querySelectorAll<SVGPathElement>("path")];
   const iconEl = el.querySelector<HTMLElement>(".dial-icon")!;
   const send = latest(spec.setLevel);
-  const steps = wheelSteps();
+  const steps = wheelStepper(WHEEL_PX, fingersUp);
   let level: Level = { value: 0, muted: false };
   let drag: { y: number; from: number; moved: boolean } | null = null;
 
@@ -191,7 +168,7 @@ function brightnessSlider(root: HTMLElement) {
   const track = el.querySelector<HTMLElement>(".bri-track")!;
   const label = el.querySelector<HTMLElement>(".bri-label")!;
   const send = latest((value: number) => call("set_brightness", { value }));
-  const steps = wheelSteps();
+  const steps = wheelStepper(WHEEL_PX, fingersUp);
   let state: Brightness = { ok: false, reason: "not read yet" };
   let dragging = false;
 
