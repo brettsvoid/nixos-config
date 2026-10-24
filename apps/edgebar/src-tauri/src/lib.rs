@@ -1816,8 +1816,8 @@ async fn set_scheme(app: tauri::AppHandle, scheme: String) {
 // ───────────────────────── shared app state ─────────────────────────
 struct AppState {
     /// Kept alive because sysinfo's CPU reading is a delta since the last
-    /// refresh (a fresh System reports 0%). On macOS CPU comes from metrics::CpuState,
-    /// so this serves memory and swap.
+    /// refresh (a fresh System reports 0%). On macOS CPU comes from
+    /// metrics::MetricsState, so this serves memory and swap.
     sys: Mutex<sysinfo::System>,
     /// App icons as PNG data URLs, by bundle id.
     icon_cache: Mutex<std::collections::HashMap<String, String>>,
@@ -2623,6 +2623,7 @@ pub fn run() {
             battery,
             metrics::metrics_sample,
             metrics::cpu_state,
+            metrics::metrics_history,
             get_volume,
             set_volume,
             set_input_volume,
@@ -2666,9 +2667,8 @@ pub fn run() {
                 thumb_cache: Mutex::new(std::collections::HashMap::new()),
                 interactive_rects: interactive_rects.clone(),
             });
-            // Managed now, before the sampler starts below, so `cpu_state` can
-            // answer a bar that asks before the first tick.
-            app.manage(metrics::CpuState::default());
+            // Before the bars exist, so their first `cpu_state` finds its state.
+            metrics::install(app.handle().clone());
             app.manage(Mutex::new(ThemeState {
                 colors: config.colors,
                 geometry: config.geometry,
@@ -2773,10 +2773,6 @@ pub fn run() {
             // Event-driven network updates.
             #[cfg(target_os = "macos")]
             install_network_observer(app.handle().clone());
-
-            // Always-on CPU sampling for the bar's graph pill.
-            #[cfg(target_os = "macos")]
-            metrics::install_cpu_sampler(app.handle().clone());
 
             // Notch providers: what's making noise, and the focused workspace's
             // rule (seeded once here, then re-run on every workspace/focus event).
