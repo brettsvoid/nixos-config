@@ -25,7 +25,7 @@ void (async () => {
 })();
 
 export function current(): Settings {
-  return snapshot.effective as Settings;
+  return snapshot.effective;
 }
 
 export function isOverridden(key: string): boolean {

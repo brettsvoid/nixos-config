@@ -1,5 +1,5 @@
 import { lucide } from "../../icons";
-import { isOverridden, reset, set, type Settings } from "../../settings";
+import { isOverridden, reset, set } from "../../settings";
 import { button, el, field, segmented, type Option, type Part } from "./rows";
 
 type Rule =
@@ -27,7 +27,6 @@ const TRASH = lucide(
 );
 
 const keyOf = (ws: string) => `notch.workspaces.${ws}`;
-const rulesOf = (s: Settings) => s.notch.workspaces as Record<string, Rule>;
 
 function sorted(names: string[]): string[] {
   const rank = (n: string) => (n === "*" ? 2 : NAMES.includes(n) ? 0 : 1);
@@ -158,7 +157,7 @@ export function rulesPart(): Part {
   return {
     el: box,
     update(s) {
-      rules = rulesOf(s);
+      rules = s.notch.workspaces;
       const names = sorted(Object.keys(rules));
       for (const [ws, row] of rows) {
         if (!(ws in rules)) {

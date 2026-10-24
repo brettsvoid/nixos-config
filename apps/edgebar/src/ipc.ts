@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { Settings } from "./settings";
 
 export interface Workspace {
   name: string;
@@ -28,13 +29,17 @@ export interface Geometry {
   windowHeight: number;
 }
 
+export type Appearance = "light" | "dark" | "auto";
+
+export type NotchIdle = "handle" | "clock" | (string & {});
+
 export interface Config {
   colors: Colours;
   geometry: Geometry;
-  appearance: string;
+  appearance: Appearance;
   scheme: string;
   ink: InkInfo;
-  notchIdle: string;
+  notchIdle: NotchIdle;
   workspaceNames: string[];
 }
 
@@ -122,12 +127,9 @@ export interface Volume {
   inputRestore: number | null;
 }
 
-export interface Network {
-  state: string;
-  label: string;
-  rssi: number | null;
-  online: boolean;
-}
+export type Network =
+  | { state: "wifi"; label: string; rssi: number | null; online: boolean }
+  | { state: "vpn" | "off" | ""; label: string; rssi: null; online: boolean };
 
 export interface Wallpaper {
   name: string;
@@ -181,7 +183,7 @@ export type AssistantChunk = { turn: string } & (
 );
 
 export interface SettingsSnapshot {
-  effective: Record<string, unknown>;
+  effective: Settings;
   user: Record<string, unknown>;
   errors: string[];
 }

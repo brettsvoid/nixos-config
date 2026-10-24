@@ -9,6 +9,7 @@ import {
   type CpuSample,
   type CpuStat,
   type Network,
+  type NotchIdle,
   type NotchItem,
   type Workspace,
 } from "./ipc";
@@ -101,7 +102,7 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
   };
 }
 
-function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
+function initBar(barHeight: number, windowHeight: number, notchIdle: NotchIdle) {
   const segments = [...document.querySelectorAll<HTMLElement>(".seg")];
 
   const drawerHeights = new Map<string, number>();
