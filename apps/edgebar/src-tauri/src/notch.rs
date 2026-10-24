@@ -432,9 +432,9 @@ pub fn install_rule_ticker(app: tauri::AppHandle) {
 
 // ───────────────────────── media provider ───────────────────────────
 
-struct Player {
-    bundle_id: &'static str,
-    name: &'static str,
+pub(crate) struct Player {
+    pub(crate) bundle_id: &'static str,
+    pub(crate) name: &'static str,
     /// Whether `duration` is in milliseconds. Spotify's sdef says seconds, but the
     /// running app answers 373333 for a 6 min 13 s track.
     duration_ms: bool,
@@ -445,7 +445,7 @@ struct Player {
     previous: &'static str,
 }
 
-const PLAYERS: [Player; 2] = [
+pub(crate) const PLAYERS: [Player; 2] = [
     Player {
         bundle_id: "com.spotify.client",
         name: "Spotify",

@@ -1,3 +1,4 @@
+use crate::notch::PLAYERS;
 use crate::toggles::{self, BluetoothPermission, Toggles};
 use crate::{SettingsPane, ThemeState};
 use serde::Serialize;
@@ -24,31 +25,10 @@ pub struct SetupItem {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Player {
-    Spotify,
-    Music,
-}
-
-impl Player {
-    fn name(self) -> &'static str {
-        match self {
-            Player::Spotify => "Spotify",
-            Player::Music => "Music",
-        }
-    }
-
-    fn bundle_id(self) -> &'static str {
-        match self {
-            Player::Spotify => "com.spotify.client",
-            Player::Music => "com.apple.Music",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
     Open(SettingsPane),
-    Ask(Player),
+    /// Ask the player at this index of `PLAYERS`.
+    Ask(usize),
 }
 
 impl Action {
@@ -104,12 +84,12 @@ const CHECKS: [Check; 9] = [
     Check {
         id: "spotify",
         label: "Automation: Spotify",
-        probe: |app| automation(app, Player::Spotify),
+        probe: |app| automation(app, 0),
     },
     Check {
         id: "music",
         label: "Automation: Music",
-        probe: |app| automation(app, Player::Music),
+        probe: |app| automation(app, 1),
     },
     Check {
         id: "focusShortcut",
@@ -176,7 +156,7 @@ const CHECKS: [Check; 9] = [
 
 #[derive(Default)]
 pub struct Setup {
-    asked: Mutex<[Option<State>; 2]>,
+    asked: Mutex<[Option<State>; PLAYERS.len()]>,
 }
 
 fn item(check: &Check, status: Status) -> SetupItem {
@@ -310,25 +290,25 @@ fn bluetooth(_: &AppHandle) -> Status {
 }
 
 #[cfg(target_os = "macos")]
-fn installed(player: Player) -> bool {
+fn installed(bundle_id: &str) -> bool {
     use objc2_app_kit::NSWorkspace;
     use objc2_foundation::NSString;
     NSWorkspace::sharedWorkspace()
-        .URLForApplicationWithBundleIdentifier(&NSString::from_str(player.bundle_id()))
+        .URLForApplicationWithBundleIdentifier(&NSString::from_str(bundle_id))
         .is_some()
 }
 
 #[cfg(not(target_os = "macos"))]
-fn installed(_: Player) -> bool {
+fn installed(_: &str) -> bool {
     false
 }
 
-fn automation(app: &AppHandle, player: Player) -> Status {
-    let name = player.name();
-    if !installed(player) {
+fn automation(app: &AppHandle, player: usize) -> Status {
+    let name = PLAYERS[player].name;
+    if !installed(PLAYERS[player].bundle_id) {
         return Status::new(State::Unknown, format!("{name} isn't installed."), None);
     }
-    match app.state::<Setup>().asked.lock().unwrap()[player as usize] {
+    match app.state::<Setup>().asked.lock().unwrap()[player] {
         Some(State::Ready) => Status::new(
             State::Ready,
             format!("kitty may control {name}, so the player shows its track and its transport works."),
@@ -347,8 +327,8 @@ fn automation(app: &AppHandle, player: Player) -> Status {
     }
 }
 
-fn ask(app: &AppHandle, player: Player) -> Result<(), String> {
-    let name = player.name();
+fn ask(app: &AppHandle, player: usize) -> Result<(), String> {
+    let name = PLAYERS[player].name;
     let script = format!(
         "if application \"{name}\" is running then\n\
          tell application \"{name}\" to get player state\n\
@@ -371,7 +351,7 @@ fn ask(app: &AppHandle, player: Player) -> Result<(), String> {
     } else {
         return Err(format!("{name} didn't answer: {stderr}"));
     };
-    app.state::<Setup>().asked.lock().unwrap()[player as usize] = Some(state);
+    app.state::<Setup>().asked.lock().unwrap()[player] = Some(state);
     Ok(())
 }
 
