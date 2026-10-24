@@ -39,7 +39,7 @@ exec-on-workspace-change = ['/bin/bash', '-c', 'nc -U "$HOME/.cache/edgebar/ws.s
 # ─── Gaps ──────────────────────────────────────────────────────────────────
 # Substituted from flake.lib.barGeometry; set them in bar-geometry.nix, not
 # here. outer.top clears the edgebar band (an overlay with no padding of its
-# own) plus one outer gap.
+# own) plus the window gap; the other sides clear the frame plus the window gap.
 [gaps]
 inner.horizontal = @innerGap@
 inner.vertical = @innerGap@
