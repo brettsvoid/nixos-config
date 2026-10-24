@@ -489,20 +489,21 @@ fn largest_screen<R: tauri::Runtime>(_app: &tauri::AppHandle<R>) -> (u32, u32) {
 
 /// Make the desktop show what config says: the tinted copy of the original
 /// picture with `tint` on, the original with it off. `dir` holds the copies.
-/// `pick` is a picture the user has just chosen, not yet on screen. Caller
-/// holds `DESKTOP`.
+/// `pick` is a picture the user has just chosen, not yet on screen. Returns
+/// the original the desktop now stands for, or None when it didn't look or
+/// couldn't set it. Caller holds `DESKTOP`.
 fn converge<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     tint: bool,
     dir: &Path,
     pick: Option<&str>,
-) {
+) -> Option<String> {
     use tauri::Manager;
 
     // Tint off and none of our copies about: nothing on the desktop to undo.
     let has_copies = std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_some());
     if !tint && pick.is_none() && !has_copies {
-        return;
+        return None;
     }
     let (command, colours) = {
         let state = app.state::<Mutex<super::ThemeState>>();
@@ -512,7 +513,7 @@ fn converge<R: tauri::Runtime>(
     let shown = super::query_desktop_picture(&command);
     let original = pick.map_or_else(|| original_in(dir, &shown), str::to_owned);
     if original.is_empty() {
-        return;
+        return None;
     }
 
     let tinted = if tint {
@@ -536,10 +537,19 @@ fn converge<R: tauri::Runtime>(
             .status();
         // Still showing the old copy: keep it.
         if !set.is_ok_and(|s| s.success()) {
-            return;
+            return None;
         }
     }
     prune(dir, tinted.as_deref());
+    Some(original)
+}
+
+/// Tell the WebView a desktop pass has finished, with the original the desktop
+/// now stands for (null when unknown), so the wallpapers view can end its busy
+/// state: a tinted change lands seconds after the call that asked for it.
+fn announce(app: &tauri::AppHandle, shown: Option<String>) {
+    use tauri::Emitter;
+    let _ = app.emit("desktop", shown);
 }
 
 /// Re-run `converge` in the background: the palette, `wallpaper.tint` or the
@@ -552,9 +562,8 @@ pub fn spawn_converge(app: &tauri::AppHandle) {
     tauri::async_runtime::spawn_blocking(move || {
         let _desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         QUEUED.store(false, Ordering::SeqCst);
-        if let Some(dir) = tinted_dir() {
-            converge(&app, tint_on(), &dir, None);
-        }
+        let shown = tinted_dir().and_then(|dir| converge(&app, tint_on(), &dir, None));
+        announce(&app, shown);
     });
 }
 
@@ -566,9 +575,8 @@ pub fn spawn_pick(app: &tauri::AppHandle, theme_command: String, path: String) {
     tauri::async_runtime::spawn_blocking(move || {
         let _desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         super::theme_from_wallpaper(&app, &theme_command, &path, true);
-        if let Some(dir) = tinted_dir() {
-            converge(&app, true, &dir, Some(&path));
-        }
+        let shown = tinted_dir().and_then(|dir| converge(&app, true, &dir, Some(&path)));
+        announce(&app, shown);
     });
 }
 

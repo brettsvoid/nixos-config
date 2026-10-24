@@ -273,6 +273,10 @@ export interface Events {
   toggles: ToggleState[];
   assistant: AssistantChunk;
   settings: SettingsSnapshot;
+  // A desktop pass has finished (a pick with Tint on, or a re-tint after a
+  // palette or Tint change): the original the desktop now stands for, null
+  // when unknown.
+  desktop: string | null;
 }
 
 export function call<K extends keyof Commands>(
