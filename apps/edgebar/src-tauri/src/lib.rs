@@ -151,9 +151,12 @@ fn resolve_colors(
     }
 }
 
-const MIN_INK_CONTRAST: f64 = 4.5;
+/// WCAG 2 AA's floor for body text (1.4.3), which the ink must clear.
+const WCAG_AA_TEXT: f64 = 4.5;
 
-const MIN_ACCENT_CONTRAST: f64 = 3.0;
+/// WCAG 2 AA's floor for UI components and graphics (1.4.11), which the
+/// accent must clear.
+const WCAG_AA_NON_TEXT: f64 = 3.0;
 
 /// WCAG 2 relative luminance of an sRGB `#hex` colour (alpha ignored).
 fn luminance(hex: &str) -> f64 {
@@ -381,13 +384,13 @@ impl ThemeState {
         let configured = std::mem::take(&mut colors.text);
         let (ink, source) = match self.ink.for_scheme(self.scheme) {
             Some(hex) => (hex.to_string(), "override"),
-            None => match readable_on(&colors.surface, &configured, palette, MIN_INK_CONTRAST) {
+            None => match readable_on(&colors.surface, &configured, palette, WCAG_AA_TEXT) {
                 Some(better) => (better, "contrast"),
                 None => (configured.clone(), "config"),
             },
         };
         if let Some(better) =
-            readable_on(&colors.surface, &colors.accent, palette, MIN_ACCENT_CONTRAST)
+            readable_on(&colors.surface, &colors.accent, palette, WCAG_AA_NON_TEXT)
         {
             colors.accent = better;
         }
@@ -463,7 +466,11 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     #[cfg(target_os = "macos")]
     {
         let surface = resolved.colors.surface.clone();
-        let _ = app.run_on_main_thread(move || recolor_native_frame(&surface));
+        let _ = app.run_on_main_thread(move || {
+            if let Some(main_thread) = objc2::MainThreadMarker::new() {
+                recolor_native_frame(main_thread, &surface);
+            }
+        });
     }
 }
 
@@ -891,9 +898,6 @@ fn create_native_frame(
     window.setOpaque(false);
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
-    // tao puts always-on-top windows (the bar) at kCGFloatingWindowLevelKey (5),
-    // not NSFloatingWindowLevel (3).
-    const FRAME_WINDOW_LEVEL: isize = 4;
     window.setLevel(FRAME_WINDOW_LEVEL);
     window.setIgnoresMouseEvents(true);
     // Same collection behaviour as the bar (see make_overlay).
@@ -1051,11 +1055,17 @@ fn remove_native_frames() {
     });
 }
 
+/// The level tao gives an always-on-top window, so the bars' level: its
+/// `NSFloatingWindowLevel` is `kCGFloatingWindowLevelKey` (5), not AppKit's 3.
 #[cfg(target_os = "macos")]
-fn recolor_native_frame(surface: &str) {
-    if objc2::MainThreadMarker::new().is_none() {
-        return;
-    }
+const BAR_WINDOW_LEVEL: isize = 5;
+
+/// Just under the bars, so a drawer the bar's WebView draws covers the frame.
+#[cfg(target_os = "macos")]
+const FRAME_WINDOW_LEVEL: isize = BAR_WINDOW_LEVEL - 1;
+
+#[cfg(target_os = "macos")]
+fn recolor_native_frame(_main_thread: objc2::MainThreadMarker, surface: &str) {
     FRAME_WINDOWS.with(|cell| {
         for f in cell.borrow().iter() {
             f.fill.setFillColor(Some(&srgb(surface).CGColor()));
@@ -1645,20 +1655,32 @@ fn precompute_palettes(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeSta
     spawn_precompute(&app, theme_cmd, persisted_scheme());
 }
 
-fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, wait: bool) {
+/// Whether a wallpaper pick waits for its new palette.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Generate {
+    /// Wait and apply it, for a tinted pick that tints with it next.
+    Wait,
+    /// Let the generator apply it: it pings theme.sock when it is done.
+    InBackground,
+}
+
+fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, generate: Generate) {
     if let Some(cache) = palette_cache_path(path, &persisted_scheme()) {
         if cache.exists() && install_palette(&cache) {
             reload_palettes(app);
             return;
         }
     }
-    let mut generate = std::process::Command::new(theme_cmd);
-    generate.arg(path);
-    if wait {
-        let _ = generate.status();
-        reload_palettes(app);
-    } else {
-        let _ = generate.spawn();
+    let mut generator = std::process::Command::new(theme_cmd);
+    generator.arg(path);
+    match generate {
+        Generate::Wait => {
+            let _ = generator.status();
+            reload_palettes(app);
+        }
+        Generate::InBackground => {
+            let _ = generator.spawn();
+        }
     }
 }
 
@@ -1676,7 +1698,7 @@ fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, 
     let _ = std::process::Command::new(wallpaper_cmd)
         .args(["all", &path])
         .spawn();
-    theme_from_wallpaper(&app, &theme_cmd, &path, false);
+    theme_from_wallpaper(&app, &theme_cmd, &path, Generate::InBackground);
 }
 
 /// Open a Finder file picker and return the chosen image path, or None on
@@ -2550,8 +2572,9 @@ fn covered_screens(bounds: &[[f64; 4]]) -> Vec<bool> {
         let Some(win) = (unsafe { win.as_ref() }) else {
             continue;
         };
-        // Layer 0 is where ordinary app windows live. Our own bar (5) and frame
-        // (6) sit above it, so they can never be read as a fullscreen app.
+        // Layer 0 is where ordinary app windows live. Our own bar and frame
+        // (BAR_WINDOW_LEVEL, FRAME_WINDOW_LEVEL) sit above it, so they can
+        // never be read as a fullscreen app.
         if window_int(win, unsafe { kCGWindowLayer }) != Some(0) {
             continue;
         }

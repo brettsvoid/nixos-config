@@ -459,7 +459,7 @@ pub fn spawn_tinted_pick(app: &tauri::AppHandle, theme_command: String, path: St
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
-        super::theme_from_wallpaper(&app, &theme_command, &path, true);
+        super::theme_from_wallpaper(&app, &theme_command, &path, super::Generate::Wait);
         let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, true, &dir, Some(&path)));
         announce(&app, shown);
     });
