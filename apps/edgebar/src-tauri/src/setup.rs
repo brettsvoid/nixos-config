@@ -1,6 +1,6 @@
 use crate::notch::PLAYERS;
 use crate::toggles::{self, BluetoothPermission, Toggles};
-use crate::{SettingsPane, ThemeState};
+use crate::SettingsPane;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -113,14 +113,8 @@ const CHECKS: [Check; 9] = [
         id: "themeCommand",
         label: "Theme command",
         probe: |app| {
-            let cmd = app
-                .state::<Mutex<ThemeState>>()
-                .lock()
-                .unwrap()
-                .theme_command
-                .clone();
             tool(
-                &cmd,
+                &crate::theme_command(app),
                 Search::Path,
                 "Not found, so a wallpaper pick can't re-theme the bar. The Nix config installs it.",
             )
@@ -130,14 +124,8 @@ const CHECKS: [Check; 9] = [
         id: "wallpaperCommand",
         label: "Wallpaper command",
         probe: |app| {
-            let cmd = app
-                .state::<Mutex<ThemeState>>()
-                .lock()
-                .unwrap()
-                .wallpaper_command
-                .clone();
             tool(
-                &cmd,
+                &crate::wallpaper_command(app),
                 Search::Path,
                 "Not found, so the Wallpapers view can't set the desktop. The Nix config installs it.",
             )

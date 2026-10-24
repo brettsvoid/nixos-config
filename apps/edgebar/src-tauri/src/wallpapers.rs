@@ -390,6 +390,7 @@ fn largest_screen<R: tauri::Runtime>(_app: &tauri::AppHandle<R>) -> (u32, u32) {
 fn converge<R: tauri::Runtime>(
     _desktop: &MutexGuard<'static, ()>,
     app: &tauri::AppHandle<R>,
+    command: &str,
     tint: bool,
     dir: &Path,
     pick: Option<&str>,
@@ -400,12 +401,13 @@ fn converge<R: tauri::Runtime>(
     if !tint && pick.is_none() && !has_copies {
         return None;
     }
-    let (command, colours) = {
-        let state = app.state::<Mutex<super::ThemeState>>();
-        let ts = state.lock().unwrap();
-        (ts.wallpaper_command.clone(), tint_colours(&ts.palette()))
-    };
-    let shown = shown_picture(&command);
+    let colours = tint_colours(
+        &app.state::<Mutex<super::ThemeState>>()
+            .lock()
+            .unwrap()
+            .palette(),
+    );
+    let shown = shown_picture(command);
     let original = pick.map_or_else(|| original_in(dir, &shown), str::to_owned);
     if original.is_empty() {
         return None;
@@ -424,7 +426,7 @@ fn converge<R: tauri::Runtime>(
     };
     if let Some(target) = desktop_target(tint, &shown, &original, tinted.as_deref()) {
         super::touch_inapp_marker();
-        let set = std::process::Command::new(&command)
+        let set = std::process::Command::new(command)
             .arg("all")
             .arg(&target)
             .status();
@@ -450,7 +452,9 @@ pub fn spawn_converge(app: &tauri::AppHandle) {
         let desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         QUEUED.store(false, Ordering::SeqCst);
         let tint = crate::settings::current(&app).wallpaper.tint;
-        let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, tint, &dir, None));
+        let command = crate::wallpaper_command(&app);
+        let shown =
+            tinted_dir().and_then(|dir| converge(&desktop, &app, &command, tint, &dir, None));
         announce(&app, shown);
     });
 }
@@ -460,7 +464,9 @@ pub fn spawn_tinted_pick(app: &tauri::AppHandle, theme_command: String, path: St
     tauri::async_runtime::spawn_blocking(move || {
         let desktop = DESKTOP.lock().unwrap_or_else(|e| e.into_inner());
         super::theme_from_wallpaper(&app, &theme_command, &path, super::Generate::Wait);
-        let shown = tinted_dir().and_then(|dir| converge(&desktop, &app, true, &dir, Some(&path)));
+        let command = super::wallpaper_command(&app);
+        let shown = tinted_dir()
+            .and_then(|dir| converge(&desktop, &app, &command, true, &dir, Some(&path)));
         announce(&app, shown);
     });
 }
@@ -547,8 +553,6 @@ mod tests {
             palettes: serde_json::from_str(include_str!("../palette.default.json")).unwrap(),
             appearance: super::super::Appearance::Auto,
             scheme,
-            theme_command: String::new(),
-            wallpaper_command: String::new(),
             notch_idle: String::new(),
             ink: Default::default(),
             oled,
@@ -815,16 +819,14 @@ mod tests {
         let _restore = Restore(before.clone());
 
         let app = tauri::test::mock_app();
-        let mut state = theme_state(false, super::super::Scheme::Dark);
-        state.wallpaper_command = "desktoppr".to_string();
-        app.manage(Mutex::new(state));
+        app.manage(Mutex::new(theme_state(false, super::super::Scheme::Dark)));
         let handle = app.handle();
         let dir = Scratch::new("converge");
         let shown = || shown_picture("desktoppr");
         let files = || std::fs::read_dir(dir.path()).unwrap().count();
         let desktop = DESKTOP.lock().unwrap();
 
-        converge(&desktop, handle, true, dir.path(), None);
+        converge(&desktop, handle, "desktoppr", true, dir.path(), None);
         let tinted = shown();
         let on = (
             Path::new(&tinted).parent() == Some(dir.path()),
@@ -832,10 +834,10 @@ mod tests {
             files(),
         );
 
-        converge(&desktop, handle, true, dir.path(), None);
+        converge(&desktop, handle, "desktoppr", true, dir.path(), None);
         let again = (shown() == tinted, files());
 
-        converge(&desktop, handle, false, dir.path(), None);
+        converge(&desktop, handle, "desktoppr", false, dir.path(), None);
         let off = (shown() == before, files());
         println!("tint on {on:?}, a second run {again:?}, tint off {off:?}");
         assert_eq!(

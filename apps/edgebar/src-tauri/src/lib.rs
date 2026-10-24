@@ -359,9 +359,6 @@ struct ThemeState {
     palettes: Palettes,
     appearance: Appearance,
     scheme: Scheme,
-    /// Binaries for the picker (resolved from config, else a bare PATH name).
-    theme_command: String,
-    wallpaper_command: String,
     /// `notch.idle` from config, passed through to the WebView.
     notch_idle: String,
     ink: InkOverride,
@@ -1568,13 +1565,7 @@ async fn list_wallpapers(app: tauri::AppHandle) -> Vec<Wallpaper> {
 #[tauri::command]
 async fn current_wallpaper(app: tauri::AppHandle) -> String {
     tauri::async_runtime::spawn_blocking(move || {
-        let cmd = app
-            .state::<Mutex<ThemeState>>()
-            .lock()
-            .unwrap()
-            .wallpaper_command
-            .clone();
-        wallpapers::original_picture(&cmd)
+        wallpapers::original_picture(&wallpaper_command(&app))
     })
     .await
     .unwrap_or_default()
@@ -1589,28 +1580,66 @@ fn touch_inapp_marker() {
     }
 }
 
+/// Read at each use, so a rebuilt config.json applies without a relaunch.
+fn theme_command<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> String {
+    settings::current(app)
+        .theme_command
+        .unwrap_or_else(|| "generate-edgebar-theme".to_string())
+}
+
+fn wallpaper_command<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> String {
+    settings::current(app)
+        .wallpaper_command
+        .unwrap_or_else(|| "desktoppr".to_string())
+}
+
 fn palette_json_path() -> Option<std::path::PathBuf> {
     Some(settings::dir()?.join("palette.json"))
 }
 
-/// Per-(wallpaper, scheme) precomputed palette cache, keyed by scheme,
-/// sanitised path and mtime so an edited image or new scheme misses it.
-fn palette_cache_path(path: &str, scheme: &str) -> Option<std::path::PathBuf> {
+fn sanitised(path: &str) -> String {
+    path.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+fn palette_cache_root() -> Option<std::path::PathBuf> {
+    Some(settings::cache_dir()?.join("palettes"))
+}
+
+/// Precomputed palettes, one folder per generator: a Nix store path changes
+/// with the generator's template, so a rebuilt one never reuses old palettes.
+/// Within it a palette is keyed by scheme, wallpaper and the wallpaper's mtime.
+fn palette_cache_path(generator: &str, path: &str, scheme: &str) -> Option<std::path::PathBuf> {
     let mtime = std::fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let sanitized: String = path
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect();
     Some(
-        settings::cache_dir()?
-            .join("palettes")
-            .join(format!("{scheme}__{sanitized}__{mtime}.json")),
+        palette_cache_root()?
+            .join(sanitised(generator))
+            .join(format!("{scheme}__{}__{mtime}.json", sanitised(path))),
     )
+}
+
+fn prune_other_generators(generator: &str) {
+    let Some(entries) = palette_cache_root().and_then(|root| std::fs::read_dir(root).ok()) else {
+        return;
+    };
+    let keep = sanitised(generator);
+    for entry in entries.flatten() {
+        if entry.file_name() == keep.as_str() {
+            continue;
+        }
+        let path = entry.path();
+        let _ = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+    }
 }
 
 /// Install a precomputed palette as the live palette.json atomically (copy to a
@@ -1631,9 +1660,10 @@ fn spawn_precompute(app: &tauri::AppHandle, theme_cmd: String, scheme: String) {
         return;
     };
     std::thread::spawn(move || {
+        prune_other_generators(&theme_cmd);
         for found in wallpapers::scan(&dir) {
             let Some(path) = found.path.to_str() else { continue };
-            let Some(cache) = palette_cache_path(path, &scheme) else {
+            let Some(cache) = palette_cache_path(&theme_cmd, path, &scheme) else {
                 continue;
             };
             if cache.exists() {
@@ -1650,9 +1680,8 @@ fn spawn_precompute(app: &tauri::AppHandle, theme_cmd: String, scheme: String) {
 /// Precompute every wallpaper's palette for the active scheme. Called when the
 /// theme view opens so later picks are instant.
 #[tauri::command]
-fn precompute_palettes(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>) {
-    let theme_cmd = state.lock().unwrap().theme_command.clone();
-    spawn_precompute(&app, theme_cmd, persisted_scheme());
+fn precompute_palettes(app: tauri::AppHandle) {
+    spawn_precompute(&app, theme_command(&app), persisted_scheme());
 }
 
 /// Whether a wallpaper pick waits for its new palette.
@@ -1665,7 +1694,7 @@ pub(crate) enum Generate {
 }
 
 fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, generate: Generate) {
-    if let Some(cache) = palette_cache_path(path, &persisted_scheme()) {
+    if let Some(cache) = palette_cache_path(theme_cmd, path, &persisted_scheme()) {
         if cache.exists() && install_palette(&cache) {
             reload_palettes(app);
             return;
@@ -1685,17 +1714,14 @@ fn theme_from_wallpaper(app: &tauri::AppHandle, theme_cmd: &str, path: &str, gen
 }
 
 #[tauri::command]
-fn set_wallpaper(app: tauri::AppHandle, state: tauri::State<Mutex<ThemeState>>, path: String) {
-    let (wallpaper_cmd, theme_cmd) = {
-        let ts = state.lock().unwrap();
-        (ts.wallpaper_command.clone(), ts.theme_command.clone())
-    };
+fn set_wallpaper(app: tauri::AppHandle, path: String) {
+    let theme_cmd = theme_command(&app);
     if settings::current(&app).wallpaper.tint {
         wallpapers::spawn_tinted_pick(&app, theme_cmd, path);
         return;
     }
     touch_inapp_marker();
-    let _ = std::process::Command::new(wallpaper_cmd)
+    let _ = std::process::Command::new(wallpaper_command(&app))
         .args(["all", &path])
         .spawn();
     theme_from_wallpaper(&app, &theme_cmd, &path, Generate::InBackground);
@@ -1739,19 +1765,13 @@ async fn pick_folder() -> Option<String> {
 async fn set_scheme(app: tauri::AppHandle, scheme: String) {
     let _ = tauri::async_runtime::spawn_blocking(move || {
         persist_scheme(&scheme);
-        // Clone the commands out and drop the guard before shelling out, so the
-        // ThemeState lock isn't held across the wallpaper subprocess.
-        let (wallpaper_cmd, theme_cmd) = {
-            let state = app.state::<Mutex<ThemeState>>();
-            let ts = state.lock().unwrap();
-            (ts.wallpaper_command.clone(), ts.theme_command.clone())
-        };
-        let current = wallpapers::original_picture(&wallpaper_cmd);
+        let theme_cmd = theme_command(&app);
+        let current = wallpapers::original_picture(&wallpaper_command(&app));
         spawn_precompute(&app, theme_cmd.clone(), scheme.clone());
         // re-theme the current wallpaper now (cache is cold for the new scheme, so
         // this usually generates once; precompute warms the rest in the background)
         if !current.is_empty() {
-            if let Some(cache) = palette_cache_path(&current, &scheme) {
+            if let Some(cache) = palette_cache_path(&theme_cmd, &current, &scheme) {
                 if cache.exists() && install_palette(&cache) {
                     reload_palettes(&app);
                     wallpapers::spawn_converge(&app);
@@ -2792,12 +2812,6 @@ pub fn run() {
                 palettes,
                 appearance,
                 scheme,
-                theme_command: config
-                    .theme_command
-                    .unwrap_or_else(|| "generate-edgebar-theme".to_string()),
-                wallpaper_command: config
-                    .wallpaper_command
-                    .unwrap_or_else(|| "desktoppr".to_string()),
                 notch_idle: resolve_notch_idle(config.notch.idle.as_deref()),
                 ink: load_ink_override(),
                 oled: config.oled,
@@ -2938,6 +2952,27 @@ mod output_within_tests {
     fn a_command_that_cannot_start_is_none() {
         let missing = Command::new("/nonexistent/edgebar-tool");
         assert!(output_within(missing, Duration::from_secs(1)).is_none());
+    }
+}
+
+#[cfg(test)]
+mod palette_cache_tests {
+    use super::*;
+
+    #[test]
+    fn a_palette_is_cached_under_the_generator_that_made_it() {
+        let cached = palette_cache_path(
+            "/nix/store/aaa-generate-edgebar-theme/bin/generate-edgebar-theme",
+            "/no/such/wall paper.jpg",
+            "scheme-neutral",
+        )
+        .unwrap();
+        assert_eq!(
+            cached.strip_prefix(palette_cache_root().unwrap()).unwrap(),
+            std::path::Path::new(
+                "_nix_store_aaa_generate_edgebar_theme_bin_generate_edgebar_theme/scheme-neutral___no_such_wall_paper_jpg__0.json"
+            )
+        );
     }
 }
 
