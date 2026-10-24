@@ -257,6 +257,10 @@ export interface Commands {
   assistant_send: { args: { prompt: string }; result: string }; // the turn id
   assistant_cancel: { args: NoArgs; result: void };
   assistant_reset: { args: NoArgs; result: void };
+  // The calling bar window takes the keyboard until release_keyboard, which
+  // hands it back to the app that was in front (keyboard.ts).
+  take_keyboard: { args: NoArgs; result: void };
+  release_keyboard: { args: NoArgs; result: void };
   get_settings: { args: NoArgs; result: SettingsSnapshot };
   // `value: null` drops the override, so the key falls back to config.json.
   set_setting: { args: { key: string; value: unknown }; result: SettingsSnapshot };

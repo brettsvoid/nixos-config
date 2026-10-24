@@ -32,6 +32,9 @@ mod toggles;
 /// The wallpaper folder, the OLED palette and Tint.
 mod wallpapers;
 
+/// Typing into the open notch: a bar window takes the keyboard on request.
+mod keyboard;
+
 /// Debug-only socket that drives and snapshots the live bar.
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod devtools;
@@ -2896,6 +2899,8 @@ pub fn run() {
             assistant::assistant_send,
             assistant::assistant_cancel,
             assistant::assistant_reset,
+            keyboard::take_keyboard,
+            keyboard::release_keyboard,
             #[cfg(all(debug_assertions, target_os = "macos"))]
             devtools::dev_result
         ])
@@ -2903,6 +2908,7 @@ pub fn run() {
             let loaded = settings::load(settings::dir().as_deref());
             let config = loaded.config.clone();
             app.manage(settings::Store::new(loaded));
+            app.manage(keyboard::Keyboard::default());
             let palettes = load_palettes();
             // Runtime override (the bar's light/dark/auto toggle) wins over the
             // config's default; Auto then resolves against the live system setting.

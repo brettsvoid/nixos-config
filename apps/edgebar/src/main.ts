@@ -12,6 +12,7 @@ import {
   type Workspace,
 } from "./ipc";
 import { lucide, TRANSPORT } from "./icons";
+import { releaseKeyboard } from "./keyboard";
 import { setLine } from "./marquee";
 import { SPRING } from "./motion";
 import {
@@ -1057,6 +1058,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   function closeViews() {
     if (shownView) handles.get(shownView)?.hide?.();
     shownView = null;
+    releaseKeyboard();
   }
 
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
@@ -1068,6 +1070,8 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   });
 
   // ---- init ---------------------------------------------------------------
+  // A reload while a view held the keyboard would otherwise leave it held.
+  releaseKeyboard();
   tickMinute(); // start the per-minute clock (updates immediately)
   reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
