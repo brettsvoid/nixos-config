@@ -82,7 +82,8 @@ the Focus file readable.
 
 donotdisturbd refuses XPC from unentitled processes, so the Focus toggle stays
 read-only until a Shortcut called "Toggle Focus" exists. Make one in Shortcuts
-with a single **Set Focus** action set to Do Not Disturb and Toggle.
+with a single **Set Focus** action set to Do Not Disturb and Toggle. Settings,
+Dashboard renames it (`toggles.focusShortcut`), and the toggle follows at once.
 
 ## Config & theming
 
@@ -109,8 +110,30 @@ WebView's typed accessor (`current`, `set`, `reset`, `onChange`).
 
 `set_setting` changes the running bar without a restart: the theme when colours,
 appearance, geometry or `notch.idle` change, the native frame and bar windows
-when geometry changes, and the notch rules when `notch.workspaces` or
-`notch.transientMs` change. Setting the same value again does nothing.
+when geometry changes, the notch rules when `notch.workspaces` or
+`notch.transientMs` change, and the Focus toggle when `toggles.focusShortcut`
+changes. Keys only the WebView reads (`clock.*`, `segments.cpu`,
+`calendar.weekStart`) take effect from the `settings` event. Setting the same
+value again does nothing.
+
+The light/dark/auto mode is the `appearance` setting, whichever control sets
+it. It used to live in `~/.config/edgebar/appearance` as well; edgebar imports
+that file once at startup (as an override only when it differs from the
+layers below) and deletes it.
+
+### The Settings view
+
+The notch's Settings tab (the gear at the foot of the rail) edits these
+settings: one section per area, each row with an undo button while its key is
+overridden, and a banner when part of settings.json was refused. Its Setup
+section lists what edgebar needs from this Mac (`src-tauri/src/setup.rs`, one
+table row per check): Full Disk Access, Bluetooth permission, Automation for
+Spotify and Music, the Focus Shortcut, and the `aerospace`, theme, wallpaper
+and Claude commands. A check never asks for anything; its button does (a
+System Settings pane, the Shortcuts app, or one guarded AppleScript read so
+macOS asks for Automation). edgebar has kitty's permissions while it runs
+under herdr, so grants go to kitty. A missing item puts a dot on the
+Settings rail button.
 
 The ink drawn on the surface (`colors.text`) is contrast-checked against it.
 If the role map's ink falls under 4.5:1 (WCAG AA), edgebar uses the palette
@@ -130,6 +153,8 @@ Three keys in `config.default.json`, changeable as settings:
 
 - `wallpaper.folder` — where the wallpapers view looks (`~` allowed). Images one
   subfolder down are listed too, each tagged with its subfolder and file type.
+  The `select-wallpaper` and `cycle-wallpaper` commands pick from the same
+  folder (`edgebar-wallpaper-folder` prints it).
 - `oled` — in the dark scheme the palette's surface becomes `#000000`, and every
   role built on it follows. The light scheme is unchanged. (It sits at the top
   level, not under `appearance`, because `appearance` is already a string.)
@@ -153,3 +178,8 @@ pnpm install
 pnpm tauri dev      # run the bar
 pnpm tauri build    # release build
 ```
+
+Vite does not watch `src-tauri/`, and the WebView types and seeds its settings
+from `src-tauri/config.default.json`. After adding a key there, restart
+`pnpm tauri dev`, or the WebView keeps the old file and reads the new key as
+undefined.
