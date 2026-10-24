@@ -245,7 +245,8 @@ export const controls: Widget = (root) => {
     ]);
     if (levels.status === "fulfilled") {
       volume.set({ value: levels.value.output, muted: levels.value.outputMuted });
-      mic.set({ value: levels.value.input, muted: levels.value.inputMuted });
+      const { input, inputRestore } = levels.value;
+      mic.set({ value: inputRestore ?? input, muted: inputRestore !== null });
     }
     brightness.set(
       bright.status === "fulfilled"

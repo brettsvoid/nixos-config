@@ -114,9 +114,9 @@ export interface MetricsHistory {
 
 export interface Volume {
   output: number;
-  input: number;
   outputMuted: boolean;
-  inputMuted: boolean;
+  input: number;
+  inputRestore: number | null;
 }
 
 export interface Network {

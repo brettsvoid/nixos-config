@@ -1825,12 +1825,18 @@ async fn battery() -> Battery {
 #[serde(rename_all = "camelCase")]
 struct Volume {
     output: u8,
-    input: u8,
     output_muted: bool,
-    input_muted: bool,
+    /// The input level macOS reports, which is 0 while edgebar holds the mic
+    /// muted.
+    input: u8,
+    /// The level unmuting restores, while edgebar holds the mic muted.
+    input_restore: Option<u8>,
 }
 
-static MIC_HELD: Mutex<Option<u8>> = Mutex::new(None);
+/// macOS has no input mute, so muting the mic sets its level to 0 and holds
+/// the old level here.
+#[derive(Default)]
+struct MicHold(Mutex<Option<u8>>);
 
 pub(crate) fn run_osa(script: &str) -> Option<String> {
     let out = std::process::Command::new("osascript")
@@ -1860,10 +1866,7 @@ fn apply_mic_hold(mut v: Volume, held: &mut Option<u8>) -> Volume {
     if v.input > 0 {
         *held = None;
     }
-    if let Some(level) = *held {
-        v.input = level;
-        v.input_muted = true;
-    }
+    v.input_restore = *held;
     v
 }
 
@@ -1886,9 +1889,11 @@ fn read_volume_settings() -> Volume {
 }
 
 #[tauri::command]
-async fn get_volume() -> Volume {
-    tauri::async_runtime::spawn_blocking(|| {
-        apply_mic_hold(read_volume_settings(), &mut MIC_HELD.lock().unwrap())
+async fn get_volume(app: tauri::AppHandle) -> Volume {
+    tauri::async_runtime::spawn_blocking(move || {
+        let hold = app.state::<MicHold>();
+        let mut held = hold.0.lock().unwrap();
+        apply_mic_hold(read_volume_settings(), &mut held)
     })
     .await
     .unwrap_or_default()
@@ -1921,7 +1926,7 @@ async fn set_input_volume(app: tauri::AppHandle, input: u8) {
         Some(level as f64 / 100.0),
     );
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        *MIC_HELD.lock().unwrap() = None;
+        *app.state::<MicHold>().0.lock().unwrap() = None;
         run_osa(&format!("set volume input volume {level}"))
     })
     .await;
@@ -1941,13 +1946,15 @@ async fn set_output_muted(app: tauri::AppHandle, muted: bool) {
 
 #[tauri::command]
 async fn set_input_muted(app: tauri::AppHandle, muted: bool) {
+    let handle = app.clone();
     let level = tauri::async_runtime::spawn_blocking(move || {
-        let mut held = MIC_HELD.lock().unwrap();
+        let hold = handle.state::<MicHold>();
+        let mut held = hold.0.lock().unwrap();
         let read = apply_mic_hold(read_volume_settings(), &mut held);
         if let Some(target) = mic_mute_target(muted, &read, &mut held) {
             run_osa(&format!("set volume input volume {target}"));
         }
-        read.input
+        read.input_restore.unwrap_or(read.input)
     })
     .await
     .unwrap_or(0);
@@ -2731,6 +2738,7 @@ pub fn run() {
             let config = loaded.config.clone();
             app.manage(settings::Store::new(loaded));
             app.manage(keyboard::Keyboard::default());
+            app.manage(MicHold::default());
             let palettes = load_palettes();
             let appearance = config.appearance;
             let scheme = resolve_scheme(appearance);
@@ -2805,8 +2813,8 @@ pub fn run() {
                         // Collapse a burst of pings into one query + push.
                         std::thread::sleep(std::time::Duration::from_millis(60));
                         while rx.try_recv().is_ok() {}
-                        let _ = query_handle
-                            .emit("workspaces", workspaces_with_icons(&query_handle));
+                        let _ =
+                            query_handle.emit("workspaces", workspaces_with_icons(&query_handle));
                         notch::refresh_workspace(&query_handle);
                     }
                 });
@@ -2918,9 +2926,9 @@ mod volume_tests {
             ),
             Volume {
                 output: 62,
-                input: 100,
                 output_muted: true,
-                input_muted: false,
+                input: 100,
+                input_restore: None,
             }
         );
         assert_eq!(
@@ -2929,9 +2937,9 @@ mod volume_tests {
             ),
             Volume {
                 output: 0,
-                input: 40,
                 output_muted: false,
-                input_muted: false,
+                input: 40,
+                input_restore: None,
             }
         );
     }
@@ -2948,14 +2956,17 @@ mod volume_tests {
     fn a_muted_mic_reports_the_level_it_will_restore() {
         let mut held = Some(70);
         let read = apply_mic_hold(mic(0), &mut held);
-        assert_eq!((read.input, read.input_muted, held), (70, true, Some(70)));
+        assert_eq!(
+            (read.input, read.input_restore, held),
+            (0, Some(70), Some(70))
+        );
     }
 
     #[test]
     fn a_level_set_elsewhere_ends_the_mute() {
         let mut held = Some(70);
         let read = apply_mic_hold(mic(30), &mut held);
-        assert_eq!((read.input, read.input_muted, held), (30, false, None));
+        assert_eq!((read.input, read.input_restore, held), (30, None, None));
     }
 
     #[test]

@@ -282,7 +282,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     try {
       const v = await call("get_volume");
       volRange.value = String(v.output);
-      micRange.value = String(v.input);
+      micRange.value = String(v.inputRestore ?? v.input);
       const br = await call("get_brightness");
       briRange.value = String(Math.round(br * 100));
     } catch {
