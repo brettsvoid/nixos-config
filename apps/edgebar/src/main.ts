@@ -1,5 +1,6 @@
 import "./styles.css";
 import { animate, motionValue } from "motion";
+import defaults from "../src-tauri/config.default.json";
 import {
   call,
   on,
@@ -58,7 +59,6 @@ const WAVE = {
   rampPx: 8, // px of played track over which the wave swells to full amplitude
   fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
 } as const;
-const FALLBACK = { barHeight: 32, windowHeight: 64 } as const;
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
 // Apply the shared config (also read by the native frame) as CSS variables,
@@ -68,7 +68,9 @@ call("get_config")
     applyConfig(cfg);
     initBar(cfg.geometry.barHeight, cfg.geometry.windowHeight, cfg.notchIdle);
   })
-  .catch(() => initBar(FALLBACK.barHeight, FALLBACK.windowHeight, "handle"));
+  .catch(() =>
+    initBar(defaults.geometry.barHeight, defaults.geometry.windowHeight, defaults.notch.idle),
+  );
 
 function applyColors(c: Colors) {
   const s = document.documentElement.style;
@@ -98,8 +100,6 @@ function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number) {
     t = window.setTimeout(() => fn(...a), ms);
   };
 }
-
-const NOTCH_CHROME = { w: 16 * 2 + 48 + 8, h: 16 * 2 } as const;
 
 function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const segments = [...document.querySelectorAll<HTMLElement>(".seg")];
@@ -235,17 +235,17 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   }
   let clockTimer = 0;
   let clockMinute = -1;
-  function tick() {
+  function tick({ force = false } = {}) {
     const now = new Date();
     updateCompactClock(now);
     const minute = Math.floor(now.getTime() / 60000);
-    if (minute !== clockMinute && notchIdle === "clock" && !notchLive) renderNotch(null);
+    if ((force || minute !== clockMinute) && notchIdle === "clock" && !notchLive) renderNotch(null);
     clockMinute = minute;
     const step = current().clock.seconds && !document.hidden ? 1000 : 60000;
     window.clearTimeout(clockTimer);
-    clockTimer = window.setTimeout(tick, step - (Date.now() % step));
+    clockTimer = window.setTimeout(() => tick(), step - (Date.now() % step));
   }
-  document.addEventListener("visibilitychange", tick);
+  document.addEventListener("visibilitychange", () => tick());
 
   // ---- centre notch: the dashboard / wallpapers / performance hub ---------
   const notchEl = document.querySelector<HTMLElement>("#notch")!;
@@ -965,6 +965,14 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     railEl.append(tab);
   }
 
+  const panelStyle = getComputedStyle(notchBody);
+  const px = (...props: string[]) =>
+    props.reduce((sum, p) => sum + parseFloat(panelStyle.getPropertyValue(p)), 0);
+  const notchChrome = {
+    w: px("padding-left", "padding-right", "column-gap") + railEl.offsetWidth,
+    h: px("padding-top", "padding-bottom"),
+  };
+
   function setAlert(view: NotchView, reason: string | null) {
     const tab = railTabs.get(view.id)!;
     let dot = tab.querySelector<HTMLElement>(".rail-dot");
@@ -993,7 +1001,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     if (shownView && shownView !== view.id) handles.get(shownView)?.hide?.();
     shownView = view.id;
     tabBody.style.width = `${view.size.w}px`;
-    notchBody.style.height = `${view.size.h + NOTCH_CHROME.h}px`;
+    notchBody.style.height = `${view.size.h + notchChrome.h}px`;
     for (const [id, el] of viewEls) el.hidden = id !== view.id;
     for (const [id, tab] of railTabs) tab.classList.toggle("active", id === view.id);
     handles.get(view.id)?.show?.();
@@ -1008,7 +1016,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
     // leave the box at the dashboard's width.
     animate(
       notchBox,
-      { width: [notchBox.offsetWidth, view.size.w + NOTCH_CHROME.w] },
+      { width: [notchBox.offsetWidth, view.size.w + notchChrome.w] },
       SPRING.drawer,
     );
     notchDrawer.resize();
@@ -1017,7 +1025,7 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   function openViews() {
     mountViews();
     showView(home);
-    notchBox.style.width = `${home.size.w + NOTCH_CHROME.w}px`;
+    notchBox.style.width = `${home.size.w + notchChrome.w}px`;
     for (const handle of handles.values()) handle.open?.();
   }
 
@@ -1041,15 +1049,18 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
 
   function applyBarSettings() {
     showCpuSegment(current().segments.cpu);
-    clockMinute = -1;
-    tick();
+    tick({ force: true });
     reportInteractiveRects();
   }
   onChange(applyBarSettings);
 
+  function resetNativeAfterReload() {
+    releaseKeyboard();
+    void syncWindowHeight();
+  }
+
   // ---- init ---------------------------------------------------------------
-  releaseKeyboard();
-  void syncWindowHeight();
+  resetNativeAfterReload();
   applyBarSettings();
   reportInteractiveRects();
   setTimeout(reportInteractiveRects, LAYOUT.settleDelay);
