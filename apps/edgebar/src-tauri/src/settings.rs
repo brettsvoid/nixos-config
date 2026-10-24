@@ -997,7 +997,10 @@ mod tests {
         assert_eq!(dir.user_file(), json!({"oled": true}));
         dir.write(LEGACY_APPEARANCE_FILE, "light");
         assert_eq!(import_legacy_appearance(&dir.0), Ok(()));
-        assert_eq!(dir.user_file(), json!({"oled": true, "appearance": "light"}));
+        assert_eq!(
+            dir.user_file(),
+            json!({"oled": true, "appearance": "light"})
+        );
     }
 
     #[test]

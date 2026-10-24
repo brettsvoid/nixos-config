@@ -682,9 +682,13 @@ async fn pick_colour(initial: String) -> Option<String> {
 /// three.
 #[tauri::command]
 async fn set_appearance(app: tauri::AppHandle, mode: String) -> Result<(), String> {
-    settings::set_setting(app, "appearance".to_string(), serde_json::Value::String(mode))
-        .await
-        .map(drop)
+    settings::set_setting(
+        app,
+        "appearance".to_string(),
+        serde_json::Value::String(mode),
+    )
+    .await
+    .map(drop)
 }
 
 #[derive(Clone, Serialize)]
