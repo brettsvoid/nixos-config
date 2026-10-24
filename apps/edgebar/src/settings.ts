@@ -15,7 +15,7 @@ function apply(next: SettingsSnapshot): void {
   for (const fn of listeners) fn(settings);
 }
 
-export const ready: Promise<void> = (async () => {
+void (async () => {
   await on("settings", (next) => {
     heard = true;
     apply(next);
@@ -28,7 +28,7 @@ export function current(): Settings {
   return snapshot.effective as Settings;
 }
 
-export function isSet(key: string): boolean {
+export function isOverridden(key: string): boolean {
   let node: unknown = snapshot.user;
   for (const part of key.split(".")) {
     if (typeof node !== "object" || node === null) return false;

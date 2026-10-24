@@ -102,7 +102,7 @@ async function flip(s: ToggleState): Promise<ToggleState | null> {
   }
 }
 
-export interface Note {
+interface Note {
   show(anchor: HTMLElement, text: string, pane: SettingsPane | null): void;
   hide(): void;
 }

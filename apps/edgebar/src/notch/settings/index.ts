@@ -58,7 +58,6 @@ function schemeRow(): Part {
   box.append(select);
   box.insertAdjacentHTML("beforeend", `<span class="icon">${ICON.chevron}</span>`);
   const f = frame("Scheme", "How matugen turns the wallpaper into colours.", box, null);
-  f.sync();
   const show = (cfg: Config) => {
     if (cfg.scheme) select.value = cfg.scheme;
   };
@@ -106,7 +105,6 @@ function aboutPart(): Part {
   const box = el("div", "st-section");
   const versionText = el("span", "st-value");
   const version = frame("Version", "", versionText, null);
-  version.sync();
   const versionCard = el("div", "st-card");
   versionCard.append(version.el);
   const card = el("div", "st-card");
@@ -127,7 +125,6 @@ function aboutPart(): Part {
       ...files.layers.map((layer) => {
         const path = el("span", "st-path st-selectable", layer.path);
         const row = frame(layer.name, layer.detail, path, null);
-        row.sync();
         row.el.classList.add("st-layer");
         return row.el;
       }),

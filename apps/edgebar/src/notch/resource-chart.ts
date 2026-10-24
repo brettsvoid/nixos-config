@@ -122,7 +122,7 @@ export const resourceChart: Widget = (root) => {
     const y = (v: number) => bottom - v * (bottom - top);
 
     ctx.lineWidth = 1 / dpr;
-    ctx.strokeStyle = getComputedStyle(root).getPropertyValue("--rc-grid").trim() || "rgba(128, 128, 128, 0.3)";
+    ctx.strokeStyle = getComputedStyle(root).getPropertyValue("--rc-grid").trim();
     for (const f of GRID) {
       const gy = (Math.round(y(f) * dpr) + 0.5) / dpr;
       ctx.beginPath();

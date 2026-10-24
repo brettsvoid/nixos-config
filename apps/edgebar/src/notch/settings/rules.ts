@@ -1,5 +1,5 @@
 import { lucide } from "../../icons";
-import { isSet, reset, set, type Settings } from "../../settings";
+import { isOverridden, reset, set, type Settings } from "../../settings";
 import { button, el, field, segmented, type Option, type Part } from "./rows";
 
 type Rule =
@@ -136,7 +136,7 @@ function ruleRow(ws: string): RuleRow {
         run.show(rule.run);
         every.show(rule.everyMs ? String(rule.everyMs / 1000) : "");
       }
-      remove.hidden = !isSet(keyOf(ws));
+      remove.hidden = !isOverridden(keyOf(ws));
     },
   };
 }

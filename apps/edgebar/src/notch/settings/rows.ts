@@ -1,8 +1,8 @@
 import { lucide } from "../../icons";
 import { keyboardField } from "../../keyboard";
-import { current, isSet, reset, set, type Settings, type SettingValue } from "../../settings";
+import { current, isOverridden, reset, set, type Settings, type SettingValue } from "../../settings";
 
-export const UNDO = lucide('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>');
+const UNDO = lucide('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>');
 
 export interface Part {
   el: HTMLElement;
@@ -18,7 +18,7 @@ type KeysTo<T, V, P extends string = ""> = {
       ? KeysTo<T[K], V, `${P}${K}.`>
       : never;
 }[keyof T & string];
-export type KeyOf<V> = KeysTo<Settings, V>;
+type KeyOf<V> = KeysTo<Settings, V>;
 
 export function valueAt<V>(s: Settings, key: KeyOf<V>): V {
   let node: unknown = s;
@@ -79,7 +79,7 @@ export function frame(label: string, note: string, control: HTMLElement, key: st
     why: showWhy,
     commit,
     sync: () => {
-      undo.classList.toggle("shown", key !== null && isSet(key));
+      undo.classList.toggle("shown", key !== null && isOverridden(key));
     },
   };
 }
@@ -103,15 +103,14 @@ export function switchRow(key: KeyOf<boolean>, label: string, note = ""): Part {
 export interface Option {
   value: string;
   label: string;
-  icon?: string;
 }
 
 export function segmented(options: Option[], pick: (value: string) => void) {
   const box = el("div", "st-seg");
   box.setAttribute("role", "group");
   const pills = options.map((o) => {
-    const b = button("st-pill", o.icon ? `<span class="icon">${o.icon}</span>` : "", o.icon ? o.label : "");
-    if (!o.icon) b.textContent = o.label;
+    const b = button("st-pill", "");
+    b.textContent = o.label;
     b.dataset.value = o.value;
     b.addEventListener("click", () => pick(o.value));
     box.append(b);
@@ -142,7 +141,7 @@ export function choiceRow(key: KeyOf<string>, label: string, options: Option[], 
   };
 }
 
-export interface Range {
+interface Range {
   min: number;
   max: number;
   step: number;
@@ -183,7 +182,7 @@ export function sliderRow(key: KeyOf<number>, label: string, range: Range, note 
   };
 }
 
-export interface Field {
+interface Field {
   el: HTMLElement;
   input: HTMLInputElement;
   show(value: string): void;
@@ -268,7 +267,6 @@ export function infoRow(label: string, value: (s: Settings) => string, note = ""
     el: f.el,
     update(s) {
       shown.textContent = value(s);
-      f.sync();
     },
   };
 }
