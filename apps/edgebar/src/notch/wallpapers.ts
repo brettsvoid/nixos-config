@@ -89,7 +89,7 @@ export const wallpapersView: NotchView = {
       });
     }
 
-    // Ink: the colour drawn on the pills. Auto is Rust's contrast-checked pick;
+    // Ink: the colour drawn on the surface. Auto is Rust's contrast-checked pick;
     // the swatch opens the system colour picker and pins an ink for the current
     // light/dark scheme. Both report back through the "theme" event.
     function renderInk(info: InkInfo, colour: string) {
@@ -102,11 +102,11 @@ export const wallpapersView: NotchView = {
       inkAuto.title = pinned
         ? "Back to auto (contrast-checked)"
         : info.source === "contrast"
-          ? `Auto: ${colour}, ${ratio(info.ratio)} on the pill ` +
+          ? `Auto: ${colour}, ${ratio(info.ratio)} on the surface ` +
             `(the scheme's ${info.configured} was only ${ratio(info.configuredRatio)})`
-          : `Auto: ${colour}, ${ratio(info.ratio)} on the pill`;
+          : `Auto: ${colour}, ${ratio(info.ratio)} on the surface`;
       inkCustom.title = pinned
-        ? `Custom ${info.mode} ink: ${colour}, ${ratio(info.ratio)} on the pill`
+        ? `Custom ${info.mode} ink: ${colour}, ${ratio(info.ratio)} on the surface`
         : `Pick a ${info.mode} ink…`;
     }
     inkAuto.addEventListener("click", (e) => {
@@ -157,7 +157,7 @@ export const wallpapersView: NotchView = {
     function showConfig(cfg: Config) {
       schemeSelect.value = cfg.scheme;
       setActiveMode(cfg.appearance);
-      renderInk(cfg.ink, cfg.colors.base);
+      renderInk(cfg.ink, cfg.colors.text);
     }
 
     async function load() {
@@ -185,7 +185,7 @@ export const wallpapersView: NotchView = {
     // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
     on("theme", (theme) => {
       setActiveMode(theme.appearance);
-      renderInk(theme.ink, theme.colors.base);
+      renderInk(theme.ink, theme.colors.text);
       if (theme.scheme) schemeSelect.value = theme.scheme;
     });
 

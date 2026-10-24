@@ -12,36 +12,43 @@ export interface Workspace {
   icon: string; // PNG data URL, or "" when the workspace is empty
 }
 
+// The colour roles, resolved to hex for the active scheme (Colors in lib.rs).
+export interface Colors {
+  surface: string; // the band, the frame, the notch and every drawer
+  text: string; // ink on the surface
+  subtext: string; // dim ink on the surface
+  accent: string; // every active or selected state
+  batteryCharging: string;
+  batteryLow: string;
+  vpn: string;
+  cpuSys: string;
+  cpuUser: string;
+}
+
+// The frame's shape in logical px (Geometry in lib.rs).
+export interface Geometry {
+  barHeight: number; // the band, which is also the frame's top edge
+  frameThickness: number; // the frame's sides and bottom
+  frameRadius: number; // corners of the hole inside the frame
+  windowHeight: number; // the bar window while no drawer is open
+}
+
 export interface Config {
-  colors: Record<string, string>;
-  geometry: {
-    innerRadius: number;
-    lineThickness: number;
-    pillHeight: number;
-    pillRadius: number;
-    concave: number;
-    windowHeight: number;
-  };
+  colors: Colors;
+  geometry: Geometry;
   appearance: string; // "light" | "dark" | "auto"
   scheme: string; // active matugen scheme (e.g. "scheme-tonal-spot")
   ink: InkInfo;
   notchIdle: string; // "handle" | "clock" | literal text
 }
 
-// How the on-pill ink (colors.base) was chosen; see ThemeState::resolve in lib.rs.
+// How the ink (colors.text) was chosen; see ThemeState::resolve in lib.rs.
 export interface InkInfo {
   source: "config" | "contrast" | "override";
-  ratio: number; // contrast of the ink in effect against the pill
+  ratio: number; // contrast of the ink in effect against the surface
   configured: string; // the role map's ink, before any correction
   configuredRatio: number;
   mode: "light" | "dark"; // the scheme it belongs to; an override edits this one
-}
-
-export interface ThemePayload {
-  colors: Record<string, string>;
-  appearance: string;
-  scheme: string;
-  ink: InkInfo;
 }
 
 // One line of collapsed-notch content. Rust picks the winner (an OSD flash
@@ -253,7 +260,8 @@ export interface Commands {
 }
 
 export interface Events {
-  theme: ThemePayload;
+  // The whole resolved config, sent again on every re-theme or geometry change.
+  theme: Config;
   notch: NotchItem | null;
   media: MediaState | null;
   workspaces: Workspace[];

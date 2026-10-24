@@ -2,8 +2,8 @@
 # apps/edgebar/src-tauri/config.default.json, which is also the binary's
 # bundled fallback when this file is absent. Edit colours, role maps and
 # geometry there, except geometry.barHeight (from flake.lib.barGeometry,
-# shared with the AeroSpace gaps) and geometry.concave, which are overridden
-# here. The commands the in-app theme view runs are added here too.
+# shared with the AeroSpace gaps), which is overridden here. The commands the
+# in-app theme view runs are added here too.
 #
 # What the user changes in the app is layered over this file by edgebar, in
 # ~/.config/edgebar/settings.json. Home Manager does not manage that file, so
@@ -22,8 +22,6 @@ let
   rendered = defaults // {
     geometry = defaults.geometry // {
       inherit (geom) barHeight;
-      # fillet radius is locked to half the pill height
-      concave = defaults.geometry.pillHeight / 2;
     };
   };
   matugenDir = ./edgebar/matugen;

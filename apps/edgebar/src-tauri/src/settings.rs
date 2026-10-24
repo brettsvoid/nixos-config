@@ -559,37 +559,37 @@ mod tests {
         let mut doc = json!({
             "appearance": "dark",
             "notch": {"workspaces": {"1": {"source": "none"}}},
-            "geometry": {"pillHeight": 40, "lineThickness": 6}
+            "geometry": {"frameRadius": 40, "frameThickness": 6}
         });
         remove_path(&mut doc, &path("notch.workspaces.1"));
-        remove_path(&mut doc, &path("geometry.pillHeight"));
+        remove_path(&mut doc, &path("geometry.frameRadius"));
         assert_eq!(
             doc,
-            json!({"appearance": "dark", "geometry": {"lineThickness": 6}})
+            json!({"appearance": "dark", "geometry": {"frameThickness": 6}})
         );
     }
 
     #[test]
     fn removing_a_missing_key_changes_nothing() {
-        let mut doc = json!({"geometry": {"pillHeight": 40}});
+        let mut doc = json!({"geometry": {"frameRadius": 40}});
         remove_path(&mut doc, &path("geometry.nope"));
         remove_path(&mut doc, &path("notch.idle"));
-        assert_eq!(doc, json!({"geometry": {"pillHeight": 40}}));
+        assert_eq!(doc, json!({"geometry": {"frameRadius": 40}}));
     }
 
     #[test]
     fn a_type_mismatch_is_rejected() {
         let defaults = bundled();
         assert_eq!(
-            check(&defaults, &path("geometry.pillHeight"), &json!("tall")),
-            Err("`geometry.pillHeight` takes a number, not a string".to_string())
+            check(&defaults, &path("geometry.frameRadius"), &json!("tall")),
+            Err("`geometry.frameRadius` takes a number, not a string".to_string())
         );
         assert_eq!(
-            check(&defaults, &path("geometry"), &json!({"pillHeight": true})),
-            Err("`geometry.pillHeight` takes a number, not a boolean".to_string())
+            check(&defaults, &path("geometry"), &json!({"frameRadius": true})),
+            Err("`geometry.frameRadius` takes a number, not a boolean".to_string())
         );
         assert_eq!(
-            check(&defaults, &path("geometry.pillHeight"), &json!(40)),
+            check(&defaults, &path("geometry.frameRadius"), &json!(40)),
             Ok(())
         );
     }
@@ -659,14 +659,14 @@ mod tests {
         let dir = Scratch::new("layers");
         dir.write(
             NIX_FILE,
-            r#"{"geometry": {"pillHeight": 40, "barHeight": 70}, "themeCommand": "gen"}"#,
+            r#"{"geometry": {"frameRadius": 40, "barHeight": 70}, "themeCommand": "gen"}"#,
         );
         dir.write(
             USER_FILE,
             r#"{
                 "appearance": "purple",
                 "bogus": 1,
-                "geometry": {"pillHeight": "tall", "lineThickness": 6},
+                "geometry": {"frameRadius": "tall", "frameThickness": 6},
                 "notch": {"transientMs": 900, "workspaces": {"2": {"source": "focusedWindow"}}}
             }"#,
         );
@@ -674,24 +674,24 @@ mod tests {
         assert_eq!(
             loaded.snapshot.user,
             json!({
-                "geometry": {"lineThickness": 6},
+                "geometry": {"frameThickness": 6},
                 "notch": {"transientMs": 900, "workspaces": {"2": {"source": "focusedWindow"}}}
             })
         );
         assert_eq!(
-            loaded.snapshot.effective["geometry"]["pillHeight"],
+            loaded.snapshot.effective["geometry"]["frameRadius"],
             json!(40)
         );
         assert_eq!(
-            loaded.snapshot.effective["geometry"]["lineThickness"],
+            loaded.snapshot.effective["geometry"]["frameThickness"],
             json!(6)
         );
         assert_eq!(
-            loaded.snapshot.effective["geometry"]["innerRadius"],
-            json!(20)
+            loaded.snapshot.effective["geometry"]["windowHeight"],
+            json!(64)
         );
         assert_eq!(loaded.snapshot.effective["themeCommand"], json!("gen"));
-        assert_eq!(loaded.config.geometry.line_thickness, 6.0);
+        assert_eq!(loaded.config.geometry.frame_thickness, 6.0);
         assert_eq!(loaded.config.notch.transient_ms, Some(900));
         assert_eq!(loaded.config.theme_command.as_deref(), Some("gen"));
         assert_eq!(
@@ -699,7 +699,7 @@ mod tests {
             Some(
                 "settings.json: `appearance`: unknown variant `purple`, expected one of `light`, `dark`, `auto`\n\
                  settings.json: `bogus` is not a setting\n\
-                 settings.json: `geometry.pillHeight` takes a number, not a string"
+                 settings.json: `geometry.frameRadius` takes a number, not a string"
             )
         );
     }
@@ -707,15 +707,15 @@ mod tests {
     #[test]
     fn an_unparseable_file_is_ignored_whole_and_reported() {
         let dir = Scratch::new("unparseable");
-        dir.write(USER_FILE, "{\"geometry\": {\"pillHeight\": 40,");
+        dir.write(USER_FILE, "{\"geometry\": {\"frameRadius\": 40,");
         let loaded = load(Some(&dir.0));
         assert_eq!(loaded.snapshot.user, json!({}));
         assert_eq!(loaded.snapshot.effective, bundled());
         assert_eq!(
             loaded.snapshot.error.as_deref(),
-            Some("settings.json is not valid JSON: EOF while parsing a value at line 1 column 31; it is ignored")
+            Some("settings.json is not valid JSON: EOF while parsing a value at line 1 column 32; it is ignored")
         );
-        assert_eq!(dir.read(USER_FILE), "{\"geometry\": {\"pillHeight\": 40,");
+        assert_eq!(dir.read(USER_FILE), "{\"geometry\": {\"frameRadius\": 40,");
     }
 
     #[test]
@@ -732,7 +732,7 @@ mod tests {
     #[test]
     fn a_config_json_that_no_longer_fits_is_ignored() {
         let dir = Scratch::new("badnix");
-        dir.write(NIX_FILE, r#"{"geometry": {"pillHeight": "tall"}}"#);
+        dir.write(NIX_FILE, r#"{"geometry": {"frameRadius": "tall"}}"#);
         let loaded = load(Some(&dir.0));
         assert_eq!(loaded.snapshot.effective, bundled());
         assert_eq!(loaded.snapshot.error, None);
@@ -742,18 +742,18 @@ mod tests {
     fn set_writes_the_file_and_reset_removes_the_override() {
         let dir = Scratch::new("roundtrip");
         assert_eq!(
-            write_override(&dir.0, "geometry.lineThickness", json!(6)),
+            write_override(&dir.0, "geometry.frameThickness", json!(6)),
             Ok(true)
         );
-        assert_eq!(dir.user_file(), json!({"geometry": {"lineThickness": 6}}));
-        assert_eq!(load(Some(&dir.0)).config.geometry.line_thickness, 6.0);
+        assert_eq!(dir.user_file(), json!({"geometry": {"frameThickness": 6}}));
+        assert_eq!(load(Some(&dir.0)).config.geometry.frame_thickness, 6.0);
 
         assert_eq!(
-            write_override(&dir.0, "geometry.lineThickness", Value::Null),
+            write_override(&dir.0, "geometry.frameThickness", Value::Null),
             Ok(true)
         );
         assert_eq!(dir.user_file(), json!({}));
-        assert_eq!(load(Some(&dir.0)).config.geometry.line_thickness, 4.0);
+        assert_eq!(load(Some(&dir.0)).config.geometry.frame_thickness, 8.0);
         assert!(!dir.0.join("settings.json.tmp").exists());
     }
 
@@ -771,7 +771,7 @@ mod tests {
         );
         assert_eq!(dir.read(USER_FILE), first);
         assert_eq!(
-            write_override(&dir.0, "geometry.pillHeight", Value::Null),
+            write_override(&dir.0, "geometry.frameRadius", Value::Null),
             Ok(false)
         );
     }
@@ -781,9 +781,9 @@ mod tests {
         let dir = Scratch::new("rejects");
         for (key, value, why) in [
             (
-                "geometry.pillHeight",
+                "geometry.frameRadius",
                 json!("tall"),
-                "`geometry.pillHeight` takes a number, not a string",
+                "`geometry.frameRadius` takes a number, not a string",
             ),
             (
                 "geometry.nope",
@@ -816,7 +816,7 @@ mod tests {
         let dir = Scratch::new("refuses");
         dir.write(USER_FILE, "{oops");
         assert_eq!(
-            write_override(&dir.0, "geometry.lineThickness", json!(6)),
+            write_override(&dir.0, "geometry.frameThickness", json!(6)),
             Err("settings.json is not valid JSON: key must be a string at line 1 column 2; it was left as it is, fix or delete it first".to_string())
         );
         assert_eq!(dir.read(USER_FILE), "{oops");
@@ -827,20 +827,20 @@ mod tests {
         let dir = Scratch::new("keeps");
         dir.write(USER_FILE, r#"{"bogus": 1}"#);
         assert_eq!(
-            write_override(&dir.0, "geometry.lineThickness", json!(6)),
+            write_override(&dir.0, "geometry.frameThickness", json!(6)),
             Ok(true)
         );
         assert_eq!(
             dir.user_file(),
-            json!({"bogus": 1, "geometry": {"lineThickness": 6}})
+            json!({"bogus": 1, "geometry": {"frameThickness": 6}})
         );
         assert_eq!(write_override(&dir.0, "bogus", Value::Null), Ok(true));
-        assert_eq!(dir.user_file(), json!({"geometry": {"lineThickness": 6}}));
+        assert_eq!(dir.user_file(), json!({"geometry": {"frameThickness": 6}}));
     }
 
     #[test]
     fn changes_names_the_subsystems_that_differ() {
-        let base = config_with("geometry.pillHeight", json!(32));
+        let base = config_with("geometry.frameRadius", json!(16));
         assert_eq!(changes(&base, &base), Changes::default());
         assert_eq!(
             changes(&base, &config_with("notch.idle", json!("clock"))),
@@ -850,7 +850,7 @@ mod tests {
             }
         );
         assert_eq!(
-            changes(&base, &config_with("geometry.pillHeight", json!(40))),
+            changes(&base, &config_with("geometry.frameRadius", json!(20))),
             Changes {
                 geometry: true,
                 ..Changes::default()

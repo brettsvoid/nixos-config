@@ -3,6 +3,7 @@ import { animate, stagger } from "motion";
 import {
   call,
   on,
+  type Colors,
   type Config,
   type CpuSample,
   type CpuStat,
@@ -63,7 +64,7 @@ const WAVE = {
   rampPx: 8, // px of played track over which the wave swells to full amplitude
   fadeInPx: 3, // px over which it fades up from nothing — see the round-cap note
 } as const;
-const FALLBACK = { pillHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
+const FALLBACK = { barHeight: 32, windowHeight: 64 } as const; // if get_config fails; matches config.default.json
 // Interactive-rect sentinel: the whole window is hit-testable while a panel is open.
 const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 
@@ -72,20 +73,16 @@ const RECT_WHOLE_WINDOW: number[] = [0, 0, 1e5, 1e5];
 call("get_config")
   .then((cfg) => {
     applyConfig(cfg);
-    initBar(cfg.geometry.pillHeight, cfg.geometry.windowHeight, cfg.notchIdle);
+    initBar(cfg.geometry.barHeight, cfg.geometry.windowHeight, cfg.notchIdle);
   })
-  .catch(() => initBar(FALLBACK.pillHeight, FALLBACK.windowHeight, "handle"));
+  .catch(() => initBar(FALLBACK.barHeight, FALLBACK.windowHeight, "handle"));
 
-// Colour vars only; re-applied live on theme changes.
-function applyColors(c: Record<string, string>) {
+function applyColors(c: Colors) {
   const s = document.documentElement.style;
-  s.setProperty("--base", c.base);
-  s.setProperty("--pill-bg", c.pillBg);
-  s.setProperty("--text", c.text);
-  s.setProperty("--subtext", c.subtext);
-  s.setProperty("--accent", c.accent);
-  s.setProperty("--occupied", c.occupied);
-  s.setProperty("--empty", c.empty);
+  s.setProperty("--surface", c.surface);
+  s.setProperty("--on-surface", c.text);
+  s.setProperty("--on-surface-variant", c.subtext);
+  s.setProperty("--primary", c.accent);
   s.setProperty("--battery-charging", c.batteryCharging);
   s.setProperty("--battery-low", c.batteryLow);
   s.setProperty("--vpn", c.vpn);
@@ -93,15 +90,13 @@ function applyColors(c: Record<string, string>) {
   s.setProperty("--cpu-user", c.cpuUser);
 }
 
+// Re-applied on every `theme` event, which a settings change to the geometry
+// sends too (the native frame rebuilds at the same time).
 function applyConfig(cfg: Config) {
   const s = document.documentElement.style;
-  const g = cfg.geometry;
   applyColors(cfg.colors);
-  s.setProperty("--bezel-line-thickness", `${g.lineThickness}px`);
-  s.setProperty("--pill-h", `${g.pillHeight}px`);
-  s.setProperty("--pill-radius", `${g.pillRadius}px`);
-  s.setProperty("--concave", `${g.concave}px`);
-  s.setProperty("--window-h", `${g.windowHeight}px`);
+  s.setProperty("--bar-h", `${cfg.geometry.barHeight}px`);
+  s.setProperty("--frame-t", `${cfg.geometry.frameThickness}px`);
 }
 
 // Coalesces slider drags into fewer IPC calls.
@@ -120,7 +115,7 @@ const PANEL_CHROME = 12 * 2 + 48 + 8;
 // view the old per-view table listed).
 const WINDOW_PAD = 48;
 
-function initBar(pillHeight: number, windowHeight: number, notchIdle: string) {
+function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const pills = [...document.querySelectorAll<HTMLElement>(".pill")];
 
   let shown = false;
@@ -134,7 +129,7 @@ function initBar(pillHeight: number, windowHeight: number, notchIdle: string) {
   // tall while any panel is open and back to base once all are closed. Base is
   // geometry.windowHeight, the size lib.rs creates the window at.
   const WINDOW_BASE_H = windowHeight;
-  const COLLAPSED_H = pillHeight;
+  const COLLAPSED_H = barHeight;
   const openPanels = new Set<string>();
   // Bar-window height while a panel is open: the popup height by default,
   // raised by the notch's views (showView) and reset when the notch closes.
@@ -1191,7 +1186,7 @@ function initBar(pillHeight: number, windowHeight: number, notchIdle: string) {
 
   // Live theme pushes (day/night flip, wallpaper or scheme change from anywhere).
   on("theme", (theme) => {
-    applyColors(theme.colors);
+    applyConfig(theme);
     // Canvas pixels don't follow CSS vars, so repaint them by hand.
     drawCpuGraph();
     paintWave();

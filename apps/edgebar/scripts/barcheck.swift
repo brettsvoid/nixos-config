@@ -1,6 +1,6 @@
 // Multi-monitor check against a running edgebar: every NSScreen must have a
-// bar window (level 5) spanning its top edge and a frame window (level 6)
-// matching its bounds. Exits 0 on PASS. NSWindow layout has no headless test
+// bar window (level 5) spanning its top edge and a frame window (level 4,
+// under the bar) matching its bounds. Exits 0 on PASS. NSWindow layout has no headless test
 // seam, so this live check is the regression test for per-display geometry.
 //
 //   DEVELOPER_DIR=/Library/Developer/CommandLineTools \
@@ -45,7 +45,7 @@ for s in NSScreen.screens {
 
     let bar = wins.first(where: { $0.layer == 5 && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
         && abs($0.w - w) < eps && abs($0.h - barH) < eps })
-    let frame = wins.first(where: { $0.layer == 6 && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
+    let frame = wins.first(where: { $0.layer == 4 && abs($0.x - x) < eps && abs($0.y - cgTop) < eps
         && abs($0.w - w) < eps && abs($0.h - h) < eps })
     let barOK = bar != nil, frameOK = frame != nil
     if !barOK || !frameOK { ok = false }
@@ -53,7 +53,7 @@ for s in NSScreen.screens {
         + "bar=\(barOK ? "OK" : "MISSING") frame=\(frameOK ? "OK" : "MISSING")")
 }
 let bars = wins.filter { $0.layer == 5 }.count
-let frames = wins.filter { $0.layer == 6 }.count
+let frames = wins.filter { $0.layer == 4 }.count
 print("totals: \(bars) bar / \(frames) frame windows for \(NSScreen.screens.count) screens")
 if bars != NSScreen.screens.count || frames != NSScreen.screens.count { ok = false }
 print(ok ? "PASS" : "FAIL")

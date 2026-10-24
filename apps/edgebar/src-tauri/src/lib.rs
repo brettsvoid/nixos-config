@@ -1,9 +1,11 @@
-// edgebar: an ambxst-style top bar for macOS.
+// edgebar: a top bar for macOS in the look of the brett-desktop shell.
 //
-// Each display gets two windows: a native frame (the bezel, permanently
-// click-through; see `create_native_frame`) and a transparent WebView bar (the
-// pills). The bar is click-through except over the rects its WebView reports,
-// switched by NSEvent cursor monitors (see "click-through bar window" below).
+// Each display gets two windows: a native frame (one surface-coloured shape
+// round the screen, permanently click-through; see `create_native_frame`) and,
+// above it, a transparent WebView bar (the band along the top, and the drawers
+// that grow out of it). The bar is click-through except over the rects its
+// WebView reports, switched by NSEvent cursor monitors (see "click-through bar
+// window" below).
 // Don't toggle `ignore_cursor_events` from a polling loop instead: Tauri's
 // getters block on the main event loop, which stops servicing them while the
 // cursor is tracked over a window, so the loop deadlocks.
@@ -55,10 +57,9 @@ enum Scheme {
     Dark,
 }
 
-/// Per-scheme colour-role maps. Catppuccin inverts its neutral ramp between
-/// flavours, so day and night need distinct mappings (e.g. the on-pill ink is
-/// `base` at night but `text` by day). Each value is a palette key or a
-/// literal `#hex`.
+/// Per-scheme colour-role maps, so day and night can map a role differently.
+/// Each value is a palette key, a literal `#hex`, or fallbacks (`a|b`, see
+/// `resolve_colors`).
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 struct Themes {
     dark: Colors,
@@ -128,7 +129,7 @@ struct ResolvedConfig {
     geometry: Geometry,
     appearance: Appearance,
     scheme: String,
-    /// How `colors.base` (the on-pill ink) was chosen.
+    /// How `colors.text` (the ink on the surface) was chosen.
     ink: InkInfo,
     /// What the notch shows when no provider has anything to say. Rendered
     /// entirely in the WebView (a clock ticks, and that shouldn't cost an event
@@ -136,42 +137,43 @@ struct ResolvedConfig {
     notch_idle: String,
 }
 
-/// Resolve a role map against a palette: palette name → hex (literal `#hex`
-/// passes through; an unknown name passes through unchanged).
+/// Resolve a role map against a palette: palette name → hex. A literal `#hex`
+/// passes through. `a|b` names fallbacks, and the first the palette has wins,
+/// so a role can ask for a key that older palettes lack. A value with no match
+/// passes through unchanged.
 fn resolve_colors(
     colors: &Colors,
     palette: &std::collections::HashMap<String, String>,
 ) -> Colors {
     let r = |v: &str| -> String {
-        if v.starts_with('#') {
-            v.to_string()
-        } else {
-            palette.get(v).cloned().unwrap_or_else(|| v.to_string())
-        }
+        v.split('|')
+            .find_map(|key| {
+                if key.starts_with('#') {
+                    Some(key.to_string())
+                } else {
+                    palette.get(key).cloned()
+                }
+            })
+            .unwrap_or_else(|| v.to_string())
     };
     Colors {
-        base: r(&colors.base),
-        pill_bg: r(&colors.pill_bg),
+        surface: r(&colors.surface),
         text: r(&colors.text),
         subtext: r(&colors.subtext),
         accent: r(&colors.accent),
-        occupied: r(&colors.occupied),
-        empty: r(&colors.empty),
         battery_charging: r(&colors.battery_charging),
         battery_low: r(&colors.battery_low),
         vpn: r(&colors.vpn),
         cpu_sys: r(&colors.cpu_sys),
         cpu_user: r(&colors.cpu_user),
-        frame_line: r(&colors.frame_line),
-        frame_corner: r(&colors.frame_corner),
     }
 }
 
-/// WCAG AA for body text. The pills' 13px labels are body text, so this is the
-/// floor the on-pill ink has to clear.
+/// WCAG AA for body text. The bar's 13px labels are body text, so this is the
+/// floor the ink on the surface has to clear.
 const MIN_INK_CONTRAST: f64 = 4.5;
 
-/// WCAG's floor for graphical indicators (1.4.11), which the accent rings are.
+/// WCAG's floor for graphical indicators (1.4.11), which the accent marks are.
 const MIN_ACCENT_CONTRAST: f64 = 3.0;
 
 /// WCAG 2 relative luminance of an sRGB `#hex` colour (alpha ignored).
@@ -193,9 +195,10 @@ fn contrast(a: &str, b: &str) -> f64 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
-/// Explicit on-pill ink per scheme, set from the theme view. Wins over both the
-/// role map and the contrast check. Per scheme because an ink picked for a dark
-/// pill would vanish on the light one the moment the appearance flips.
+/// Explicit ink (the `text` role) per scheme, set from the theme view. Wins over
+/// both the role map and the contrast check. Per scheme because an ink picked
+/// for a dark surface would vanish on the light one the moment the appearance
+/// flips.
 #[derive(Clone, Default, Deserialize, Serialize)]
 struct InkOverride {
     #[serde(default)]
@@ -220,14 +223,14 @@ impl InkOverride {
     }
 }
 
-/// How the on-pill ink in effect was arrived at, for the theme view's control.
+/// How the ink in effect was arrived at, for the theme view's control.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InkInfo {
     /// "config" (the role map's ink cleared the floor), "contrast" (the check
     /// replaced it) or "override" (set explicitly from the theme view).
     source: &'static str,
-    /// Contrast of the ink in effect against the pill.
+    /// Contrast of the ink in effect against the surface.
     ratio: f64,
     /// The role map's ink and its contrast, before any correction.
     configured: String,
@@ -236,17 +239,17 @@ struct InkInfo {
     mode: &'static str,
 }
 
-/// A replacement for `configured` that reads on `pill`, or None if it already
+/// A replacement for `configured` that reads on `ground`, or None if it already
 /// clears `floor`. Prefers the palette colour with the most contrast, which
-/// keeps the wallpaper's tint; if even that falls short (a mid-tone pill),
+/// keeps the wallpaper's tint; if even that falls short (a mid-tone surface),
 /// the best of it, `configured`, black and white.
 fn readable_on(
-    pill: &str,
+    ground: &str,
     configured: &str,
     palette: &std::collections::HashMap<String, String>,
     floor: f64,
 ) -> Option<String> {
-    if contrast(configured, pill) >= floor {
+    if contrast(configured, ground) >= floor {
         return None;
     }
     // Sorted so a tie between two distinct colours resolves the same way every
@@ -260,12 +263,12 @@ fn readable_on(
     let best_of = |c: &[&str]| -> String {
         c.iter()
             .copied()
-            .max_by(|a, b| contrast(a, pill).total_cmp(&contrast(b, pill)))
+            .max_by(|a, b| contrast(a, ground).total_cmp(&contrast(b, ground)))
             .unwrap_or(configured)
             .to_string()
     };
     let best = best_of(&candidates);
-    if contrast(&best, pill) >= floor {
+    if contrast(&best, ground) >= floor {
         return Some(best);
     }
     Some(best_of(&[configured, best.as_str(), "#000000", "#ffffff"]))
@@ -278,16 +281,16 @@ fn normalise_hex(s: &str) -> Option<String> {
         .then(|| format!("#{}", h.to_ascii_lowercase()))
 }
 
+/// The colour roles. The bar band, the frame, the notch and every drawer are
+/// one `surface`; `text` and `subtext` are drawn on it and `accent` marks every
+/// active or selected state. Ink on an accent fill is the surface again.
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Colors {
-    base: String,
-    pill_bg: String,
+    surface: String,
     text: String,
     subtext: String,
     accent: String,
-    occupied: String,
-    empty: String,
     /// Battery-state accents. Serde defaults keep an older config.json (rendered
     /// before these existed) parsing instead of dropping to the bundled default.
     #[serde(default = "default_battery_charging")]
@@ -301,8 +304,6 @@ struct Colors {
     cpu_sys: String,
     #[serde(default = "default_cpu_user")]
     cpu_user: String,
-    frame_line: String,
-    frame_corner: String,
 }
 
 fn default_battery_charging() -> String {
@@ -321,37 +322,27 @@ fn default_cpu_user() -> String {
     "#1e66f5".to_string()
 }
 
+/// The frame's shape, in logical px. The frame is one shape in the surface
+/// colour: the bar's band along the top, `frameThickness` down the sides and
+/// along the bottom, around a hole with `frameRadius` corners.
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Geometry {
-    inner_radius: f64,
-    line_thickness: f64,
-    pill_height: f64,
-    pill_radius: f64,
-    concave: f64,
-    /// Height (logical px) of the bar window. Taller than the band AeroSpace
-    /// reserves (`barHeight`, used only on the Nix side) so the pills' shadows
-    /// and the corner fillets below the band aren't clipped; the extra height
-    /// is transparent and click-through.
+    /// The band: the frame's top edge and the strip AeroSpace keeps clear (Nix
+    /// sets it from `flake.lib.barGeometry`).
+    bar_height: f64,
+    frame_thickness: f64,
+    frame_radius: f64,
+    /// Height of the bar window while no drawer is open: the band, plus
+    /// transparent click-through room below it.
     #[serde(default = "default_window_height")]
     window_height: f64,
-    /// How far the native frame's top edge is pushed down, in device pixels
-    /// (not points, so it is one row at any backing scale), to clear the top
-    /// row this display doesn't show. See `create_native_frame`; the bar
-    /// window isn't offset (see `sync_bars_to_monitors`).
-    #[serde(default = "default_top_offset_px")]
-    top_offset_px: f64,
 }
 
 /// Fallback for configs rendered before `windowHeight` existed, so they still
 /// parse instead of dropping to the bundled default.
 fn default_window_height() -> f64 {
     64.0
-}
-
-/// Fallback for configs rendered before `topOffsetPx` existed.
-fn default_top_offset_px() -> f64 {
-    1.0
 }
 
 fn load_config() -> Config {
@@ -483,42 +474,42 @@ struct ThemeState {
     wallpaper_command: String,
     /// `notch.idle` from config, passed through to the WebView.
     notch_idle: String,
-    /// The theme view's explicit on-pill ink, per scheme.
+    /// The theme view's explicit ink, per scheme.
     ink: InkOverride,
 }
 
 impl ThemeState {
-    /// Colours for the active scheme, with the on-pill ink settled: the
+    /// Colours for the active scheme, with the ink on the surface settled: the
     /// override if one is set, else the role map's ink after the contrast check.
     fn resolve(&self) -> (Colors, InkInfo) {
         let palette = self.palettes.for_scheme(self.scheme);
         let mut colors = resolve_colors(self.colors.for_scheme(self.scheme), palette);
-        let configured = std::mem::take(&mut colors.base);
+        let configured = std::mem::take(&mut colors.text);
         let (ink, source) = match self.ink.for_scheme(self.scheme) {
             Some(hex) => (hex.to_string(), "override"),
-            None => match readable_on(&colors.pill_bg, &configured, palette, MIN_INK_CONTRAST) {
+            None => match readable_on(&colors.surface, &configured, palette, MIN_INK_CONTRAST) {
                 Some(better) => (better, "contrast"),
                 None => (configured.clone(), "config"),
             },
         };
-        // The accent rings get the same check: matugen's accent often lands on
-        // the pill's own tone (in monochrome light it is the pill colour).
+        // The accent gets the same check: a palette without `primary` falls back
+        // to a key that may be the surface's own tone.
         if let Some(better) =
-            readable_on(&colors.pill_bg, &colors.accent, palette, MIN_ACCENT_CONTRAST)
+            readable_on(&colors.surface, &colors.accent, palette, MIN_ACCENT_CONTRAST)
         {
             colors.accent = better;
         }
         let info = InkInfo {
             source,
-            ratio: contrast(&ink, &colors.pill_bg),
-            configured_ratio: contrast(&configured, &colors.pill_bg),
+            ratio: contrast(&ink, &colors.surface),
+            configured_ratio: contrast(&configured, &colors.surface),
             configured,
             mode: match self.scheme {
                 Scheme::Light => "light",
                 Scheme::Dark => "dark",
             },
         };
-        colors.base = ink;
+        colors.text = ink;
         (colors, info)
     }
 
@@ -568,7 +559,7 @@ fn resolve_scheme(appearance: Appearance) -> Scheme {
 }
 
 /// Switch the active appearance: re-resolve colours for the new scheme, push
-/// them to the WebView and recolour the native frame's layers in place.
+/// them to the WebView and recolour the native frame in place.
 fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     let resolved: ResolvedConfig = {
         let state = app.state::<Mutex<ThemeState>>();
@@ -580,9 +571,8 @@ fn apply_theme(app: &tauri::AppHandle, appearance: Appearance) {
     let _ = app.emit("theme", &resolved);
     #[cfg(target_os = "macos")]
     {
-        let line = resolved.colors.frame_line.clone();
-        let corner = resolved.colors.frame_corner.clone();
-        let _ = app.run_on_main_thread(move || recolor_native_frame(&line, &corner));
+        let surface = resolved.colors.surface.clone();
+        let _ = app.run_on_main_thread(move || recolor_native_frame(&surface));
     }
 }
 
@@ -630,8 +620,8 @@ fn get_config(state: tauri::State<Mutex<ThemeState>>) -> ResolvedConfig {
     state.lock().unwrap().resolved_config()
 }
 
-/// Set (or, with None, clear) the on-pill ink for the active scheme from the
-/// theme view. Persists it and re-themes live.
+/// Set (or, with None, clear) the ink for the active scheme from the theme
+/// view. Persists it and re-themes live.
 #[tauri::command]
 fn set_ink(app: tauri::AppHandle, colour: Option<String>) {
     let ink = colour.as_deref().and_then(normalise_hex);
@@ -849,10 +839,10 @@ fn make_overlay(window: &tauri::WebviewWindow) {
 type RectMap = std::sync::Arc<Mutex<std::collections::HashMap<String, Vec<[f64; 4]>>>>;
 
 // ───────────────────────── click-through bar window ─────────────────
-// The bar window is taller than the bar band (for shadows and fillets) and
-// overlaps the tiled windows' top edge. A transparent window still swallows
-// clicks across its whole rect, and returning nil from a view's hitTest doesn't
-// pass them through; only the window's `ignoresMouseEvents` does. So bars stay
+// The bar window is taller than the bar band (and taller still while a drawer
+// is open) and overlaps the tiled windows' top edge. A transparent window still
+// swallows clicks across its whole rect, and returning nil from a view's hitTest
+// doesn't pass them through; only the window's `ignoresMouseEvents` does. So bars stay
 // click-through except while the cursor is over a rect the WebView reported.
 
 // The bar NSWindows the shared cursor monitors hit-test, keyed by window
@@ -866,10 +856,11 @@ thread_local! {
 }
 
 /// Set one bar's `ignoresMouseEvents` from the cursor position: interactive when
-/// it's over one of the reported rects (the pills, or a full-window rect while a
-/// popup is open), click-through otherwise. `mouseLocation` and the window frame
-/// are screen coords (bottom-left origin); the rects are window-relative CSS px
-/// from the top-left, so we map each rect into screen space to compare.
+/// it's over one of the reported rects (the band's segments, or a full-window
+/// rect while a drawer is open), click-through otherwise. `mouseLocation` and
+/// the window frame are screen coords (bottom-left origin); the rects are
+/// window-relative CSS px from the top-left, so we map each rect into screen
+/// space to compare.
 #[cfg(target_os = "macos")]
 fn sync_ignore_mouse(ns_window: &objc2_app_kit::NSWindow, rects: &[[f64; 4]]) {
     let loc = objc2_app_kit::NSEvent::mouseLocation();
@@ -928,7 +919,7 @@ fn install_cursor_monitors(rects: RectMap) {
 }
 
 /// Register a bar window with the cursor monitors (idempotent). Starts
-/// click-through; the monitors flip it on when the cursor reaches a pill.
+/// click-through; the monitors flip it on when the cursor reaches a segment.
 #[cfg(target_os = "macos")]
 fn track_bar_window(label: &str, window: &tauri::WebviewWindow) {
     use objc2::rc::Retained;
@@ -974,10 +965,10 @@ fn set_interactive_rects(
         .insert(window.label().to_string(), rects);
 }
 
-/// Create one screen's frame as a borderless NSWindow drawn with CAShapeLayers
-/// (no WebView, so no web-content process): a rounded-rect ring hugging the
-/// screen edge in `frameLine`, and the four corners outside it filled with
-/// `frameCorner`. Click-through, all-spaces, stationary. Called once per
+/// Create one screen's frame as a borderless NSWindow drawn with layers (no
+/// WebView, so no web-content process): one opaque shape in the surface colour,
+/// the screen minus the hole inside the frame, over a shadow that falls inward
+/// from the hole's edge. Click-through, all-spaces, stationary. Called once per
 /// NSScreen; the window is kept in FRAME_WINDOWS so a display change can close
 /// and rebuild it.
 #[cfg(target_os = "macos")]
@@ -985,21 +976,17 @@ fn create_native_frame(
     mtm: objc2::MainThreadMarker,
     screen: &objc2_app_kit::NSScreen,
     geometry: &Geometry,
-    frame_line: &str,
-    frame_corner: &str,
+    surface: &str,
 ) {
     use objc2::MainThreadOnly;
     use objc2_app_kit::{
         NSBackingStoreType, NSBezierPath, NSColor, NSWindow, NSWindowCollectionBehavior,
-        NSWindowStyleMask, NSWindingRule,
+        NSWindowStyleMask,
     };
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-    use objc2_quartz_core::{kCAFillRuleEvenOdd, CAShapeLayer};
-
-    let radius = geometry.inner_radius;
-    let line = geometry.line_thickness;
-    let line_rgba = hex_to_rgba(frame_line);
-    let corner_rgba = hex_to_rgba(frame_corner);
+    use objc2_quartz_core::{
+        kCAFillRuleEvenOdd, kCAGradientLayerRadial, CALayer, CAShapeLayer,
+    };
 
     let frame = screen.frame();
 
@@ -1016,8 +1003,9 @@ fn create_native_frame(
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
     // tao puts always-on-top windows (the bar) at kCGFloatingWindowLevelKey (5),
-    // not NSFloatingWindowLevel (3). One above keeps the edge line over the pills.
-    const FRAME_WINDOW_LEVEL: isize = 6;
+    // not NSFloatingWindowLevel (3). One below keeps the bar's band and drawers
+    // over the frame they join.
+    const FRAME_WINDOW_LEVEL: isize = 4;
     window.setLevel(FRAME_WINDOW_LEVEL);
     window.setIgnoresMouseEvents(true);
     // Same collection behaviour as the bar (see make_overlay).
@@ -1040,95 +1028,143 @@ fn create_native_frame(
 
     let w = frame.size.width;
     let h = frame.size.height;
-
-    // Work in whole framebuffer pixels, converting to points (÷ scale) only at
-    // the CALayer/NSBezierPath boundary. In this display's scaled mode the
-    // HiDPI framebuffer is downscaled to the panel, which loses the top row (the
-    // "dead row") and rounds fractional point geometry unpredictably.
-    let scale = screen.backingScaleFactor();
-    let d = |px: f64| px / scale; // framebuffer device px -> points
-    let line_px = (line * scale).round(); // frame line thickness (e.g. 8)
-    let radius_px = (radius * scale).round(); // outer corner radius (e.g. 40)
-    let top_inset_px = geometry.top_offset_px; // dead-row compensation (e.g. 1)
-
-    let line_color = NSColor::colorWithSRGBRed_green_blue_alpha(
-        line_rgba[0], line_rgba[1], line_rgba[2], line_rgba[3],
-    );
-    let corner_color = NSColor::colorWithSRGBRed_green_blue_alpha(
-        corner_rgba[0], corner_rgba[1], corner_rgba[2], corner_rgba[3],
-    );
-
-    // root: clear, non-clipping container spanning the whole screen
     let full = CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(w, h));
     root.setFrame(full);
     root.setBackgroundColor(Some(&NSColor::clearColor().CGColor()));
     root.setMasksToBounds(false);
 
-    // Outer contour: the screen rect with its top edge lowered `top_inset_px` to
-    // clear the dead row (the layer's origin is bottom-left, so shrinking the
-    // height moves only the top).
-    let outer = CGRect::new(
-        CGPoint::new(0.0, 0.0),
-        CGSize::new(w, h - d(top_inset_px)),
+    // Whole device pixels, so the hole's straight edges stay crisp and its top
+    // meets the bar window's band exactly.
+    let scale = screen.backingScaleFactor();
+    let snap = |pt: f64| (pt * scale).round() / scale;
+    let side = snap(geometry.frame_thickness);
+    let top = snap(geometry.bar_height);
+    let radius = snap(geometry.frame_radius);
+    // The layer's origin is bottom-left, so the band's lower edge is at h - top.
+    let hole_rect = CGRect::new(
+        CGPoint::new(side, side),
+        CGSize::new(w - 2.0 * side, h - side - top),
     );
-    // Inner contour (the hole): inset `line_px` from the screen edges, not from
-    // `outer`, so the top line ends up `top_inset_px` thinner but its bottom edge
-    // stays put. The bar's pills flare their fillets into that edge, and as a
-    // separate window placed in logical px they can't follow a one-pixel shift.
-    let inner = CGRect::new(
-        CGPoint::new(d(line_px), d(line_px)),
-        CGSize::new(w - 2.0 * d(line_px), h - 2.0 * d(line_px)),
-    );
+    let hole = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(hole_rect, radius, radius);
 
-    // frame line = outer rounded rect minus inner rounded rect (even-odd ring)
-    let ring = NSBezierPath::bezierPath();
-    ring.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
-    ring.appendBezierPathWithRoundedRect_xRadius_yRadius(
-        inner,
-        d(radius_px - line_px),
-        d(radius_px - line_px),
-    );
-    ring.setWindingRule(NSWindingRule::EvenOdd);
-    let line_layer = CAShapeLayer::new();
-    line_layer.setFrame(full);
-    line_layer.setPath(Some(&ring.CGPath()));
-    line_layer.setFillRule(unsafe { kCAFillRuleEvenOdd });
-    line_layer.setFillColor(Some(&line_color.CGColor()));
-    root.addSublayer(&line_layer);
+    // The shadow over the windows: a strip along each straight edge of the
+    // hole and a quarter ring in each corner, under the frame's fill.
+    let (hw, hh) = (hole_rect.size.width, hole_rect.size.height);
+    let s = FRAME_SHADOW_SIZE;
+    let along = |l: f64| frame_shadow_at(l * s);
+    for (x, y, sw, sh, from, to) in [
+        (side, side + radius, s, hh - 2.0 * radius, (0.0, 0.5), (1.0, 0.5)),
+        (w - side - s, side + radius, s, hh - 2.0 * radius, (1.0, 0.5), (0.0, 0.5)),
+        (side + radius, side, hw - 2.0 * radius, s, (0.5, 0.0), (0.5, 1.0)),
+        (side + radius, h - top - s, hw - 2.0 * radius, s, (0.5, 1.0), (0.5, 0.0)),
+    ] {
+        let strip = shadow_gradient(&along);
+        strip.setFrame(CGRect::new(CGPoint::new(x, y), CGSize::new(sw, sh)));
+        strip.setStartPoint(CGPoint::new(from.0, from.1));
+        strip.setEndPoint(CGPoint::new(to.0, to.1));
+        root.addSublayer(&strip);
+    }
+    if radius > 0.0 {
+        // Location 0 is the corner arc's centre and 1 the arc itself, so a point
+        // at location l is radius × (1 - l) from the frame.
+        let around = |l: f64| frame_shadow_at(radius * (1.0 - l));
+        for (x, y, cx, cy) in [
+            (side, h - top - radius, radius, 0.0),
+            (w - side - radius, h - top - radius, 0.0, 0.0),
+            (side, side, radius, radius),
+            (w - side - radius, side, 0.0, radius),
+        ] {
+            let corner = CALayer::new();
+            corner.setFrame(CGRect::new(CGPoint::new(x, y), CGSize::new(radius, radius)));
+            corner.setMasksToBounds(true);
+            let ring = shadow_gradient(&around);
+            ring.setType(unsafe { kCAGradientLayerRadial });
+            ring.setFrame(CGRect::new(
+                CGPoint::new(cx - radius, cy - radius),
+                CGSize::new(2.0 * radius, 2.0 * radius),
+            ));
+            ring.setStartPoint(CGPoint::new(0.5, 0.5));
+            ring.setEndPoint(CGPoint::new(1.0, 1.0));
+            corner.addSublayer(&ring);
+            root.addSublayer(&corner);
+        }
+    }
 
-    // corner fills = full screen rect minus the outer rounded rect (even-odd)
-    let notch = NSBezierPath::bezierPath();
-    notch.appendBezierPathWithRect(full);
-    notch.appendBezierPathWithRoundedRect_xRadius_yRadius(outer, d(radius_px), d(radius_px));
-    notch.setWindingRule(NSWindingRule::EvenOdd);
-    let corners = CAShapeLayer::new();
-    corners.setFrame(full);
-    corners.setPath(Some(&notch.CGPath()));
-    corners.setFillRule(unsafe { kCAFillRuleEvenOdd });
-    corners.setFillColor(Some(&corner_color.CGColor()));
-    root.addSublayer(&corners);
+    let shape = NSBezierPath::bezierPathWithRect(full);
+    shape.appendBezierPath(&hole);
+    let fill = CAShapeLayer::new();
+    fill.setFrame(full);
+    fill.setPath(Some(&shape.CGPath()));
+    fill.setFillRule(unsafe { kCAFillRuleEvenOdd });
+    fill.setFillColor(Some(&srgb(surface).CGColor()));
+    root.addSublayer(&fill);
 
     window.orderFrontRegardless();
 
-    // Keep the window and both layers: theme changes recolour the layers in
-    // place, and a display change closes the window and rebuilds.
-    FRAME_WINDOWS.with(|cell| {
-        cell.borrow_mut().push(FrameWindow {
-            window,
-            line: line_layer,
-            corners,
-        });
-    });
+    // Keep the window and its fill: theme changes recolour the fill in place,
+    // and a display change closes the window and rebuilds.
+    FRAME_WINDOWS.with(|cell| cell.borrow_mut().push(FrameWindow { window, fill }));
 }
 
-/// One screen's native frame: the NSWindow plus its two fill layers. CALayer
-/// and NSWindow aren't `Send`, so these live in a main-thread `thread_local!`,
-/// not Tauri's managed state.
+/// The frame's shadow over the windows, as the custom shell draws it: this deep,
+/// black at this opacity at the frame's edge, fading out quadratically. Drawn as
+/// gradients rather than a layer shadow: they follow that falloff exactly, and the
+/// dev snapshot shows them as the screen does, which it does not for a layer
+/// shadow's blur. The drawers' CSS shadow (`--shadow-drawer`) matches it.
+#[cfg(target_os = "macos")]
+const FRAME_SHADOW_SIZE: f64 = 12.0;
+#[cfg(target_os = "macos")]
+const FRAME_SHADOW_OPACITY: f64 = 0.3;
+
+/// How dark the frame's shadow is `d` px from the frame.
+#[cfg(target_os = "macos")]
+fn frame_shadow_at(d: f64) -> f64 {
+    let t = (1.0 - d / FRAME_SHADOW_SIZE).max(0.0);
+    FRAME_SHADOW_OPACITY * t * t
+}
+
+/// A gradient of the frame's shadow, black at `darkness(location)` alpha.
+#[cfg(target_os = "macos")]
+fn shadow_gradient(
+    darkness: &dyn Fn(f64) -> f64,
+) -> objc2::rc::Retained<objc2_quartz_core::CAGradientLayer> {
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSArray, NSNumber};
+    // Enough stops that straight lines between them trace the curve.
+    const STOPS: usize = 13;
+    let at = |i: usize| i as f64 / (STOPS - 1) as f64;
+    let colours: Vec<_> = (0..STOPS)
+        .map(|i| {
+            objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, darkness(at(i)))
+                .CGColor()
+        })
+        .collect();
+    // CGColor is toll-free bridged, so the array can hold it as an object.
+    let objects: Vec<&AnyObject> = colours
+        .iter()
+        .map(|c| unsafe { &*(&**c as *const objc2_core_graphics::CGColor).cast::<AnyObject>() })
+        .collect();
+    let locations: Vec<_> = (0..STOPS).map(|i| NSNumber::new_f64(at(i))).collect();
+    let layer = objc2_quartz_core::CAGradientLayer::new();
+    unsafe { layer.setColors(Some(&NSArray::from_slice(&objects))) };
+    layer.setLocations(Some(&NSArray::from_retained_slice(&locations)));
+    layer
+}
+
+/// `#hex` as an sRGB NSColor, the colour space CSS paints the band in.
+#[cfg(target_os = "macos")]
+fn srgb(hex: &str) -> objc2::rc::Retained<objc2_app_kit::NSColor> {
+    let [r, g, b, a] = hex_to_rgba(hex);
+    objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, a)
+}
+
+/// One screen's native frame: the NSWindow plus its fill layer. CALayer and
+/// NSWindow aren't `Send`, so these live in a main-thread `thread_local!`, not
+/// Tauri's managed state.
 #[cfg(target_os = "macos")]
 struct FrameWindow {
     window: objc2::rc::Retained<objc2_app_kit::NSWindow>,
-    line: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
-    corners: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
+    fill: objc2::rc::Retained<objc2_quartz_core::CAShapeLayer>,
 }
 
 #[cfg(target_os = "macos")]
@@ -1148,23 +1184,16 @@ fn remove_native_frames() {
     });
 }
 
-/// Recolour every native frame's line and corner layers. Main thread only;
-/// callers hop via `run_on_main_thread`.
+/// Recolour every native frame. Main thread only; callers hop via
+/// `run_on_main_thread`.
 #[cfg(target_os = "macos")]
-fn recolor_native_frame(line_hex: &str, corner_hex: &str) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::NSColor;
-    if MainThreadMarker::new().is_none() {
+fn recolor_native_frame(surface: &str) {
+    if objc2::MainThreadMarker::new().is_none() {
         return;
     }
-    let l = hex_to_rgba(line_hex);
-    let c = hex_to_rgba(corner_hex);
     FRAME_WINDOWS.with(|cell| {
         for f in cell.borrow().iter() {
-            let lc = NSColor::colorWithSRGBRed_green_blue_alpha(l[0], l[1], l[2], l[3]);
-            let cc = NSColor::colorWithSRGBRed_green_blue_alpha(c[0], c[1], c[2], c[3]);
-            f.line.setFillColor(Some(&lc.CGColor()));
-            f.corners.setFillColor(Some(&cc.CGColor()));
+            f.fill.setFillColor(Some(&srgb(surface).CGColor()));
         }
     });
 }
@@ -2287,9 +2316,6 @@ fn sync_bars_to_monitors(app: &tauri::AppHandle, window_height: f64, rects: &Rec
         let scale = m.scale_factor();
         let pos: LogicalPosition<f64> = m.position().to_logical(scale);
         let size: LogicalSize<f64> = m.size().to_logical(scale);
-        // No `top_offset_px` here: the pills sit a line-thickness below the top
-        // edge, clear of the dead row, and overlap the frame's top line, so
-        // lowering the bar would only open a 1px seam between the windows.
         let _ = bar.set_position(pos);
         let _ = bar.set_size(LogicalSize::new(size.width, window_height));
         let _ = bar.set_always_on_top(true);
@@ -2317,16 +2343,16 @@ fn rebuild_displays(app: &tauri::AppHandle) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    let (geometry, line, corner) = {
+    let (geometry, surface) = {
         let state = app.state::<Mutex<ThemeState>>();
         let ts = state.lock().unwrap();
         let (c, _) = ts.resolve();
-        (ts.geometry.clone(), c.frame_line, c.frame_corner)
+        (ts.geometry.clone(), c.surface)
     };
     remove_native_frames();
     let screens = NSScreen::screens(mtm);
     for screen in screens.iter() {
-        create_native_frame(mtm, &screen, &geometry, &line, &corner);
+        create_native_frame(mtm, &screen, &geometry, &surface);
     }
     let rects = app.state::<AppState>().interactive_rects.clone();
     sync_bars_to_monitors(app, geometry.window_height, &rects);
