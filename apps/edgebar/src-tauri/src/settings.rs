@@ -537,14 +537,19 @@ pub struct Files {
     layers: Vec<Layer>,
 }
 
-/// `~/…` for a path under the home folder.
-fn tilde(path: &Path) -> String {
-    let shown = path.display().to_string();
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() && shown.starts_with(&home) => {
-            format!("~{}", &shown[home.len()..])
-        }
-        _ => shown,
+/// `~/…` for a path under the home folder, else the path as it is.
+pub fn tilde(path: &Path) -> String {
+    match std::env::var_os("HOME") {
+        Some(home) if !home.is_empty() => under_home(path, Path::new(&home)),
+        _ => path.display().to_string(),
+    }
+}
+
+fn under_home(path: &Path, home: &Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rest) if rest.as_os_str().is_empty() => "~".to_string(),
+        Ok(rest) => format!("~/{}", rest.display()),
+        Err(_) => path.display().to_string(),
     }
 }
 
@@ -965,6 +970,21 @@ mod tests {
         );
         assert_eq!(write_override(&dir.0, "bogus", Value::Null), Ok(true));
         assert_eq!(dir.user_file(), json!({"geometry": {"frameThickness": 6}}));
+    }
+
+    #[test]
+    fn a_path_under_home_is_shown_with_a_tilde() {
+        let home = Path::new("/Users/brett");
+        assert_eq!(under_home(Path::new("/Users/brett"), home), "~");
+        assert_eq!(
+            under_home(Path::new("/Users/brett/Pictures/Art"), home),
+            "~/Pictures/Art"
+        );
+        assert_eq!(
+            under_home(Path::new("/Users/brettx/Art"), home),
+            "/Users/brettx/Art"
+        );
+        assert_eq!(under_home(Path::new("/Volumes/Art"), home), "/Volumes/Art");
     }
 
     #[test]

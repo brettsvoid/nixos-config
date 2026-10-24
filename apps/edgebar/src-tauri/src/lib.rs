@@ -1896,16 +1896,7 @@ async fn pick_folder() -> Option<String> {
     .ok()
     .flatten()?;
     let path = path.trim_end_matches('/');
-    if path.is_empty() {
-        return None;
-    }
-    let home = std::env::var("HOME").unwrap_or_default();
-    Some(match path.strip_prefix(home.as_str()) {
-        Some(rest) if !home.is_empty() && (rest.is_empty() || rest.starts_with('/')) => {
-            format!("~{rest}")
-        }
-        _ => path.to_string(),
-    })
+    (!path.is_empty()).then(|| settings::tilde(std::path::Path::new(path)))
 }
 
 /// Set the matugen scheme: re-theme the current wallpaper with it now, and
