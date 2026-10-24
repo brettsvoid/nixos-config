@@ -184,8 +184,7 @@ export const wallpapersView: NotchView = {
           img.src = w.thumb;
           img.alt = w.name;
           b.appendChild(img);
-          b.addEventListener("click", (e) => {
-            e.stopPropagation();
+          b.addEventListener("click", () => {
             setActive(w.path);
             if (current().wallpaper.tint) waitForTint({ until: "pick", path: w.path });
             call("set_wallpaper", { path: w.path });
@@ -249,13 +248,11 @@ export const wallpapersView: NotchView = {
       }
       showSwitches();
     }
-    oledBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    oledBtn.addEventListener("click", () => {
       retint();
       void flip("oled", !current().oled);
     });
-    tintBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    tintBtn.addEventListener("click", () => {
       waitForTint({ until: "pass" });
       void flip("wallpaper.tint", !current().wallpaper.tint);
     });
@@ -270,8 +267,7 @@ export const wallpapersView: NotchView = {
       for (const b of modeButtons) b.classList.toggle("active", b.dataset.mode === m);
     }
     for (const b of modeButtons) {
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
+      b.addEventListener("click", () => {
         const m = b.dataset.mode!;
         setActiveMode(m);
         retint();
@@ -296,12 +292,10 @@ export const wallpapersView: NotchView = {
         ? `Custom ${info.mode} ink: ${colour}, ${ratio(info.ratio)} on the surface`
         : `Pick a ${info.mode} ink…`;
     }
-    inkAuto.addEventListener("click", (e) => {
-      e.stopPropagation();
+    inkAuto.addEventListener("click", () => {
       call("set_ink", { colour: null });
     });
-    inkCustom.addEventListener("click", (e) => {
-      e.stopPropagation();
+    inkCustom.addEventListener("click", () => {
       call("pick_colour", { initial: inkColour }).then((colour) => {
         if (colour) call("set_ink", { colour });
       });
@@ -313,8 +307,7 @@ export const wallpapersView: NotchView = {
       o.textContent = s.replace("scheme-", "").replace(/-/g, " ");
       schemeSelect.appendChild(o);
     }
-    schemeSelect.addEventListener("change", (e) => {
-      e.stopPropagation();
+    schemeSelect.addEventListener("change", () => {
       retint();
       call("set_scheme", { scheme: schemeSelect.value });
     });
@@ -338,8 +331,7 @@ export const wallpapersView: NotchView = {
       call("precompute_palettes").catch(() => {});
     }
 
-    root.querySelector<HTMLElement>("#browse-btn")!.addEventListener("click", (e) => {
-      e.stopPropagation();
+    root.querySelector<HTMLElement>("#browse-btn")!.addEventListener("click", () => {
       call("pick_wallpaper_file").then((path) => {
         if (!path) return;
         setActive(path);

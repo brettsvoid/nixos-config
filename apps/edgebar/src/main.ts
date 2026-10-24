@@ -335,9 +335,9 @@ function initBar(barHeight: number, windowHeight: number, notchIdle: string) {
   const drawers = [notchDrawer, controlsDrawer, launcherDrawer];
 
   document.addEventListener("click", (e) => {
-    const t = e.target as Node;
+    const path = e.composedPath();
     for (const d of drawers) {
-      if (d.isOpen() && !d.root.contains(t)) void d.close();
+      if (d.isOpen() && !path.includes(d.root)) void d.close();
     }
   });
 

@@ -103,8 +103,7 @@ export const assistantView: NotchView = {
       retry.type = "button";
       retry.className = "as-retry";
       retry.innerHTML = `<span class="icon">${ICON.retry}</span><span>Retry</span>`;
-      retry.addEventListener("click", (e) => {
-        e.stopPropagation();
+      retry.addEventListener("click", () => {
         if (phase.kind === "idle") startTurn(reply);
       });
       return [line, retry];
@@ -237,15 +236,13 @@ export const assistantView: NotchView = {
         stop();
       }
     });
-    sendBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    sendBtn.addEventListener("click", () => {
       if (phase.kind === "idle") send();
       else stop();
       field.focus();
     });
 
-    newBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    newBtn.addEventListener("click", () => {
       phase = { kind: "idle" };
       dirty.clear();
       log.replaceChildren();
@@ -259,7 +256,6 @@ export const assistantView: NotchView = {
       const copy = target.closest<HTMLButtonElement>(".md-copy");
       const anchor = target.closest<HTMLElement>(".md-link");
       if (!copy && !anchor) return;
-      e.stopPropagation();
       if (anchor) {
         call("assistant_open_link", { url: anchor.dataset.href! }).catch(() => {});
         return;
@@ -279,8 +275,7 @@ export const assistantView: NotchView = {
       modelBtn.textContent = modelName(id);
       modelBtn.title = `Replies come from ${id}. Click for the next model.`;
     }
-    modelBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    modelBtn.addEventListener("click", () => {
       const next = MODELS[(MODELS.indexOf(current().assistant.model) + 1) % MODELS.length];
       setSetting("assistant.model", next).catch(() => {});
     });

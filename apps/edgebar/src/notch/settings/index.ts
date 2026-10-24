@@ -294,7 +294,6 @@ export const settingsView: NotchView = {
     const fix = button("st-btn filled", "Open settings.json");
     fix.addEventListener("click", () => void openSettingsFile());
     banner.append(fix);
-    root.addEventListener("click", (e) => e.stopPropagation());
 
     const bodies = new Map<string, { el: HTMLElement; part: Part }>();
     const tabs = new Map<string, HTMLButtonElement>();
