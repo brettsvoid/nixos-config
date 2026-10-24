@@ -21,6 +21,10 @@ serde_json = "1"
 # CPU/RAM/disk/swap for the notch's metrics view, and the CPU pill's
 # top-process lookup.
 sysinfo = "0.37"
+# The notification history: a read-only copy of the system notification store
+# (SQLite, WAL mode), and the binary plists in its records.
+rusqlite = { version = "0.40", features = ["bundled"] }
+plist = "1.9"
 
 # Native macOS: AppKit windows, events and icons, and the frame window drawn
 # with CAShapeLayer. Pinned to the objc2 0.3 crates tao/wry already pull in.

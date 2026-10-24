@@ -18,6 +18,9 @@ mod notch;
 /// Memory, swap and disk rows, and the always-on CPU sampler.
 mod metrics;
 
+/// Notification history, read from a copy of macOS's store.
+mod notifications;
+
 /// Debug-only socket that drives and snapshots the live bar.
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod devtools;
@@ -2022,7 +2025,7 @@ const ICON_PX: f64 = 64.0;
 /// Encode an NSImage as a PNG data URL, redrawn at ICON_PX first (then TIFF rep
 /// → bitmap rep → PNG → base64).
 #[cfg(target_os = "macos")]
-fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
+pub(crate) fn icon_png_data_url(img: &objc2_app_kit::NSImage) -> Option<String> {
     use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSCompositingOperation, NSImage};
     use objc2_foundation::{NSDataBase64EncodingOptions, NSDictionary, NSPoint, NSRect, NSSize};
 
@@ -2645,6 +2648,9 @@ pub fn run() {
             notch::media_seek,
             settings::get_settings,
             settings::set_setting,
+            notifications::notification_history,
+            notifications::notification_dismiss,
+            notifications::notification_clear,
             #[cfg(all(debug_assertions, target_os = "macos"))]
             devtools::dev_result
         ])
