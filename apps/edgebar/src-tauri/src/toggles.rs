@@ -471,27 +471,11 @@ fn write_caffeine(t: &Toggles, on: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn run(mut cmd: Command) -> Option<String> {
-    use std::io::Read;
-    let mut child = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    let mut stdout = child.stdout.take()?;
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = stdout.read_to_string(&mut text);
-        let _ = tx.send(text);
-    });
-    let Ok(text) = rx.recv_timeout(COMMAND_TIMEOUT) else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return None;
-    };
-    child.wait().ok()?.success().then_some(text)
+fn run(cmd: Command) -> Option<String> {
+    match crate::output_within(cmd, COMMAND_TIMEOUT)? {
+        crate::Ran::Exited(status, text) if status.success() => Some(text),
+        _ => None,
+    }
 }
 
 #[cfg(target_os = "macos")]

@@ -394,39 +394,9 @@ fn parse_focused(line: &str) -> Option<(String, FocusedWin)> {
 /// Run a `command` rule and split its stdout into headline + dim line. The
 /// workspace is exported so one rule can serve several workspaces.
 fn run_rule(run: &str, workspace: &str) -> Option<(String, String)> {
-    use std::io::Read;
-    use std::process::{Command, Stdio};
-
-    let mut child = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(run)
-        .env("EDGEBAR_WORKSPACE", workspace)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    // Same shape as the AeroSpace helper: drain on a side thread so a full pipe
-    // can't wedge the child, and kill on deadline to force the reader to EOF.
-    let mut stdout = child.stdout.take();
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut text = String::new();
-        if let Some(out) = stdout.as_mut() {
-            let _ = out.read_to_string(&mut text);
-        }
-        let _ = tx.send(text);
-    });
-    let text = match rx.recv_timeout(COMMAND_TIMEOUT) {
-        Ok(text) => text,
-        Err(_) => {
-            let _ = child.kill();
-            rx.recv().unwrap_or_default()
-        }
-    };
-    let _ = child.wait();
-
+    let mut cmd = std::process::Command::new("/bin/sh");
+    cmd.arg("-c").arg(run).env("EDGEBAR_WORKSPACE", workspace);
+    let text = crate::output_within(cmd, COMMAND_TIMEOUT)?.stdout();
     let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
     let primary = lines.next()?.to_string();
     Some((primary, lines.next().unwrap_or_default().to_string()))

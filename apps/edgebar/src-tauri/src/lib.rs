@@ -601,21 +601,34 @@ fn parse_win(line: &str) -> Option<(String, WinRef)> {
     Some((ws, WinRef { app, bundle_id }))
 }
 
-/// Run the AeroSpace CLI and return its non-empty, trimmed stdout lines. Capped
-/// at 5s, after which the child is killed and whatever it printed is used: a
-/// wedged server would otherwise block the caller forever.
-pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
+/// How a command run by `output_within` ended, with what it printed.
+pub(crate) enum Ran {
+    Exited(std::process::ExitStatus, String),
+    Killed(String),
+}
+
+impl Ran {
+    pub(crate) fn stdout(self) -> String {
+        match self {
+            Ran::Exited(_, text) | Ran::Killed(text) => text,
+        }
+    }
+}
+
+/// Run `cmd` with only stdout open, killing it once `limit` has passed. None
+/// when it could not be started or reaped.
+pub(crate) fn output_within(
+    mut cmd: std::process::Command,
+    limit: std::time::Duration,
+) -> Option<Ran> {
     use std::io::Read;
-    use std::process::{Command, Stdio};
-    let Ok(mut child) = Command::new("aerospace")
-        .args(args)
+    use std::process::Stdio;
+    let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-    else {
-        return Vec::new();
-    };
+        .ok()?;
     // Drain stdout on a side thread so a full pipe can't wedge the child, and
     // so the deadline can be enforced from here. kill() forces the pipe to EOF,
     // which unblocks the reader; the second recv then returns what was read.
@@ -628,15 +641,27 @@ pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
         }
         let _ = tx.send(text);
     });
-    let text = match rx.recv_timeout(std::time::Duration::from_secs(5)) {
-        Ok(text) => text,
+    match rx.recv_timeout(limit) {
+        Ok(text) => Some(Ran::Exited(child.wait().ok()?, text)),
         Err(_) => {
             let _ = child.kill();
-            rx.recv().unwrap_or_default()
+            let text = rx.recv().unwrap_or_default();
+            let _ = child.wait();
+            Some(Ran::Killed(text))
         }
-    };
-    let _ = child.wait();
-    text.lines()
+    }
+}
+
+/// Run the AeroSpace CLI and return its non-empty, trimmed stdout lines. Capped
+/// at 5s, after which the child is killed and whatever it printed is used: a
+/// wedged server would otherwise block the caller forever.
+pub(crate) fn aerospace(args: &[&str]) -> Vec<String> {
+    let mut cmd = std::process::Command::new("aerospace");
+    cmd.args(args);
+    output_within(cmd, std::time::Duration::from_secs(5))
+        .map(Ran::stdout)
+        .unwrap_or_default()
+        .lines()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
         .collect()
@@ -2875,6 +2900,48 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod output_within_tests {
+    use super::*;
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    fn sh(script: &str) -> Command {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", script]);
+        cmd
+    }
+
+    #[test]
+    fn a_command_that_finishes_reports_its_status_and_output() {
+        let Some(Ran::Exited(status, text)) =
+            output_within(sh("echo hi; exit 3"), Duration::from_secs(5))
+        else {
+            panic!("the command should have exited");
+        };
+        assert_eq!((status.code(), text.as_str()), (Some(3), "hi\n"));
+    }
+
+    #[test]
+    fn a_command_past_its_limit_is_killed_and_keeps_what_it_printed() {
+        let started = Instant::now();
+        let Some(Ran::Killed(text)) = output_within(
+            sh("echo started; exec sleep 30"),
+            Duration::from_millis(200),
+        ) else {
+            panic!("the command should have been killed");
+        };
+        assert_eq!(text, "started\n");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn a_command_that_cannot_start_is_none() {
+        let missing = Command::new("/nonexistent/edgebar-tool");
+        assert!(output_within(missing, Duration::from_secs(1)).is_none());
+    }
 }
 
 #[cfg(test)]
