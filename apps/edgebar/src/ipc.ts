@@ -191,10 +191,11 @@ export interface AssistantChunk {
   text: string; // the new text for "delta", the message for "error"
 }
 
-// edgebar's settings: `effective` is the Nix config.json with the user's
-// overrides (settings.json) applied, `user` the overrides alone, so a row can
-// tell whether it has been changed. `error` is set when settings.json can't be
-// parsed; Rust then ignores the file.
+// edgebar's settings: `effective` is the bundled defaults, the Nix config.json
+// and the user's overrides (settings.json) merged, `user` the valid overrides
+// alone, so a row can tell whether it has been changed. `error` is set when
+// settings.json can't be parsed (Rust then ignores the file) or when some of its
+// overrides failed validation (Rust leaves those out); one problem per line.
 export interface SettingsSnapshot {
   effective: Record<string, unknown>;
   user: Record<string, unknown>;

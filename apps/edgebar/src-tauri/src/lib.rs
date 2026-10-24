@@ -19,6 +19,10 @@ mod notch;
 #[cfg(all(debug_assertions, target_os = "macos"))]
 mod devtools;
 
+/// The user's overrides layered over the Nix config, and the two commands that
+/// read and change them.
+mod settings;
+
 /// Appearance preference. `Auto` follows the macOS system light/dark setting;
 /// `Light`/`Dark` pin it. Lives in config.json and is overridable at runtime
 /// (persisted to `~/.config/edgebar/appearance`).
@@ -46,7 +50,7 @@ enum Scheme {
 /// flavours, so day and night need distinct mappings (e.g. the on-pill ink is
 /// `base` at night but `text` by day). Each value is a palette key or a
 /// literal `#hex`.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 struct Themes {
     dark: Colors,
     light: Colors,
@@ -80,8 +84,9 @@ impl Palettes {
 }
 
 /// Single source of truth for colours and geometry, read by both the native
-/// frame and the bar WebView (as CSS custom properties). Loaded from
-/// `~/.config/edgebar/config.json` if present, else the bundled default.
+/// frame and the bar WebView (as CSS custom properties). Built by
+/// `settings::load` from three layers: the bundled default, then
+/// `~/.config/edgebar/config.json`, then the user's `settings.json`.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Config {
@@ -261,7 +266,7 @@ fn normalise_hex(s: &str) -> Option<String> {
         .then(|| format!("#{}", h.to_ascii_lowercase()))
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Colors {
     base: String,
@@ -304,7 +309,7 @@ fn default_cpu_user() -> String {
     "#1e66f5".to_string()
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Geometry {
     inner_radius: f64,
@@ -338,14 +343,7 @@ fn default_top_offset_px() -> f64 {
 }
 
 fn load_config() -> Config {
-    const DEFAULT: &str = include_str!("../config.default.json");
-    std::env::var_os("HOME")
-        .map(|home| std::path::Path::new(&home).join(".config/edgebar/config.json"))
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_else(|| {
-            serde_json::from_str(DEFAULT).expect("bundled config.default.json is valid")
-        })
+    settings::load(settings::dir().as_deref()).config
 }
 
 /// Resolve `notch.idle` to what the WebView should draw when no provider owns
@@ -2903,11 +2901,15 @@ pub fn run() {
             notch::notch_state,
             notch::media_toggle,
             notch::media_seek,
+            settings::get_settings,
+            settings::set_setting,
             #[cfg(all(debug_assertions, target_os = "macos"))]
             devtools::dev_result
         ])
         .setup(|app| {
-            let config = load_config();
+            let loaded = settings::load(settings::dir().as_deref());
+            let config = loaded.config.clone();
+            app.manage(settings::Store::new(loaded));
             let palettes = load_palettes();
             // Runtime override (the bar's light/dark/auto toggle) wins over the
             // config's default; Auto then resolves against the live system setting.

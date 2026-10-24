@@ -5,6 +5,10 @@
 # shared with the AeroSpace gaps) and geometry.concave, which are overridden
 # here. The commands the in-app theme view runs are added here too.
 #
+# What the user changes in the app is layered over this file by edgebar, in
+# ~/.config/edgebar/settings.json. Home Manager does not manage that file, so
+# edgebar can write it.
+#
 # The wallpaper-derived palette is separate: `generate-edgebar-theme` runs
 # matugen over the current wallpaper to write ~/.config/edgebar/palette.json
 # (light + dark), then pings theme.sock so the running bar re-themes live.
