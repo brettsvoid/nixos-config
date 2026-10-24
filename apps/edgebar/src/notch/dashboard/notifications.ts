@@ -1,5 +1,6 @@
 import "./notifications.css";
 import { animate } from "motion";
+import { el } from "../../dom";
 import { call, type NotificationEntry, type NotificationHistory } from "../../ipc";
 import { lucide } from "../../icons";
 import { current, onChange, set } from "../../settings";
@@ -52,13 +53,6 @@ function ago(iso: string, now: number): string {
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 }
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text) node.textContent = text;
-  return node;
-};
 
 function message(icon: string, text: string, action?: { label: string; run: () => void }) {
   const box = el("div", "nf-message");

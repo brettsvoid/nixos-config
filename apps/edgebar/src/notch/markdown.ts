@@ -1,3 +1,4 @@
+import { el } from "../dom";
 import { lucide } from "../icons";
 
 const COPY_GLYPHS =
@@ -21,17 +22,6 @@ const INLINE = new RegExp(
   ].join("|"),
   "g",
 );
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  node.append(...children);
-  return node;
-}
 
 const isWebLink = (url: string) => /^https?:\/\//i.test(url);
 

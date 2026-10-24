@@ -1,4 +1,5 @@
 import "./settings.css";
+import { el } from "../../dom";
 import { call, on, type Config, type SettingsFiles, type SetupItem } from "../../ipc";
 import { lucide } from "../../icons";
 import { current, errors, onChange, type Settings } from "../../settings";
@@ -9,7 +10,6 @@ import { SCHEMES, wallpapersView } from "../wallpapers";
 import {
   button,
   choiceRow,
-  el,
   fanOut,
   field,
   folderRow,

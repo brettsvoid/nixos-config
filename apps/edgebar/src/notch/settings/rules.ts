@@ -1,6 +1,7 @@
+import { el } from "../../dom";
 import { lucide } from "../../icons";
 import { isOverridden, reset, set } from "../../settings";
-import { button, el, field, segmented, type Option, type Part } from "./rows";
+import { button, field, segmented, type Option, type Part } from "./rows";
 
 type Rule =
   | { source: "focusedWindow" }

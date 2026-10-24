@@ -1,4 +1,5 @@
 import "./dashboard.css";
+import { el } from "../../dom";
 import { lucide } from "../../icons";
 import type { NotchView, ViewHandle, Widget } from "../view";
 import { calendar } from "./calendar";
@@ -6,13 +7,6 @@ import { controls } from "./controls";
 import { notifications } from "./notifications";
 import { player } from "./player";
 import { toggles } from "./toggles";
-
-const div = (className: string, parent: HTMLElement) => {
-  const el = document.createElement("div");
-  el.className = className;
-  parent.append(el);
-  return el;
-};
 
 export const dashboardView: NotchView = {
   id: "dashboard",
@@ -24,10 +18,10 @@ export const dashboardView: NotchView = {
   mount(root) {
     const handles: ViewHandle[] = [];
     const fill = (name: string, widget: Widget, parent: HTMLElement) => {
-      handles.push(widget(div(`dash-${name}`, parent)));
+      handles.push(widget(parent.appendChild(el("div", `dash-${name}`))));
     };
     fill("player", player, root);
-    const column = div("dash-col dash-widgets", root);
+    const column = root.appendChild(el("div", "dash-col dash-widgets"));
     fill("toggles", toggles, column);
     fill("calendar", calendar, column);
     fill("notifications", notifications, root);

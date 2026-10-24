@@ -1,3 +1,4 @@
+import { el } from "../../dom";
 import { lucide } from "../../icons";
 import { keyboardField } from "../../keyboard";
 import { current, isOverridden, reset, set, type Settings, type SettingValue } from "../../settings";
@@ -24,13 +25,6 @@ export function valueAt<V>(s: Settings, key: KeyOf<V>): V {
   let node: unknown = s;
   for (const part of key.split(".")) node = (node as Record<string, unknown>)[part];
   return node as V;
-}
-
-export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text) node.textContent = text;
-  return node;
 }
 
 export function button(className: string, html: string, title = ""): HTMLButtonElement {

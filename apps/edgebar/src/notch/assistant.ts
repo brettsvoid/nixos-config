@@ -1,4 +1,5 @@
 import "./assistant.css";
+import { el } from "../dom";
 import { call, on, type AssistantChunk } from "../ipc";
 import { lucide } from "../icons";
 import { keyboardField, releaseKeyboard, takeKeyboard } from "../keyboard";
@@ -56,24 +57,9 @@ const newTurnId = () =>
 
 const modelName = (id: string) => (MODELS.includes(id) ? id[0].toUpperCase() + id.slice(1) : id);
 
-function bubble(kind: "as-user" | "as-claude", text = ""): HTMLElement {
-  const el = document.createElement("div");
-  el.className = `as-msg ${kind}`;
-  el.textContent = text;
-  return el;
-}
-
-function span(className: string, text = ""): HTMLElement {
-  const el = document.createElement("span");
-  el.className = className;
-  el.textContent = text;
-  return el;
-}
-
 function typingDots(): HTMLElement {
-  const dots = span("as-typing");
+  const dots = el("span", "as-typing", el("i"), el("i"), el("i"));
   dots.setAttribute("aria-label", "Claude is replying");
-  dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
   return dots;
 }
 
@@ -96,9 +82,9 @@ export const assistantView: NotchView = {
     let frame = 0;
 
     function errorBlock(reply: Reply, message: string): Node[] {
-      const line = span("as-error-line");
+      const line = el("span", "as-error-line");
       line.innerHTML = `<span class="icon">${ICON.alert}</span>`;
-      line.append(span("as-error-text", message));
+      line.append(el("span", "as-error-text", message));
       const retry = document.createElement("button");
       retry.type = "button";
       retry.className = "as-retry";
@@ -115,7 +101,7 @@ export const assistantView: NotchView = {
       if (text) parts.push(renderMarkdown(text));
       if (state.kind === "running" && !text) parts.push(typingDots());
       if (state.kind === "done" && (state.stopped || !text)) {
-        parts.push(span("as-note", state.stopped ? "Stopped" : "No reply"));
+        parts.push(el("span", "as-note", state.stopped ? "Stopped" : "No reply"));
       }
       if (state.kind === "error") parts.push(...errorBlock(reply, state.message));
       reply.el.classList.toggle("as-error", state.kind === "error");
@@ -208,9 +194,9 @@ export const assistantView: NotchView = {
         prompt,
         text: "",
         state: { kind: "running" },
-        el: bubble("as-claude"),
+        el: el("div", "as-msg as-claude"),
       };
-      log.append(bubble("as-user", prompt), reply.el);
+      log.append(el("div", "as-msg as-user", prompt), reply.el);
       startTurn(reply);
       log.scrollTop = log.scrollHeight;
     }
