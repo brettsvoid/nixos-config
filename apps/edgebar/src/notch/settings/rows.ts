@@ -35,6 +35,18 @@ export function button(className: string, html: string, title = ""): HTMLButtonE
   return b;
 }
 
+export function whyLine(): { el: HTMLElement; show(reason: string | null): void } {
+  const line = el("span", "st-why");
+  line.hidden = true;
+  return {
+    el: line,
+    show(reason) {
+      line.hidden = reason === null;
+      line.textContent = reason ?? "";
+    },
+  };
+}
+
 export interface Frame {
   el: HTMLElement;
   why(reason: string | null): void;
@@ -47,22 +59,17 @@ export function frame(label: string, note: string, control: HTMLElement, key: st
   const text = el("div", "st-text");
   text.append(el("span", "st-name", label));
   if (note) text.append(el("span", "st-note", note));
-  const why = el("span", "st-why");
-  why.hidden = true;
-  text.append(why);
+  const why = whyLine();
+  text.append(why.el);
   const undo = button("st-reset", UNDO, "Back to the default");
   row.append(text, control, undo);
 
-  const showWhy = (reason: string | null) => {
-    why.hidden = reason === null;
-    why.textContent = reason ?? "";
-  };
   const commit = async (k: string, value: SettingValue | null) => {
     try {
       await (value === null ? reset(k) : set(k, value));
-      showWhy(null);
+      why.show(null);
     } catch (e) {
-      showWhy(String(e));
+      why.show(String(e));
     }
   };
   undo.addEventListener("click", () => {
@@ -70,7 +77,7 @@ export function frame(label: string, note: string, control: HTMLElement, key: st
   });
   return {
     el: row,
-    why: showWhy,
+    why: why.show,
     commit,
     sync: () => {
       undo.classList.toggle("shown", key !== null && isOverridden(key));

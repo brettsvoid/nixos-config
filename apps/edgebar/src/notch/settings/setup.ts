@@ -1,7 +1,7 @@
 import { el } from "../../dom";
 import { call, type SetupItem } from "../../ipc";
 import { lucide } from "../../icons";
-import { button, type Part } from "./rows";
+import { button, whyLine, type Part } from "./rows";
 
 const ICON: Record<SetupItem["state"], string> = {
   ready: lucide('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
@@ -36,9 +36,8 @@ function checkRow(onAction: () => void): CheckRow {
   const text = el("div", "st-text");
   const name = el("span", "st-name");
   const detail = el("span", "st-note st-selectable");
-  const why = el("span", "st-why");
-  why.hidden = true;
-  text.append(name, detail, why);
+  const why = whyLine();
+  text.append(name, detail, why.el);
   const action = button("st-btn", "");
   action.addEventListener("click", onAction);
   row.append(icon, text, action);
@@ -54,10 +53,7 @@ function checkRow(onAction: () => void): CheckRow {
       action.textContent = item.action ?? "";
       action.classList.toggle("filled", item.state === "missing");
     },
-    why(reason) {
-      why.hidden = reason === null;
-      why.textContent = reason ?? "";
-    },
+    why: why.show,
   };
 }
 

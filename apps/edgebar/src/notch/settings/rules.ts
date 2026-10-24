@@ -1,7 +1,7 @@
 import { el } from "../../dom";
 import { lucide } from "../../icons";
 import { isOverridden, reset, set } from "../../settings";
-import { button, field, segmented, type Option, type Part } from "./rows";
+import { button, field, segmented, whyLine, type Option, type Part } from "./rows";
 
 type Rule =
   | { source: "focusedWindow" }
@@ -50,29 +50,24 @@ interface RuleRow {
 function ruleRow(ws: string): RuleRow {
   const row = el("div", "st-rule");
   const line = el("div", "st-rule-line");
-  const why = el("span", "st-why");
-  why.hidden = true;
+  const why = whyLine();
   const note = el("span", "st-note");
   let rule: Rule = { source: "focusedWindow" };
   let all: Record<string, Rule> = {};
 
-  const fail = (reason: string | null) => {
-    why.hidden = reason === null;
-    why.textContent = reason ?? "";
-  };
   async function write(next: Rule) {
     try {
       await set(keyOf(ws), next);
-      fail(null);
+      why.show(null);
     } catch (e) {
-      fail(String(e));
+      why.show(String(e));
     }
   }
 
   const name = field({ placeholder: "1" }, async (text) => {
     if (text === ws) return;
     const refuse = (reason: string) => {
-      fail(reason);
+      why.show(reason);
       name.input.value = ws;
     };
     if (!text) return refuse("A rule needs a workspace name, or * for every other workspace.");
@@ -96,7 +91,7 @@ function ruleRow(ws: string): RuleRow {
     try {
       await reset(keyOf(ws));
     } catch (e) {
-      fail(String(e));
+      why.show(String(e));
     }
   });
   line.append(name.el, source.el, remove);
@@ -112,7 +107,7 @@ function ruleRow(ws: string): RuleRow {
     if (text === "") return void write(rest);
     const secs = Number(text);
     if (!Number.isFinite(secs) || secs < 1) {
-      fail("The interval is a number of seconds, at least 1.");
+      why.show("The interval is a number of seconds, at least 1.");
       every.input.value = rule.everyMs ? String(rule.everyMs / 1000) : "";
       return;
     }
@@ -122,7 +117,7 @@ function ruleRow(ws: string): RuleRow {
   every.input.title = "Seconds between runs while this workspace is focused; empty runs it on focus changes only";
   cmdLine.append(run.el, el("span", "st-note", "every"), every.el, el("span", "st-note", "s"));
 
-  row.append(line, cmdLine, note, why);
+  row.append(line, cmdLine, note, why.el);
   return {
     el: row,
     draw(next, rules) {
