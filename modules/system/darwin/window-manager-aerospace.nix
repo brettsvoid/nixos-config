@@ -54,6 +54,16 @@ _: {
                 fi
       '';
 
+      # edgebar's band takes the top edge, so the native menu bar stays hidden
+      # until the pointer reaches it. Tahoe draws it with no background by
+      # default, so it shows straight over the band.
+      system.defaults = {
+        NSGlobalDomain._HIHideMenuBar = true;
+        # System Settings → Menu Bar → "Show menu bar background". Not a
+        # nix-darwin option; the toggle writes this key to the global domain.
+        CustomUserPreferences.NSGlobalDomain.SLSMenuBarUseBlurredAppearance = true;
+      };
+
       # Disabled: the edgebar Tauri overlay (apps/edgebar) replaced it.
       # services.sketchybar = {
       #   enable = true;
