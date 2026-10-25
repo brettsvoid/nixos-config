@@ -2,36 +2,26 @@
   "appearance": "auto",
   "colors": {
     "dark": {
-      "base": "base",
-      "pillBg": "rosewater",
+      "surface": "base",
       "text": "text",
       "subtext": "subtext0",
-      "accent": "blue",
-      "occupied": "peach",
-      "empty": "surface1",
+      "accent": "primary|rosewater",
       "batteryCharging": "#40a02b",
       "batteryLow": "#d20f39",
       "vpn": "#179299",
       "cpuSys": "#d20f39",
-      "cpuUser": "#1e66f5",
-      "frameLine": "rosewater",
-      "frameCorner": "#000000"
+      "cpuUser": "#1e66f5"
     },
     "light": {
-      "base": "text",
-      "pillBg": "rosewater",
+      "surface": "base",
       "text": "text",
       "subtext": "subtext0",
-      "accent": "blue",
-      "occupied": "peach",
-      "empty": "overlay0",
+      "accent": "primary|rosewater",
       "batteryCharging": "#40a02b",
       "batteryLow": "#d20f39",
       "vpn": "#179299",
       "cpuSys": "#d20f39",
-      "cpuUser": "#1e66f5",
-      "frameLine": "rosewater",
-      "frameCorner": "#000000"
+      "cpuUser": "#1e66f5"
     }
   },
   "notch": {
@@ -39,14 +29,36 @@
     "transientMs": 1600,
     "workspaces": {}
   },
+  "clock": {
+    "hour24": true,
+    "seconds": false,
+    "date": true
+  },
+  "segments": {
+    "cpu": true
+  },
+  "toggles": {
+    "focusShortcut": "Toggle Focus"
+  },
+  "calendar": {
+    "weekStart": "monday"
+  },
+  "notifications": {
+    "history": false
+  },
+  "assistant": {
+    "command": "claude",
+    "model": "haiku"
+  },
   "geometry": {
-    "innerRadius": 20,
-    "lineThickness": 4,
-    "pillHeight": 32,
-    "pillRadius": 16,
-    "concave": 16,
-    "barHeight": 64,
-    "windowHeight": 64,
-    "topOffsetPx": 1
+    "barHeight": 32,
+    "frameThickness": 8,
+    "frameRadius": 16,
+    "windowHeight": 64
+  },
+  "oled": false,
+  "wallpaper": {
+    "folder": "~/Pictures/Wallpapers",
+    "tint": false
   }
 }

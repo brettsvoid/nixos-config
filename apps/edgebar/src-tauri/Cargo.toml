@@ -21,6 +21,10 @@ serde_json = "1"
 # CPU/RAM/disk/swap for the notch's metrics view, and the CPU pill's
 # top-process lookup.
 sysinfo = "0.37"
+rusqlite = { version = "0.40", features = ["bundled"] }
+plist = "1.9"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+uuid = { version = "1", features = ["v4"] }
 
 # Native macOS: AppKit windows, events and icons, and the frame window drawn
 # with CAShapeLayer. Pinned to the objc2 0.3 crates tao/wry already pull in.
@@ -32,11 +36,13 @@ objc2 = "0.6"
 # Objective-C blocks for the NSEvent cursor monitors that drive bar click-through.
 block2 = "0.6"
 objc2-foundation = { version = "0.3", features = [
+  "NSArray",
   "NSGeometry",
   "NSString",
   "NSNotification",
   "NSDistributedNotificationCenter",
   "NSUserDefaults",
+  "NSValue",
 ] }
 objc2-app-kit = { version = "0.3", features = [
   "NSApplication",
@@ -53,11 +59,15 @@ objc2-app-kit = { version = "0.3", features = [
   "NSImage",
   "NSImageRep",
   "NSBitmapImageRep",
+  "NSGraphicsContext",
+  "objc2-core-graphics",
 ] }
 objc2-quartz-core = { version = "0.3", features = [
+  "CAGradientLayer",
   "CALayer",
   "CAShapeLayer",
   "objc2-core-foundation",
+  "objc2-core-graphics",
 ] }
 # CGWindow: the on-screen window list that shows when an app has taken a whole
 # display (native fullscreen), so the bar and frame can hide. Reading
@@ -67,6 +77,17 @@ objc2-core-graphics = { version = "0.3", features = [
   "CGPath",
   "CGWindow",
   "CGGeometry",
+  "CGBitmapContext",
+  "CGContext",
+  "CGImage",
+  "CGColorSpace",
+] }
+objc2-web-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-app-kit",
+  "WKWebView",
+  "WKSnapshotConfiguration",
 ] }
 objc2-core-foundation = { version = "0.3", features = [
   "CFCGTypes",
@@ -81,3 +102,29 @@ objc2-core-foundation = { version = "0.3", features = [
 # system-configuration 0.7 expects (separate from objc2-core-foundation).
 system-configuration = "0.7"
 core-foundation = "0.9"
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.flate2]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+[profile.dev.package.simd-adler32]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.zune-core]
+opt-level = 3
+[profile.dev.package.image-webp]
+opt-level = 3
+[profile.dev.package.moxcms]
+opt-level = 3

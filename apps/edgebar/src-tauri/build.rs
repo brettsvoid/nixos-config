@@ -11,6 +11,7 @@ fn main() {
         // The notch's media readout asks CoreAudio which processes are playing
         // (see notch.rs for why not MediaRemote).
         println!("cargo:rustc-link-lib=framework=CoreAudio");
+        println!("cargo:rustc-link-lib=framework=CoreWLAN");
     }
 
     tauri_build::build()

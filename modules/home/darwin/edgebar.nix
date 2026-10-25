@@ -1,9 +1,6 @@
 # Renders edgebar's runtime config (~/.config/edgebar/config.json) from
 # apps/edgebar/src-tauri/config.default.json, which is also the binary's
-# bundled fallback when this file is absent. Edit colours, role maps and
-# geometry there, except geometry.barHeight (from flake.lib.barGeometry,
-# shared with the AeroSpace gaps) and geometry.concave, which are overridden
-# here. The commands the in-app theme view runs are added here too.
+# bundled fallback when this file is absent.
 #
 # The wallpaper-derived palette is separate: `generate-edgebar-theme` runs
 # matugen over the current wallpaper to write ~/.config/edgebar/palette.json
@@ -14,12 +11,12 @@
 let
   geom = config.flake.lib.barGeometry;
   wp = config.flake.lib.wallpaper;
-  defaults = lib.importJSON ../../../apps/edgebar/src-tauri/config.default.json;
+  bundledConfig = ../../../apps/edgebar/src-tauri/config.default.json;
+  defaults = lib.importJSON bundledConfig;
+  schemes = lib.importJSON ../../../apps/edgebar/src/schemes.json;
   rendered = defaults // {
     geometry = defaults.geometry // {
-      inherit (geom) barHeight;
-      # fillet radius is locked to half the pill height
-      concave = defaults.geometry.pillHeight / 2;
+      inherit (geom) barHeight frameThickness;
     };
   };
   matugenDir = ./edgebar/matugen;
@@ -68,6 +65,12 @@ in
         if [ -z "$WALLPAPER" ]; then
           WALLPAPER=$(${pkgs.desktoppr}/bin/desktoppr 2>/dev/null | head -1)
         fi
+        case "$WALLPAPER" in
+          "$HOME"/.cache/edgebar/tinted/*)
+            ORIGINAL=$(cat "$WALLPAPER.src" 2>/dev/null)
+            [ -f "$ORIGINAL" ] && WALLPAPER="$ORIGINAL"
+            ;;
+        esac
         if [ -z "$WALLPAPER" ] || [ ! -f "$WALLPAPER" ]; then
           WALLPAPER="${defaultWallpaper}"
         fi
@@ -110,6 +113,13 @@ in
         fi
       '';
 
+      edgebar-wallpaper-folder = pkgs.writeShellApplication {
+        name = "edgebar-wallpaper-folder";
+        runtimeInputs = [ pkgs.jq ];
+        runtimeEnv.BUNDLED_CONFIG = "${bundledConfig}";
+        text = builtins.readFile ./edgebar/wallpaper-folder.sh;
+      };
+
       # Wallpaper commands. Each sets the desktop picture and re-themes edgebar
       # directly; the launchd watcher below covers changes made elsewhere.
       cycle-wallpaper = pkgs.writeShellApplication {
@@ -117,6 +127,7 @@ in
         runtimeInputs = [
           pkgs.desktoppr
           generate-edgebar-theme
+          edgebar-wallpaper-folder
         ];
         text = builtins.readFile ./edgebar/cycle-wallpaper.sh;
       };
@@ -125,6 +136,7 @@ in
         runtimeInputs = [
           pkgs.desktoppr
           generate-edgebar-theme
+          edgebar-wallpaper-folder
         ];
         text = builtins.readFile ./edgebar/select-wallpaper.sh;
       };
@@ -132,6 +144,7 @@ in
       select-scheme = pkgs.writeShellApplication {
         name = "select-scheme";
         runtimeInputs = [ generate-edgebar-theme ];
+        runtimeEnv.SCHEMES = lib.concatStringsSep " " schemes;
         text = builtins.readFile ./edgebar/select-scheme.sh;
       };
       # Seeds the persisted scheme choice for this machine. Same
@@ -159,7 +172,7 @@ in
         example = "scheme-expressive";
         description = ''
           matugen scheme this machine derives its edgebar palette with — see
-          the list in edgebar/select-scheme.sh. Written to
+          the list in apps/edgebar/src/schemes.json. Written to
           ~/.config/edgebar/scheme on the first activation that declares it,
           and again whenever this value changes, never on an unchanged
           rebuild.
