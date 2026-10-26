@@ -18,7 +18,7 @@ _: {
     let
       # The baseline Node version. Must be a version fnm has installed —
       # `fnm ls` to check, `fnm install v${nodeVersion}` to add it.
-      nodeVersion = "24.16.0";
+      nodeVersion = "24.22.1";
     in
     {
       home.activation.fnmDefaultNode = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
