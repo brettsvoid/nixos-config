@@ -193,8 +193,33 @@ pub async fn setup_run(app: AppHandle, id: String) -> Result<Vec<SetupItem>, Str
 /// The AppleScript error macOS returns when the user refused Automation.
 const ERR_AE_EVENT_NOT_PERMITTED: &str = "-1743";
 
-const INHERITED: &str = "edgebar has the permissions of the app that started it \
-(kitty today, through herdr), so the grant goes to that app.";
+/// The app macOS checks edgebar's permissions against, so the one a grant goes
+/// to: edgebar's responsible process. That is edgebar itself when launchd or
+/// Finder starts edgebar.app, and the terminal when a shell runs the binary,
+/// as `pnpm tauri dev` does (kitty, through herdr).
+#[cfg(target_os = "macos")]
+fn grantee() -> &'static str {
+    use objc2_app_kit::NSRunningApplication;
+    use std::sync::OnceLock;
+    extern "C" {
+        // Private, in libSystem (libquarantine).
+        fn responsibility_get_pid_responsible_for_pid(pid: libc::pid_t) -> libc::pid_t;
+    }
+    static GRANTEE: OnceLock<String> = OnceLock::new();
+    GRANTEE.get_or_init(|| {
+        // SAFETY: takes and returns a plain pid.
+        let pid = unsafe { responsibility_get_pid_responsible_for_pid(std::process::id() as _) };
+        NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+            .and_then(|app| app.localizedName())
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| "the app that started edgebar".into())
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn grantee() -> &'static str {
+    "the app that started edgebar"
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Opened {
@@ -230,7 +255,10 @@ fn full_disk_access(app: &AppHandle) -> Status {
     if focus == Opened::Refused || store == Opened::Refused {
         Status::new(
             State::Missing,
-            format!("Needed to read the Focus state and macOS's notification history. {INHERITED}"),
+            format!(
+                "Needed to read the Focus state and macOS's notification history. The grant goes to {}.",
+                grantee()
+            ),
             pane,
         )
     } else if focus == Opened::Yes || store == Opened::Yes {
@@ -248,7 +276,8 @@ fn full_disk_access(app: &AppHandle) -> Status {
         Status::new(
             State::Unknown,
             format!(
-                "Nothing to test it on yet: the Focus file doesn't exist.{store_note} {INHERITED}"
+                "Nothing to test it on yet: the Focus file doesn't exist.{store_note} The grant goes to {}.",
+                grantee()
             ),
             pane,
         )
@@ -260,17 +289,23 @@ fn bluetooth(_: &AppHandle) -> Status {
     match toggles::bluetooth_permission() {
         Some(BluetoothPermission::Granted) => Status::new(
             State::Ready,
-            "Granted to kitty, so the dashboard can switch Bluetooth.",
+            format!("Granted to {}, so the dashboard can switch Bluetooth.", grantee()),
             None,
         ),
         Some(BluetoothPermission::NotAsked) => Status::new(
             State::Unknown,
-            "Not asked yet. The first Bluetooth switch from the dashboard asks, for kitty.",
+            format!(
+                "Not asked yet. The first Bluetooth switch from the dashboard asks, for {}.",
+                grantee()
+            ),
             None,
         ),
         Some(BluetoothPermission::Denied) => Status::new(
             State::Missing,
-            "Refused, so the dashboard can't switch Bluetooth. Allow kitty under Privacy & Security, Bluetooth.",
+            format!(
+                "Refused, so the dashboard can't switch Bluetooth. Allow {} under Privacy & Security, Bluetooth.",
+                grantee()
+            ),
             pane,
         ),
         Some(BluetoothPermission::Restricted) => Status::new(
@@ -304,12 +339,18 @@ fn automation_as_last_asked(app: &AppHandle, player: usize) -> Status {
     match app.state::<Setup>().asked.lock().unwrap()[player] {
         Some(State::Ready) => Status::new(
             State::Ready,
-            format!("kitty may control {name}, so the player shows its track and its transport works."),
+            format!(
+                "{} may control {name}, so the player shows its track and its transport works.",
+                grantee()
+            ),
             None,
         ),
         Some(_) => Status::new(
             State::Missing,
-            format!("Refused. Allow kitty to control {name} under Privacy & Security, Automation."),
+            format!(
+                "Refused. Allow {} to control {name} under Privacy & Security, Automation.",
+                grantee()
+            ),
             Some(Action::Open(SettingsPane::PrivacyAutomation)),
         ),
         None => Status::new(

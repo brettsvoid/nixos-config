@@ -75,7 +75,7 @@ each. Full Disk Access is what makes the Focus file readable (see
 | Toggle | Read | Write |
 |---|---|---|
 | Wi-Fi | CoreWLAN `powerOn` | `networksetup -setairportpower` |
-| Bluetooth | the `com.apple.bluetooth.power` notify key | IOBluetooth's private power setter, which asks for Bluetooth permission for kitty |
+| Bluetooth | the `com.apple.bluetooth.power` notify key | IOBluetooth's private power setter, which asks for Bluetooth permission |
 | Focus | `~/Library/DoNotDisturb/DB/Assertions.json` (needs Full Disk Access) | runs the Shortcut named in `toggles.focusShortcut` |
 | Night Shift | CoreBrightness `CBBlueLightClient` | the same client's `setEnabled:` |
 | Caffeine | a `caffeinate -di -w <edgebar's pid>` child is alive | starts or kills that child |
@@ -131,9 +131,9 @@ table row per check): Full Disk Access, Bluetooth permission, Automation for
 Spotify and Music, the Focus Shortcut, and the `aerospace`, theme, wallpaper
 and Claude commands. A check never asks for anything; its button does (a
 System Settings pane, the Shortcuts app, or one guarded AppleScript read so
-macOS asks for Automation). The grants go to `edgebar.app`, or to kitty while
-`pnpm tauri dev` runs edgebar in herdr. A missing item puts a dot on the
-Settings rail button.
+macOS asks for Automation). Each row names the app its grant goes to, which is
+edgebar's responsible process: `edgebar.app`, or kitty while `pnpm tauri dev`
+runs edgebar in herdr. A missing item puts a dot on the Settings rail button.
 
 The ink drawn on the surface (`colors.text`) is contrast-checked against it.
 If the role map's ink falls under 4.5:1 (WCAG AA), edgebar uses the palette

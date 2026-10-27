@@ -15,10 +15,8 @@ const SETTLE_STEP: Duration = Duration::from_millis(100);
 const SHORTCUTS_TTL: Duration = Duration::from_secs(30);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 const BLUETOOTH_TIMEOUT: Duration = Duration::from_secs(3);
-const BLUETOOTH_PERMISSION: Problem = Problem::fixed_in(
-    "Needs Bluetooth permission for kitty",
-    SettingsPane::PrivacyBluetooth,
-);
+const BLUETOOTH_PERMISSION: Problem =
+    Problem::fixed_in("Needs Bluetooth permission", SettingsPane::PrivacyBluetooth);
 /// The `com.apple.bluetooth.power` notify state while Bluetooth is on.
 const BLUETOOTH_POWER_ON: u64 = 1;
 /// `CBManagerAuthorization`'s raw values.
@@ -871,7 +869,7 @@ mod tests {
         assert_eq!(
             t.converge(&ignored, true, Duration::ZERO),
             Err(Problem::fixed_in(
-                "Needs Bluetooth permission for kitty",
+                "Needs Bluetooth permission",
                 SettingsPane::PrivacyBluetooth
             ))
         );
