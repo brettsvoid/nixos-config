@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No Dock icon from launch, before setup sets the Accessory policy. -->
+	<key>LSUIElement</key>
+	<true/>
+	<!-- The Bluetooth quick toggle. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>edgebar's Bluetooth toggle reads and sets the Bluetooth power.</string>
+	<!-- Track details for Spotify and Music in the notch. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>edgebar shows the track that Spotify or Music is playing.</string>
+</dict>
+</plist>

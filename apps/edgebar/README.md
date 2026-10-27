@@ -69,8 +69,8 @@ which is the point of the ladder.
 ## Quick toggles
 
 The dashboard's five toggles live in `src-tauri/src/toggles.rs`, one table row
-each. edgebar inherits kitty's permissions through herdr, which is what makes
-the Focus file readable.
+each. Full Disk Access is what makes the Focus file readable (see
+[Install](#install) for which app holds the grants).
 
 | Toggle | Read | Write |
 |---|---|---|
@@ -131,8 +131,8 @@ table row per check): Full Disk Access, Bluetooth permission, Automation for
 Spotify and Music, the Focus Shortcut, and the `aerospace`, theme, wallpaper
 and Claude commands. A check never asks for anything; its button does (a
 System Settings pane, the Shortcuts app, or one guarded AppleScript read so
-macOS asks for Automation). edgebar has kitty's permissions while it runs
-under herdr, so grants go to kitty. A missing item puts a dot on the
+macOS asks for Automation). The grants go to `edgebar.app`, or to kitty while
+`pnpm tauri dev` runs edgebar in herdr. A missing item puts a dot on the
 Settings rail button.
 
 The ink drawn on the surface (`colors.text`) is contrast-checked against it.
@@ -171,7 +171,42 @@ Three keys in `config.default.json`, changeable as settings:
 rebuild. See also [../../docs/bar-spec.md](../../docs/bar-spec.md) for edgebar's
 design spec.
 
+## Install
+
+`package.nix` builds `edgebar.app` with Nix, and
+`modules/home/darwin/edgebar.nix` installs and starts it:
+
+- Activation copies the app out of the store to `~/Applications/edgebar.app`
+  when the build changes, signs the copy, and restarts the bar.
+- The launchd agent `org.nix-community.home.edgebar` starts it at login and
+  again if it exits. It logs to `/tmp/edgebar.log`.
+
+The signing keeps the macOS permissions across rebuilds. Nix leaves the app
+signed ad hoc, and macOS knows an ad hoc app by its hash, so every rebuild
+would look like a new app. Signed with the `edgebar-codesign` certificate, the
+app is known by its bundle id and certificate, which don't change. Each Mac
+needs that certificate once, in the login keychain: Keychain Access ›
+Certificate Assistant › Create a Certificate, Name `edgebar-codesign`, Identity
+Type Self-Signed Root, Certificate Type Code Signing. Tick "Let me override
+defaults" and set the validity to 3650 days, because a new certificate means
+granting the permissions again. Without the certificate, activation says so
+and installs the app signed ad hoc.
+
+`src-tauri/Info.plist` is merged into the bundle's own. It keeps the Dock icon
+hidden from launch and gives the Bluetooth and Automation prompts their text.
+
+When `pnpm-lock.yaml` changes, update `pnpmDeps.hash` in `package.nix`: set it
+to `lib.fakeHash`, rebuild, and copy the hash from the error.
+
 ## Development
+
+Stop the installed bar first. A second edgebar takes over the bar's sockets and
+draws a second bar on top:
+
+```sh
+launchctl bootout gui/$UID/org.nix-community.home.edgebar      # stop
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/org.nix-community.home.edgebar.plist  # start
+```
 
 ```sh
 pnpm install

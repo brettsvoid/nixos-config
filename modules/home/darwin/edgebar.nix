@@ -164,6 +164,56 @@ in
         # would leave a stale palette.json until the next wallpaper change.
         ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
       '';
+
+      # Not in home.packages: linkApps would put a second, unsigned
+      # edgebar.app in ~/Applications/Home Manager Apps.
+      edgebar = pkgs.callPackage ../../../apps/edgebar/package.nix { };
+
+      # Signed ad hoc, as Nix leaves it, edgebar.app is known to macOS by its
+      # hash, so each rebuild would lose its permissions (Full Disk Access,
+      # Bluetooth, Automation). Signed with one certificate it is known by
+      # bundle id and certificate instead. Each Mac needs its own: Keychain
+      # Access › Certificate Assistant › Create a Certificate, Self-Signed
+      # Root, Code Signing, in the login keychain.
+      signingIdentity = "edgebar-codesign";
+      appPath = "${config.home.homeDirectory}/Applications/edgebar.app";
+
+      # Copies edgebar.app out of the store and signs the copy when the build
+      # changed, or when the certificate appeared since the last ad hoc
+      # install, then restarts the running bar on it.
+      install-app = pkgs.writeShellScript "install-edgebar-app" ''
+        src="${edgebar}/Applications/edgebar.app"
+        dst="${appPath}"
+        stamp="$HOME/.local/state/edgebar/app-source"
+
+        have_cert() {
+          /usr/bin/security find-identity -p codesigning 2>/dev/null \
+            | grep -qF '"${signingIdentity}"'
+        }
+        want="$src"
+        have_cert || want="$src (ad hoc)"
+        [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && [ -d "$dst" ] && exit 0
+
+        mkdir -p "$(dirname "$dst")" "$(dirname "$stamp")"
+        rm -rf "$dst.new"
+        cp -R "$src" "$dst.new"
+        chmod -R u+w "$dst.new"
+        if ! have_cert; then
+          echo "edgebar: no ${signingIdentity} certificate, so edgebar.app is signed ad hoc" >&2
+          echo "edgebar: and its macOS permissions reset on every rebuild" >&2
+        elif ! /usr/bin/codesign --force --sign "${signingIdentity}" "$dst.new"; then
+          echo "edgebar: signing failed, so edgebar.app is signed ad hoc" >&2
+          want="$src (ad hoc)"
+        fi
+        rm -rf "$dst"
+        mv "$dst.new" "$dst"
+        printf '%s\n' "$want" > "$stamp"
+
+        label="${config.launchd.agents.edgebar.config.Label}"
+        if /bin/launchctl print "gui/$UID/$label" >/dev/null 2>&1; then
+          /bin/launchctl kickstart -k "gui/$UID/$label"
+        fi
+      '';
     in
     {
       options.local.edgebar.scheme = lib.mkOption {
@@ -199,18 +249,55 @@ in
             select-scheme
           ];
 
-          # Scheme first, so the palette below is generated with it.
-          activation.edgebarScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-            run ${seed-scheme}
-          '';
+          activation = {
+            # Scheme first, so the palette below is generated with it.
+            edgebarScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+              run ${seed-scheme}
+            '';
 
-          # Seed palette.json on first build only. A matugen failure is
-          # non-fatal: without the file edgebar uses its bundled palette.
-          activation.edgebarTheme = lib.hm.dag.entryAfter [ "edgebarScheme" ] ''
-            if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
-              run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
-            fi
-          '';
+            # Seed palette.json on first build only. A matugen failure is
+            # non-fatal: without the file edgebar uses its bundled palette.
+            edgebarTheme = lib.hm.dag.entryAfter [ "edgebarScheme" ] ''
+              if [ ! -f "$HOME/.config/edgebar/palette.json" ]; then
+                run ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
+              fi
+            '';
+
+            # Before setupLaunchAgents, so a first install starts the signed copy.
+            edgebarApp = lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ] ''
+              run ${install-app}
+            '';
+          };
+        };
+
+        # The bar, run from the signed copy.
+        #
+        # EnvironmentVariables.PATH is load-bearing: edgebar finds `aerospace`
+        # and `claude`, and runs the notch's command rules, by PATH, and
+        # launchd gives agents only /usr/bin:/bin:/usr/sbin:/sbin.
+        launchd.agents.edgebar = {
+          enable = true;
+          config = {
+            ProgramArguments = [ "${appPath}/Contents/MacOS/edgebar" ];
+            RunAtLoad = true;
+            KeepAlive = true;
+            ProcessType = "Interactive";
+            EnvironmentVariables = {
+              PATH = lib.concatStringsSep ":" [
+                "${config.home.profileDirectory}/bin"
+                "/run/current-system/sw/bin"
+                "/nix/var/nix/profiles/default/bin"
+                "${config.home.homeDirectory}/.local/bin"
+                "/opt/homebrew/bin"
+                "/usr/bin"
+                "/bin"
+                "/usr/sbin"
+                "/sbin"
+              ];
+            };
+            StandardOutPath = "/tmp/edgebar.log";
+            StandardErrorPath = "/tmp/edgebar.log";
+          };
         };
 
         # Re-theme on wallpaper changes made outside edgebar (System Settings,
