@@ -70,7 +70,6 @@ in
             "cargo-llvm-cov"
             "cargo-nextest"
             "cargo-sweep"
-            "cloudflared"
             "d2"
             "livekit"
             # ── Tap-qualified formulae (the next four) ────────────────
