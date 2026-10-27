@@ -91,5 +91,13 @@ _: {
       # Set via Hyprland rather than enableSessionWide: Steam is started
       # from Hyprland and does not inherit home.sessionVariables.
       wayland.windowManager.hyprland.settings.env = [ "MANGOHUD, 1" ];
+
+      # A controller sends Hyprland no input, so the shell's idle timeouts ran
+      # out mid-game and turned the screens off. A fullscreen Proton game
+      # (Steam names its window steam_app_<id>) now holds idle back, with or
+      # without gamemoderun.
+      wayland.windowManager.hyprland.settings.windowrule = [
+        "idle_inhibit fullscreen, match:class ^(steam_app_.*)$"
+      ];
     };
 }
