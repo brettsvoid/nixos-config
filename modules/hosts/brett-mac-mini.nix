@@ -25,6 +25,7 @@ in
           timemachine
           nh-gc
           window-manager-aerospace
+          ios-ci-runner
         ];
 
         # ─── Identity ──────────────────────────────────────────────────
