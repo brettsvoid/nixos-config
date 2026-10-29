@@ -60,6 +60,10 @@ stop_caelestia() {
 start_custom() {
   echo "Starting custom shell..."
   qs_env
+  # The soft limit of 1024 open files is not enough: each monitor change makes the
+  # shell hold more for a while, and a shell at the limit dies on the next file
+  # descriptor Hyprland sends ("file descriptor expected ... format_table").
+  ulimit -n "$(ulimit -Hn)"
   # Quickshell's own log misses the last words of a shell killed by a Wayland protocol
   # error (Qt exits at once); its output keeps them.
   "$qs" -p "$HOME/.config/quickshell/custom-shell" \
