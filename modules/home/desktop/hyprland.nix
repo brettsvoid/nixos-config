@@ -408,6 +408,8 @@ in
             "$mod, F, Toggle fullscreen, fullscreen"
             "$mod, V, Toggle floating, togglefloating"
             "$mod, M, Exit Hyprland, exit"
+            # The session locks on the way down (logind's Lock signal).
+            "$mod SHIFT, L, Suspend, exec, systemctl suspend"
 
             # Focus (ALT + arrow keys)
             "ALT, Left, Focus window left, movefocus, l"
