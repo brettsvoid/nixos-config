@@ -5,27 +5,75 @@
 # and Keychain. tyto-ci joins `staff`, as every macOS user does, so brett's
 # home goes 700 below; it was 750 with group staff.
 #
-# The runner is nix-darwin's launchd daemon, and that is enough: a job booted
-# a simulator and Maestro drove it with no tyto-ci login (#548), so tyto-ci
-# never logs in and stays hidden.
+# The runner is a launchd daemon, and that is enough: a job booted a simulator
+# and Maestro drove it with no tyto-ci login (#548), so tyto-ci never logs in
+# and stays hidden.
+#
+# It is GitHub's own runner, which updates itself, as the beelinks' does
+# (#709). nix-darwin's services.github-runners runs nixpkgs' copy with
+# --disableupdate, and GitHub stops sending jobs to a runner 30 days after any
+# newer release, which nixpkgs can't be relied on to keep up with. The pinned
+# copy below only seeds an empty directory.
 #
 # A runner that has never registered reads a registration token from
-# `tokenFile` once. The registration then persists in
-# /var/lib/github-runners/<name>, and the token file can go. Setup, reboots
-# and failover: docs/CI.md in the tyto repo.
+# `tokenFile`. The registration then persists in the runner's directory, and
+# the token file can go. Setup, reboots and failover: docs/CI.md in the tyto
+# repo.
 _: {
   flake.modules.darwin.ios-ci-runner =
-    {
-      lib,
-      pkgs,
-      flake,
-      ...
-    }:
+    { pkgs, flake, ... }:
     let
       user = "tyto-ci";
       home = "/Users/${user}";
       runner = "brett-mac-mini-ios";
-      workDir = "/private/var/lib/github-runners/_work/${runner}";
+      runnerDir = "${home}/actions-runner";
+      workDir = "${runnerDir}/_work";
+      logDir = "/var/log/tyto-ci";
+      tokenFile = "/etc/tyto-ci/registration-token";
+
+      seed = pkgs.fetchurl {
+        url = "https://github.com/actions/runner/releases/download/v2.338.2/actions-runner-osx-arm64-2.338.2.tar.gz";
+        sha256 = "25a065af409ffa317ab4d5a3b614dd15fc9c40f2172bc1b35a1b1258e919a388";
+      };
+
+      startRunner = pkgs.writeShellApplication {
+        name = "tyto-ci-runner";
+        text = ''
+          mkdir -p ${runnerDir}
+          cd ${runnerDir}
+
+          if [[ ! -x bin/Runner.Listener ]]; then
+            echo "seeding the runner from ${seed.name}"
+            /usr/bin/tar -xzf ${seed}
+          fi
+
+          if [[ ! -f .runner ]]; then
+            token=""
+            if [[ -r ${tokenFile} ]]; then
+              token=$(tr -d '\n' <${tokenFile})
+            fi
+            if [[ -z $token ]]; then
+              echo "not registered, and no token in ${tokenFile}: see docs/CI.md in the tyto repo" >&2
+              exit 1
+            fi
+            ./config.sh --unattended --replace \
+              --url https://github.com/irj-io/tyto \
+              --token "$token" \
+              --name ${runner} \
+              --labels tyto-ios --no-default-labels \
+              --work ${workDir}
+          fi
+
+          # env.sh snapshots PATH into .path and JAVA_HOME and the like into
+          # .env, and jobs get both. It only adds what .env lacks, so start
+          # without one, or a store path from an older switch would stick.
+          rm -f .env
+          ./env.sh
+
+          # run.sh relaunches the listener after a self-update.
+          exec ./run.sh
+        '';
+      };
 
       # CI's own Xcode, beside the workstation's, so updating
       # /Applications/Xcode.app never changes CI. Bump it on purpose, after
@@ -105,43 +153,45 @@ _: {
         restartAfterPowerFailure = true;
       };
 
-      services.github-runners.${runner} = {
-        enable = true;
-        url = "https://github.com/irj-io/tyto";
-        tokenFile = "/etc/tyto-ci/registration-token";
-        inherit user;
-        group = "staff";
-        extraLabels = [ "tyto-ios" ];
-        noDefaultLabels = true;
-        replace = true;
-        extraPackages = [ pkgs.jdk17 ];
-        extraEnvironment = {
-          # The module's default is the runner's state directory. tyto-ci's
-          # home is where DerivedData, the pnpm store and Maestro persist.
+      launchd.daemons.tyto-ci-runner = {
+        command = "${startRunner}/bin/tyto-ci-runner";
+        # bash 5 and GNU coreutils first, then the system's own tools, which
+        # jobs need too: xcrun, xcodebuild, python3, defaults.
+        path = [
+          pkgs.bash
+          pkgs.coreutils
+          pkgs.git
+          pkgs.gnutar
+          pkgs.gzip
+          pkgs.jdk17
+          "/usr/bin"
+          "/bin"
+          "/usr/sbin"
+          "/sbin"
+        ];
+        environment = {
+          # Where DerivedData, the pnpm store and Maestro persist.
           HOME = home;
           DEVELOPER_DIR = developerDir;
           JAVA_HOME = "${pkgs.jdk17.home}";
         };
-        # Standard, not Background: Background confines the process to the
-        # efficiency cores and throttles its disk I/O. Nice 10 lets the
-        # workstation win when the two overlap.
-        serviceOverrides = {
+        serviceConfig = {
+          UserName = user;
+          GroupName = "staff";
+          WorkingDirectory = home;
+          RunAtLoad = true;
+          # Also retries every 30 s while the runner waits for a token.
+          KeepAlive = true;
+          ThrottleInterval = 30;
+          # Standard, not Background: Background confines the process to the
+          # efficiency cores and throttles its disk I/O. Nice 10 lets the
+          # workstation win when the two overlap.
           Nice = 10;
-          ProcessType = lib.mkForce "Standard";
-          # The module means to set KeepAlive, but merges an mkIf into it with
-          # `//`, so the plist gets none and an exited runner stays down.
-          KeepAlive = lib.mkForce true;
+          ProcessType = "Standard";
+          StandardOutPath = "${logDir}/runner.log";
+          StandardErrorPath = "${logDir}/runner.log";
         };
       };
-
-      # The module's PATH holds only Nix packages. Jobs need the system's own
-      # tools too: xcrun, xcodebuild, python3, defaults.
-      launchd.daemons."github-runner-${runner}".path = lib.mkAfter [
-        "/usr/bin"
-        "/bin"
-        "/usr/sbin"
-        "/sbin"
-      ];
 
       launchd.daemons.tyto-ci-cache-cleanup.serviceConfig = {
         ProgramArguments = [ "${cacheCleanup}/bin/tyto-ci-cache-cleanup" ];
@@ -156,8 +206,8 @@ _: {
           }
         ];
         RunAtLoad = false;
-        StandardOutPath = "/var/log/tyto-ci-cache-cleanup.log";
-        StandardErrorPath = "/var/log/tyto-ci-cache-cleanup.log";
+        StandardOutPath = "${logDir}/cache-cleanup.log";
+        StandardErrorPath = "${logDir}/cache-cleanup.log";
       };
 
       system.activationScripts.postActivation.text = ''
@@ -178,9 +228,10 @@ _: {
           fi
         fi
 
-        mkdir -p /etc/tyto-ci
-        chown ${user}:staff /etc/tyto-ci
+        mkdir -p /etc/tyto-ci ${logDir}
+        chown ${user}:staff /etc/tyto-ci ${logDir}
         chmod 700 /etc/tyto-ci
+        chmod 750 ${logDir}
       '';
     };
 }
