@@ -22,8 +22,11 @@ _: {
       # portrait monitor (tiles 1898 px tall) it always floated, wider than
       # the screen. no_max_size makes Hyprland ignore the maximum; GTK still
       # caps it at 1440 px tall, leaving a gap beneath it there.
-      wayland.windowManager.hyprland.settings.windowrule = [
-        "no_max_size on, match:class ^(keymapp)$"
+      wayland.windowManager.hyprland.settings.window_rule = [
+        {
+          match.class = "^(keymapp)$";
+          no_max_size = true;
+        }
       ];
     };
 }

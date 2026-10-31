@@ -3,7 +3,7 @@
 # Caelestia trial; `toggle-shell` switches between them.
 { inputs, config, ... }:
 let
-  inherit (config.flake.lib) repoDir liveHyprland;
+  inherit (config.flake.lib) hypr repoDir liveHyprland;
 in
 {
   flake.modules.homeManager.desktop-custom-shell =
@@ -310,7 +310,7 @@ in
               } 2>/dev/null
               [ -n "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || exit 0
               echo "Restarting the custom shell, if it is running"
-              hyprctl dispatch exec "${toggle-shell}/bin/toggle-shell restart" >/dev/null
+              hyprctl dispatch 'hl.dsp.exec_cmd("${toggle-shell}/bin/toggle-shell restart")' >/dev/null
             ) || true
           '';
         };
@@ -335,35 +335,71 @@ in
         wayland.windowManager.hyprland.settings = {
           # Through toggle-shell, which keeps the pid file the rebuild restart and
           # lock-recover use.
-          exec-once = lib.mkIf config.local.customShell.atLogin [ "toggle-shell custom" ];
-          bindd = [
-            "$mod, R, App launcher, exec, custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel"
-            "$mod, slash, Keybind cheatsheet, exec, custom-shell-or cheatsheet hypr-cheatsheet"
+          on = lib.mkIf config.local.customShell.atLogin [ (hypr.onStart "toggle-shell custom") ];
+          bind = with hypr; [
+            (bind "SUPER + R" (exec "custom-shell-or launcher ${pkgs.fuzzel}/bin/fuzzel") {
+              description = "App launcher";
+            })
+            (bind "SUPER + slash" (exec "custom-shell-or cheatsheet hypr-cheatsheet") {
+              description = "Keybind cheatsheet";
+            })
             # Caelestia and ambxst each lock on logind's Lock signal.
-            "$mod, L, Lock the session, exec, custom-shell-or lock loginctl lock-session"
-            "$mod, ESCAPE, Session menu (custom shell), global, custom-shell:session"
-            "$mod, N, Notification history (custom shell), global, custom-shell:notifications"
-            "$mod, D, Dashboard (custom shell), global, custom-shell:dashboard"
-            "$mod, I, Shell settings (custom shell), global, custom-shell:settings"
+            (bind "SUPER + L" (exec "custom-shell-or lock loginctl lock-session") {
+              description = "Lock the session";
+            })
+            (bind "SUPER + ESCAPE" (global "custom-shell:session") {
+              description = "Session menu (custom shell)";
+            })
+            (bind "SUPER + N" (global "custom-shell:notifications") {
+              description = "Notification history (custom shell)";
+            })
+            (bind "SUPER + D" (global "custom-shell:dashboard") {
+              description = "Dashboard (custom shell)";
+            })
+            (bind "SUPER + I" (global "custom-shell:settings") {
+              description = "Shell settings (custom shell)";
+            })
+            # The brightness keys still run brightnessctl (hyprland.nix); this also tells
+            # the shell, which shows the new level. The backlight sends no change events.
+            (bind "XF86MonBrightnessUp" (global "custom-shell:brightness") {
+              description = "Show the brightness level (custom shell)";
+              repeating = true;
+              locked = true;
+            })
+            (bind "XF86MonBrightnessDown" (global "custom-shell:brightness") {
+              description = "Show the brightness level (custom shell)";
+              repeating = true;
+              locked = true;
+            })
+            # Hyprland sends no event when a lock key changes. These tell the shell the key
+            # came up (a global bind's shortcut is released with it), so it reads the state.
+            # Locked, so they work on the lock screen; not consuming, so apps still get the
+            # key; ignoring modifiers, so Caps Lock and Num Lock themselves do not stop a match.
+            (bind "Caps_Lock" (global "custom-shell:lockkeys") {
+              description = "Show the Caps Lock state (custom shell)";
+              locked = true;
+              non_consuming = true;
+              ignore_mods = true;
+            })
+            (bind "Num_Lock" (global "custom-shell:lockkeys") {
+              description = "Show the Num Lock state (custom shell)";
+              locked = true;
+              non_consuming = true;
+              ignore_mods = true;
+            })
           ];
           # The settings window is an ordinary window (quickshell/settings): float it,
           # centred, at the size it is drawn for.
-          windowrule = [
-            "float on, center on, size 960 700, match:class ^(org\\.quickshell)$, match:title ^(Shell settings)$"
-          ];
-          # The brightness keys still run brightnessctl (hyprland.nix); this also tells
-          # the shell, which shows the new level. The backlight sends no change events.
-          binddel = [
-            ", XF86MonBrightnessUp, Show the brightness level (custom shell), global, custom-shell:brightness"
-            ", XF86MonBrightnessDown, Show the brightness level (custom shell), global, custom-shell:brightness"
-          ];
-          # Hyprland sends no event when a lock key changes. These tell the shell the key
-          # came up (a global bind's shortcut is released with it), so it reads the state.
-          # Locked, so they work on the lock screen; not consuming, so apps still get the
-          # key; ignoring modifiers, so Caps Lock and Num Lock themselves do not stop a match.
-          bindlni = [
-            ", Caps_Lock, global, custom-shell:lockkeys"
-            ", Num_Lock, global, custom-shell:lockkeys"
+          window_rule = [
+            {
+              match = {
+                class = "^(org\\.quickshell)$";
+                title = "^(Shell settings)$";
+              };
+              float = true;
+              center = true;
+              size = "960 700";
+            }
           ];
         };
 

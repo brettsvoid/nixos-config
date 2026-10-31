@@ -29,7 +29,7 @@
 # protocol) or a window rule marks it `immediate`. Game mode adds no such rules.
 { config, ... }:
 let
-  inherit (config.flake.lib) liveHyprland;
+  inherit (config.flake.lib) hypr liveHyprland;
 in
 {
   flake.modules.homeManager.desktop-game-mode =
@@ -51,7 +51,7 @@ in
         # run from an old terminal it may be one that has gone: take the running one.
         ${liveHyprland pkgs}
         STATE="$DIR/game-mode"
-        # The values to put back, one `keyword <option> <value>` per line.
+        # The values to put back, one `hl.config(...)` Lua call per line.
         SAVED="$DIR/game-mode.saved"
         # Present while game mode is on because a game started it (auto-on).
         AUTO="$DIR/game-mode.auto"
@@ -94,13 +94,26 @@ in
           [ "$(status)" = on ] && return 0
           : > "$SAVED.tmp"
           for option in $OPTIONS; do
-            # An int, a float or a custom string such as "8 8 8 8".
-            value=$(hyprctl getoption "$option" -j | jq -r '.int // .float // .custom // empty')
-            [ -n "$value" ] && echo "keyword $option $value" >> "$SAVED.tmp"
+            # "decoration:shadow:enabled" with {"bool": true} becomes
+            # hl.config({ decoration = { shadow = { enabled = true } } }). Gaps
+            # come back as "8 8 8 8", which hl.config takes only as a table.
+            hyprctl getoption "$option" -j | jq -r '
+              (if has("bool") then .bool | tostring
+               elif has("int") then .int | tostring
+               elif has("float") then .float | tostring
+               elif has("css") then .css | split(" ") | map(tonumber)
+                 | "{ top = \(.[0]), right = \(.[1]), bottom = \(.[2]), left = \(.[3]) }"
+               else empty end) as $value
+              | "hl.config(" + reduce (.option | split(":") | reverse)[] as $key ($value; "{ \($key) = \(.) }") + ")"
+            ' >> "$SAVED.tmp"
           done
           mv "$SAVED.tmp" "$SAVED"
-          # One batch, so nothing renders half-applied.
-          hyprctl --batch "keyword animations:enabled 0; keyword decoration:shadow:enabled 0; keyword decoration:blur:enabled 0; keyword general:gaps_in 0; keyword general:gaps_out 0; keyword general:border_size 1; keyword decoration:rounding 0; keyword general:allow_tearing 1" >/dev/null
+          # One call, so nothing renders half-applied.
+          hyprctl eval 'hl.config({
+            animations = { enabled = false },
+            decoration = { shadow = { enabled = false }, blur = { enabled = false }, rounding = 0 },
+            general = { gaps_in = 0, gaps_out = 0, border_size = 1, allow_tearing = true },
+          })' >/dev/null
           write_state on
           notify "Game mode on" "Animations, blur, shadows, gaps and rounding are off."
         }
@@ -109,7 +122,7 @@ in
           release
           [ "$(status)" = off ] && return 0
           if [ -s "$SAVED" ]; then
-            hyprctl --batch "$(paste -sd ';' "$SAVED")" >/dev/null
+            hyprctl eval "$(cat "$SAVED")" >/dev/null
           else
             # Nothing saved to go back to: fall back to the config.
             hyprctl reload >/dev/null
@@ -150,8 +163,10 @@ in
     {
       home.packages = [ game-mode ];
 
-      wayland.windowManager.hyprland.settings.bindd = [
-        "$mod SHIFT, G, Toggle game mode, exec, game-mode toggle"
+      wayland.windowManager.hyprland.settings.bind = [
+        (hypr.bind "SUPER + SHIFT + G" (hypr.exec "game-mode toggle") {
+          description = "Toggle game mode";
+        })
       ];
 
       # GameMode runs these through /bin/sh in its own environment, so the full path.

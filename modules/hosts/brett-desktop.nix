@@ -5,13 +5,12 @@
 { config, inputs, ... }:
 let
   username = config.flake.lib.username;
+  inherit (config.flake.lib) hypr;
 
   # Matched by EDID description (from `hyprctl monitors`), not connector, so
-  # swapping DP cables does not reshuffle the layout. The Dell's serial
-  # starts with "#", which hyprlang reads as a comment unless doubled; a
-  # single "#" silently matches nothing.
+  # swapping DP cables does not reshuffle the layout.
   odyssey = "desc:Samsung Electric Company Odyssey G5 HK7X700060";
-  dell = "desc:Dell Inc. Dell AW2518H ##ASO0Wsxq3xLd";
+  dell = "desc:Dell Inc. Dell AW2518H #ASO0Wsxq3xLd";
 
   # The 3080 Ti's PCI address.
   dgpu = "0000:01:00.0";
@@ -250,17 +249,26 @@ in
               # Render only on the 3080 Ti; the iGPU drives nothing. The
               # symlink comes from the udev rule above.
               wayland.windowManager.hyprland.settings = {
-                env = [
-                  "AQ_DRM_DEVICES, /dev/dri/nvidia-dgpu"
-                ];
+                env = [ (hypr.env "AQ_DRM_DEVICES" "/dev/dri/nvidia-dgpu") ];
 
                 # Odyssey G5 on the left; Dell AW2518H on the right, turned 90°
                 # clockwise (transform 1 rotates the picture back). The Odyssey
                 # sits 240 px down to centre it on the 1920-tall Dell. The Dell's
                 # EDID prefers 60 Hz, so 240 Hz has to be asked for.
                 monitor = [
-                  "${odyssey}, 2560x1440@165, 0x240, 1"
-                  "${dell}, 1920x1080@240, 2560x0, 1, transform, 1"
+                  {
+                    output = odyssey;
+                    mode = "2560x1440@165";
+                    position = "0x240";
+                    scale = 1;
+                  }
+                  {
+                    output = dell;
+                    mode = "1920x1080@240";
+                    position = "2560x0";
+                    scale = 1;
+                    transform = 1;
+                  }
                 ];
 
                 # XWayland games (CS2 among them) size themselves to X's first
@@ -269,57 +277,53 @@ in
                 # KVM switches away and back, so redo it on every monitoradded
                 # event. xrandr exits 0 for an output XWayland doesn't have yet,
                 # so success is checked in its monitor list, with retries.
-                exec-once = [
-                  (lib.getExe (
-                    pkgs.writeShellApplication {
-                      name = "xwayland-primary-odyssey";
-                      runtimeInputs = [
-                        pkgs.gnugrep
-                        pkgs.jq
-                        pkgs.socat
-                        pkgs.xrandr
-                      ];
-                      text = ''
-                        set_primary() {
-                          for _ in $(seq 30); do
-                            output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name') || true
-                            if [ -n "$output" ]; then
-                              xrandr --output "$output" --primary 2>/dev/null || true
-                              monitors=$(xrandr --listmonitors 2>/dev/null) || true
-                              grep -q "^ *[0-9]*: +\*$output " <<<"$monitors" && return 0
-                            fi
-                            sleep 1
-                          done
-                          echo "could not make the Odyssey XWayland's primary output" >&2
-                        }
+                on = [
+                  (hypr.onStart (
+                    lib.getExe (
+                      pkgs.writeShellApplication {
+                        name = "xwayland-primary-odyssey";
+                        runtimeInputs = [
+                          pkgs.gnugrep
+                          pkgs.jq
+                          pkgs.socat
+                          pkgs.xrandr
+                        ];
+                        text = ''
+                          set_primary() {
+                            for _ in $(seq 30); do
+                              output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name') || true
+                              if [ -n "$output" ]; then
+                                xrandr --output "$output" --primary 2>/dev/null || true
+                                monitors=$(xrandr --listmonitors 2>/dev/null) || true
+                                grep -q "^ *[0-9]*: +\*$output " <<<"$monitors" && return 0
+                              fi
+                              sleep 1
+                            done
+                            echo "could not make the Odyssey XWayland's primary output" >&2
+                          }
 
-                        set_primary
-                        socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" |
-                          while read -r event; do
-                            case $event in
-                              'monitoradded>>'*) set_primary ;;
-                            esac
-                          done
-                      '';
-                    }
+                          set_primary
+                          socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" |
+                            while read -r event; do
+                              case $event in
+                                'monitoradded>>'*) set_primary ;;
+                              esac
+                            done
+                        '';
+                      }
+                    )
                   ))
                 ];
 
-                # 1–5 on the Odyssey, 6–10 on the Dell. persistent:true keeps a
+                # 1–5 on the Odyssey, 6–10 on the Dell. persistent keeps a
                 # workspace alive while its monitor is off, so apps land on the
                 # other screen rather than an invisible orphan.
-                workspace = [
-                  "1, monitor:${odyssey}, default:true, persistent:true"
-                  "2, monitor:${odyssey}, persistent:true"
-                  "3, monitor:${odyssey}, persistent:true"
-                  "4, monitor:${odyssey}, persistent:true"
-                  "5, monitor:${odyssey}, persistent:true"
-                  "6, monitor:${dell}, default:true, persistent:true"
-                  "7, monitor:${dell}, persistent:true"
-                  "8, monitor:${dell}, persistent:true"
-                  "9, monitor:${dell}, persistent:true"
-                  "10, monitor:${dell}, persistent:true"
-                ];
+                workspace_rule = map (ws: {
+                  workspace = toString ws;
+                  monitor = if ws <= 5 then odyssey else dell;
+                  default = ws == 1 || ws == 6;
+                  persistent = true;
+                }) (lib.range 1 10);
               };
             };
         };

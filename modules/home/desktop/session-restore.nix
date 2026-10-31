@@ -10,7 +10,10 @@
 # apps/firefox.nix) and, as its windows share one process, is relaunched
 # once. Each window's command comes from /proc/<pid>/cmdline. A floating
 # window comes back floating, but not at its old position or size.
-{ inputs, ... }:
+{ inputs, config, ... }:
+let
+  inherit (config.flake.lib) hypr;
+in
 {
   flake.modules.homeManager.desktop-session-restore =
     { pkgs, ... }:
@@ -83,6 +86,6 @@
       # saves over it every 60 s. Loading first kills every open window's
       # process. At login nothing else has a window yet (the shell's panels are
       # layer surfaces), but do not start it by hand in a running session.
-      wayland.windowManager.hyprland.settings.exec-once = [ "hyprsession" ];
+      wayland.windowManager.hyprland.settings.on = [ (hypr.onStart "hyprsession") ];
     };
 }

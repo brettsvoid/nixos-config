@@ -3,8 +3,12 @@
 # collapses to a small round button. Themed from ambxst's colors.json.
 #
 # No host imports it. To bring it back, add `desktop-media-player` to a host's
-# home-manager imports; it starts itself from Hyprland's exec-once.
-_: {
+# home-manager imports; it starts itself from Hyprland's hyprland.start event.
+{ config, ... }:
+let
+  inherit (config.flake.lib) hypr;
+in
+{
   flake.modules.homeManager.desktop-media-player =
     { config, pkgs, ... }:
     {
@@ -561,6 +565,6 @@ _: {
         '')
       ];
 
-      wayland.windowManager.hyprland.settings.exec-once = [ "media-player-widget" ];
+      wayland.windowManager.hyprland.settings.on = [ (hypr.onStart "media-player-widget") ];
     };
 }

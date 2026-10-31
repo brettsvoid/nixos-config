@@ -1,6 +1,7 @@
 { config, ... }:
 let
   wp = config.flake.lib.wallpaper;
+  inherit (config.flake.lib) hypr;
 in
 {
   flake.modules.homeManager.desktop-ambxst =
@@ -11,9 +12,9 @@ in
       cacheDir = "${config.home.homeDirectory}/.cache/ambxst";
     in
     {
-      wayland.windowManager.hyprland.settings.exec-once = [
-        "ambxst" # bar, wallpaper, launcher, notifications
-        "sh -c 'sleep 3 && hyprctl reload'" # reload config after ambxst startup to restore keybinds
+      wayland.windowManager.hyprland.settings.on = [
+        (hypr.onStart "ambxst") # bar, wallpaper, launcher, notifications
+        (hypr.onStart "sleep 3 && hyprctl reload") # reload config after ambxst startup to restore keybinds
       ];
 
       # After linkGeneration, which creates desktop-wallpapers'

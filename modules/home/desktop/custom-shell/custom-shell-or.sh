@@ -5,6 +5,7 @@
 drawer=$1
 shift
 if hyprctl globalshortcuts -j | jq -e --arg name "custom-shell:$drawer" 'any(.[]; .name == $name)' >/dev/null; then
-  exec hyprctl dispatch global "custom-shell:$drawer"
+  # Safe inside the Lua quotes: jq has just matched it to a registered shortcut's name.
+  exec hyprctl dispatch "hl.dsp.global(\"custom-shell:$drawer\")"
 fi
 exec "$@"

@@ -10,6 +10,7 @@
 }:
 let
   font = config.flake.lib.theme.font.ui;
+  inherit (config.flake.lib) hypr;
   c = (lib.importJSON "${inputs.crimson-ronin}/state/caelestia/scheme.json").colours;
 in
 {
@@ -163,8 +164,15 @@ in
 
         wayland.windowManager.hyprland.settings = {
           # The window is translucent ink; the blur is what hides the desktop.
-          layerrule = [ "blur on, match:namespace ^rofi$" ];
-          bindd = [ "$mod, G, Game library, exec, game-launcher" ];
+          layer_rule = [
+            {
+              match.namespace = "^rofi$";
+              blur = true;
+            }
+          ];
+          bind = [
+            (hypr.bind "SUPER + G" (hypr.exec "game-launcher") { description = "Game library"; })
+          ];
         };
       };
     };

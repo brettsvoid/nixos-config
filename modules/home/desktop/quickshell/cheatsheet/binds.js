@@ -44,25 +44,11 @@ function keyName(key) {
     return key.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 }
 
-const directions = { l: "left", r: "right", u: "up", d: "down" };
-
-// For binds without a description.
-function describe(bind) {
-    switch (bind.dispatcher) {
-    case "exec":
-    case "global":
-        return bind.arg;
-    case "workspace":
-        return "Switch to workspace " + bind.arg;
-    case "movetoworkspace":
-        return "Move window to workspace " + bind.arg;
-    case "movefocus":
-        return "Focus window " + (directions[bind.arg] ?? bind.arg);
-    case "swapwindow":
-        return "Swap window " + (directions[bind.arg] ?? bind.arg);
-    default:
-        return bind.dispatcher + (bind.arg ? " " + bind.arg : "");
-    }
+// A Lua bind reports its dispatcher as "HL.Dispatcher(exec_cmd)", and its arg is an
+// internal reference rather than the dispatcher's argument.
+function dispatcher(bind) {
+    const match = /^HL\.Dispatcher\((.*)\)$/.exec(bind.dispatcher);
+    return match ? match[1] : bind.dispatcher;
 }
 
 function group(bind) {
@@ -70,29 +56,28 @@ function group(bind) {
         return "Media";
     if (bind.key === "Print")
         return "Screenshots";
-    switch (bind.dispatcher) {
-    case "exec":
-        // `custom-shell <target> <function> ...` drives the shell (not custom-shell-or).
-        return bind.arg === "custom-shell" || bind.arg.startsWith("custom-shell ") ? "Shell" : "Apps";
+    switch (dispatcher(bind)) {
+    case "exec_cmd":
+        return "Apps";
     case "global":
         return "Shell";
-    case "killactive":
+    case "focus":
+    case "move":
+        // Both take a direction, a window or a workspace; only the description tells.
+        return /workspace|scratchpad/i.test(bind.description) ? "Workspaces" : "Windows";
+    case "close":
+    case "kill":
     case "fullscreen":
-    case "togglefloating":
-    case "movefocus":
-    case "swapwindow":
-    case "movewindow":
-    case "resizewindow":
-    case "mouse":
+    case "float":
+    case "swap":
+    case "drag":
+    case "resize":
     case "pin":
     case "pseudo":
-    case "togglesplit":
-    case "centerwindow":
+    case "layout":
+    case "center":
         return "Windows";
-    case "workspace":
-    case "movetoworkspace":
-    case "movetoworkspacesilent":
-    case "togglespecialworkspace":
+    case "toggle_special":
         return "Workspaces";
     case "exit":
         return "Session";
@@ -104,14 +89,14 @@ function group(bind) {
 // Binds that only tell the shell something, with no keys of their own to show: the lock
 // keys' (services/LockKeys.qml).
 function hidden(bind) {
-    return bind.dispatcher === "global" && bind.arg === "custom-shell:lockkeys";
+    return dispatcher(bind) === "global" && (bind.key === "Caps_Lock" || bind.key === "Num_Lock");
 }
 
 // Rows sorted by group, keeping the config's order within each.
 function rows(binds) {
     const out = binds.filter(bind => !hidden(bind)).map((bind, i) => ({
                 keys: modifiers(bind.modmask).concat([keyName(bind.key)]),
-                description: bind.description || describe(bind),
+                description: bind.description || dispatcher(bind),
                 group: group(bind),
                 order: i
             }));

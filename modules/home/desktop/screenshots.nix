@@ -7,7 +7,11 @@
 # The region picker (grimblast's `area`, through slurp) freezes the screen first, with
 # hyprpicker, so it captures what was there when the key went down; clicking a window
 # selects the whole window.
-_: {
+{ config, ... }:
+let
+  inherit (config.flake.lib) hypr;
+in
+{
   flake.modules.homeManager.desktop-screenshots =
     {
       config,
@@ -77,10 +81,14 @@ _: {
         settings.Default.save_dir = saveDir;
       };
 
-      wayland.windowManager.hyprland.settings.bindd = [
-        ", Print, Screenshot a region (swappy), exec, screenshot region"
-        "CTRL, Print, Screenshot a region to the clipboard, exec, screenshot region-copy"
-        "SHIFT, Print, Screenshot the monitor to the clipboard, exec, screenshot monitor"
+      wayland.windowManager.hyprland.settings.bind = with hypr; [
+        (bind "Print" (exec "screenshot region") { description = "Screenshot a region (swappy)"; })
+        (bind "CTRL + Print" (exec "screenshot region-copy") {
+          description = "Screenshot a region to the clipboard";
+        })
+        (bind "SHIFT + Print" (exec "screenshot monitor") {
+          description = "Screenshot the monitor to the clipboard";
+        })
       ];
     };
 }

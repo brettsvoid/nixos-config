@@ -19,7 +19,9 @@ gdbus monitor --session --dest org.gnome.NautilusPreviewer \
     esac
 
     window=$(cat "$state/window" 2>/dev/null) || continue
-    hyprctl dispatch sendshortcut ", $key, address:$window" >/dev/null || continue
+    # It goes into Lua source below: only ever a hex address.
+    [[ $window =~ ^0x[0-9a-f]+$ ]] || continue
+    hyprctl dispatch "hl.dsp.send_shortcut({ mods = \"\", key = \"$key\", window = \"address:$window\" })" >/dev/null || continue
     touch "$state/follow"
-    hyprctl dispatch sendshortcut ", space, address:$window" >/dev/null || true
+    hyprctl dispatch "hl.dsp.send_shortcut({ mods = \"\", key = \"space\", window = \"address:$window\" })" >/dev/null || true
   done

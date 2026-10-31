@@ -5,9 +5,10 @@
 # local.customShell.atLogin. ambxst stays installed (programs.ambxst in
 # system/nixos/hyprland.nix), so `toggle-shell ambxst` swaps it in and
 # `toggle-shell caelestia` swaps back.
-{ inputs, ... }:
+{ inputs, config, ... }:
 let
   ronin = inputs.crimson-ronin;
+  inherit (config.flake.lib) hypr;
 in
 {
   flake.modules.homeManager.desktop-caelestia =
@@ -68,7 +69,7 @@ in
       programs.caelestia = {
         enable = true;
         package = shell;
-        # Hyprland's exec-once starts it (below), with the command that
+        # Hyprland's hyprland.start event starts it (below), with the command that
         # toggle-shell uses, so both start it outside systemd.
         systemd.enable = false;
 
@@ -234,27 +235,36 @@ in
         # foreground for the session, only to filter the shell's log. Not
         # where the custom shell starts at login instead (custom-shell.nix);
         # toggle-shell still starts Caelestia there.
-        exec-once = lib.mkIf (!(config.local.customShell.atLogin or false)) [ "caelestia shell -d" ];
+        on = lib.mkIf (!(config.local.customShell.atLogin or false)) [
+          (hypr.onStart "caelestia shell -d")
+        ];
 
         # Caelestia's panels are Hyprland global shortcuts; they do nothing
         # while it is not running. ambxst binds D, N and Escape too, but
         # toggle-shell reloads Hyprland after stopping it, which drops them.
-        bindd = [
-          "$mod, SPACE, Caelestia launcher, global, caelestia:launcher"
-          "$mod, D, Caelestia dashboard, global, caelestia:dashboard"
-          "$mod, N, Caelestia sidebar, global, caelestia:sidebar"
-          "$mod, ESCAPE, Caelestia session menu, global, caelestia:session"
-          # Print screenshots are desktop-screenshots', under any shell.
+        # Print screenshots are desktop-screenshots', under any shell.
+        bind = with hypr; [
+          (bind "SUPER + SPACE" (global "caelestia:launcher") { description = "Caelestia launcher"; })
+          (bind "SUPER + D" (global "caelestia:dashboard") { description = "Caelestia dashboard"; })
+          (bind "SUPER + N" (global "caelestia:sidebar") { description = "Caelestia sidebar"; })
+          (bind "SUPER + ESCAPE" (global "caelestia:session") { description = "Caelestia session menu"; })
         ];
 
         # Crimson Ronin's window borders: a crimson edge that fades back to
         # graphite. Forced over the Catppuccin gradient in hyprland.nix; this
         # also applies while ambxst is running. The custom shell sets its
         # theme's in their place while it runs (quickshell/theme/WindowBorders.qml).
-        general = {
-          "col.active_border" =
-            lib.mkForce "rgba(24242Bdd) rgba(720B12ee) rgba(E21A28ff) rgba(24242Bdd) 32deg";
-          "col.inactive_border" = lib.mkForce "rgba(24242B66)";
+        config.general.col = {
+          active_border = lib.mkForce {
+            colors = [
+              "rgba(24242Bdd)"
+              "rgba(720B12ee)"
+              "rgba(E21A28ff)"
+              "rgba(24242Bdd)"
+            ];
+            angle = 32;
+          };
+          inactive_border = lib.mkForce "rgba(24242B66)";
         };
       };
     };

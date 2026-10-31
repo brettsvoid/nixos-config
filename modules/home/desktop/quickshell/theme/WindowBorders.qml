@@ -4,8 +4,8 @@ import Quickshell.Hyprland
 
 // Hyprland's window borders in the theme's colours, in Crimson Ronin's shape: the
 // focused window's edge runs from the surface through the primary colour and back, and
-// the others get a faint surface edge. Set with `hyprctl keyword` rather than written
-// to a file the config sources: Hyprland reloads its whole config when a sourced file
+// the others get a faint surface edge. Set with `hyprctl eval` rather than written
+// to a file the config loads: Hyprland reloads its whole config when a loaded file
 // changes, and a reload would undo game mode. A reload (a rebuild, toggle-shell) puts
 // the config's colours back, so they are set again after each.
 Scope {
@@ -13,8 +13,9 @@ Scope {
 
     // Not before the theme's colours have loaded, which would set the fallbacks first.
     readonly property bool ready: Object.keys(Theme.colors).length > 0
-    readonly property string active: [root.rgba(Theme.surfaceContainer, "dd"), root.rgba(Theme.primaryContainer, "ee"), root.rgba(Theme.primary, "ff"), root.rgba(Theme.surfaceContainer, "dd"), "32deg"].join(" ")
-    readonly property string inactive: root.rgba(Theme.surfaceContainer, "66")
+    // Lua tables for hl.config. rgba() yields only hex digits, so the quoting is safe.
+    readonly property string active: `{ colors = { ${[root.rgba(Theme.surfaceContainer, "dd"), root.rgba(Theme.primaryContainer, "ee"), root.rgba(Theme.primary, "ff"), root.rgba(Theme.surfaceContainer, "dd")].map(c => `"${c}"`).join(", ")} }, angle = 32 }`
+    readonly property string inactive: `"${root.rgba(Theme.surfaceContainer, "66")}"`
 
     // Hyprland's colour syntax, rgba(rrggbbaa), with the alpha given in hex.
     function rgba(colour, alpha) {
@@ -34,7 +35,7 @@ Scope {
         interval: 100
         onTriggered: {
             if (root.ready)
-                Quickshell.execDetached(["hyprctl", "--batch", `keyword general:col.active_border ${root.active}; keyword general:col.inactive_border ${root.inactive}`]);
+                Quickshell.execDetached(["hyprctl", "eval", `hl.config({ general = { col = { active_border = ${root.active}, inactive_border = ${root.inactive} } } })`]);
         }
     }
 

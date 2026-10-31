@@ -25,7 +25,7 @@ Scope {
         if (!root.screensOff)
             return;
         root.screensOff = false;
-        Hyprland.dispatch("dpms on");
+        Hyprland.dispatch(`hl.dsp.dpms({ action = "on" })`);
     }
 
     Instantiator {
@@ -54,7 +54,7 @@ Scope {
             onIsIdleChanged: {
                 if (isIdle) {
                     root.screensOff = true;
-                    Hyprland.dispatch("dpms off");
+                    Hyprland.dispatch(`hl.dsp.dpms({ action = "off" })`);
                 } else {
                     root.screensOn();
                 }

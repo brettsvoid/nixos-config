@@ -24,7 +24,7 @@ if [ -n "$pid" ] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "qui
 fi
 
 echo "Starting the custom shell..."
-hypr dispatch exec toggle-shell custom >/dev/null
+hypr dispatch 'hl.dsp.exec_cmd("toggle-shell custom")' >/dev/null
 started=false
 for _ in $(seq 50); do
   if hypr globalshortcuts -j | jq -e 'any(.[]; .name == "custom-shell:lock")' >/dev/null; then
@@ -35,7 +35,7 @@ for _ in $(seq 50); do
 done
 last_resort() {
   echo "Last resort, which ends the session and loses unsaved work:" >&2
-  echo "  hyprctl --instance 0 dispatch exit" >&2
+  echo "  hyprctl --instance 0 dispatch 'hl.dsp.exit()'" >&2
 }
 if ! $started; then
   echo "The custom shell did not start within 10 s, so nothing could lock." >&2
@@ -62,10 +62,10 @@ fi
 # Hyprland sets its monitors up again as its VT comes back.
 sleep 2
 
-hypr keyword misc:allow_session_lock_restore 1 >/dev/null
-hypr dispatch global custom-shell:lock >/dev/null
+hypr eval 'hl.config({ misc = { allow_session_lock_restore = true } })' >/dev/null
+hypr dispatch 'hl.dsp.global("custom-shell:lock")' >/dev/null
 sleep 2
-hypr keyword misc:allow_session_lock_restore 0 >/dev/null
+hypr eval 'hl.config({ misc = { allow_session_lock_restore = false } })' >/dev/null
 
 # You are on tty$vt by now: this is for when you come back here.
 sleep 2

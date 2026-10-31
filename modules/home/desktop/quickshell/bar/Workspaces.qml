@@ -88,7 +88,7 @@ Item {
                     width: root.vertical ? Theme.barHeight : parent.width + 8
                     height: root.vertical ? parent.height + 8 : Theme.barHeight
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Hyprland.dispatch("workspace " + parent.modelData)
+                    onClicked: Hyprland.dispatch(`hl.dsp.focus({ workspace = ${parent.modelData} })`)
                 }
             }
         }
@@ -118,7 +118,7 @@ Item {
             const ids = root.shown;
             const at = ids.indexOf(root.activeWorkspaceId);
             const next = at < 0 ? (step > 0 ? 0 : ids.length - 1) : (at + step + ids.length) % ids.length;
-            Hyprland.dispatch("workspace " + ids[next]);
+            Hyprland.dispatch(`hl.dsp.focus({ workspace = ${ids[next]} })`);
         }
     }
 }

@@ -73,12 +73,16 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
     does not know (or its DRM backend tries the seat and every input device first).
   - Its exec lines run for real: stub them, or they start the session's apps again.
 - A second headless output in the nested Hyprland (`hyprctl output create headless` again)
-  takes `hyprctl keyword monitor <name>,1920x1080,0x0,1,transform,1` for a 1080x1920 one; a
-  rule that changes the mode itself (`1080x1920@60`) was ignored. Test windows: `kitty
+  takes a transform for a 1080x1920 one: `hyprctl eval 'hl.monitor({ output = "<name>", mode
+  = "1920x1080", position = "0x0", scale = 1, transform = 1 })'` (found on 0.56 with the
+  hyprlang form of that rule); a rule that changes the mode itself (`1080x1920@60`) was
+  ignored. Test windows: `kitty
   --class x -e sh -c '...'` reading titles from a fifo and printing `\033]2;<title>\007`
   changes the title live, but not with `--title`, which fixes it.
-- `hyprctl dispatch exec kitty --class x` reads `--class` as its own flag: quote the whole
-  command after `exec`.
+- Since 0.57, `hyprctl dispatch X` runs the Lua `hl.dispatch(X)`: `hyprctl dispatch
+  'hl.dsp.exec_cmd("kitty --class x")'`. The old `hyprctl dispatch exec kitty` form fails
+  with a Lua syntax error, and `hyprctl keyword` is gone (use `hyprctl eval
+  'hl.config({ ... })'`).
 - A virtual keyboard (wtype, `zwp_virtual_keyboard_v1`) does not toggle Caps Lock or Num Lock
   in Hyprland's state: the client has to send `modifiers` with the lock bit itself. A
   `wtype` keyboard is also gone again before a `hyprctl devices -j` that follows its key.
@@ -162,9 +166,10 @@ the live theme.
 ## Hyprland and GTK
 
 - Hyprland reloads its whole config when any file it sources changes (an inotify
-  watch on each). A reload drops runtime `hyprctl keyword` changes, game mode's
-  included. For values that change at runtime, use `hyprctl keyword`, and set them
-  again on the `configreloaded` event (`theme/WindowBorders.qml`).
+  watch on each; seen with hyprlang, not yet checked for Lua's `require`). A reload
+  drops runtime `hyprctl eval 'hl.config(...)'` changes, game mode's included. For
+  values that change at runtime, use `hyprctl eval`, and set them again on the
+  `configreloaded` event (`theme/WindowBorders.qml`).
 - GTK 3 and GTK 4 read `~/.config/gtk-{3,4}.0/gtk.css` once, when an app starts.
   Changing the theme name doesn't make them read it again. libadwaita 1.9 still takes
   its colours from the `@define-color` names there. Light/dark (dconf's

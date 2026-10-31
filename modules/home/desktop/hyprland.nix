@@ -20,9 +20,43 @@ let
       export HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY
     fi
   '';
+  # Entries for home-manager's Lua settings (configType = "lua"): `_args`
+  # renders as a call with several arguments, mkLuaInline as raw Lua.
+  hypr =
+    let
+      inline = lib.generators.mkLuaInline;
+      toLua = lib.generators.toLua { };
+    in
+    {
+      # A dispatcher, e.g. dsp "window.close()" for hl.dsp.window.close().
+      dsp = expr: inline "hl.dsp.${expr}";
+      exec = cmd: inline "hl.dsp.exec_cmd(${toLua cmd})";
+      global = name: inline "hl.dsp.global(${toLua name})";
+      # settings.bind entry: hl.bind(keys, dispatcher, opts).
+      bind = keys: dispatcher: opts: {
+        _args = [
+          keys
+          dispatcher
+          opts
+        ];
+      };
+      env = name: value: {
+        _args = [
+          name
+          value
+        ];
+      };
+      # settings.on entry that runs a command once at login (exec-once).
+      onStart = cmd: {
+        _args = [
+          "hyprland.start"
+          (inline "function() hl.exec_cmd(${toLua cmd}) end")
+        ];
+      };
+    };
 in
 {
-  flake.lib.liveHyprland = liveHyprland;
+  flake.lib = { inherit hypr liveHyprland; };
 
   flake.modules.homeManager.desktop-hyprland =
     { config, pkgs, ... }:
@@ -55,28 +89,13 @@ in
             else .
             end;
 
-          def auto_desc:
-            if .dispatcher == "exec" then .arg
-            elif .dispatcher == "workspace" then "Switch to workspace " + .arg
-            elif .dispatcher == "movetoworkspace" then "Move to workspace " + .arg
-            elif .dispatcher == "movefocus" then "Focus " + ({"l":"left","r":"right","u":"up","d":"down"}[.arg] // .arg)
-            elif .dispatcher == "swapwindow" then "Swap window " + ({"l":"left","r":"right","u":"up","d":"down"}[.arg] // .arg)
-            elif .dispatcher == "fullscreen" then "Toggle fullscreen"
-            elif .dispatcher == "togglefloating" then "Toggle floating"
-            elif .dispatcher == "killactive" then "Close active window"
-            elif .dispatcher == "exit" then "Exit Hyprland"
-            elif .dispatcher == "togglespecialworkspace" then "Toggle scratchpad"
-            elif .dispatcher == "movewindow" then "Move window (drag)"
-            elif .dispatcher == "resizewindow" then "Resize window (drag)"
-            else .dispatcher + (if .arg != "" then " " + .arg else "" end)
-            end;
-
           def rpad($n): . + " " * ([$n - length, 1] | max);
 
           [ .[] |
             (.modmask | decode_mods) as $mods |
             ($mods + (if $mods != "" then " + " else "" end) + (.key | clean_key)) as $combo |
-            (if (.description // "") != "" then .description else auto_desc end) as $desc |
+            # A Lua bind's dispatcher reads "HL.Dispatcher(exec_cmd)", with no argument.
+            (if (.description // "") != "" then .description else .dispatcher end) as $desc |
             (($combo | rpad(28)) + $desc)
           ] |
           sort_by(
@@ -285,200 +304,308 @@ in
         enable = true;
         package = null; # installed system-wide via programs.hyprland.enable
 
-        # From home.stateVersion 26.05 this defaults to "lua", but `settings`
-        # below is hyprlang: moving means rewriting it (docs/TODO.md).
-        #
-        # Hyprland 0.56 prefers ~/.config/hypr/hyprland.lua to hyprland.conf,
-        # and writes a default hyprland.lua if it starts with no config at all
-        # (say, after a failed activation). Delete a stray one: it shadows this.
-        configType = "hyprlang";
+        # Hyprland 0.57 reads only hyprland.lua. Each settings.<name> entry
+        # renders as an hl.<name>(...) call; flake.lib.hypr builds the
+        # entries that take more than one argument.
+        configType = "lua";
 
         # Monitor layout, GPU selection (AQ_DRM_DEVICES) and multi-GPU
         # workarounds are per machine: each host file adds its own.
         settings = {
           # ── Autostart ──────────────────────────────────────────────
           # The desktop shell starts itself from its own module's
-          # exec-once: a host imports desktop-ambxst or desktop-caelestia.
+          # hypr.onStart: a host imports desktop-ambxst or desktop-caelestia.
 
           # ── Monitors ───────────────────────────────────────────────
           # Hosts list their own monitors; mkAfter keeps this catch-all
           # below them.
           monitor = lib.mkAfter [
-            ", preferred, auto, 1" # fallback for hotplug
+            {
+              output = ""; # fallback for hotplug
+              mode = "preferred";
+              position = "auto";
+              scale = 1;
+            }
           ];
 
           # ── Environment variables ──────────────────────────────────
-          env = [
+          env = lib.mapAttrsToList hypr.env {
             # NVIDIA
-            "LIBVA_DRIVER_NAME, nvidia"
-            "__GLX_VENDOR_LIBRARY_NAME, nvidia"
-            "NVD_BACKEND, direct"
+            LIBVA_DRIVER_NAME = "nvidia";
+            __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+            NVD_BACKEND = "direct";
             # Wayland toolkit hints
-            "XDG_SESSION_TYPE, wayland"
-            "QT_QPA_PLATFORM, wayland"
-            "QT_WAYLAND_DISABLE_WINDOWDECORATION, 1"
-            "SDL_VIDEODRIVER, wayland"
-            "CLUTTER_BACKEND, wayland"
-            "MOZ_ENABLE_WAYLAND, 1"
+            XDG_SESSION_TYPE = "wayland";
+            QT_QPA_PLATFORM = "wayland";
+            QT_WAYLAND_DISABLE_WINDOWDECORATION = "1";
+            SDL_VIDEODRIVER = "wayland";
+            CLUTTER_BACKEND = "wayland";
+            MOZ_ENABLE_WAYLAND = "1";
             # Cursor
-            "XCURSOR_THEME, catppuccin-mocha-dark-cursors"
-            "XCURSOR_SIZE, 24"
-          ];
-
-          # ── Input ──────────────────────────────────────────────────
-          input = {
-            repeat_rate = 35;
-            repeat_delay = 300;
-            accel_profile = "flat";
-            touchpad = {
-              natural_scroll = true;
-              tap-to-click = true;
-            };
+            XCURSOR_THEME = "catppuccin-mocha-dark-cursors";
+            XCURSOR_SIZE = "24";
           };
 
           gesture = [
-            "3, horizontal, workspace"
+            {
+              fingers = 3;
+              direction = "horizontal";
+              action = "workspace";
+            }
           ];
 
-          # ── Look & feel ────────────────────────────────────────────
-          general = {
-            gaps_in = 4;
-            gaps_out = 8;
-            border_size = 2;
-            "col.active_border" = "${rgba mocha.mauve "ff"} ${rgba mocha.blue "ff"} 45deg";
-            "col.inactive_border" = rgba mocha.surface0 "ff";
-          };
-
-          decoration = {
-            rounding = 10;
-            active_opacity = 1.0;
-            inactive_opacity = 0.95;
-            shadow = {
-              enabled = true;
-              range = 8;
-              render_power = 2;
-              color = rgba mocha.base "ee";
+          config = {
+            # ── Input ────────────────────────────────────────────────
+            input = {
+              repeat_rate = 35;
+              repeat_delay = 300;
+              accel_profile = "flat";
+              touchpad = {
+                natural_scroll = true;
+                tap_to_click = true;
+              };
             };
-            blur = {
-              enabled = true;
-              size = 6;
-              passes = 2;
-              new_optimizations = true;
+
+            # ── Look & feel ──────────────────────────────────────────
+            general = {
+              gaps_in = 4;
+              gaps_out = 8;
+              border_size = 2;
+              col = {
+                active_border = {
+                  colors = [
+                    (rgba mocha.mauve "ff")
+                    (rgba mocha.blue "ff")
+                  ];
+                  angle = 45;
+                };
+                inactive_border = rgba mocha.surface0 "ff";
+              };
+            };
+
+            decoration = {
+              rounding = 10;
+              active_opacity = 1.0;
+              inactive_opacity = 0.95;
+              shadow = {
+                enabled = true;
+                range = 8;
+                render_power = 2;
+                color = rgba mocha.base "ee";
+              };
+              blur = {
+                enabled = true;
+                size = 6;
+                passes = 2;
+                new_optimizations = true;
+              };
+            };
+
+            animations.enabled = true;
+
+            render = {
+              cm_enabled = false;
+              new_render_scheduling = true; # dynamic triple buffering for high refresh rates
+            };
+
+            misc = {
+              vrr = 2; # adaptive sync in fullscreen apps/games
+              disable_hyprland_logo = true;
+              disable_splash_rendering = true;
             };
           };
 
-          animations = {
-            enabled = true;
-            bezier = [ "ease, 0.25, 0.1, 0.25, 1" ];
-            animation = [
-              "windows, 1, 4, ease, slide"
-              "windowsOut, 1, 4, ease, slide"
-              "fade, 1, 4, ease"
-              "workspaces, 1, 4, ease, slide"
-            ];
-          };
-
-          render = {
-            cm_enabled = false;
-            new_render_scheduling = true; # dynamic triple buffering for high refresh rates
-          };
-
-          misc = {
-            vrr = 2; # adaptive sync in fullscreen apps/games
-            disable_hyprland_logo = true;
-            disable_splash_rendering = true;
-          };
+          curve = [
+            {
+              _args = [
+                "ease"
+                {
+                  type = "bezier";
+                  points = [
+                    [
+                      0.25
+                      0.1
+                    ]
+                    [
+                      0.25
+                      1
+                    ]
+                  ];
+                }
+              ];
+            }
+          ];
+          animation = [
+            {
+              leaf = "windows";
+              enabled = true;
+              speed = 4;
+              bezier = "ease";
+              style = "slide";
+            }
+            {
+              leaf = "windowsOut";
+              enabled = true;
+              speed = 4;
+              bezier = "ease";
+              style = "slide";
+            }
+            {
+              leaf = "fade";
+              enabled = true;
+              speed = 4;
+              bezier = "ease";
+            }
+            {
+              leaf = "workspaces";
+              enabled = true;
+              speed = 4;
+              bezier = "ease";
+              style = "slide";
+            }
+          ];
 
           # ── Window rules ───────────────────────────────────────────
           # Sushi (Space in Thunar, above) sizes its window to the file, so it
           # floats. stay_focused keeps the arrow keys on it: otherwise focus
           # went to the window under the pointer whenever Sushi resized.
-          windowrule = [
-            "float on, center on, stay_focused on, match:class ^(org\\.gnome\\.NautilusPreviewer)$"
+          window_rule = [
+            {
+              match.class = "^(org\\.gnome\\.NautilusPreviewer)$";
+              float = true;
+              center = true;
+              stay_focused = true;
+            }
           ];
 
           # ── Keybindings ────────────────────────────────────────────
-          "$mod" = "SUPER";
+          bind =
+            with hypr;
+            [
+              # Applications
+              (bind "SUPER + Q" (exec "kitty") { description = "Open terminal (Kitty)"; })
+              (bind "SUPER + C" (dsp "window.close()") { description = "Close active window"; })
+              (bind "SUPER + E" (exec "thunar") { description = "File manager (Thunar)"; })
+              (bind "SUPER + F" (dsp "window.fullscreen()") { description = "Toggle fullscreen"; })
+              (bind "SUPER + V" (dsp ''window.float({ action = "toggle" })'') {
+                description = "Toggle floating";
+              })
+              (bind "SUPER + M" (dsp "exit()") { description = "Exit Hyprland"; })
+              # The session locks on the way down (logind's Lock signal).
+              (bind "SUPER + SHIFT + L" (exec "systemctl suspend") { description = "Suspend"; })
+            ]
+            # Focus (ALT + arrow keys), swap windows (ALT + SHIFT + arrow keys)
+            ++
+              lib.concatMap
+                (
+                  dir:
+                  let
+                    key = lib.toSentenceCase dir;
+                  in
+                  [
+                    (bind "ALT + ${key}" (dsp ''focus({ direction = "${dir}" })'') {
+                      description = "Focus window ${dir}";
+                    })
+                    (bind "ALT + SHIFT + ${key}" (dsp ''window.swap({ direction = "${dir}" })'') {
+                      description = "Swap window ${dir}";
+                    })
+                  ]
+                )
+                [
+                  "left"
+                  "right"
+                  "up"
+                  "down"
+                ]
+            # Workspaces, and moving a window to one
+            ++ lib.concatMap (
+              ws:
+              let
+                key = toString (lib.mod ws 10);
+              in
+              [
+                (bind "SUPER + ${key}" (dsp "focus({ workspace = ${toString ws} })") {
+                  description = "Switch to workspace ${toString ws}";
+                })
+                (bind "SUPER + SHIFT + ${key}" (dsp "window.move({ workspace = ${toString ws} })") {
+                  description = "Move window to workspace ${toString ws}";
+                })
+              ]
+            ) (lib.range 1 10)
+            ++ [
+              # Scratchpad
+              (bind "SUPER + S" (dsp ''workspace.toggle_special("magic")'') {
+                description = "Toggle scratchpad";
+              })
+              (bind "SUPER + SHIFT + S" (dsp ''window.move({ workspace = "special:magic" })'') {
+                description = "Move window to scratchpad";
+              })
 
-          bindd = [
-            # Applications
-            "$mod, Q, Open terminal (Kitty), exec, kitty"
-            "$mod, C, Close active window, killactive"
-            "$mod, E, File manager (Thunar), exec, thunar"
-            "$mod, F, Toggle fullscreen, fullscreen"
-            "$mod, V, Toggle floating, togglefloating"
-            "$mod, M, Exit Hyprland, exit"
-            # The session locks on the way down (logind's Lock signal).
-            "$mod SHIFT, L, Suspend, exec, systemctl suspend"
+              # Scroll through workspaces
+              (bind "SUPER + mouse_down" (dsp ''focus({ workspace = "e+1" })'') {
+                description = "Next workspace (scroll)";
+              })
+              (bind "SUPER + mouse_up" (dsp ''focus({ workspace = "e-1" })'') {
+                description = "Previous workspace (scroll)";
+              })
 
-            # Focus (ALT + arrow keys)
-            "ALT, Left, Focus window left, movefocus, l"
-            "ALT, Right, Focus window right, movefocus, r"
-            "ALT, Up, Focus window up, movefocus, u"
-            "ALT, Down, Focus window down, movefocus, d"
+              # Media / brightness keys (repeat on hold, work on the lock screen)
+              (bind "XF86AudioRaiseVolume" (exec "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+") {
+                description = "Volume up";
+                repeating = true;
+                locked = true;
+              })
+              (bind "XF86AudioLowerVolume" (exec "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-") {
+                description = "Volume down";
+                repeating = true;
+                locked = true;
+              })
+              (bind "XF86MonBrightnessUp" (exec "brightnessctl s 5%+") {
+                description = "Brightness up";
+                repeating = true;
+                locked = true;
+              })
+              (bind "XF86MonBrightnessDown" (exec "brightnessctl s 5%-") {
+                description = "Brightness down";
+                repeating = true;
+                locked = true;
+              })
 
-            # Swap windows (ALT + SHIFT + arrow keys)
-            "ALT SHIFT, Left, Swap window left, swapwindow, l"
-            "ALT SHIFT, Right, Swap window right, swapwindow, r"
-            "ALT SHIFT, Up, Swap window up, swapwindow, u"
-            "ALT SHIFT, Down, Swap window down, swapwindow, d"
+              # Media controls (work on the lock screen)
+              (bind "XF86AudioMute" (exec "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle") {
+                description = "Toggle mute";
+                locked = true;
+              })
+              (bind "XF86AudioPlay" (exec "playerctl play-pause") {
+                description = "Play/Pause media";
+                locked = true;
+              })
+              (bind "XF86AudioNext" (exec "playerctl next") {
+                description = "Next track";
+                locked = true;
+              })
+              (bind "XF86AudioPrev" (exec "playerctl previous") {
+                description = "Previous track";
+                locked = true;
+              })
 
-            # Workspaces
-            "$mod, 1, Switch to workspace 1, workspace, 1"
-            "$mod, 2, Switch to workspace 2, workspace, 2"
-            "$mod, 3, Switch to workspace 3, workspace, 3"
-            "$mod, 4, Switch to workspace 4, workspace, 4"
-            "$mod, 5, Switch to workspace 5, workspace, 5"
-            "$mod, 6, Switch to workspace 6, workspace, 6"
-            "$mod, 7, Switch to workspace 7, workspace, 7"
-            "$mod, 8, Switch to workspace 8, workspace, 8"
-            "$mod, 9, Switch to workspace 9, workspace, 9"
-            "$mod, 0, Switch to workspace 10, workspace, 10"
-
-            # Move window to workspace
-            "$mod SHIFT, 1, Move window to workspace 1, movetoworkspace, 1"
-            "$mod SHIFT, 2, Move window to workspace 2, movetoworkspace, 2"
-            "$mod SHIFT, 3, Move window to workspace 3, movetoworkspace, 3"
-            "$mod SHIFT, 4, Move window to workspace 4, movetoworkspace, 4"
-            "$mod SHIFT, 5, Move window to workspace 5, movetoworkspace, 5"
-            "$mod SHIFT, 6, Move window to workspace 6, movetoworkspace, 6"
-            "$mod SHIFT, 7, Move window to workspace 7, movetoworkspace, 7"
-            "$mod SHIFT, 8, Move window to workspace 8, movetoworkspace, 8"
-            "$mod SHIFT, 9, Move window to workspace 9, movetoworkspace, 9"
-            "$mod SHIFT, 0, Move window to workspace 10, movetoworkspace, 10"
-
-            # Scratchpad
-            "$mod, S, Toggle scratchpad, togglespecialworkspace, magic"
-            "$mod SHIFT, S, Move window to scratchpad, movetoworkspace, special:magic"
-
-            # Scroll through workspaces
-            "$mod, mouse_down, Next workspace (scroll), workspace, e+1"
-            "$mod, mouse_up, Previous workspace (scroll), workspace, e-1"
-          ];
-
-          # Media / brightness keys (repeat on hold)
-          binddel = [
-            ", XF86AudioRaiseVolume, Volume up, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
-            ", XF86AudioLowerVolume, Volume down, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
-            ", XF86MonBrightnessUp, Brightness up, exec, brightnessctl s 5%+"
-            ", XF86MonBrightnessDown, Brightness down, exec, brightnessctl s 5%-"
-          ];
-
-          # Media controls (work on lock screen)
-          binddl = [
-            ", XF86AudioMute, Toggle mute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-            ", XF86AudioPlay, Play/Pause media, exec, playerctl play-pause"
-            ", XF86AudioNext, Next track, exec, playerctl next"
-            ", XF86AudioPrev, Previous track, exec, playerctl previous"
-          ];
-
-          # Move/resize with mouse
-          binddm = [
-            "$mod, mouse:272, Move window (drag), movewindow"
-            "$mod, mouse:273, Resize window (drag), resizewindow"
-          ];
+              # Move/resize with mouse
+              (bind "SUPER + mouse:272" (dsp "window.drag()") {
+                description = "Move window (drag)";
+                mouse = true;
+              })
+              (bind "SUPER + mouse:273" (dsp "window.resize()") {
+                description = "Resize window (drag)";
+                mouse = true;
+              })
+            ];
         };
       };
+
+      # Hyprland writes its stock hyprland.lua if it ever starts with no
+      # config (say, after a failed activation). That file is never ours, so
+      # replace it rather than fail the activation on it.
+      xdg.configFile."hypr/hyprland.lua".force = true;
 
       # Arrow keys in Sushi's preview for Thunar (thunar-quick-look-keys.sh).
       # It also starts Sushi, which then stays running

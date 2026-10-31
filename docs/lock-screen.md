@@ -17,9 +17,9 @@ Under Caelestia or ambxst, Super+L and suspending use that shell's own lock inst
 
 The session stays locked. If the lock screen app has died, Hyprland shows "Oopsie daisy,
 it looks like you locked your screen but the lockscreen app died". Its own advice,
-`hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`, only works with a Lua
-Hyprland config. This config is hyprlang, so the command replies "eval is only supported
-with the lua config manager".
+`hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`, works, but it unlocks the
+session with no password (Hyprland's `forceUnlock`). `lock-recover` keeps it locked and
+asks for the password instead.
 
 1. Press Ctrl+Alt+F2 and log in.
 2. Run `lock-recover`. It stops the custom shell if it is still running and starts it

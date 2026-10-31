@@ -29,7 +29,7 @@
 # next open or close, without a rebuild.
 { inputs, config, ... }:
 let
-  inherit (config.flake.lib) repoDir;
+  inherit (config.flake.lib) hypr repoDir;
 in
 {
   flake.modules.homeManager.desktop-window-dissolve =
@@ -199,12 +199,12 @@ in
       '';
 
       wayland.windowManager.hyprland.settings = {
-        # Loaded once the session is up, not by a `plugin =` line while the
+        # Loaded once the session is up, not by hl.plugin.load while the
         # config is parsed: a plugin that fails then takes Hyprland down on
         # every login (the plugin's README), while here it costs the effect
-        # for one session. exec-once does not rerun on a rebuild: after the
+        # for one session. This does not rerun on a rebuild: after the
         # plugin changes, `hyprctl plugin unload`/`load` it or log in again.
-        exec-once = [ "hyprctl plugin load ${plugin}/lib/libhyprwindowshade.so" ];
+        on = [ (hypr.onStart "hyprctl plugin load ${plugin}/lib/libhyprwindowshade.so") ];
 
         # Windows grow in from 85% while the open shader plays. A close needs
         # no Hyprland animation unless the shader asks for one (`// @overlay`,
@@ -214,9 +214,20 @@ in
         # override them. Speed is in tenths of a second: 3 matches the default
         # dissolve-open.glsl's `@duration`, so popin, fade-in and burn end
         # together. Other effects run for their own length over the popin.
-        animations.animation = [
-          "windowsIn, 1, 3, ease, popin 85%"
-          "fadeIn, 1, 3, ease"
+        animation = [
+          {
+            leaf = "windowsIn";
+            enabled = true;
+            speed = 3;
+            bezier = "ease";
+            style = "popin 85%";
+          }
+          {
+            leaf = "fadeIn";
+            enabled = true;
+            speed = 3;
+            bezier = "ease";
+          }
         ];
 
         # A `tag` on a window rule picks the shader; `+shader_open:` and
@@ -225,11 +236,17 @@ in
         # fullscreen game costs nothing. Menus and tooltips borrow their
         # window's shader, which only matters while that window is opening. To
         # exclude an app, add a rule after these that removes both tags, e.g.
-        # "tag -shader_open:${stateDir}/open.glsl, match:class ^(app)$"
+        # { match.class = "^(app)$"; tag = "-shader_open:${stateDir}/open.glsl"; }
         # and the same with -shader_close.
-        windowrule = [
-          "tag +shader_open:${stateDir}/open.glsl, match:class .*"
-          "tag +shader_close:${stateDir}/close.glsl, match:class .*"
+        window_rule = [
+          {
+            match.class = ".*";
+            tag = "+shader_open:${stateDir}/open.glsl";
+          }
+          {
+            match.class = ".*";
+            tag = "+shader_close:${stateDir}/close.glsl";
+          }
         ];
       };
     };

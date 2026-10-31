@@ -39,7 +39,7 @@ Singleton {
         if (page)
             root.settingsPage = page;
         if (root.settings)
-            Hyprland.dispatch("focuswindow title:^(Shell settings)$");
+            Hyprland.dispatch(`hl.dsp.focus({ window = "title:^(Shell settings)$" })`);
         root.settings = true;
     }
 

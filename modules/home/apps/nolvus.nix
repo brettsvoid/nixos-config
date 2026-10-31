@@ -144,8 +144,14 @@ _: {
       # Hyprland tiles as an ordinary window. Fullscreen it, so misc:vrr 2 turns VRR on
       # (hyprland.nix) and window-dissolve skips it. GE-Proton names the window after
       # the SteamGameId Fluorine sets; the title keeps the game's dialogs out.
-      wayland.windowManager.hyprland.settings.windowrule = [
-        "fullscreen on, match:class ^(steam_app_489830)$, match:title ^(Skyrim Special Edition)$"
+      wayland.windowManager.hyprland.settings.window_rule = [
+        {
+          match = {
+            class = "^(steam_app_489830)$";
+            title = "^(Skyrim Special Edition)$";
+          };
+          fullscreen = true;
+        }
       ];
 
       local.gameLauncher.entries = [
