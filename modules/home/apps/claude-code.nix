@@ -136,14 +136,28 @@
         # The worktrunk plugin only where `wt` exists: all its hooks call it,
         # and its WorktreeCreate hook replaces Claude's own worktree creation
         # with `wt switch --create`, so without `wt`, `--worktree` would break.
+        #
+        # context7 is Upstash's library-docs MCP server
+        # (https://mcp.context7.com/mcp), no API key, so the anonymous rate
+        # limit applies. impeccable is Paul Bakaus's frontend-design skill; its
+        # plugin also adds agents and SessionStart, PostToolUse (Edit|Write)
+        # and Stop hooks that run its own engine.
         enabledPlugins = {
           "rust-analyzer-lsp@claude-plugins-official" = true;
           "typescript-lsp@claude-plugins-official" = true;
+          "context7@claude-plugins-official" = true;
+          "impeccable@impeccable" = true;
         }
         // lib.optionalAttrs hasWorktrunk {
           "worktrunk@worktrunk" = true;
         };
-        extraKnownMarketplaces = lib.optionalAttrs hasWorktrunk {
+        extraKnownMarketplaces = {
+          impeccable.source = {
+            source = "github";
+            repo = "pbakaus/impeccable";
+          };
+        }
+        // lib.optionalAttrs hasWorktrunk {
           worktrunk.source = {
             source = "github";
             repo = "max-sixty/worktrunk";
