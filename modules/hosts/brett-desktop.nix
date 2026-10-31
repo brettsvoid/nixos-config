@@ -115,6 +115,11 @@ in
         # partition, as the desktop never hibernates.
         zramSwap.enable = true;
 
+        # Let systemd-oomd kill a user cgroup that stays above 80% memory
+        # pressure for 30s. Without it oomd monitors nothing, and on 31 Oct
+        # a parallel CUDA build filled RAM and zram and froze the desktop.
+        systemd.oomd.enableUserSlices = true;
+
         # ─── SSH ───────────────────────────────────────────────────────
         # Merged with the shared list in system/authorized-keys.nix.
         users.users.${username}.openssh.authorizedKeys.keys = [
