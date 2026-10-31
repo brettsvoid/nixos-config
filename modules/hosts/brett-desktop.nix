@@ -52,6 +52,15 @@ in
         # ─── Identity ──────────────────────────────────────────────────
         networking.hostName = "brett-desktop";
 
+        # ─── Secrets ───────────────────────────────────────────────────
+        # Context7 API key. apps-claude-code finds it here and sends it from
+        # its own MCP entry instead of the keyless plugin.
+        age.secrets.docs-lookup-token = {
+          file = "${inputs.secrets}/docs-lookup-token.age";
+          owner = "brett";
+          mode = "0400";
+        };
+
         # ─── Boot ──────────────────────────────────────────────────────
         boot = {
           loader = {

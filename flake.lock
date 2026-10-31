@@ -568,11 +568,11 @@
     "secrets": {
       "flake": false,
       "locked": {
-        "lastModified": 1778175750,
-        "narHash": "sha256-50c+eG9nbBPOww+LgEVlMt54dJIyOwuo449v6hDNxmc=",
+        "lastModified": 1793457716,
+        "narHash": "sha256-oRjGTI85pIxISDB9MuMemeb/ZsbrGxDrq6LckKqUlZo=",
         "ref": "refs/heads/main",
-        "rev": "3064f338ec4ad3c56ed6392b7f08285d1dc8d9ac",
-        "revCount": 2,
+        "rev": "a0387fc5342abdc2f468c7c25715ba95df9cdb27",
+        "revCount": 3,
         "type": "git",
         "url": "ssh://git@github.com/brettsvoid/nix-secrets.git"
       },

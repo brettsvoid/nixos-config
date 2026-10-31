@@ -28,6 +28,7 @@
       config,
       lib,
       pkgs,
+      osConfig ? { },
       ...
     }:
     let
@@ -39,6 +40,56 @@
       # Whether this host imports apps-worktrunk. The status line and the
       # worktrunk plugin below both call `wt`.
       hasWorktrunk = lib.any (p: lib.getName p == "worktrunk") config.home.packages;
+
+      # ─── Context7 ──────────────────────────────────────────────────────
+      # A host that declares age.secrets.docs-lookup-token (a Context7 API
+      # key, from nix-secrets) gets its own user-scope MCP entry that sends
+      # the key. Elsewhere the keyless context7 plugin stands in, on the
+      # anonymous rate limit. The plugin's .mcp.json sets no headers, so it
+      # cannot carry a key.
+      docsKeyPath = osConfig.age.secrets.docs-lookup-token.path or null;
+      hasDocsKey = docsKeyPath != null;
+
+      # Claude Code runs a headersHelper on every connection and merges the
+      # JSON object it prints into the request headers. Reading the file here
+      # keeps the key out of the store and out of every process's env.
+      docsHeaders = pkgs.writeShellScript "context7-headers" ''
+        exec ${jq} -cn --rawfile k ${lib.escapeShellArg (toString docsKeyPath)} \
+          '{Authorization: ("Bearer " + ($k | rtrimstr("\n")))}'
+      '';
+
+      # Same URL as the plugin's server, less its ?client= tag.
+      docsServer = {
+        type = "http";
+        url = "https://mcp.context7.com/mcp";
+        headersHelper = "${docsHeaders}";
+      };
+
+      # User-scope MCP servers live in ~/.claude.json, which Claude Code
+      # rewrites constantly, so the entry is merged in on activation like
+      # settings.json, never linked. Without a key the entry is removed, so a
+      # host that loses the secret falls back to the plugin cleanly.
+      mergeMcp = pkgs.writeShellScript "claude-code-merge-mcp" ''
+        set -euo pipefail
+
+        live="${config.home.homeDirectory}/.claude.json"
+        [ -s "$live" ] || printf '{}\n' >"$live"
+
+        if ! ${jq} -e . "$live" >/dev/null 2>&1; then
+            echo "claude-code: $live is not valid JSON — leaving it untouched." >&2
+            exit 0
+        fi
+
+        tmp="$(mktemp "$live.XXXXXX")"
+        ${
+          if hasDocsKey then
+            ''${jq} --argjson s ${lib.escapeShellArg (builtins.toJSON docsServer)} '.mcpServers.context7 = $s' "$live" >"$tmp"''
+          else
+            ''${jq} 'if .mcpServers then .mcpServers |= del(.context7) else . end' "$live" >"$tmp"''
+        }
+        chmod 600 "$tmp"
+        mv -f "$tmp" "$live"
+      '';
 
       # ─── status line without worktrunk ─────────────────────────────────
       # The model and context-gauge cells of worktrunk's status line, e.g.
@@ -137,15 +188,14 @@
         # and its WorktreeCreate hook replaces Claude's own worktree creation
         # with `wt switch --create`, so without `wt`, `--worktree` would break.
         #
-        # context7 is Upstash's library-docs MCP server
-        # (https://mcp.context7.com/mcp), no API key, so the anonymous rate
-        # limit applies. impeccable is Paul Bakaus's frontend-design skill; its
+        # context7 is Upstash's library-docs MCP server; the plugin only
+        # where there is no API key (see Context7 above). impeccable is Paul Bakaus's frontend-design skill; its
         # plugin also adds agents and SessionStart, PostToolUse (Edit|Write)
         # and Stop hooks that run its own engine.
         enabledPlugins = {
           "rust-analyzer-lsp@claude-plugins-official" = true;
           "typescript-lsp@claude-plugins-official" = true;
-          "context7@claude-plugins-official" = true;
+          "context7@claude-plugins-official" = !hasDocsKey;
           "impeccable@impeccable" = true;
         }
         // lib.optionalAttrs hasWorktrunk {
@@ -315,6 +365,10 @@
 
         claudeCodeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           $DRY_RUN_CMD ${mergeSettings}
+        '';
+
+        claudeCodeMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          $DRY_RUN_CMD ${mergeMcp}
         '';
       };
     };
