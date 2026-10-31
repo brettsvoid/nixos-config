@@ -35,8 +35,10 @@ _: {
         args = [ "mcp" ];
       };
 
-      # The global install's directory name is a hash pnpm picks, so the
-      # package is found by glob, not by a fixed path. pnpm skips frida's
+      # pnpm installs each global package into a fresh directory, deletes the
+      # old one, and repoints a hash-named symlink beside it; the `rea` shim
+      # goes through that symlink. Linking the skill through it too keeps the
+      # link valid across any reinstall, not only ours. pnpm skips frida's
       # build script (it only allows approved ones); frida is optional and
       # only used for live instrumentation.
       home.activation.reaInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -44,8 +46,9 @@ _: {
         export PATH="$PNPM_HOME/bin:$PATH"
 
         _rea_pkg() {
-          for p in "$PNPM_HOME"/global/*/*/node_modules/rea-agents; do
-            [ -f "$p/package.json" ] && printf '%s\n' "$p" && return
+          for d in "$PNPM_HOME"/global/*/*; do
+            [ -L "$d" ] && [ -f "$d/node_modules/rea-agents/package.json" ] \
+              && printf '%s\n' "$d/node_modules/rea-agents" && return
           done
         }
 
