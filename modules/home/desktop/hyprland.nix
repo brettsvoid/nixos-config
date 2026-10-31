@@ -94,7 +94,7 @@ in
           [ .[] |
             (.modmask | decode_mods) as $mods |
             ($mods + (if $mods != "" then " + " else "" end) + (.key | clean_key)) as $combo |
-            # A Lua bind's dispatcher reads "HL.Dispatcher(exec_cmd)", with no argument.
+            # Lua binds report their dispatcher as "HL.Dispatcher(exec_cmd)", with no argument.
             (if (.description // "") != "" then .description else .dispatcher end) as $desc |
             (($combo | rpad(28)) + $desc)
           ] |
