@@ -41,6 +41,13 @@ in
           # ─── Identity ──────────────────────────────────────────────────
           networking.hostName = "brett-msi-laptop";
 
+          # Context7 API key; see brett-desktop.
+          age.secrets.docs-lookup-token = {
+            file = "${inputs.secrets}/docs-lookup-token.age";
+            owner = username;
+            mode = "0400";
+          };
+
           # ─── Boot ──────────────────────────────────────────────────────
           boot = {
             loader.systemd-boot.enable = true;
