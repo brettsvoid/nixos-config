@@ -131,16 +131,39 @@ in
 
         # ─── Game streaming ────────────────────────────────────────────
         # Sunshine, a host for Moonlight clients. A user service started
-        # with the graphical session; pair and configure at
-        # https://localhost:47990. CAP_SYS_ADMIN is for KMS capture.
+        # with the graphical session; pair at https://localhost:47990 on the
+        # desktop itself. CAP_SYS_ADMIN is for KMS capture.
+        #
+        # Reachable over Tailscale only, so a compromised LAN device cannot
+        # reach the pairing service or the stream; clients add the desktop
+        # by its tailnet name or 100.x address (no mDNS discovery there).
+        # Setting `settings` makes the web UI read-only for configuration.
         # shortcut: the cached package is built with SUNSHINE_ENABLE_CUDA
         # off (nixpkgs' cudaSupport is off); if NVENC or capture misbehaves,
-        # try `package = pkgs.sunshine.override { cudaSupport = true; }`
-        # (a local build).
+        # try `.override { cudaSupport = true; }` on the package (a local build).
         services.sunshine = {
           enable = true;
           capSysAdmin = true;
-          openFirewall = true;
+          settings = {
+            origin_web_ui_allowed = "pc";
+            lan_encryption_mode = 2;
+            wan_encryption_mode = 2;
+          };
+        };
+        # Sunshine's default ports (base 47989), less the web UI (47990).
+        networking.firewall.interfaces.tailscale0 = {
+          allowedTCPPorts = [
+            47984
+            47989
+            48010
+          ];
+          allowedUDPPorts = [
+            47998
+            47999
+            48000
+            48002
+            48010
+          ];
         };
 
         # ─── SSH ───────────────────────────────────────────────────────
