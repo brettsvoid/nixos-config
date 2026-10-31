@@ -5,6 +5,21 @@ _: {
   flake.modules.nixos.hyprland =
     { pkgs, ... }:
     {
+      # Hyprland 0.56.2 drops the keyboard capability (sleep, a VT switch) without
+      # sending wl_keyboard.leave first. When the keyboard comes back, the client gets
+      # an enter on a surface it never left, and Qt then never re-activates the window:
+      # the custom shell's lock screen ignored every key after a wake until the
+      # pointer moved to another screen. The patch sends the leave first, as wlroots
+      # does. An overlay, so the window-dissolve plugin builds against the same
+      # Hyprland. Still unfixed on Hyprland main on 30 Oct 2026; drop it once fixed.
+      nixpkgs.overlays = [
+        (_: prev: {
+          hyprland = prev.hyprland.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [ ./hyprland/seat-leave-on-keyboard-loss.patch ];
+          });
+        })
+      ];
+
       programs = {
         firefox.enable = true;
         hyprland.enable = true;

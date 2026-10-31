@@ -1,0 +1,20 @@
+diff --git a/src/protocols/core/Seat.cpp b/src/protocols/core/Seat.cpp
+index e37cb76..f66e66a 100644
+--- a/src/protocols/core/Seat.cpp
++++ b/src/protocols/core/Seat.cpp
+@@ -584,6 +584,15 @@ void CWLSeatProtocol::updateCapabilities(uint32_t caps) {
+     if (caps == m_currentCaps)
+         return;
+ 
++    // Send leave while the keyboard capability is still set (sendLeave() is a no-op
++    // without it), as wlroots does. Otherwise a client that gets the keyboard back sees
++    // an enter on a surface it never left, and Qt then never re-activates the window.
++    if ((m_currentCaps & ~caps) & eHIDCapabilityType::HID_INPUT_CAPABILITY_KEYBOARD) {
++        for (auto const& k : m_keyboards) {
++            k->sendLeave();
++        }
++    }
++
+     m_currentCaps = caps;
+ 
+     for (auto const& s : m_seatResources) {

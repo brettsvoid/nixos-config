@@ -45,6 +45,20 @@ Hyprland only lets a new lock take over a locked session while
 working lock and unlock the session. It is off normally. `lock-recover` turns it on
 for the two seconds it needs, then off again.
 
+## Typing after a wake or a VT switch
+
+Hyprland is patched (`modules/system/nixos/hyprland/seat-leave-on-keyboard-loss.patch`)
+so the lock takes the keyboard again after a wake. Without the patch, the lock showed
+but ignored every key until the pointer moved to another screen.
+
+On sleep or a VT switch the keyboards go away, and Hyprland 0.56.2 drops the seat's
+keyboard capability without sending `wl_keyboard.leave` first. When they come back,
+Hyprland sends an enter on the same lock surface. Qt 6.11 still has that surface as
+its last keyboard focus, takes the enter for no change and activates no window, so it
+drops the keys. wlroots compositors send the leave first; the patch does the same.
+Hyprland main still lacks it (30 Oct 2026). Others have hit it too:
+omarchy-asus/omarchy-asus#298 (Qt side) and #302 (Hyprland side).
+
 ## Known limits
 
 - **Two lockers at once:** if another program already holds the lock (hyprlock started
