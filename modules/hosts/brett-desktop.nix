@@ -183,6 +183,7 @@ in
                 apps-godot
                 apps-fonts
                 apps-worktrunk
+                apps-fnm
                 apps-claude-code
                 apps-comfyui
                 apps-keymapp

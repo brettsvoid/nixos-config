@@ -80,7 +80,8 @@ _: {
 
       # Tool hooks that don't have a home-manager `programs.*` module.
       programs.zsh.initContent = lib.mkOrder 800 ''
-        # fnm (Fast Node Manager), from Homebrew. `--use-on-cd` picks up a
+        # fnm (Fast Node Manager): Homebrew's on the Macs, nixpkgs' on Linux
+        # (apps-fnm). `--use-on-cd` picks up a
         # project's .nvmrc; elsewhere the `default` alias applies, which
         # modules/home/apps/fnm.nix pins.
         if command -v fnm &>/dev/null; then

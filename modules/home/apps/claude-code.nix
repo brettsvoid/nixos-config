@@ -191,12 +191,15 @@
         # context7 is Upstash's library-docs MCP server; the plugin only
         # where there is no API key (see Context7 above). impeccable is Paul Bakaus's frontend-design skill; its
         # plugin also adds agents and SessionStart, PostToolUse (Edit|Write)
-        # and Stop hooks that run its own engine.
+        # and Stop hooks that run its own engine. ponytail is Dietrich
+        # Gebert's "do less" coding mode; its SessionStart, SubagentStart and
+        # UserPromptSubmit hooks run `node`, so hosts need apps-fnm.
         enabledPlugins = {
           "rust-analyzer-lsp@claude-plugins-official" = true;
           "typescript-lsp@claude-plugins-official" = true;
           "context7@claude-plugins-official" = !hasDocsKey;
           "impeccable@impeccable" = true;
+          "ponytail@ponytail" = true;
         }
         // lib.optionalAttrs hasWorktrunk {
           "worktrunk@worktrunk" = true;
@@ -205,6 +208,10 @@
           impeccable.source = {
             source = "github";
             repo = "pbakaus/impeccable";
+          };
+          ponytail.source = {
+            source = "github";
+            repo = "DietrichGebert/ponytail";
           };
         }
         // lib.optionalAttrs hasWorktrunk {
