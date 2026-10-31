@@ -164,6 +164,7 @@ in
                 apps-worktrunk
                 apps-fnm
                 apps-claude-code
+                apps-rea
                 profile-base
                 profile-code
                 profile-gaming

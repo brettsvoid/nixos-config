@@ -65,10 +65,14 @@
         headersHelper = "${docsHeaders}";
       };
 
-      # User-scope MCP servers live in ~/.claude.json, which Claude Code
-      # rewrites constantly, so the entry is merged in on activation like
-      # settings.json, never linked. Without a key the entry is removed, so a
-      # host that loses the secret falls back to the plugin cleanly.
+      # ─── user-scope MCP servers ────────────────────────────────────────
+      # They live in ~/.claude.json, which Claude Code rewrites constantly,
+      # so local.claudeCode.mcpServers is merged in on activation like
+      # settings.json, never linked. context7 is dropped first, so a host that
+      # loses the secret falls back to the plugin cleanly; other servers stay
+      # until removed by hand (`claude mcp remove -s user <name>`).
+      mcpServersJson = builtins.toJSON config.local.claudeCode.mcpServers;
+
       mergeMcp = pkgs.writeShellScript "claude-code-merge-mcp" ''
         set -euo pipefail
 
@@ -81,12 +85,8 @@
         fi
 
         tmp="$(mktemp "$live.XXXXXX")"
-        ${
-          if hasDocsKey then
-            ''${jq} --argjson s ${lib.escapeShellArg (builtins.toJSON docsServer)} '.mcpServers.context7 = $s' "$live" >"$tmp"''
-          else
-            ''${jq} 'if .mcpServers then .mcpServers |= del(.context7) else . end' "$live" >"$tmp"''
-        }
+        ${jq} --argjson s ${lib.escapeShellArg mcpServersJson} \
+          '.mcpServers = ((.mcpServers // {}) | del(.context7)) + $s' "$live" >"$tmp"
         chmod 600 "$tmp"
         mv -f "$tmp" "$live"
       '';
@@ -331,52 +331,62 @@
       '';
     in
     {
-      programs.claude-code = {
-        enable = true;
-
-        # No nix-managed binary (see the header); `enable` only switches on
-        # the config half of the module.
-        package = null;
-
-        # ~/.claude/CLAUDE.md — the global instruction file, prepended to
-        # every session on every project.
-        context = ./claude/CLAUDE.md;
-
-        # ~/.claude/skills/. Each skill is linked recursively, so the
-        # directory and the skill folders stay real and writable (only the
-        # files are store symlinks), and `claude plugin init` can still
-        # scaffold into it. The attrset form lets skills come from flake
-        # inputs; dropping a folder into claude/skills is still all a local
-        # skill needs.
-        skills = {
-          # ASD-STE100 Simplified Technical English. Pinned in flake.lock;
-          # `nix flake update simple-english` is the upgrade.
-          simple-english = "${inputs.simple-english}/skills/simple-english";
-        }
-        // pstackSkills
-        // flattenBuckets "${inputs.mattpocock-skills}/skills"
-        // localSkills;
-
-        # ~/.claude/agents/<name>.md, one link per file.
-        agents = pstackAgents;
+      options.local.claudeCode.mcpServers = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+        default = { };
+        description = "User-scope MCP servers merged into ~/.claude.json on activation, by name.";
       };
 
-      # The installer puts the launcher in ~/.local/bin. The Macs get that on
-      # PATH from shell/env.nix, which the NixOS hosts do not import.
-      home.sessionPath = lib.mkIf pkgs.stdenv.isLinux [ "$HOME/.local/bin" ];
+      config = {
+        local.claudeCode.mcpServers = lib.mkIf hasDocsKey { context7 = docsServer; };
 
-      home.activation = {
-        claudeCodeNative = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          $DRY_RUN_CMD ${installNative}
-        '';
+        programs.claude-code = {
+          enable = true;
 
-        claudeCodeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          $DRY_RUN_CMD ${mergeSettings}
-        '';
+          # No nix-managed binary (see the header); `enable` only switches on
+          # the config half of the module.
+          package = null;
 
-        claudeCodeMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          $DRY_RUN_CMD ${mergeMcp}
-        '';
+          # ~/.claude/CLAUDE.md — the global instruction file, prepended to
+          # every session on every project.
+          context = ./claude/CLAUDE.md;
+
+          # ~/.claude/skills/. Each skill is linked recursively, so the
+          # directory and the skill folders stay real and writable (only the
+          # files are store symlinks), and `claude plugin init` can still
+          # scaffold into it. The attrset form lets skills come from flake
+          # inputs; dropping a folder into claude/skills is still all a local
+          # skill needs.
+          skills = {
+            # ASD-STE100 Simplified Technical English. Pinned in flake.lock;
+            # `nix flake update simple-english` is the upgrade.
+            simple-english = "${inputs.simple-english}/skills/simple-english";
+          }
+          // pstackSkills
+          // flattenBuckets "${inputs.mattpocock-skills}/skills"
+          // localSkills;
+
+          # ~/.claude/agents/<name>.md, one link per file.
+          agents = pstackAgents;
+        };
+
+        # The installer puts the launcher in ~/.local/bin. The Macs get that on
+        # PATH from shell/env.nix, which the NixOS hosts do not import.
+        home.sessionPath = lib.mkIf pkgs.stdenv.isLinux [ "$HOME/.local/bin" ];
+
+        home.activation = {
+          claudeCodeNative = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            $DRY_RUN_CMD ${installNative}
+          '';
+
+          claudeCodeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            $DRY_RUN_CMD ${mergeSettings}
+          '';
+
+          claudeCodeMcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            $DRY_RUN_CMD ${mergeMcp}
+          '';
+        };
       };
     };
 }

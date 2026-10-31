@@ -47,12 +47,13 @@ _: {
           PNPM_HOME = "${config.xdg.dataHome}/pnpm";
         };
 
-        # PNPM_HOME holds `pnpm add -g` binaries. The default alias puts Node
-        # on PATH for processes no interactive shell started; in a shell,
+        # pnpm 12 puts `pnpm add -g` binaries in $PNPM_HOME/bin and refuses
+        # to install globally unless that is on PATH. The default alias puts
+        # Node on PATH for processes no interactive shell started; in a shell,
         # `fnm env` prepends its own per-shell path, so a project's version
         # still wins.
         sessionPath = lib.mkIf isLinux [
-          "${config.xdg.dataHome}/pnpm"
+          "${config.xdg.dataHome}/pnpm/bin"
           "${fnmDir}/aliases/default/bin"
         ];
       };

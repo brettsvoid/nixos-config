@@ -185,6 +185,7 @@ in
                 apps-worktrunk
                 apps-fnm
                 apps-claude-code
+                apps-rea
                 apps-comfyui
                 apps-keymapp
                 apps-nolvus
