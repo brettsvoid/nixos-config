@@ -129,6 +129,20 @@ in
         # a parallel CUDA build filled RAM and zram and froze the desktop.
         systemd.oomd.enableUserSlices = true;
 
+        # ─── Game streaming ────────────────────────────────────────────
+        # Sunshine, a host for Moonlight clients. A user service started
+        # with the graphical session; pair and configure at
+        # https://localhost:47990. CAP_SYS_ADMIN is for KMS capture.
+        # shortcut: the cached package is built with SUNSHINE_ENABLE_CUDA
+        # off (nixpkgs' cudaSupport is off); if NVENC or capture misbehaves,
+        # try `package = pkgs.sunshine.override { cudaSupport = true; }`
+        # (a local build).
+        services.sunshine = {
+          enable = true;
+          capSysAdmin = true;
+          openFirewall = true;
+        };
+
         # ─── SSH ───────────────────────────────────────────────────────
         # Merged with the shared list in system/authorized-keys.nix.
         users.users.${username}.openssh.authorizedKeys.keys = [
