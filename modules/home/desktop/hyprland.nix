@@ -523,6 +523,7 @@ in
       home.packages = [
         pkgs.brightnessctl
         loupe
+        pkgs.mpv
         pkgs.playerctl
         pkgs.wl-clipboard
         hypr-cheatsheet
