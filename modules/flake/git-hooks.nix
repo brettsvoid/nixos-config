@@ -54,7 +54,6 @@
         inputsFrom = [ config.pre-commit.devShell ];
         packages = with pkgs; [
           gitleaks
-          semgrep
           nixfmt
           deadnix
           statix

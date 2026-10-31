@@ -17,6 +17,8 @@
       # Pinned: newer versions cause stutter on NVIDIA external monitors
       url = "github:Axenide/Ambxst/59edec9a0430eb2f679697f4a817a1f44ffcfb8b";
       inputs.nixpkgs.follows = "nixpkgs";
+      # Its own quickshell pin (Dec 2025) no longer builds against nixpkgs' Qt.
+      inputs.quickshell.follows = "quickshell";
     };
 
     quickshell = {
@@ -51,10 +53,10 @@
     # HyprWindowShade (MIT), a Hyprland plugin that runs GLSL shaders over
     # windows, for modules/home/desktop/window-dissolve.nix. It builds against
     # Hyprland's internal headers, so pin the commit that the `commit_pins` in
-    # upstream main's hyprpm.toml names for nixpkgs' Hyprland (here 0.56.2),
+    # upstream main's hyprpm.toml names for nixpkgs' Hyprland (here 0.57.0),
     # and bump it with Hyprland.
     hyprwindowshade = {
-      url = "github:ManofJELLO/HyprWindowShade/a4c6b8af424a189072427c4c90ef2938e1b481d3";
+      url = "github:ManofJELLO/HyprWindowShade/0766b631a18a532c094d25ae6b6fcc242545aafe";
       flake = false;
     };
 
