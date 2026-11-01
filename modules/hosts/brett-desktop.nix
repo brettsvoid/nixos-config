@@ -123,10 +123,19 @@ in
         # partition, as the desktop never hibernates.
         zramSwap.enable = true;
 
-        # Let systemd-oomd kill a user cgroup that stays above 80% memory
-        # pressure for 30s. Without it oomd monitors nothing, and on 31 Oct
-        # a parallel CUDA build filled RAM and zram and froze the desktop.
-        systemd.oomd.enableUserSlices = true;
+        systemd = {
+          # Let systemd-oomd kill a user cgroup that stays above 80% memory
+          # pressure for 30s. Without it oomd monitors nothing, and on 31 Oct
+          # a parallel CUDA build filled RAM and zram and froze the desktop.
+          oomd.enableUserSlices = true;
+
+          # oomd did not catch the 1 Nov freeze (a TRELLIS run thrashing RAM and
+          # zram), and it kills whole cgroups, which here means every kitty tab.
+          # This makes the kernel OOM-kill the single largest process once it
+          # can no longer keep the last second of working set in RAM (MGLRU
+          # thrashing prevention, docs.kernel.org/admin-guide/mm/multigen_lru.html).
+          tmpfiles.rules = [ "w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000" ];
+        };
 
         # ─── Game streaming ────────────────────────────────────────────
         # Sunshine, a host for Moonlight clients. A user service started
