@@ -242,6 +242,7 @@ in
                 apps-comfyui
                 apps-keymapp
                 apps-nolvus
+                apps-sims4
                 profile-base
                 profile-code
                 profile-gaming
