@@ -20,10 +20,19 @@ _: {
 
       services.greetd =
         let
+          # The stock session file, but with start-hyprland's output going to the
+          # journal (`journalctl -t hyprland`). On tty1 the restarted Hyprland
+          # draws over it, which lost the exit reason of the 1 Nov crash.
           sessions = pkgs.linkFarm "greeter-sessions" [
             {
               name = "hyprland.desktop";
-              path = "${pkgs.hyprland}/share/wayland-sessions/hyprland.desktop";
+              path = pkgs.writeText "hyprland.desktop" ''
+                [Desktop Entry]
+                Name=Hyprland
+                Exec=${pkgs.systemd}/bin/systemd-cat -t hyprland ${pkgs.hyprland}/bin/start-hyprland
+                Type=Application
+                DesktopNames=Hyprland
+              '';
             }
           ];
         in
