@@ -23,13 +23,23 @@ _: {
           # The stock session file, but with start-hyprland's output going to the
           # journal (`journalctl -t hyprland`). On tty1 the restarted Hyprland
           # draws over it, which lost the exit reason of the 1 Nov crash.
+          # greetd is X-RestartIfChanged=false: edits here apply only after
+          # `systemctl restart greetd` or a reboot.
+          #
+          # shortcut: HYPRLAND_NO_RT keeps Hyprland off SCHED_RR, so heavy CPU
+          # load can make it stutter; drop it once Hyprland ships PR 16737.
+          # Under rtkit, Hyprland 0.57's main thread gets a 200 ms
+          # RLIMIT_RTTIME, and a slow NVIDIA connector probe on monitor wake or
+          # reconnect overruns it inside the kernel, so the kernel SIGKILLs the
+          # compositor with no core or log (1 and 2 Nov; Hyprland discussion
+          # 16648).
           sessions = pkgs.linkFarm "greeter-sessions" [
             {
               name = "hyprland.desktop";
               path = pkgs.writeText "hyprland.desktop" ''
                 [Desktop Entry]
                 Name=Hyprland
-                Exec=${pkgs.systemd}/bin/systemd-cat -t hyprland ${pkgs.hyprland}/bin/start-hyprland
+                Exec=${pkgs.systemd}/bin/systemd-cat -t hyprland ${pkgs.coreutils}/bin/env HYPRLAND_NO_RT=1 ${pkgs.hyprland}/bin/start-hyprland
                 Type=Application
                 DesktopNames=Hyprland
               '';
