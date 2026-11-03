@@ -26,12 +26,23 @@ in
       # A list, not an attrset: order decides which rule wins, and attrset keys
       # would sort 'com.google.Chrome' above 'com.google.Chrome.app.<id>' — so a
       # Chrome PWA would land wherever plain Chrome goes.
-      windowRules = lib.concatMapStrings (rule: ''
-
-        [[on-window-detected]]
-        if.app-id = '${rule.appId}'
-        run = 'move-node-to-workspace ${rule.workspace}'
-      '') config.local.aerospace.windowAssignments;
+      #
+      # Values go in TOML literal strings ('…'), so a title regex's
+      # backslashes reach AeroSpace unescaped.
+      windowRules = lib.concatMapStrings (
+        rule:
+        lib.concatLines (
+          [
+            ""
+            "[[on-window-detected]]"
+            "if.app-id = '${rule.appId}'"
+          ]
+          ++ lib.optional (
+            rule.windowTitleRegex != null
+          ) "if.window-title-regex-substring = '${rule.windowTitleRegex}'"
+          ++ [ "run = 'move-node-to-workspace ${rule.workspace}'" ]
+        )
+      ) config.local.aerospace.windowAssignments;
 
       aerospaceToml = pkgs.replaceVars ./aerospace/aerospace.toml.in {
         outerTop = toString geom.outerTop;
@@ -54,6 +65,18 @@ in
                 type = lib.types.str;
                 example = "1";
                 description = "Workspace this app's windows move to when detected.";
+              };
+              windowTitleRegex = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                example = "\\(m2north\\.com\\)$";
+                description = ''
+                  Also require the window title to contain a match for this
+                  regex. Chrome appends the profile to every window title,
+                  e.g. `– Brett (m2north.com)`, so this can split Chrome by
+                  profile. Put a title rule above the same app's
+                  catch-all: only the first matching rule runs.
+                '';
               };
             };
           }

@@ -172,6 +172,39 @@ in
               # This end sends the PRO X headset's mic, which is mono; stereo
               # would only duplicate the channel at double the bitrate.
               sonobus.sendChannels = "mono";
+
+              # ─── Workspace assignment (this machine only) ──────────────
+              # 6–0 are force-assigned to the secondary display (the Dell) in
+              # aerospace.toml.in. Chrome splits by profile: m2north.com on the
+              # Dell, every other profile on the Odyssey. The profile rule must
+              # stay above Chrome's catch-all.
+              aerospace.windowAssignments = [
+                {
+                  appId = "net.kovidgoyal.kitty";
+                  workspace = "1";
+                }
+                {
+                  appId = "com.google.Chrome";
+                  windowTitleRegex = "\\(m2north\\.com\\)$";
+                  workspace = "6";
+                }
+                {
+                  appId = "com.google.Chrome";
+                  workspace = "2";
+                }
+                {
+                  appId = "com.apple.iphonesimulator";
+                  workspace = "6";
+                }
+                {
+                  appId = "com.Sonosaurus.SonoBus";
+                  workspace = "8";
+                }
+                {
+                  appId = "com.spotify.client";
+                  workspace = "9";
+                }
+              ];
             };
 
             home = {
