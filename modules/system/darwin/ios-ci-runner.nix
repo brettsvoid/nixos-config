@@ -156,7 +156,9 @@ _: {
       launchd.daemons.tyto-ci-runner = {
         command = "${startRunner}/bin/tyto-ci-runner";
         # bash 5 and GNU coreutils first, then the system's own tools, which
-        # jobs need too: xcrun, xcodebuild, python3, defaults.
+        # jobs need too: xcrun, xcodebuild, python3, defaults. CocoaPods for
+        # `expo prebuild --platform ios`, the AWS CLI for the e2e user's SSM
+        # parameters.
         path = [
           pkgs.bash
           pkgs.coreutils
@@ -164,6 +166,8 @@ _: {
           pkgs.gnutar
           pkgs.gzip
           pkgs.jdk17
+          pkgs.cocoapods
+          pkgs.awscli2
           "/usr/bin"
           "/bin"
           "/usr/sbin"
