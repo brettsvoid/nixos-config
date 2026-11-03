@@ -178,6 +178,8 @@ _: {
           HOME = home;
           DEVELOPER_DIR = developerDir;
           JAVA_HOME = "${pkgs.jdk17.home}";
+          # launchd sets no locale, and CocoaPods fails without UTF-8.
+          LANG = "en_US.UTF-8";
         };
         serviceConfig = {
           UserName = user;
