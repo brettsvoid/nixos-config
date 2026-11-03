@@ -1,7 +1,8 @@
 # The Sims 4 (Steam, Proton). Mods are installed by hand, a folder per mod,
 # into the Proton prefix's Mods folder. This module adds a short link to it and
 # `sims4-prep`, to run after a game patch or a mod change: it backs up the saves
-# and clears the thumbnail cache, which goes stale when mods change.
+# and clears the thumbnail and sim texture caches, which go stale when mods
+# change (a stale sim texture cache showed sims' skin as black).
 _: {
   flake.modules.homeManager.apps-sims4 =
     { config, pkgs, ... }:
@@ -26,8 +27,8 @@ _: {
           out=${backups}/saves-$(date +%Y%m%d-%H%M%S).tar.gz
           tar -czf "$out" -C "$dir" saves
           echo "Saves backed up to $out"
-          rm -f "$dir/localthumbcache.package"
-          echo "Thumbnail cache cleared."
+          rm -f "$dir/localthumbcache.package" "$dir/localsimtexturecache.package"
+          echo "Thumbnail and sim texture caches cleared."
         '';
       };
     in
