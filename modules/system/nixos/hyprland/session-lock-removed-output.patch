@@ -1,0 +1,37 @@
+diff --git a/src/protocols/SessionLock.cpp b/src/protocols/SessionLock.cpp
+--- a/src/protocols/SessionLock.cpp
++++ b/src/protocols/SessionLock.cpp
+@@ -22,6 +22,10 @@
+         PROTO::sessionLock->destroyResource(this);
+     });
+ 
++    // Keep the resource destroyable if the output disappeared while the request was in flight.
++    if (!m_monitor)
++        return;
++
+     m_resource->setAckConfigure([this](CExtSessionLockSurfaceV1* r, uint32_t serial) {
+         m_ackdConfigure = true;
+         if (m_surface)
+@@ -213,11 +217,7 @@
+         LOG(Log::ERR, "onGetLockSurface: invalid output resource");
+         return;
+     }
+-    auto PMONITOR = OUTPUTRES->m_monitor.lock();
+-    if (!PMONITOR) {
+-        LOG(Log::ERR, "onGetLockSurface: monitor is gone for output resource");
+-        return;
+-    }
++    auto             PMONITOR = OUTPUTRES->m_monitor.lock();
+ 
+     SP<CSessionLock> sessionLock;
+     for (auto const& l : m_locks) {
+@@ -236,6 +236,9 @@
+         return;
+     }
+ 
++    if (!PMONITOR)
++        return;
++
+     sessionLock->m_events.newLockSurface.emit(RESOURCE);
+ }
+ 

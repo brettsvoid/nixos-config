@@ -12,10 +12,18 @@ _: {
       # pointer moved to another screen. The patch sends the leave first, as wlroots
       # does. An overlay, so the window-dissolve plugin builds against the same
       # Hyprland. Still unfixed on Hyprland main on 30 Oct 2026; drop it once fixed.
+      #
+      # Hyprland 0.57.0 creates no lock surface when its output goes away while the
+      # request is in flight, so the lock's next request on it is a protocol error and
+      # Hyprland drops the custom shell, lock and all (5 Nov, a monitor coming back
+      # after a wake). The patch is upstream's fix (#16784); drop it with 0.57.1.
       nixpkgs.overlays = [
         (_: prev: {
           hyprland = prev.hyprland.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [ ./hyprland/seat-leave-on-keyboard-loss.patch ];
+            patches = (old.patches or [ ]) ++ [
+              ./hyprland/seat-leave-on-keyboard-loss.patch
+              ./hyprland/session-lock-removed-output.patch
+            ];
           });
         })
       ];
