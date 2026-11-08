@@ -143,6 +143,16 @@ in
         meta.mainProgram = "shell-stats";
       };
 
+      # The Bluetooth page's pairing agent: BlueZ's requests out as JSON lines and the
+      # page's answers in, while the page shows (shell-bluetooth-agent/src/main.rs).
+      shell-bluetooth-agent = pkgs.rustPlatform.buildRustPackage {
+        pname = "shell-bluetooth-agent";
+        version = "0.1.0";
+        src = ./shell-bluetooth-agent;
+        cargoLock.lockFile = ./shell-bluetooth-agent/Cargo.lock;
+        meta.mainProgram = "shell-bluetooth-agent";
+      };
+
       wallpaper-thumbnails = script "wallpaper-thumbnails" [
         pkgs.coreutils
         pkgs.imagemagick
@@ -288,6 +298,7 @@ in
           custom-shell-or
           lock-recover
           shell-stats
+          shell-bluetooth-agent
           wallpaper-thumbnails
           # qalc, for the launcher's calculator (launcher/CalculatorMode.qml).
           pkgs.libqalculate

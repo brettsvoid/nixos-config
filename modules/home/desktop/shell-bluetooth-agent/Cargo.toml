@@ -1,0 +1,17 @@
+[package]
+name = "shell-bluetooth-agent"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A BlueZ pairing agent for the custom Quickshell shell's Bluetooth page: requests out as JSON lines, answers in."
+
+[dependencies]
+ordered-stream = "0.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+zbus = { version = "6.2.1", default-features = false, features = ["default-rt", "proxy", "service"] }
+zruntime = { version = "0.2.2", default-features = false, features = ["mpmc"] }
+
+[profile.release]
+lto = true
+strip = true
