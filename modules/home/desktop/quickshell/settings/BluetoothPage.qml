@@ -1,5 +1,7 @@
 import QtQuick
+import Quickshell
 import Quickshell.Bluetooth
+import Quickshell.Io
 import "../components"
 import "../theme"
 
@@ -8,9 +10,11 @@ import "../theme"
 // page shows and paired. A device paired here is trusted, so it may reconnect by
 // itself, and connected.
 //
-// BlueZ asks an agent for a PIN or a passkey confirmation, and the shell does not run
-// one, so devices that need either do not pair here (use `bluetoothctl`). Some
-// controllers need a confirmation: an Xbox Wireless Controller does.
+// While the page shows, it runs the pairing agent that BlueZ asks for a confirmation, a
+// PIN or a passkey (shell-bluetooth-agent, custom-shell.nix). Only the device Pair was
+// pressed on gets an answer: a confirmation is accepted without a click and its passkey
+// shows in the row, a PIN or passkey is typed into the row, and a code to type on the
+// device shows in the row. A request for any other device is rejected.
 FocusScope {
     id: root
 
@@ -19,6 +23,130 @@ FocusScope {
     readonly property var paired: root.devices.filter(device => device.paired).sort((a, b) => (b.connected - a.connected) || a.name.localeCompare(b.name))
     // Unnamed devices (mostly beacons) are left out.
     readonly property var nearby: root.devices.filter(device => !device.paired && device.deviceName !== "").sort((a, b) => a.name.localeCompare(b.name))
+
+    // The device Pair was pressed on, until its pairing ends.
+    property string pairingAddress: ""
+    // What the agent asked about that device, for its row; null when nothing. By `kind`:
+    // "confirm" and "displayPasskey" carry `passkey`, "displayPincode" `pincode`,
+    // "displayPasskey" also `entered`; "pincode" and "passkey" carry the `id` to answer.
+    property var prompt: null
+
+    // The agent lives as long as the page: Quickshell kills a Process with its object.
+    Process {
+        id: agent
+        command: ["shell-bluetooth-agent"]
+        running: true
+        stdinEnabled: true
+        stdout: SplitParser {
+            onRead: line => root.handle(line)
+        }
+        stderr: SplitParser {
+            onRead: line => console.info("shell-bluetooth-agent:", line)
+        }
+    }
+
+    function answer(reply) {
+        agent.write(JSON.stringify(reply) + "\n");
+    }
+
+    function handle(line) {
+        console.info("shell-bluetooth-agent:", line);
+        let request;
+        try {
+            request = JSON.parse(line);
+        } catch (e) {
+            return;
+        }
+        const target = request.device === root.pairingAddress;
+        switch (request.method) {
+        case "RequestConfirmation":
+            if (target)
+                root.prompt = {
+                    kind: "confirm",
+                    address: request.device,
+                    passkey: String(request.passkey).padStart(6, "0")
+                };
+            root.answer({
+                id: request.id,
+                accept: target
+            });
+            break;
+        case "RequestAuthorization":
+        case "AuthorizeService":
+            root.answer({
+                id: request.id,
+                accept: target
+            });
+            break;
+        case "RequestPinCode":
+        case "RequestPasskey":
+            if (target)
+                root.prompt = {
+                    kind: request.method === "RequestPinCode" ? "pincode" : "passkey",
+                    id: request.id,
+                    address: request.device
+                };
+            else
+                root.answer({
+                    id: request.id,
+                    accept: false
+                });
+            break;
+        case "DisplayPinCode":
+            if (target)
+                root.prompt = {
+                    kind: "displayPincode",
+                    address: request.device,
+                    pincode: request.pincode
+                };
+            break;
+        case "DisplayPasskey":
+            if (target)
+                root.prompt = {
+                    kind: "displayPasskey",
+                    address: request.device,
+                    passkey: String(request.passkey).padStart(6, "0"),
+                    entered: request.entered
+                };
+            break;
+        case "Cancel":
+            root.prompt = null;
+            break;
+        }
+    }
+
+    function submitCode(text) {
+        const prompt = root.prompt;
+        root.answer(prompt.kind === "pincode" ? {
+            id: prompt.id,
+            pincode: text
+        } : {
+            id: prompt.id,
+            passkey: Number(text)
+        });
+        root.prompt = null;
+    }
+
+    function endPairing() {
+        if (root.prompt?.id !== undefined)
+            root.answer({
+                id: root.prompt.id,
+                accept: false
+            });
+        root.prompt = null;
+        root.pairingAddress = "";
+    }
+
+    // Pair() has returned, paired or not, once `pairing` turns false.
+    Connections {
+        id: pairingDevice
+        target: root.devices.find(device => device.address === root.pairingAddress) ?? null
+
+        function onPairingChanged() {
+            if (!pairingDevice.target.pairing)
+                root.endPairing();
+        }
+    }
 
     // Look for devices while the page shows.
     Component.onCompleted: {
@@ -237,12 +365,35 @@ FocusScope {
             }
 
             Repeater {
-                model: root.adapter?.enabled ? root.nearby : []
+                // A ScriptModel keeps the rows of the devices that stay as others come and
+                // go, and so a PIN half typed.
+                model: ScriptModel {
+                    values: root.adapter?.enabled ? root.nearby : []
+                }
 
                 DeviceRow {
                     id: nearbyRow
 
-                    status: nearbyRow.device.pairing ? "Pairing…" : nearbyRow.device.address
+                    readonly property var prompt: root.prompt?.address === nearbyRow.device.address ? root.prompt : null
+                    readonly property bool asking: nearbyRow.prompt?.id !== undefined
+
+                    function submit() {
+                        if (code.acceptableInput)
+                            root.submitCode(code.text);
+                    }
+
+                    status: {
+                        const prompt = nearbyRow.prompt;
+                        switch (prompt?.kind) {
+                        case "confirm":
+                            return `Pairing, passkey ${prompt.passkey}`;
+                        case "displayPincode":
+                            return `Type ${prompt.pincode} on the device`;
+                        case "displayPasskey":
+                            return `Type ${prompt.passkey} on the device` + (prompt.entered > 0 ? `, ${prompt.entered} typed` : "");
+                        }
+                        return nearbyRow.device.pairing ? "Pairing…" : nearbyRow.device.address;
+                    }
 
                     // Once paired, keep it and connect: what pairing is for here.
                     Connections {
@@ -256,10 +407,73 @@ FocusScope {
                         }
                     }
 
+                    // The PIN or passkey the agent asks for.
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: nearbyRow.asking
+                        width: 180
+                        height: 32
+                        radius: height / 2
+                        color: Theme.surfaceContainer
+                        border.width: 1
+                        border.color: Theme.primary
+
+                        onVisibleChanged: {
+                            if (visible) {
+                                code.text = "";
+                                code.forceActiveFocus();
+                            }
+                        }
+
+                        TextInput {
+                            id: code
+                            anchors.fill: parent
+                            anchors.leftMargin: Theme.spacingLarge
+                            anchors.rightMargin: Theme.spacingLarge
+                            verticalAlignment: TextInput.AlignVCenter
+                            clip: true
+                            validator: RegularExpressionValidator {
+                                regularExpression: nearbyRow.prompt?.kind === "passkey" ? /[0-9]{1,6}/ : /[0-9A-Za-z]{1,16}/
+                            }
+                            color: Theme.text
+                            selectionColor: Theme.primary
+                            selectedTextColor: Theme.onPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.typeBodyMedium
+
+                            Keys.onReturnPressed: nearbyRow.submit()
+                            Keys.onEnterPressed: nearbyRow.submit()
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: code.text === ""
+                                text: nearbyRow.prompt?.kind === "passkey" ? "Passkey" : "PIN"
+                                color: Theme.subtext
+                                font: code.font
+                            }
+                        }
+                    }
+
+                    Pill {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: nearbyRow.asking
+                        text: "OK"
+                        active: code.acceptableInput
+                        onClicked: nearbyRow.submit()
+                    }
+
                     Pill {
                         anchors.verticalCenter: parent.verticalCenter
                         text: nearbyRow.device.pairing ? "Cancel" : "Pair"
-                        onClicked: nearbyRow.device.pairing ? nearbyRow.device.cancelPair() : nearbyRow.device.pair()
+                        onClicked: {
+                            if (nearbyRow.device.pairing) {
+                                root.endPairing();
+                                nearbyRow.device.cancelPair();
+                            } else {
+                                root.pairingAddress = nearbyRow.device.address;
+                                nearbyRow.device.pair();
+                            }
+                        }
                     }
                 }
             }
