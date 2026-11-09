@@ -15,7 +15,18 @@ _: {
   flake.modules.homeManager.apps-keymapp =
     { pkgs, ... }:
     {
-      home.packages = [ pkgs.keymapp ];
+      # patchelf 0.19.2 breaks keymapp 1.3.7: autoPatchelf sets the interpreter
+      # and then the rpath, and the second step adds a program header that the
+      # first step's new LOAD segment does not cover, so ld.so segfaults in
+      # dl_main before main. Setting a long rpath first avoids it: the real one
+      # then fits in place. Drop this when a plain pkgs.keymapp starts.
+      home.packages = [
+        (pkgs.keymapp.overrideAttrs (old: {
+          postInstall = (old.postInstall or "") + ''
+            patchelf --set-rpath "$(printf '%4096s' "")" "$out/bin/keymapp"
+          '';
+        }))
+      ];
 
       # Keymapp sets a maximum window size of 2560x1440, and dwindle floats a
       # window whose tile would exceed its maximum, so on the desktop's
