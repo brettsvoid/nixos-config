@@ -16,8 +16,8 @@
 # The first must list aarch64-darwin; the second must say "will be fetched",
 # not "will be built" (it prints nothing if the closure is already local).
 # If both pass, write a modules/home/apps/<name>.nix module instead, as
-# modules/home/apps/blender.nix does: home-manager's linkApps (on at this
-# home.stateVersion) puts its .app in ~/Applications/Home Manager Apps.
+# modules/home/apps/blender.nix does: home-manager's copyApps (enabled in
+# modules/home/base.nix) puts its .app in ~/Applications/Home Manager Apps.
 # Besides pinning, a cask can gain an artifact type the pinned brew does not
 # implement, and a failing `brew bundle` aborts the whole switch (the kitty
 # cask did this on the mini; see modules/hosts/brett-mac-mini.nix).

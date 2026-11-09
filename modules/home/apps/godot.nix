@@ -1,5 +1,5 @@
 # Godot from nixpkgs rather than the Homebrew cask, by the same route as
-# modules/home/apps/blender.nix: on darwin, linkApps puts the app bundle in
+# modules/home/apps/blender.nix: on darwin, copyApps puts the app bundle in
 # ~/Applications/Home Manager Apps; on Linux it ships a .desktop entry.
 #
 # Editor settings live outside the store (~/Library/Application Support/Godot

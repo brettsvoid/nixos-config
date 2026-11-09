@@ -165,7 +165,7 @@ in
         ${generate-edgebar-theme}/bin/generate-edgebar-theme || true
       '';
 
-      # Not in home.packages: linkApps would put a second, unsigned
+      # Not in home.packages: copyApps would put a second, unsigned
       # edgebar.app in ~/Applications/Home Manager Apps.
       edgebar = pkgs.callPackage ../../../apps/edgebar/package.nix { };
 
