@@ -235,6 +235,7 @@ in
                 apps-cursor
                 apps-spotify
                 apps-godot
+                apps-krita
                 apps-fonts
                 apps-worktrunk
                 apps-fnm
