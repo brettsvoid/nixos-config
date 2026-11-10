@@ -17,8 +17,16 @@ _: {
       # request is in flight, so the lock's next request on it is a protocol error and
       # Hyprland drops the custom shell, lock and all (5 Nov, a monitor coming back
       # after a wake). The patch is upstream's fix (#16784); drop it with 0.57.1.
+      #
+      # Aquamarine 0.15.1 segfaults on resume: re-adding a monitor restates the other
+      # heads with their last front buffer, which suspend has freed (10 Nov, after a
+      # 12 h sleep). The patch skips a dead buffer, so the test commit fails and
+      # Hyprland retries. Upstream aquamarine#466, unfixed on main on 10 Nov 2026.
       nixpkgs.overlays = [
         (_: prev: {
+          aquamarine = prev.aquamarine.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [ ./hyprland/aquamarine-restate-dead-fb.patch ];
+          });
           hyprland = prev.hyprland.overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [
               ./hyprland/seat-leave-on-keyboard-loss.patch

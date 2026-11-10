@@ -1,0 +1,12 @@
+--- a/src/backend/drm/impl/Atomic.cpp
++++ b/src/backend/drm/impl/Atomic.cpp
+@@ -116,7 +116,8 @@
+ 
+         // A head that has not scanned out yet has no buffer to restate; its
+         // existing plane state carries over untouched, which is what we want.
+-        if (c->crtc->primary && c->crtc->primary->front) {
++        // After a suspend the front buffer can be dead (aquamarine#466): skip it too.
++        if (c->crtc->primary && c->crtc->primary->front && !c->crtc->primary->front->dead && c->crtc->primary->front->buffer) {
+             // planeProps reads per-connector state off `conn`, so point it at the
+             // head we are restating rather than ours.
+             const auto saved = conn;
