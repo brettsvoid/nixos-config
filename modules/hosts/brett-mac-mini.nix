@@ -15,6 +15,7 @@ in
       (_: {
         imports = with config.flake.modules.darwin; [
           agenix
+          backups
           common
           defaults
           users

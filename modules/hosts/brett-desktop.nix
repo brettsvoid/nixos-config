@@ -28,6 +28,7 @@ in
       {
         imports = with config.flake.modules.nixos; [
           agenix
+          backups
           common
           networking
           users
