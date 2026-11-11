@@ -146,6 +146,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Pinned to a release tag, like herdr: bump it by hand.
+    hey-cli = {
+      url = "github:basecamp/hey-cli/v1.10.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     agenix = {
       url = "github:ryantm/agenix";
       inputs = {

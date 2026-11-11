@@ -176,6 +176,7 @@ in
               apps-nh
               apps-comma
               apps-worktrunk
+              apps-hey
               apps-claude-code
               apps-sesh
               apps-tmuxinator

@@ -225,6 +225,27 @@
         "type": "github"
       }
     },
+    "hey-cli": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792876267,
+        "narHash": "sha256-FtSui8G5S7I/46k9CLxlN2DNURnPi27+9OAknMx6+wE=",
+        "owner": "basecamp",
+        "repo": "hey-cli",
+        "rev": "5388a803cd43c8fba1d93dee5fd970e4da823d41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "basecamp",
+        "ref": "v1.10.1",
+        "repo": "hey-cli",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -529,6 +550,7 @@
         "flake-parts": "flake-parts",
         "git-hooks": "git-hooks",
         "herdr": "herdr",
+        "hey-cli": "hey-cli",
         "home-manager": "home-manager",
         "hyprsession": "hyprsession",
         "hyprwindowshade": "hyprwindowshade",
