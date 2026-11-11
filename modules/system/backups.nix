@@ -12,7 +12,9 @@
 # file", or pruned packs stay hidden and billed.
 #
 # NixOS uses nixpkgs' services.restic. nix-darwin has no restic module, so
-# the Macs get a launchd daemon running the same backup and prune.
+# the Macs get a launchd daemon running the same backup and prune. Both give
+# a `restic-b2` command with the repo, password and key already set, e.g.
+# `sudo restic-b2 snapshots`.
 _:
 let
   bucket = "brettsvoid-backups";
@@ -121,8 +123,9 @@ in
       home = "/Users/${flake.lib.username}";
       excludeFile = pkgs.writeText "restic-excludes" (lib.concatLines (excludes home));
 
-      backup = pkgs.writeShellApplication {
-        name = "restic-b2-backup";
+      # Like the restic-<name> wrapper nixpkgs' NixOS module makes.
+      restic-b2 = pkgs.writeShellApplication {
+        name = "restic-b2";
         runtimeInputs = [ pkgs.restic ];
         text = ''
           set -a
@@ -132,15 +135,54 @@ in
           export RESTIC_REPOSITORY="${repository config.networking.hostName}"
           export RESTIC_PASSWORD_FILE="${config.age.secrets.restic-password.path}"
           export RESTIC_CACHE_DIR=/var/root/Library/Caches/restic
-
-          # Same order as the NixOS module: init once, back up, then prune.
-          restic cat config >/dev/null 2>&1 || restic init
-          # Exit 3 = snapshot saved but some files unreadable (TCC); still prune.
-          restic backup --exclude-caches --exclude-file ${excludeFile} ${lib.escapeShellArgs config.backups.paths} || [ $? -eq 3 ]
-          restic unlock
-          restic forget --prune ${lib.concatStringsSep " " keep}
+          exec restic "$@"
         '';
       };
+
+      backup = pkgs.writeShellApplication {
+        name = "restic-b2-backup";
+        runtimeInputs = [ restic-b2 ];
+        text = ''
+          # Same order as the NixOS module: init once, back up, then prune.
+          restic-b2 cat config >/dev/null 2>&1 || restic-b2 init
+          # Exit 3 = snapshot saved but some files unreadable (TCC); still prune.
+          restic-b2 backup --exclude-caches --exclude-file ${excludeFile} ${lib.escapeShellArgs config.backups.paths} || [ $? -eq 3 ]
+          restic-b2 unlock
+          restic-b2 forget --prune ${lib.concatStringsSep " " keep}
+        '';
+      };
+
+      # macOS grants a launchd job Full Disk Access by the program launchd
+      # starts, and its children inherit it. This launcher only starts its
+      # arguments and waits, so the grant goes to it, not to /bin/sh. It lives
+      # at a fixed path, replaced only when its bytes change: a store path
+      # would lose the grant on every update.
+      launcher = pkgs.writeCBin "restic-b2-launcher" ''
+        #include <spawn.h>
+        #include <stdio.h>
+        #include <string.h>
+        #include <sys/wait.h>
+        extern char **environ;
+        int main(int argc, char **argv) {
+          pid_t pid;
+          int status, err;
+          if (argc < 2) {
+            fprintf(stderr, "usage: %s command [args...]\n", argv[0]);
+            return 64;
+          }
+          err = posix_spawn(&pid, argv[1], NULL, NULL, argv + 1, environ);
+          if (err) {
+            fprintf(stderr, "%s: %s\n", argv[1], strerror(err));
+            return 127;
+          }
+          if (waitpid(pid, &status, 0) < 0) {
+            perror("waitpid");
+            return 1;
+          }
+          return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+        }
+      '';
+      launcherPath = "/usr/local/libexec/restic-b2-launcher";
     in
     {
       options.backups.paths = pathsOption lib home;
@@ -148,15 +190,33 @@ in
       config = {
         age.secrets = secrets inputs;
 
-        # Also on PATH, to run a backup by hand: sudo restic-b2-backup
-        environment.systemPackages = [ backup ];
+        # restic-b2, and restic-b2-backup to run a backup by hand (both sudo).
+        environment.systemPackages = [
+          restic-b2
+          backup
+        ];
+
+        # Before the launchd step, so the job never starts without it. A
+        # rename, not an overwrite, as the old copy may be running.
+        system.activationScripts.extraActivation.text = ''
+          if ! /usr/bin/cmp -s ${lib.getExe launcher} ${launcherPath}; then
+            if [ -e ${launcherPath} ]; then
+              echo "restic-b2: the backup launcher changed: give ${launcherPath} Full Disk Access again" >&2
+            fi
+            /bin/mkdir -p ${dirOf launcherPath}
+            /usr/bin/install -m 0755 -o root -g wheel ${lib.getExe launcher} ${launcherPath}.new
+            /bin/mv -f ${launcherPath}.new ${launcherPath}
+          fi
+        '';
 
         launchd.daemons.restic-b2 = {
           serviceConfig = {
             # Root, to read the agenix secrets. Folders macOS protects with TCC
             # (Desktop, Documents, Downloads, Mail…) are skipped with warnings
-            # unless restic is given Full Disk Access.
+            # until the launcher has Full Disk Access: System Settings ›
+            # Privacy & Security › Full Disk Access › +, then ⇧⌘G and its path.
             ProgramArguments = [
+              launcherPath
               "/bin/sh"
               "-c"
               # agenix writes the secrets after launchd loads this job, at
