@@ -38,8 +38,9 @@ print(wallpaper)
 print(f"{'scheme':18}" + "".join(f"{a}/{b}".rjust(32) for a, b in PAIRS))
 for scheme in SCHEMES:
     for mode in ("dark", "light"):
+        # An argument list, never a shell, so the arguments cannot inject commands.
         out = subprocess.run(
-            [matugen, "image", wallpaper, "--source-color-index", "0", "--dry-run", "-j", "hex", "-t", f"scheme-{scheme}", "-m", mode],
+            [matugen, "image", wallpaper, "--source-color-index", "0", "--dry-run", "-j", "hex", "-t", f"scheme-{scheme}", "-m", mode],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
             capture_output=True, text=True, check=True,
         ).stdout
         colours = {k: v["default"]["color"] for k, v in json.loads(out)["colors"].items()}
