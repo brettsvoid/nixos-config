@@ -97,6 +97,8 @@ let
     # Bins.
     "${home}/.local/share/Trash"
     "${home}/.Trash"
+    # iCloud Drive: not wanted, and cloud-only files fail to read.
+    "${home}/Library/Mobile Documents"
   ];
 
   pathsOption =
@@ -257,8 +259,10 @@ in
               "/bin/sh"
               "-c"
               # agenix writes the secrets after launchd loads this job, at
-              # boot and on a switch: wait for them too.
-              "/bin/wait4path /nix/store && /bin/wait4path ${config.age.secrets.restic-b2-env.path} && /bin/wait4path ${config.age.secrets.restic-password.path} && exec ${lib.getExe backup}"
+              # boot and on a switch: wait for them too. Polled, as wait4path
+              # only looks again when the mount table changes, and agenix
+              # writes into a disk it has already mounted.
+              "/bin/wait4path /nix/store && until [ -e ${config.age.secrets.restic-b2-env.path} ] && [ -e ${config.age.secrets.restic-password.path} ]; do sleep 1; done && exec ${lib.getExe backup}"
             ];
             # Hourly, and at boot to catch up after the Mac was off. launchd
             # never starts a second copy while a run is still going.
