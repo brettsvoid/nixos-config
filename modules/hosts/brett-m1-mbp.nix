@@ -177,6 +177,8 @@ in
               apps-comma
               apps-worktrunk
               apps-hey
+              apps-zed
+              apps-vscode
               apps-claude-code
               apps-sesh
               apps-tmuxinator
