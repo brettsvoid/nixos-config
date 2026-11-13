@@ -224,6 +224,7 @@ in
                 desktop-game-launcher
                 desktop-game-mode
                 desktop-display-doctor
+                desktop-usb-reset
                 desktop-screenshots
                 desktop-window-dissolve
                 nvim
