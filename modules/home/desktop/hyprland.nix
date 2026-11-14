@@ -413,6 +413,11 @@ in
               disable_hyprland_logo = true;
               disable_splash_rendering = true;
             };
+
+            # Hyprland writes its own lines to hyprland.log only with this off.
+            # Without them the 14 Nov lock that ignored keys after a wake left no
+            # trace of what Hyprland did.
+            debug.disable_logs = false;
           };
 
           curve = [
