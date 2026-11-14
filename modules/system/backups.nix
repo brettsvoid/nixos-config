@@ -50,6 +50,50 @@ let
     "**/Cache/Cache_Data"
     "**/Code Cache"
     "**/GPUCache"
+    "**/OptGuideOnDeviceModel"
+    "${home}/.config/google-chrome/*/Extensions"
+    # Wine's own files, rebuilt in every prefix. Saves and the registry stay.
+    "**/drive_c/windows"
+    "**/drive_c/ProgramData/Package Cache"
+    "**/drive_c/Program Files/Electronic Arts/EA Desktop"
+    # Steam: the client, game installs, shader caches and Proton builds all
+    # download again. Keep userdata, config and steamapps/compatdata (Proton
+    # prefixes, where most saves live). The last matching pattern wins.
+    "${home}/.local/share/Steam/*"
+    "!${home}/.local/share/Steam/userdata"
+    "!${home}/.local/share/Steam/config"
+    "!${home}/.local/share/Steam/steamapps"
+    "${home}/.local/share/Steam/config/htmlcache"
+    "${home}/.local/share/Steam/steamapps/common"
+    "${home}/.local/share/Steam/steamapps/shadercache"
+    "${home}/.local/share/Steam/steamapps/downloading"
+    "${home}/.local/share/Steam/steamapps/temp"
+    "${home}/.local/share/Steam/steamapps/workshop"
+    # Heroic game installs (its prefixes stay), and the launchers' own
+    # installs in their Wine prefixes.
+    "${home}/Games/Heroic/*"
+    "!${home}/Games/Heroic/Prefixes"
+    "${home}/Games/*/drive_c/Program Files"
+    "${home}/Games/*/drive_c/Program Files (x86)"
+    "${home}/.local/share/lutris/runners"
+    "${home}/.local/share/lutris/runtime"
+    "${home}/.local/share/umu"
+    "${home}/.config/heroic/tools"
+    # Fluorine, installed by the Nolvus Dashboard. The instance is in /games.
+    "${home}/.local/share/fluorine"
+    # Model weights, fetched again by ComfyUI-Manager or each setup script,
+    # and the upstream checkouts those scripts clone.
+    "${home}/ai-models"
+    "${home}/comfyui/temp"
+    "${home}/projects/*/weights"
+    "${home}/projects/trellis2-local/src"
+    "${home}/projects/unirig-local/src"
+    "${home}/projects/quad-remesh/src"
+    # Godot's import cache, and perf's debug-info cache.
+    "**/.godot"
+    "${home}/.debug"
+    # Creation Club files, downloaded again by Skyrim Anniversary Edition.
+    "${home}/nolvus-windows-backup/skyrim-cc"
     # Tool caches, toolchains and package stores in home.
     "${home}/.cache"
     "${home}/.cargo/registry"
@@ -86,7 +130,6 @@ let
     "${home}/Library/Containers/com.docker.docker"
     # App installs, models and caches kept in Application Support.
     "${home}/Library/Application Support/com.docker.install"
-    "${home}/Library/Application Support/Google/Chrome/OptGuideOnDeviceModel"
     "${home}/Library/Application Support/Autodesk/webdeploy"
     "${home}/Library/Application Support/Spotify/PersistentCache"
     "${home}/Library/Application Support/Local/lightning-services"
