@@ -32,7 +32,8 @@ _: {
         # and a second one from nix would race it on PATH. rustup rather than
         # nixpkgs' cargo/rustc so rust-toolchain.toml pins work as on the Macs;
         # nixpkgs' rustup patchelfs the toolchains it downloads. Toolchains
-        # live in ~/.rustup: run `rustup default stable` once per machine.
+        # live in ~/.rustup: run `rustup default stable` and
+        # `rustup component add rust-analyzer` (Claude Code LSP plugin) once per machine.
         # gcc because rustc links through `cc`; nothing else puts a C
         # compiler on the shell's PATH.
         ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
