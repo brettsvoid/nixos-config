@@ -28,7 +28,7 @@ in
         # ad-hoc-signed source build loses them on every rebuild, while
         # kitty-bin's bundle ID + team ID survive updates. It also ships
         # shell-integration/ and terminfo/.
-        package = if pkgs.stdenv.isDarwin then pkgs.kitty-bin else pkgs.kitty;
+        package = if pkgs.stdenv.hostPlatform.isDarwin then pkgs.kitty-bin else pkgs.kitty;
         font = {
           name = terminal.font.family;
           inherit (terminal.font) size;
@@ -57,7 +57,7 @@ in
           # On Hyprland a lone tiled kitty window saves "maximized" on close,
           # and the next one then opens maximised over its workspace. "yes" is
           # kitty's default, kept on macOS.
-          remember_window_size = if pkgs.stdenv.isLinux then "no" else "yes";
+          remember_window_size = if pkgs.stdenv.hostPlatform.isLinux then "no" else "yes";
           background_opacity = builtins.toString terminal.opacity;
 
           # Background
@@ -77,13 +77,13 @@ in
           tab_bar_edge = "bottom";
           tab_bar_min_tabs = 2;
         }
-        // lib.optionalAttrs pkgs.stdenv.isLinux {
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           # Wayland / Linux-only
           linux_display_server = "wayland";
           wayland_titlebar_color = "background";
           hide_window_decorations = "yes";
         }
-        // lib.optionalAttrs pkgs.stdenv.isDarwin {
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
           # macOS-only
           background_blur = 20;
           hide_window_decorations = "titlebar-only";
@@ -137,7 +137,7 @@ in
           "alt+h" = "send_text all \\x1b[D";
           "alt+l" = "send_text all \\x1b[C";
         }
-        // lib.optionalAttrs pkgs.stdenv.isDarwin (
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin (
           # Pass cmd+1..9 through to the program, for herdr's focus_agent
           # (see terminals-herdr). kitty binds them to
           # first_window..ninth_window, unused as herdr owns the splits.

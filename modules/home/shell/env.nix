@@ -15,7 +15,7 @@ _: {
       home.sessionVariables = {
         REACT_EDITOR = "nvim";
       }
-      // lib.optionalAttrs pkgs.stdenv.isDarwin {
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
         ANDROID_HOME = "$HOME/Library/Android/sdk";
         PNPM_HOME = "$HOME/Library/pnpm";
       };
@@ -42,11 +42,11 @@ _: {
         # profileExtra, not initContent: shellenv is login-shell setup (it also
         # exports HOMEBREW_* and extends MANPATH and INFOPATH), and the PATH
         # block below needs `command -v brew` to succeed.
-        profileExtra = lib.mkIf pkgs.stdenv.isDarwin ''
+        profileExtra = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin ''
           [ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
         '';
 
-        initContent = lib.mkIf pkgs.stdenv.isDarwin (
+        initContent = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin (
           lib.mkOrder 600 ''
             # ─── PATH additions (Mac) ─────────────────────────────────────
             # Helper: prepend if not already on PATH

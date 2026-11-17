@@ -2,7 +2,7 @@
 _: {
   flake.modules.homeManager.apps-cursor =
     { lib, pkgs, ... }:
-    lib.mkIf pkgs.stdenv.isLinux {
+    lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
       home.pointerCursor = {
         # Explicit: home-manager deprecated inferring it from the other
         # home.pointerCursor settings.

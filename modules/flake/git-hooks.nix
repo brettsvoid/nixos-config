@@ -20,7 +20,7 @@
           detect-private-keys.enable = true;
 
           # ─── Nix format (blocking) ────────────────────────────────────
-          nixfmt-rfc-style.enable = true;
+          nixfmt.enable = true;
 
           # ─── General hygiene ──────────────────────────────────────────
           check-added-large-files.enable = true; # default 500 KB; LFS-tracked images excluded

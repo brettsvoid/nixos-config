@@ -372,7 +372,7 @@
 
         # The installer puts the launcher in ~/.local/bin. The Macs get that on
         # PATH from shell/env.nix, which the NixOS hosts do not import.
-        home.sessionPath = lib.mkIf pkgs.stdenv.isLinux [ "$HOME/.local/bin" ];
+        home.sessionPath = lib.mkIf pkgs.stdenv.hostPlatform.isLinux [ "$HOME/.local/bin" ];
 
         home.activation = {
           claudeCodeNative = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

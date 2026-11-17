@@ -12,7 +12,7 @@ in
         # from NH_FLAKE (programs.nh.flake) and nh elevates itself, so no
         # `--flake` or sudo.
         edit = "cd ~/${repoDir} && $EDITOR .";
-        nix-rebuild = if pkgs.stdenv.isDarwin then "nh darwin switch" else "nh os switch";
+        nix-rebuild = if pkgs.stdenv.hostPlatform.isDarwin then "nh darwin switch" else "nh os switch";
 
         # Editor shortcuts. programs.neovim's viAlias/vimAlias also install
         # vi and vim as commands, for scripts.
@@ -47,7 +47,7 @@ in
         commitrefine = "python ~/projects/github.com/brettsvoid/commit-refine/main.py";
         download_website = "wget --mirror -p --convert-links --no-parent";
       }
-      // lib.optionalAttrs pkgs.stdenv.isLinux {
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
         # Linux-only: MSI fan control via isw
         fans = "sudo isw -r";
         fan-boost = "sudo isw -b on";

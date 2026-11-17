@@ -23,7 +23,7 @@ in
       };
     in
     {
-      home.packages = lib.optionals pkgs.stdenv.isLinux [ pkgs.ghostty ];
+      home.packages = lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.ghostty ];
 
       xdg.configFile."ghostty/config".text = ''
         # ─── Theme ─────────────────────────────────────────────────────────

@@ -171,7 +171,7 @@ in
             iferr
           ]
           # Wayland clipboard helper — Linux-only (Darwin uses pbcopy/pbpaste)
-          ++ lib.optionals pkgs.stdenv.isLinux [ wl-clipboard ];
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ wl-clipboard ];
       };
 
       xdg.configFile = {

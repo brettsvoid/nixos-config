@@ -83,7 +83,7 @@ _: {
         };
       };
 
-      config = lib.mkIf pkgs.stdenv.isDarwin {
+      config = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
         home.packages = [ netwatch ];
 
         # `--quiet` drops the live status line, which is redrawn with \r and

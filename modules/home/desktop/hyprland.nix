@@ -207,6 +207,9 @@ in
         userDirs = {
           enable = true;
           createDirectories = true;
+          # XDG_*_DIR in the session too, the default before home.stateVersion
+          # 26.05.
+          setSessionVariables = true;
           # Lowercase, the ghq root in apps-git; the module default is ~/Projects.
           projects = "${config.home.homeDirectory}/projects";
           # No desktop icons and no LAN file sharing on a tiling setup. null

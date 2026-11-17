@@ -47,7 +47,7 @@ _: {
             fi
           }
         ''
-        + lib.optionalString pkgs.stdenv.isDarwin ''
+        + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
 
           # VS Code launcher (Mac): preserve $PWD via VSCODE_CWD
           code() {
