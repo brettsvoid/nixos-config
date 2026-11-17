@@ -7,7 +7,6 @@ _: {
       programs.steam = {
         enable = true;
         remotePlay.openFirewall = true;
-        dedicatedServer.openFirewall = true;
       };
       programs.gamemode.enable = true;
       # GameMode's polkit rule lets only this group switch the CPU governor and
