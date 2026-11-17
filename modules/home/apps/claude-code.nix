@@ -154,12 +154,10 @@
 
         permissions = {
           # Read-only inspection, pre-approved. Anything that mutates state is
-          # left to prompt.
+          # left to prompt. Not find, fd or bat: `find -exec`, `fd -x` and
+          # `bat --pager` run any command.
           allow = [
             "Bash(cat:*)"
-            "Bash(bat:*)"
-            "Bash(fd:*)"
-            "Bash(find:*)"
             "Bash(grep:*)"
             "Bash(ls:*)"
           ];
