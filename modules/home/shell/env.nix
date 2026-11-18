@@ -29,6 +29,9 @@ _: {
       # purpose: local.zsh holds only lookup IDs, so a key rotates in the
       # Bitwarden UI with no rebuild. agenix is for host secrets
       # (docs/SECRETS.md).
+      # local.zsh's secret loader needs bws on PATH, or it skips itself.
+      home.packages = [ pkgs.bws ];
+
       programs.zsh = {
         envExtra = ''
           [ -f "$HOME/.env_vars" ] && source "$HOME/.env_vars"
