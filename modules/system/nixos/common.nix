@@ -4,10 +4,19 @@ _: {
     { pkgs, ... }:
     {
       nix = {
-        settings.experimental-features = [
-          "nix-command"
-          "flakes"
-        ];
+        settings = {
+          experimental-features = [
+            "nix-command"
+            "flakes"
+          ];
+          # The NixOS CUDA team's cache: CUDA builds (Blender, for apps-blender)
+          # that cache.nixos.org does not carry. Key from wiki.nixos.org/wiki/CUDA,
+          # checked against the cache's own narinfo signatures.
+          substituters = [ "https://cache.nixos-cuda.org" ];
+          trusted-public-keys = [
+            "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
+          ];
+        };
 
         # Weekly GC of generations older than 30 days. (The Macs use
         # `nh clean` instead: system/darwin/nh-gc.nix.)

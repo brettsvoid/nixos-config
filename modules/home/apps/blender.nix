@@ -8,9 +8,11 @@
 # ~/Library/Application Support/Blender/<major.minor> (~/.config/blender on
 # Linux).
 #
-# On Linux this is the build without CUDA (nixpkgs' cudaSupport is off), so
-# Cycles renders on the CPU only. cache.nixos.org has no CUDA build, so
-# turning it on means compiling Blender locally.
+# On Linux this is the CUDA build, so Cycles renders on the GPU. It comes from
+# its own nixpkgs instance with cudaSupport on, not pkgs.blender.override: the
+# host's overlays (openldap in nixos/common.nix) would change its hash and miss
+# cache.nixos-cuda.org (added in nixos/common.nix), which means compiling
+# Blender locally for hours.
 #
 # MCP for Blender (https://github.com/ahujasid/mcp-for-blender) lets Claude
 # Code drive Blender: a user-scope MCP server run by uvx, and the addon it
@@ -22,8 +24,26 @@
 # leave the server behind.
 _: {
   flake.modules.homeManager.apps-blender =
-    { lib, pkgs, ... }:
+    {
+      inputs,
+      lib,
+      pkgs,
+      ...
+    }:
     let
+      blender =
+        if pkgs.stdenv.hostPlatform.isLinux then
+          # Config must match what the CUDA cache builds with, or it misses.
+          (import inputs.nixpkgs {
+            inherit (pkgs.stdenv.hostPlatform) system;
+            config = {
+              allowUnfree = true;
+              cudaSupport = true;
+            };
+          }).blender
+        else
+          pkgs.blender;
+
       mcpVersion = "2.2.7";
 
       mcpWheel = pkgs.fetchurl {
@@ -42,11 +62,11 @@ _: {
           ".config/blender";
     in
     {
-      home.packages = [ pkgs.blender ];
+      home.packages = [ blender ];
 
       # The name `uvx mcp-for-blender install-addon` uses, so the server's
       # startup check finds it.
-      home.file."${configBase}/${lib.versions.majorMinor pkgs.blender.version}/scripts/addons/blender_mcp.py".source =
+      home.file."${configBase}/${lib.versions.majorMinor blender.version}/scripts/addons/blender_mcp.py".source =
         mcpAddon;
 
       local.claudeCode.mcpServers.blender = {
