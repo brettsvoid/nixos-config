@@ -28,6 +28,8 @@ ShellRoot {
         Lock.locked;
         // Take up a saved pomodoro session, so its phase end is armed.
         Pomodoro.phase;
+        // Start the clock that clears the restart count (services/Recovery.qml).
+        Recovery.attempts;
         // The settings window's search has to find every setting (settings/index.js).
         const unindexed = SettingsIndex.missing(Object.keys(Settings.schema));
         if (unindexed.length > 0)

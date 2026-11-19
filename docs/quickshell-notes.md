@@ -145,6 +145,11 @@ Hyprland. Run `qs-test --help` for how to drive it. Building a host's home runs
   `workspace` still matched held a closed one (null) afterwards, as nothing changed again:
   check membership in `workspace.toplevels.values` (`services/ActiveWindows.qml`).
 
+- A window whose graphics context cannot be made (EGL_BAD_ALLOC when VRAM is full, as
+  on a monitor coming back) is hidden for good: Quickshell emits `resourcesLost` and
+  `closed` and never retries. `services/Recovery.qml` restarts the shell with backoff.
+  `WlSessionLockSurface` has no `resourcesLost`.
+
 ## Theme colours
 
 The colours come from matugen (`quickshell/matugen/colors.json`, read by

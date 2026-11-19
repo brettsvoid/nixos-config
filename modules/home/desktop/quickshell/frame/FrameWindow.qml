@@ -21,6 +21,8 @@ import "../theme"
 PanelWindow {
     id: root
 
+    onResourcesLost: Recovery.lost(root)
+
     // 1 shows the frame in full; towards 0 its thickness, rounding and bar shrink to
     // nothing. ScreenShell animates it for fullscreen and game mode.
     property real reveal: 1

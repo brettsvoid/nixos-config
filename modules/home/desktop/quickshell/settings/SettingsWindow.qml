@@ -20,6 +20,8 @@ import "index.js" as Index
 FloatingWindow {
     id: root
 
+    onResourcesLost: Recovery.lost(root)
+
     // A new page is an entry here and a Component below, and a name in
     // Windows.settingsPages; its rows (or, for a page of devices, the page itself) need
     // entries in index.js.

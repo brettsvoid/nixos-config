@@ -14,6 +14,8 @@ import "../theme"
 PanelWindow {
     id: root
 
+    onResourcesLost: Recovery.lost(root)
+
     required property ScreenSettings settings
     // Which of the two images is on top.
     property Image front: first
