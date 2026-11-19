@@ -158,6 +158,8 @@ in
               apps-fnm
               apps-lspmux
               apps-netwatch
+              apps-cargo-sweep
+              apps-docker-prune
               profile-base
               profile-code
               profile-work

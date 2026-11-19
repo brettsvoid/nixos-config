@@ -187,6 +187,8 @@ in
               apps-blender
               apps-godot
               apps-netwatch
+              apps-cargo-sweep
+              apps-docker-prune
               profile-base
               profile-code
               profile-work
