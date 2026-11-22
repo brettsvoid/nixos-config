@@ -3,7 +3,6 @@ import "../config"
 import "../dashboard"
 import "../services"
 import "../theme"
-import "index.js" as Index
 
 // The shell's look: font, text size, corners, the frame and the speed of motion, then
 // the wallpaper's folder, fill and timed change, and the wallpaper and its colours (the
@@ -13,9 +12,14 @@ FocusScope {
 
     property bool pickingFont: false
 
-    // Lights up the row with `key` (a search result). The rows all fit, so none scrolls.
+    // Scrolls to the row with `key` and lights it up (a search result).
     function reveal(key) {
-        Index.rowFor(rows.children, key)?.flash();
+        rows.reveal(key);
+    }
+
+    // Ctrl+D and Ctrl+U, from the settings window.
+    function halfPage(direction) {
+        rows.halfPage(direction);
     }
 
     component Heading: Text {
@@ -27,11 +31,10 @@ FocusScope {
         bottomPadding: Theme.spacingSmall
     }
 
-    Column {
+    OptionsPage {
         id: rows
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.fill: parent
+        focus: true
 
         Heading {
             text: "Text and shape"
@@ -118,17 +121,17 @@ FocusScope {
             key: "wallpaper.changeMinutes"
             format: value => value === 0 ? "Never" : value < 60 ? value + " min" : (value / 60).toFixed(value % 60 === 0 ? 0 : 1) + " h"
         }
-    }
 
-    // The same on every screen, so faded while one is picked, as the shared rows are.
-    WallpaperTab {
-        anchors.top: rows.bottom
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        focus: !root.pickingFont
-        enabled: Windows.settingsScreen === ""
-        opacity: enabled ? 1 : 0.4
+        // The same on every screen, so faded while one is picked, as the shared rows
+        // are. It takes the height left, and in a short window enough for a few rows of
+        // wallpapers, with the page scrolling to it.
+        WallpaperTab {
+            width: parent.width
+            height: Math.max(420, rows.height - y)
+            focus: !root.pickingFont
+            enabled: Windows.settingsScreen === ""
+            opacity: enabled ? 1 : 0.4
+        }
     }
 
     // Over the page while open, so the list has room.
