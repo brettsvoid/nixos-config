@@ -2,7 +2,8 @@ import QtQuick
 import "../theme"
 
 // A horizontal slider for a number from `from` to `to`, in steps of `stepSize`. Drag
-// it, click the track, scroll over it, or use the arrow keys once it has focus. It
+// it, click the track, or use the arrow keys once it has focus. The wheel scrolls the
+// page under it instead, so scrolling past a slider does not change it. It
 // does not change `value` itself: `moved` reports each new value, so `value` can stay
 // bound to what it shows.
 Item {
@@ -78,6 +79,5 @@ Item {
             if (pressed)
                 root._move(valueAt(mouse.x));
         }
-        onWheel: wheel => root._move(root.value + Math.sign(wheel.angleDelta.y) * root.stepSize)
     }
 }
