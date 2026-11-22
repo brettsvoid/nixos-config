@@ -12,3 +12,4 @@ singleton ActiveWindows 1.0 ActiveWindows.qml
 singleton LockKeys 1.0 LockKeys.qml
 NotificationEntry 1.0 NotificationEntry.qml
 singleton Recovery 1.0 Recovery.qml
+singleton Displays 1.0 Displays.qml

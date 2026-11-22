@@ -52,6 +52,8 @@ Scope {
             return "true or false";
         case "number":
             return `a number from ${spec.min} to ${spec.max}`;
+        case "object":
+            return "an object";
         default:
             return "a string that is not empty";
         }

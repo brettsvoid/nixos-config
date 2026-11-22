@@ -25,7 +25,7 @@ data and runtime folders under $QS_TEST. Its settings start at their defaults, i
 $QS_TEST/xdg-config/custom-shell/settings.json; a command can write that file and the
 shell applies it. Commands that would change the desktop (hyprctl,
 generate-theme, game-mode, session-exit, systemctl, loginctl, wl-copy, window-effect,
-pw-play, toggle-shell) are stubs that log each call to $QS_TEST/calls. A fake Hyprland answers
+pw-play, toggle-shell, xrandr) are stubs that log each call to $QS_TEST/calls. A fake Hyprland answers
 queries with empty JSON (monitors with -m's file), logs each request (dispatches included) to
 $QS_TEST/hyprland.log, and sends each line appended to $QS_TEST/events as an event,
 for example: echo 'configreloaded>>' >>"$QS_TEST/events". The folder is kept.
@@ -84,6 +84,17 @@ case " \$* " in *" -j "*) echo "[]" ;; esac
 EOF
   chmod +x "$QS_TEST/bin/$command"
 done
+
+# xrandr keeps the primary output it is given, so --listmonitors shows it.
+cat >"$QS_TEST/bin/xrandr" <<EOF
+#!/bin/sh
+echo "xrandr \$*" >>"$QS_TEST/calls"
+case "\$1" in
+  --output) echo "\$2" >"$QS_TEST/xrandr-primary" ;;
+  --listmonitors) [ -f "$QS_TEST/xrandr-primary" ] && echo " 0: +*\$(cat "$QS_TEST/xrandr-primary") 1920/500x1080/300+0+0  x" ;;
+esac
+EOF
+chmod +x "$QS_TEST/bin/xrandr"
 
 export PATH="$QS_TEST/bin:$PATH"
 export XDG_RUNTIME_DIR=$QS_TEST/run XDG_STATE_HOME=$QS_TEST/state XDG_CONFIG_HOME=$QS_TEST/xdg-config

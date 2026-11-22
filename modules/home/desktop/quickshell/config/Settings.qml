@@ -144,6 +144,11 @@ Singleton {
             // 0 is never.
             "wallpaper.changeMinutes": { default: 0, min: 0, max: 240, step: 5 },
 
+            // Each arranged display's { x, y, transform } by its description; the main
+            // display's description (services/Displays.qml).
+            "displays.layout": { default: {} },
+            "displays.main": { default: "" },
+
             // Log out, restart and shut down wait for a second press.
             "session.confirm": { default: false },
             "session.showSleep": { default: false }

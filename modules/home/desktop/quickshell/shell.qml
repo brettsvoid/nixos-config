@@ -30,6 +30,8 @@ ShellRoot {
         Pomodoro.phase;
         // Start the clock that clears the restart count (services/Recovery.qml).
         Recovery.attempts;
+        // Place the displays and set the main one (services/Displays.qml).
+        Displays.layout;
         // The settings window's search has to find every setting (settings/index.js).
         const unindexed = SettingsIndex.missing(Object.keys(Settings.schema));
         if (unindexed.length > 0)

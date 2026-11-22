@@ -14,7 +14,7 @@ Singleton {
     property string settingsPage: ""
     // Its pages' names, as SettingsWindow gives them, for the commands that open it on
     // one.
-    readonly property var settingsPages: ["Appearance", "Window effects", "Bar", "Dashboard", "Launcher", "Notifications", "Session", "Audio", "Network", "Bluetooth"]
+    readonly property var settingsPages: ["Appearance", "Window effects", "Bar", "Dashboard", "Launcher", "Notifications", "Session", "Displays", "Audio", "Network", "Bluetooth"]
     // The pages with per-screen settings, which offer a screen to edit.
     readonly property var screenPages: ["Appearance", "Bar", "Launcher", "Notifications"]
     // The screen picked above them, by name as in Settings.screens; "" for all.

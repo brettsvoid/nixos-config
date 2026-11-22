@@ -202,7 +202,7 @@ in
           backupFileExtension = "backup";
           extraSpecialArgs = { inherit inputs; };
           users.${username} =
-            { lib, pkgs, ... }:
+            { lib, ... }:
             {
               imports = with config.flake.modules.homeManager; [
                 base
@@ -289,50 +289,6 @@ in
                     position = "0x180";
                     scale = 1;
                   }
-                ];
-
-                # XWayland games (CS2 among them) size themselves to X's first
-                # monitor, which is the Dell unless a primary is set, so
-                # make the Odyssey primary. XWayland drops the primary when the
-                # KVM switches away and back, so redo it on every monitoradded
-                # event. xrandr exits 0 for an output XWayland doesn't have yet,
-                # so success is checked in its monitor list, with retries.
-                on = [
-                  (hypr.onStart (
-                    lib.getExe (
-                      pkgs.writeShellApplication {
-                        name = "xwayland-primary-odyssey";
-                        runtimeInputs = [
-                          pkgs.gnugrep
-                          pkgs.jq
-                          pkgs.socat
-                          pkgs.xrandr
-                        ];
-                        text = ''
-                          set_primary() {
-                            for _ in $(seq 30); do
-                              output=$(hyprctl -j monitors | jq -r --arg d ${lib.escapeShellArg (lib.removePrefix "desc:" odyssey)} '.[] | select(.description == $d) | .name') || true
-                              if [ -n "$output" ]; then
-                                xrandr --output "$output" --primary 2>/dev/null || true
-                                monitors=$(xrandr --listmonitors 2>/dev/null) || true
-                                grep -q "^ *[0-9]*: +\*$output " <<<"$monitors" && return 0
-                              fi
-                              sleep 1
-                            done
-                            echo "could not make the Odyssey XWayland's primary output" >&2
-                          }
-
-                          set_primary
-                          socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" |
-                            while read -r event; do
-                              case $event in
-                                'monitoradded>>'*) set_primary ;;
-                              esac
-                            done
-                        '';
-                      }
-                    )
-                  ))
                 ];
 
                 # 1–5 on the Odyssey, 6–10 on the Dell. persistent keeps a

@@ -97,6 +97,10 @@ const entries = [
     { key: "osd.showBrightness", page: "Notifications", heading: "On-screen display", label: "Brightness", keywords: ["osd", "backlight", "screen", "show"] },
     { key: "osd.showInGameMode", page: "Notifications", heading: "On-screen display", label: "In game mode", keywords: ["osd", "gaming", "show", "hide"] },
 
+    { key: "displays.layout", page: "Displays", heading: "Arrangement", label: "Arrangement", keywords: ["monitor", "screen", "position", "arrange", "move", "left", "right", "above", "below", "layout"] },
+    { key: "displays.rotation", page: "Displays", heading: "Arrangement", label: "Rotation", keywords: ["monitor", "screen", "rotate", "portrait", "landscape", "turn", "upside down", "transform"] },
+    { key: "displays.main", page: "Displays", heading: "Arrangement", label: "Main display", keywords: ["primary", "monitor", "screen", "games", "xwayland", "default"] },
+
     { key: "lock.blur", page: "Session", heading: "Lock screen", label: "Blur", keywords: ["wallpaper", "background", "soften"] },
     { key: "lock.dim", page: "Session", heading: "Lock screen", label: "Dim", keywords: ["wallpaper", "background", "darken", "brightness"] },
     { key: "lock.media", page: "Session", heading: "Lock screen", label: "Media", keywords: ["music", "player", "controls", "now playing"] },

@@ -23,3 +23,4 @@ EffectPreview 1.0 EffectPreview.qml
 SampleWindow 1.0 SampleWindow.qml
 SearchField 1.0 SearchField.qml
 SearchResults 1.0 SearchResults.qml
+DisplaysPage 1.0 DisplaysPage.qml

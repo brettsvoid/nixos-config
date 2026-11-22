@@ -302,6 +302,8 @@ in
           wallpaper-thumbnails
           # qalc, for the launcher's calculator (launcher/CalculatorMode.qml).
           pkgs.libqalculate
+          # For XWayland's primary output, the main display (services/Displays.qml).
+          pkgs.xrandr
         ]
         # GTK 3's theme, recoloured by gtk.css (generate-theme).
         ++ lib.optional themeApps pkgs.adw-gtk3;

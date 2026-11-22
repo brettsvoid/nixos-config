@@ -62,6 +62,11 @@ FloatingWindow {
             component: sessionPage
         },
         {
+            name: "Displays",
+            icon: 0xF0379, // md-monitor
+            component: displaysPage
+        },
+        {
             name: "Audio",
             icon: 0xF057E, // md-volume_high
             component: audioPage
@@ -416,6 +421,12 @@ FloatingWindow {
         id: sessionPage
 
         SessionPage {}
+    }
+
+    Component {
+        id: displaysPage
+
+        DisplaysPage {}
     }
 
     Component {
