@@ -272,10 +272,10 @@ in
               wayland.windowManager.hyprland.settings = {
                 env = [ (hypr.env "AQ_DRM_DEVICES" "/dev/dri/nvidia-dgpu") ];
 
-                # Dell AW2518H on the left, landscape; Odyssey G5 on the right.
-                # The Dell sits 180 px down to centre it on the 1440-tall
-                # Odyssey. The Dell's EDID prefers 60 Hz, so 240 Hz has to be
-                # asked for.
+                # Dell AW2518H on the left, landscape, tops aligned; Odyssey G5
+                # on the right. These are the defaults: the shell's Displays
+                # page applies its own saved layout over them. The Dell's EDID
+                # prefers 60 Hz, so 240 Hz has to be asked for.
                 monitor = [
                   {
                     output = odyssey;
@@ -286,7 +286,7 @@ in
                   {
                     output = dell;
                     mode = "1920x1080@240";
-                    position = "0x180";
+                    position = "0x0";
                     scale = 1;
                   }
                 ];
