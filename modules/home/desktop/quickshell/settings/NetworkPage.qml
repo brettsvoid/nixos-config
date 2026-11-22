@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import Quickshell.Networking
 import "../components"
@@ -230,7 +231,11 @@ FocusScope {
                     }
 
                     Repeater {
-                        model: Networking.wifiEnabled ? wifiDevice.networks : []
+                        // The list is sorted again whenever a signal changes. A plain array
+                        // would make every row again, losing a password being typed.
+                        model: ScriptModel {
+                            values: Networking.wifiEnabled ? wifiDevice.networks : []
+                        }
 
                         Column {
                             id: row
