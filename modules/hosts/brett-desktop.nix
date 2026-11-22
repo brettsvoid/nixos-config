@@ -272,28 +272,27 @@ in
               wayland.windowManager.hyprland.settings = {
                 env = [ (hypr.env "AQ_DRM_DEVICES" "/dev/dri/nvidia-dgpu") ];
 
-                # Odyssey G5 on the left; Dell AW2518H on the right, turned 90°
-                # clockwise (transform 1 rotates the picture back). The Odyssey
-                # sits 240 px down to centre it on the 1920-tall Dell. The Dell's
-                # EDID prefers 60 Hz, so 240 Hz has to be asked for.
+                # Dell AW2518H on the left, landscape; Odyssey G5 on the right.
+                # The Dell sits 180 px down to centre it on the 1440-tall
+                # Odyssey. The Dell's EDID prefers 60 Hz, so 240 Hz has to be
+                # asked for.
                 monitor = [
                   {
                     output = odyssey;
                     mode = "2560x1440@165";
-                    position = "0x240";
+                    position = "1920x0";
                     scale = 1;
                   }
                   {
                     output = dell;
                     mode = "1920x1080@240";
-                    position = "2560x0";
+                    position = "0x180";
                     scale = 1;
-                    transform = 1;
                   }
                 ];
 
                 # XWayland games (CS2 among them) size themselves to X's first
-                # monitor, which is the rotated Dell unless a primary is set, so
+                # monitor, which is the Dell unless a primary is set, so
                 # make the Odyssey primary. XWayland drops the primary when the
                 # KVM switches away and back, so redo it on every monitoradded
                 # event. xrandr exits 0 for an output XWayland doesn't have yet,
