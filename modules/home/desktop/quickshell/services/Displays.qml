@@ -91,19 +91,22 @@ Singleton {
 
     // Sets each connected display that `want` places, unless `current` already has it
     // there.
+    // All in one eval: Hyprland applies monitor rules at its next frame and warns about
+    // any overlap then, so rules sent apart could show a half-moved layout that overlaps.
     function _apply(want, current) {
-        let sent = false;
+        const rules = [];
         for (const m of root.monitors) {
             const to = want[m.description];
             const from = current[m.description];
             if (!to || (from && from.x === to.x && from.y === to.y && from.transform === to.transform))
                 continue;
-            Quickshell.execDetached(["hyprctl", "eval", `hl.monitor({ output = ${JSON.stringify("desc:" + m.description)}, mode = "${m.mode}", position = "${to.x}x${to.y}", scale = ${m.scale}, transform = ${to.transform} })`]);
-            sent = true;
+            rules.push(`hl.monitor({ output = ${JSON.stringify("desc:" + m.description)}, mode = "${m.mode}", position = "${to.x}x${to.y}", scale = ${m.scale}, transform = ${to.transform} })`);
         }
+        if (rules.length === 0)
+            return;
+        Quickshell.execDetached(["hyprctl", "eval", rules.join("\n")]);
         // Hyprland sends no event for a moved display.
-        if (sent)
-            refresh.restart();
+        refresh.restart();
     }
 
     function _live() {
