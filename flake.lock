@@ -274,17 +274,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1767553580,
-        "narHash": "sha256-8mYThyeRJDVgfxsE082BXkaEqShWksexCTP+WVI2bKw=",
-        "owner": "joshurtree",
+        "lastModified": 1793421511,
+        "narHash": "sha256-ETFEKQkMmgKELH177aNzA6DeF3fifuD0o0IS+Qg1iYA=",
+        "owner": "mjgreenjr",
         "repo": "hyprsession",
-        "rev": "364ccba80bd07f2f2e9a00bcf12b943809f35474",
+        "rev": "7b31b3a5e8be42a211eedd75fcbbd73d99d519f0",
         "type": "github"
       },
       "original": {
-        "owner": "joshurtree",
-        "ref": "v0.2.1",
+        "owner": "mjgreenjr",
         "repo": "hyprsession",
+        "rev": "7b31b3a5e8be42a211eedd75fcbbd73d99d519f0",
         "type": "github"
       }
     },

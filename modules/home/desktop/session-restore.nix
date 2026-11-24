@@ -1,15 +1,16 @@
 # Reopens, at login, the apps that were open when the last session ended,
 # each on the workspace it was on; Hyprland has no session restore of its
-# own. hyprsession (github:joshurtree/hyprsession) saves the open windows
-# every 60 s to ~/.local/share/hyprsession/default and relaunches them when
-# it starts. A host that imports this module gets `session-exit`, which the
-# shell's power buttons call (Caelestia's session.commands in caelestia.nix).
+# own. hyprsession saves the open windows every 60 s to
+# ~/.local/share/hyprsession/default and relaunches them when it starts. It is
+# the mjgreenjr fork: upstream (joshurtree) sends classic dispatches, which
+# Hyprland 0.57's Lua config rejects, so upstream restores nothing. A host
+# that imports this module gets `session-exit`, which the shell's power
+# buttons call (Caelestia's session.commands in caelestia.nix).
 #
-# It reopens apps, not what was in them: a kitty comes back as a fresh
-# shell. Firefox restores its own windows and tabs (browser.startup.page in
-# apps/firefox.nix) and, as its windows share one process, is relaunched
-# once. Each window's command comes from /proc/<pid>/cmdline. A floating
-# window comes back floating, but not at its old position or size.
+# It reopens apps, not what was in them, except that a terminal reruns the
+# program it had in the foreground. Firefox restores its own windows and
+# tabs (browser.startup.page in apps/firefox.nix). Each window's command
+# comes from /proc/<pid>/cmdline.
 { inputs, config, ... }:
 let
   inherit (config.flake.lib) hypr;
@@ -22,12 +23,20 @@ in
       # for 60 s after relaunching moves each window's whole workspace to that
       # ID. Hyprland gives a monitor the lowest free ID when it connects, so
       # IDs change between logins and workspaces landed on the wrong monitor.
-      # The patch drops the monitor; each host's workspace rules already put
-      # every workspace on its monitor.
+      # no-monitor-ids.patch drops that move; each host's workspace rules
+      # already put every workspace on its monitor.
+      #
+      # Chrome rewrites its /proc cmdline into one space-joined string, which
+      # hyprsession replays unquoted, so a date in one of its flags became
+      # stray arguments. rewritten-cmdline.patch launches such a window
+      # through its desktop entry instead.
       hyprsession =
         inputs.hyprsession.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs
           (old: {
-            patches = (old.patches or [ ]) ++ [ ./session-restore/no-monitor-ids.patch ];
+            patches = (old.patches or [ ]) ++ [
+              ./session-restore/no-monitor-ids.patch
+              ./session-restore/rewritten-cmdline.patch
+            ];
           });
 
       # `session-exit poweroff|reboot|logout`. Calling logind directly ends the

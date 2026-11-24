@@ -43,10 +43,11 @@
     };
 
     # Reopens the last session's apps at login
-    # (modules/home/desktop/session-restore.nix). Pinned to a release tag,
-    # which `nix flake update` does not move: bump it by hand.
+    # (modules/home/desktop/session-restore.nix). The mjgreenjr fork, for
+    # Hyprland's Lua dispatches. Pinned to a commit, which `nix flake update`
+    # does not move: bump it by hand and check the patches still apply.
     hyprsession = {
-      url = "github:joshurtree/hyprsession/v0.2.1";
+      url = "github:mjgreenjr/hyprsession/7b31b3a5e8be42a211eedd75fcbbd73d99d519f0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

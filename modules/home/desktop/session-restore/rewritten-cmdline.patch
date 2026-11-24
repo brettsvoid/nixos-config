@@ -1,0 +1,43 @@
+diff --git a/src/load.rs b/src/load.rs
+index 5a4a5f4..31ca4c6 100644
+--- a/src/load.rs
++++ b/src/load.rs
+@@ -268,13 +268,17 @@ pub fn launch_entries_with(
+         let Some(argv) = window.argv.as_deref() else { continue };
+         let Some(mut command) = command_from_saved_argv(argv) else { continue };
+         let sandboxed = is_sandbox_internal(argv);
+-        if sandboxed {
++        // A process that rewrote its title (Chrome, Electron) leaves one space-joined
++        // string whose quoting is lost: its desktop entry is the reliable way back.
++        let rewritten = matches!(argv, [line] if line.trim().contains(char::is_whitespace));
++        if sandboxed || rewritten {
+             match resolve_desktop_command(&window.client, xdg_map) {
+                 Some(entry_command) => command = entry_command,
+-                None => println!(
++                None if sandboxed => println!(
+                     "Warning: '{}' ({}) runs inside a sandbox and has no desktop entry; launching its recorded command",
+                     window.client.title, window.client.class
+                 ),
++                None => {}
+             }
+         }
+         let rules = group_rules
+@@ -1624,6 +1628,18 @@ mod tests {
+         assert_eq!(entries[0].command, "./playcall-gui");
+     }
+ 
++    #[test]
++    fn test_rewritten_cmdline_launches_through_the_desktop_entry() {
++        let mut xdg = HashMap::new();
++        xdg.insert(crate::command_faker::xdg_id_key("google-chrome"), "google-chrome-stable".to_string());
++        let mut chrome = saved_pid("google-chrome", &["/opt/chrome/chrome --flag=Tue, 31 Dec 2099"], 50, (0, 0));
++        chrome.client.initial_class = "google-chrome".to_string();
++        let entries = launch_entries_from_saved(&[chrome.clone()], &xdg);
++        assert_eq!(entries[0].command, "google-chrome-stable");
++        let entries = launch_entries_from_saved(&[chrome], &HashMap::new());
++        assert_eq!(entries[0].command, "/opt/chrome/chrome --flag=Tue, 31 Dec 2099");
++    }
++
+     #[test]
+     fn test_sandbox_launches_skip_the_cwd_wrap_silently() {
+         let mut xdg = HashMap::new();
