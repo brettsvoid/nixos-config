@@ -11,7 +11,7 @@ _: {
     # AeroSpace must clear. Also feeds outerTop below.
     barHeight = 32;
 
-    frameThickness = 8;
+    frameThickness = 4;
 
     # Gap between tiled windows (AeroSpace inner.horizontal/vertical).
     innerGap = 8;
