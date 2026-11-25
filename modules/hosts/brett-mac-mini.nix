@@ -102,6 +102,8 @@ in
             "google-chrome"
             "grok-build"
             "keymapp"
+            # Virtual camera, to improve the webcam feed for calls.
+            "obs"
             # No kitty cask: nixpkgs' kitty (terminals-kitty) includes
             # kitty.app, in ~/Applications/Home Manager Apps. The cask also
             # broke activation: brew's code is pinned (nix-homebrew's brew-src
